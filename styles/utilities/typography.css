@@ -1,0 +1,17 @@
+@layer utilities {
+    .heading-primary {
+      @apply text-3xl md:text-4xl font-bold tracking-tight;
+    }
+  
+    .heading-secondary {
+      @apply text-2xl font-semibold tracking-tight;
+    }
+  
+    .text-muted {
+      @apply text-muted-foreground;
+    }
+  
+    .text-balance {
+      text-wrap: balance;
+    }
+  }

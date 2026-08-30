@@ -1,0 +1,156 @@
+/* =========================================================
+   KEYFRAMES
+========================================================= */
+
+@keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  
+  @keyframes slide-up {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  @keyframes slide-down {
+    from {
+      opacity: 0;
+      transform: translateY(-20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  @keyframes slide-left {
+    from {
+      opacity: 0;
+      transform: translateX(30px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+  
+  @keyframes slide-right {
+    from {
+      opacity: 0;
+      transform: translateX(-30px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+  
+  @keyframes scale-in {
+    from {
+      opacity: 0;
+      transform: scale(0.92);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+  
+  @keyframes pulse-soft {
+    0%,
+    100% {
+      opacity: 1;
+    }
+  
+    50% {
+      opacity: 0.6;
+    }
+  }
+  
+  @keyframes glow-blue {
+    0%,
+    100% {
+      box-shadow: 0 0 0px rgba(59, 130, 246, 0.2);
+    }
+  
+    50% {
+      box-shadow: 0 0 25px rgba(59, 130, 246, 0.45);
+    }
+  }
+  
+  @keyframes float {
+    0%,
+    100% {
+      transform: translateY(0px);
+    }
+  
+    50% {
+      transform: translateY(-10px);
+    }
+  }
+  
+  @keyframes rotate-slow {
+    from {
+      transform: rotate(0deg);
+    }
+  
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  
+  /* =========================================================
+     ANIMATION UTILITIES
+  ========================================================= */
+  
+  @layer utilities {
+    .animate-fade-in {
+      animation: fade-in 0.4s ease-in-out;
+    }
+  
+    .animate-slide-up {
+      animation: slide-up 0.45s ease-out;
+    }
+  
+    .animate-slide-down {
+      animation: slide-down 0.45s ease-out;
+    }
+  
+    .animate-slide-left {
+      animation: slide-left 0.45s ease-out;
+    }
+  
+    .animate-slide-right {
+      animation: slide-right 0.45s ease-out;
+    }
+  
+    .animate-scale-in {
+      animation: scale-in 0.35s ease-out;
+    }
+  
+    .animate-pulse-soft {
+      animation: pulse-soft 2s infinite ease-in-out;
+    }
+  
+    .animate-glow-blue {
+      animation: glow-blue 2.5s infinite ease-in-out;
+    }
+  
+    .animate-float {
+      animation: float 4s infinite ease-in-out;
+    }
+  
+    .animate-rotate-slow {
+      animation: rotate-slow 12s linear infinite;
+    }
+  }

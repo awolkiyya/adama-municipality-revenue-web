@@ -1,0 +1,68 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+/* CORE */
+@import "../styles/theme.css";
+@import "../styles/base.css";
+
+/* THEME */
+@import "../styles/themes/dark-blue.css";
+
+/* ANIMATIONS */
+@import "../styles/utilities/animations.css";
+
+/* UTILITIES */
+@import "../styles/utilities/scrollbar.css";
+@import "../styles/utilities/typography.css";
+@import "../styles/utilities/gradients.css";
+
+@custom-variant dark (&:is(.dark *));
+
+.nav-link {
+    @apply text-sm font-medium text-muted-foreground transition hover:text-foreground;
+  }
+
+  .mobile-link {
+    @apply text-base font-medium text-slate-700 hover:text-slate-900 transition;
+  }
+  html, body {
+    touch-action: manipulation;
+  }
+
+  /*
+  Add to your globals.css (outside any @layer block is fine).
+  Only two things are new here:
+  1. The shake keyframes used on a failed code.
+  2. A `font-serif` utility for the heading, in case your Tailwind
+     theme doesn't already map one — wire it to next/font/google
+     (Source Serif 4) in layout.tsx for best results, e.g.:
+
+       import { Source_Serif_4 } from "next/font/google";
+       const serif = Source_Serif_4({ subsets: ["latin"], variable: "--font-serif" });
+       // then on <body className={serif.variable}>
+
+     If --font-serif isn't defined, the utility below just falls
+     back to the system serif stack.
+*/
+
+@keyframes otp-shake {
+  10%, 90% { transform: translateX(-1px); }
+  20%, 80% { transform: translateX(2px); }
+  30%, 50%, 70% { transform: translateX(-4px); }
+  40%, 60% { transform: translateX(4px); }
+}
+
+.animate-otp-shake {
+  animation: otp-shake 0.42s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-otp-shake {
+    animation: none;
+  }
+}
+
+.font-serif {
+  font-family: var(--font-serif, Georgia, "Times New Roman", serif);
+}

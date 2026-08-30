@@ -1,0 +1,184 @@
+/*
+  Galii Kiyya â€” Citizen Portal design tokens
+  A civic / revenue-office identity: deep archival green + brass gold,
+  a serif "official document" display face, and a fine engraved-paper
+  texture borrowed from security printing on currency and seals.
+
+  Theming: variables are defined on .galii-root (light, default) and
+  overridden under .dark .galii-root (dark). Toggle by adding/removing
+  a "dark" class on <html> â€” next-themes does this for you (see
+  components/theme-provider.tsx + ThemeToggle.tsx).
+
+  Import this file once in your global stylesheet:
+    @import "./citizen-tokens.css";
+
+  And load the fonts (recommended via next/font in your root layout):
+    Fraunces        â€” display / serif headings & figures
+    Inter           â€” body / UI text
+    IBM Plex Mono   â€” ids, invoice numbers, monetary amounts
+*/
+
+.galii-root {
+  color-scheme: light;
+
+  --galii-bg: #f3f6f1;
+  --galii-surface: #ffffff;
+  --galii-surface-muted: #eaeee6;
+  --galii-border: #dce3d6;
+
+  --galii-primary: #144b36;
+  --galii-primary-dark: #0a2e20;
+  --galii-primary-light: #1f6b4c;
+
+  --galii-gold: #b8933a;
+  --galii-gold-light: #d8bb74;
+  --galii-gold-dark: #8c6e28;
+
+  --galii-text: #16221b;
+  --galii-text-muted: #5b6b5f;
+  --galii-text-faint: #8c9a8f;
+
+  --galii-success: #1f7a52;
+  --galii-success-bg: #e3f2e9;
+  --galii-danger: #a23a2c;
+  --galii-danger-bg: #f7e7e2;
+
+  /*
+    --font-display / --font-body / --font-mono are expected to already be
+    set higher up the tree by next/font (see app/layout.tsx). The fallback
+    stacks below only kick in if you're not using next/font.
+  */
+  font-family: var(--font-body, "Inter", -apple-system, BlinkMacSystemFont, sans-serif);
+  color: var(--galii-text);
+  background: var(--galii-bg);
+
+  transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+/* =====================================================================
+   DARK THEME
+   Same hues, re-balanced for a dark surface: brighter primary/gold for
+   contrast, desaturated near-black surfaces (not pure black â€” keeps the
+   "paper" feel instead of going flat OLED-black).
+===================================================================== */
+
+.dark .galii-root {
+  color-scheme: dark;
+
+  --galii-bg: #10140f;
+  --galii-surface: #171d18;
+  --galii-surface-muted: #212822;
+  --galii-border: #2b342c;
+
+  --galii-primary: #2e9066;
+  --galii-primary-dark: #0f3324;
+  --galii-primary-light: #45b17f;
+
+  --galii-gold: #d8bb74;
+  --galii-gold-light: #ecd6a3;
+  --galii-gold-dark: #a9843a;
+
+  --galii-text: #edf1ec;
+  --galii-text-muted: #a5b3a9;
+  --galii-text-faint: #6d7b71;
+
+  --galii-success: #34ab77;
+  --galii-success-bg: #16281f;
+  --galii-danger: #e2695a;
+  --galii-danger-bg: #2c1712;
+}
+
+.galii-serif {
+  font-family: var(--font-display, "Fraunces", "Iowan Old Style", serif);
+}
+
+.galii-mono {
+  font-family: var(--font-mono, "IBM Plex Mono", ui-monospace, monospace);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Fine engraved-paper / guillochÃ© texture used on the hero + sidebar */
+.galii-seal-texture {
+  background-image: repeating-radial-gradient(
+      circle at 12% 22%,
+      rgba(255, 255, 255, 0.05) 0px,
+      rgba(255, 255, 255, 0.05) 1px,
+      transparent 1px,
+      transparent 7px
+    ),
+    repeating-radial-gradient(
+      circle at 92% 78%,
+      rgba(216, 187, 116, 0.1) 0px,
+      rgba(216, 187, 116, 0.1) 1px,
+      transparent 1px,
+      transparent 9px
+    );
+}
+
+.dark .galii-seal-texture {
+  background-image: repeating-radial-gradient(
+      circle at 12% 22%,
+      rgba(255, 255, 255, 0.035) 0px,
+      rgba(255, 255, 255, 0.035) 1px,
+      transparent 1px,
+      transparent 7px
+    ),
+    repeating-radial-gradient(
+      circle at 92% 78%,
+      rgba(216, 187, 116, 0.08) 0px,
+      rgba(216, 187, 116, 0.08) 1px,
+      transparent 1px,
+      transparent 9px
+    );
+}
+
+.galii-card-in {
+  animation: galiiRise 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes galiiRise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .galii-card-in {
+    animation: none;
+  }
+  .galii-root,
+  .galii-root * {
+    transition: none !important;
+  }
+}
+
+.galii-nav-btn {
+  transition: background-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
+}
+.galii-nav-btn:active {
+  transform: scale(0.98);
+}
+
+.galii-tap {
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+.galii-tap:hover {
+  transform: translateY(-1px);
+}
+.galii-tap:active {
+  transform: translateY(0);
+}
+
+.galii-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.galii-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--galii-border);
+  border-radius: 999px;
+}

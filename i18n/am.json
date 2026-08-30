@@ -1,0 +1,224 @@
+{
+  
+  "system": {
+    "short_title": "የገቢ አስተዳደር",
+    "title": "የከተማ ዘመናዊ ገቢ ስርዓት",
+    "full_title": "የከተማ ዘመናዊ ገቢ አስተዳደር ስርዓት"
+  },
+
+
+  "landing": {
+
+    "banner": {
+      "message": "ይህ አዲስ የዲጂታል አገልግሎት ነው። አንዳንድ አገልግሎቶች አሁንም በሙከራ ደረጃ ላይ ናቸው።",
+      "feedback": "አስተያየት ይስጡ"
+    },
+
+
+    "navbar": {
+
+      "logo": "ገቢ ማኔጅመንት",
+
+      "services": "አገልግሎቶች",
+
+      "about": "ስለ እኛ",
+
+      "contact": "ያግኙን",
+
+      "sign_in": "ግባ",
+
+      "citizen_portal": "የዜጋ ፖርታል",
+
+      "office_system": "የቢሮ ስርዓት"
+
+    },
+
+
+    "hero": {
+
+      "badge": "አሁን የአዳማ ነዋሪዎችን በመስመር ላይ እያገለገለ ነው",
+
+      "title": "GMQ የአገልግሎት መድረክ",
+
+      "description":
+      "የመንግስት አገልግሎቶችን ያግኙ፣ ክፍያዎችን ያስተዳድሩ፣ እና የቢሮ ስራዎችን በአንድ ደህንነቱ በተጠበቀ ስርዓት ያከናውኑ።",
+
+      "citizen_button": "የዜጋ ፖርታል",
+
+      "office_button": "የቢሮ ስርዓት"
+
+    },
+
+
+    "features": {
+
+      "title": "የሚገኙ አገልግሎቶች",
+
+      "description":
+      "አገልግሎቶች በዝግጅት ደረጃቸው መሰረት በቀስታ እየተጨመሩ ነው።",
+
+
+      "citizen": {
+
+        "title": "የዜጎች አገልግሎት",
+
+        "description":
+        "ግብር ይክፈሉ፣ የክፍያ መረጃ ይመልከቱ፣ ክፍያዎችን ይከታተሉ።"
+
+      },
+
+
+      "revenue": {
+
+        "title": "የገቢ አስተዳደር",
+
+        "description":
+        "ግብር፣ ክፍያ፣ ቅጣት እና የመንግስት ገቢ ስራዎችን ያስተዳድሩ።"
+
+      },
+
+
+      "sector": {
+
+        "title": "የዘርፍ አሰራር",
+
+        "description":
+        "የመሬት፣ የግንባታ እና የምርመራ ስራዎችን ያጣምራል።"
+
+      },
+
+
+      "soon":
+      "በቅርቡ ተጨማሪ ዘርፎች ይካተታሉ"
+
+    },
+
+
+    "about": {
+
+      "title":
+      "ዘመናዊ የዲጂታል መንግስት ስርዓት",
+
+      "description":
+      "ይህ መድረክ ዜጎችንና የመንግስት ቢሮዎችን በአንድ ደህንነቱ በተጠበቀ ስርዓት ያገናኛል።"
+
+    },
+
+
+    "footer": {
+
+      "copyright":
+      "የአዳማ የመንግስት አገልግሎት ፖርታል። መብቶች በሙሉ የተጠበቁ ናቸው።",
+
+      "report_issue":
+      "ችግር ያሳውቁ ወይም ሀሳብ ያቅርቡ"
+
+    }
+
+  },
+
+
+  "auth": {
+
+    "welcome": "እንኳን ደህና መጡ",
+
+    "fields": {
+
+      "email": "ኢሜይል አድራሻ",
+
+      "password": "የይለፍ ቃል"
+
+    },
+
+
+    "actions": {
+
+      "login": "በደህንነት ግባ",
+
+      "logging_in": "በመግባት ላይ..."
+
+    }
+
+  },
+
+
+    "navigation": {
+      "dashboard": "ዳሽቦርድ",
+  
+      "user_access": "የተጠቃሚ እና የመዳረሻ አስተዳደር",
+      "users": "ተጠቃሚዎች",
+      "taxpayers": "ግብር ከፋዮች",
+      "access_managements": "የመዳረሻ አስተዳደር",
+  
+      "administrative_structure": "የአስተዳደር መዋቅር",
+      "administrative_units": "የአስተዳደር ክፍሎች",
+      "sectors": "ዘርፎች",
+  
+      "workflow_configuration": "የስራ ሂደት ማዋቀር",
+      "service_sector_access": "የአገልግሎት ዘርፍ መዳረሻ",
+  
+      "system_settings": "የስርዓት ቅንብሮች",
+      "audit_logs": "የኦዲት መዝገቦች",
+      
+      "calculation_setup": "የስሌት ማዋቀሪያ",
+      "measurement_units": "የመለኪያ አሃዶች",
+      "base_fields": "መሰረታዊ መስኮች",
+      "formula_variables": "የፎርሙላ ተለዋዋጮች",
+  
+  
+      "data_dashboard": "የመረጃ ዳሽቦርድ",
+  
+      "revenue_configuration": "የገቢ ማዋቀሪያ",
+      "revenue_categories": "የገቢ ምድቦች",
+      "revenue_codes": "የገቢ ኮዶች",
+      "revenue_services": "የገቢ አገልግሎቶች",
+  
+  
+      "tariff_management": "የታሪፍ አስተዳደር",
+      "tariff_versions": "የታሪፍ ስሪቶች",
+      "tariff_rules": "የታሪፍ ደንቦች",
+  
+  
+      "data_validation": "የመረጃ ማረጋገጫ",
+      "data_reports": "የመረጃ ሪፖርቶች",
+  
+  
+      "executive_dashboard": "የአመራር ዳሽቦርድ",
+      "revenue_overview": "የገቢ አጠቃላይ እይታ",
+      "performance_reports": "የአፈጻጸም ሪፖርቶች",
+  
+  
+      "sector_dashboard": "የዘርፍ ዳሽቦርድ",
+      "revenue_data_entry": "የገቢ መረጃ ማስገቢያ",
+      "sector_reports": "የዘርፍ ሪፖርቶች",
+  
+  
+      "decision_dashboard": "የውሳኔ ዳሽቦርድ",
+      "pending_approvals": "በመጠባበቅ ላይ ያሉ ማጽደቆች",
+      "decision_history": "የውሳኔ ታሪክ",
+  
+  
+      "collections": "ማሰባሰብ",
+      "pending_collections": "በመጠባበቅ ላይ ያሉ ስብስቦች",
+      "completed_collections": "የተጠናቀቁ ስብስቦች",
+  
+  
+      "payments": "ክፍያዎች",
+      "create_payment": "ክፍያ መመዝገብ",
+      "payment_history": "የክፍያ ታሪክ",
+  
+  
+      "reports": "ሪፖርቶች",
+      "receipts": "ደረሰኞች",
+      "collection_reports": "የስብስብ ሪፖርቶች",
+  
+  
+      "registration_dashboard": "የምዝገባ ዳሽቦርድ",
+      "taxpayer_registration": "የግብር ከፋይ ምዝገባ",
+      "registration_reports": "የምዝገባ ሪፖርቶች",
+  
+  
+      "platform": "መድረክ",
+      "shared": "የጋራ"
+    }
+}

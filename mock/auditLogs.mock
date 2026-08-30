@@ -1,0 +1,96 @@
+import type { ActionType, SystemLog } from "@/types/auditLog";
+
+const USERS = [
+  { id: "u-101", name: "Amara Tesfaye", email: "amara.tesfaye@company.com" },
+  { id: "u-102", name: "Daniel Kim", email: "daniel.kim@company.com" },
+  { id: "u-103", name: "Priya Nair", email: "priya.nair@company.com" },
+  { id: "u-104", name: "Marcus Webb", email: "marcus.webb@company.com" },
+  { id: "u-105", name: "Sofia Alvarez", email: "sofia.alvarez@company.com" },
+];
+
+const MODULES = ["billing", "auth", "inventory", "orders", "users", "settings"];
+
+const ACTIONS: ActionType[] = [
+  "CREATE",
+  "UPDATE",
+  "DELETE",
+  "LOGIN",
+  "LOGIN_FAILED",
+  "EXPORT",
+];
+
+const RESOURCE_TYPES = ["Invoice", "User", "Product", "Order", "Role", "ApiToken"];
+
+function seededRandom(seed: number): () => number {
+  let s = seed;
+  return () => {
+    s = (s * 9301 + 49297) % 233280;
+    return s / 233280;
+  };
+}
+
+function pick<T>(rng: () => number, arr: T[]): T {
+  return arr[Math.floor(rng() * arr.length)];
+}
+
+function buildMockAuditLogs(count: number): SystemLog[] {
+  const rng = seededRandom(42);
+  const now = new Date("2026-08-30T09:12:00Z").getTime();
+  const logs: SystemLog[] = [];
+
+  for (let i = 0; i < count; i++) {
+    const action = pick(rng, ACTIONS);
+    const module = pick(rng, MODULES);
+    const isSystem = rng() < 0.12;
+    const user = isSystem ? null : pick(rng, USERS);
+    const resourceType = pick(rng, RESOURCE_TYPES);
+    const resourceId = `${resourceType.slice(0, 3).toUpperCase()}-${1000 + Math.floor(rng() * 8999)}`;
+    const created = new Date(
+      now - i * (1000 * 60 * 37) - Math.floor(rng() * 1000 * 60 * 20)
+    );
+
+    const descriptions: Record<ActionType, string> = {
+      CREATE: `Created ${resourceType.toLowerCase()} ${resourceId}`,
+      UPDATE: `Updated ${resourceType.toLowerCase()} ${resourceId}`,
+      DELETE: `Deleted ${resourceType.toLowerCase()} ${resourceId}`,
+      LOGIN: "Signed in successfully",
+      LOGIN_FAILED: "Failed sign-in attempt",
+      EXPORT: `Exported ${module} report`,
+    };
+
+    const hasDiff = action === "UPDATE";
+
+    logs.push({
+      id: `log-${10000 + i}`,
+      user,
+      user_id: user?.id ?? null,
+      action,
+      module,
+      resource: { type: resourceType, id: resourceId },
+      description: descriptions[action],
+      old_values: hasDiff
+        ? { status: "pending", amount: 1042.5, assignee: "Daniel Kim" }
+        : null,
+      new_values: hasDiff
+        ? { status: "approved", amount: 1042.5, assignee: "Priya Nair" }
+        : null,
+      request_id: `req-${(1000000 + i * 37).toString(16)}`,
+      ip_address: `${10 + (i % 200)}.${(i * 3) % 255}.${(i * 7) % 255}.${(i * 13) % 255}`,
+      user_agent: pick(rng, [
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/126",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/126",
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5) Safari/604.1",
+      ]),
+      metadata: {
+        source: pick(rng, ["web", "mobile", "api"]),
+        latency_ms: 40 + Math.floor(rng() * 300),
+      },
+      created_at: created.toISOString(),
+    });
+  }
+
+  return logs;
+}
+
+/** Generated once per module load — stable across re-renders and filters. */
+export const MOCK_AUDIT_LOGS: SystemLog[] = buildMockAuditLogs(134);

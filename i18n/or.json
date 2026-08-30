@@ -1,0 +1,185 @@
+{
+  "system": {
+    "title": "Sirna Galii Mana Qopheessaa",
+    "full_title": "Sirna Bulchiinsa Galii Magaalaa"
+  },
+
+
+  "landing": {
+
+    "banner": {
+      "message": "Tajaajilli dijitaalaa kun ijaaramaa jira. Tajaajiloonni muraasni yeroo ammaa qorannoo keessa jiru.",
+      "feedback": "Yaada kenni"
+    },
+
+
+    "navbar": {
+
+      "logo": "Galii Mana Qopheessaa",
+      "services": "Tajaajiloota",
+      "about": "Waa'ee Keenya",
+      "contact": "Nu Quunnamaa",
+
+      "sign_in": "Seeni",
+
+      "citizen_portal": "Kutaalee Lammii",
+      "office_system": "Sirna Waajjiraa"
+
+    },
+
+
+    "hero": {
+
+      "badge": "Amma jiraattota Adaamaa tajaajilaa jira",
+
+      "title": "Mosajii Tejajila GMQ",
+
+      "description":
+      "Tajaajiloota mootummaa argadhu, kaffaltii bulchi, hojii waajjiraa sirna nageenya qabu keessatti raawwadhu.",
+
+      "citizen_button": "Portal Lammii",
+
+      "office_button": "Sirna Waajjiraa"
+
+    },
+
+
+    "features": {
+
+      "title": "Tajaajiloota Jiraatan",
+
+      "description":
+      "Tajaajiloonni haala qophii isaanii irratti hundaa'uun dabalamaa jiru.",
+
+
+      "citizen": {
+
+        "title": "Tajaajila Lammii",
+
+        "description":
+        "Taaksii kaffali, liqii ilaali, kaffaltii kee hordofi."
+
+      },
+
+
+      "revenue": {
+
+        "title": "Bulchiinsa Galii",
+
+        "description":
+        "Taaksii, kaffaltii, adabbii fi galii mootummaa bulchi."
+
+      },
+
+
+      "sector": {
+
+        "title": "Hojii Dameewwanii",
+
+        "description":
+        "Hojii lafa, ijaarsaa fi qorannoo waliin walitti hidha."
+
+      },
+
+
+      "soon":
+      "Damee dabalataa keessatti yeroo dhiyootti ni banama"
+
+    },
+
+
+    "about": {
+
+      "title":
+      "Sirna Mootummaa Dijitaalaa Ammaa",
+
+      "description":
+      "Sirni kun jiraattotaa fi waajjira mootummaa sirna tokko keessatti wal qunnamsiisa."
+
+    },
+
+
+    "footer": {
+
+      "copyright":
+      "Adama GovService Portal. Mirgi hundi eegamaadha.",
+
+      "report_issue":
+      "Rakkoo gabaasi ykn yaada kenni"
+
+    }
+
+  },
+   
+  "navigation": {
+   
+     "dashboard":"Gabatee Hojii",
+   
+     "user_access":"Bulchiinsa Fayyadamtootaa fi Hayyamaa",
+     "users": "Fayyadamtoota",
+     "taxpayers": "Kaffaltoota Gibiraa",
+     "access_managements": "Bulchiinsa Mirga Seeni",
+   
+     "administrative_structure":"Caasaa Bulchiinsaa",
+     "administrative_units":"Kutaa Bulchiinsaa",
+     "sectors":"Dameewwan",
+
+     "calculation_setup":"Qindaa'ina Shallaggii",
+    "measurement_units":"Safartuuwwan Madaallii",
+    "base_fields":"Dirreewwan Bu'uuraa",
+    "formula_variables":"Jijjiiramoota Foormulaa",
+   
+     "workflow_configuration":"Qindaa'ina Adeemsa Hojii",
+     "service_sector_access":"Hayyama Tajaajila fi Damee",
+   
+     "system_settings":"Qindaa'ina Sirnaa",
+     "audit_logs":"Galmee Hordoffii",
+   
+   
+     "revenue_configuration":"Qindaa'ina Galii",
+     "revenue_categories":"Ramaddii Galii",
+     "revenue_codes":"Koodii Galii",
+     "revenue_services":"Tajaajila Galii",
+   
+     "tariff_management":"Bulchiinsa Tariffii",
+     "tariff_versions":"Gosa Tariffii",
+     "tariff_rules":"Seera Tariffii",
+   
+     "data_validation":"Mirkaneessa Odeeffannoo",
+     "data_reports":"Gabaasa Odeeffannoo",
+   
+   
+     "executive_dashboard":"Gabatee Hoggansaa",
+     "revenue_overview":"Ilaalcha Galii",
+     "performance_reports":"Gabaasa Raawwii",
+   
+   
+     "sector_dashboard":"Gabatee Damee",
+     "revenue_data_entry":"Galmee Odeeffannoo Galii",
+     "sector_reports":"Gabaasa Damee",
+   
+   
+     "decision_dashboard":"Gabatee Murtii",
+     "pending_approvals":"Eegaa Raggaasisaa",
+     "decision_history":"Seenaa Murtii",
+   
+   
+     "collections":"Sassaabbii",
+     "pending_collections":"Sassaabbii Eegaa Jiru",
+     "completed_collections":"Sassaabbii Xumurame",
+   
+     "payments":"Kaffaltii",
+     "create_payment":"Galmeessi Kaffaltii",
+     "payment_history":"Seenaa Kaffaltii",
+   
+     "reports":"Gabaasa",
+     "receipts":"Ragaa Kaffaltii",
+     "collection_reports":"Gabaasa Sassaabbii",
+   
+   
+     "registration_dashboard":"Gabatee Galmee",
+     "taxpayer_registration":"Galmee Kaffaltootaa",
+     "registration_reports":"Gabaasa Galmee"
+   
+    }
+}

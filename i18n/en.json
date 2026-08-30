@@ -1,0 +1,157 @@
+{
+  "system": {
+    "title": "GMQ Revenue System",
+    "full_title": "Government Revenue Management System"
+  },
+
+  "landing": {
+    "banner": {
+      "message": "This is a new digital service and still being built. Some features are in beta.",
+      "feedback": "Share feedback"
+    },
+
+    "navbar": {
+      "logo": "Galii Mana Qopheessaa",
+      "services": "Services",
+      "about": "About",
+      "contact": "Contact",
+      "sign_in": "Sign In",
+      "citizen_portal": "Citizen Portal",
+      "office_system": "Office System"
+    },
+
+    "hero": {
+      "badge": "Now serving Adama citizens online",
+      "title": "Mosajii Tejajila GMQ",
+      "description": "Access public services, manage payments, and handle government operations in one secure system.",
+      "citizen_button": "Citizen Portal",
+      "office_button": "Office System"
+    },
+
+    "features": {
+      "title": "Available Services",
+      "description": "Services are being introduced gradually based on readiness.",
+
+      "citizen": {
+        "title": "Citizen Services",
+        "description": "Pay taxes, view bills, and track payments in real time."
+      },
+
+      "revenue": {
+        "title": "Revenue Management",
+        "description": "Manage taxes, fees, penalties, and government revenue operations."
+      },
+
+      "sector": {
+        "title": "Sector Operations",
+        "description": "Land, construction, and inspection workflows integrated."
+      },
+
+      "soon": "Rolling out to more sectors soon"
+    },
+
+    "about": {
+      "title": "Modern Digital Government System",
+      "description": "This platform connects citizens and government offices in one unified system with secure authentication, billing, and payment integration."
+    },
+
+    "footer": {
+      "copyright": "Adama GovService Portal. All rights reserved.",
+      "report_issue": "Report an issue or suggest a feature"
+    }
+  },
+
+
+  "auth": {
+    "welcome": "Welcome Back",
+
+    "fields": {
+      "email": "Email Address",
+      "password": "Password"
+    },
+
+    "actions": {
+      "login": "Login Securely",
+      "logging_in": "Logging in..."
+    }
+  },
+  "navigation": {
+    "dashboard": "Dashboard",
+  
+    "user_access": "User & Access Management",
+    "users": "Users",
+    "taxpayers": "Taxpayers",
+    "access_managements": "Access Management",
+  
+    "administrative_structure": "Administrative Structure",
+    "administrative_units": "Administrative Units",
+    "sectors": "Sectors",
+  
+    "workflow_configuration": "Workflow Configuration",
+    "service_sector_access": "Service Sector Access",
+  
+    "system_settings": "System Settings",
+    "audit_logs": "Audit Logs",
+  
+    "revenue_configuration": "Revenue Configuration",
+    "revenue_categories": "Revenue Categories",
+    "revenue_codes": "Revenue Codes",
+    "revenue_services": "Revenue Services",
+  
+    "calculation_setup": "Calculation Setup",
+    "measurement_units": "Measurement Units",
+    "base_fields": "Base Fields",
+    "formula_variables": "Formula Variables",
+  
+    "tariff_management": "Tariff Management",
+    "tariff_versions": "Tariff Versions",
+    "tariff_rules": "Tariff Rules",
+  
+    "data_validation": "Data Validation",
+    "data_reports": "Data Reports",
+  
+    "executive_dashboard": "Executive Dashboard",
+    "revenue_overview": "Revenue Overview",
+    "performance_reports": "Performance Reports",
+  
+    "sector_dashboard": "Sector Dashboard",
+  
+    "revenue_operations": "Revenue Operations",
+    "revenue_data": "Revenue Data",
+    "assessments": "Assessments",
+    "invoices": "Invoices",
+  
+    "workflow": "Workflow",
+    "drafts": "Drafts",
+    "pending_approval": "Pending Approval",
+    "submitted": "Submitted",
+    "returned": "Returned",
+  
+    "reports": "Reports",
+    "revenue_reports": "Revenue Reports",
+    "sector_performance_reports": "Performance Reports",
+  
+    "decision_dashboard": "Decision Dashboard",
+  
+    "assessment_decisions": "Assessment Decisions",
+    "pending_assessments": "Pending Assessments",
+    "decision_history": "Decision History",
+  
+    "decision_reports": "Decision Reports",
+  
+    "collections": "Collections",
+    "pending_collections": "Pending Collections",
+    "completed_collections": "Completed Collections",
+  
+    "payments": "Payments",
+    "create_payment": "Create Payment",
+    "payment_history": "Payment History",
+  
+    "receipts": "Receipts",
+    "collection_reports": "Collection Reports",
+  
+    "registration_dashboard": "Registration Dashboard",
+    "taxpayer_registration": "Taxpayer Registration",
+    "registration_reports": "Registration Reports"
+  }
+}

@@ -84,19 +84,19 @@ export const NAV_ITEMS: NavItem[] = [
   // EXECUTIVE / ANALYTICS
   // =========================================================
 
-  {
-    title: "analytics",
-    url: "/office/dashboard/analytics",
-    icon: Target,
-    permission: APP_PERMISSIONS.ANALYTICS_VIEW,
-  },
+  // {
+  //   title: "analytics",
+  //   url: "/office/dashboard/analytics",
+  //   icon: Target,
+  //   permission: APP_PERMISSIONS.ANALYTICS_VIEW,
+  // },
 
-  {
-    title: "revenue_overview",
-    url: "/dashboard/revenue",
-    icon: Landmark,
-    permission: APP_PERMISSIONS.REVENUE_VIEW,
-  },
+  // {
+  //   title: "revenue_overview",
+  //   url: "/dashboard/revenue",
+  //   icon: Landmark,
+  //   permission: APP_PERMISSIONS.REVENUE_VIEW,
+  // },
 
   // =========================================================
   // ADMINISTRATIVE STRUCTURE
@@ -146,15 +146,15 @@ export const NAV_ITEMS: NavItem[] = [
 
       {
         title: "roles",
-        url: "/office/dashboard/access-managements/roles",
+        url: "/office/dashboard/access-managements",
         permission: APP_PERMISSIONS.ROLES_VIEW,
       },
 
-      {
-        title: "permissions",
-        url: "/office/dashboard/access-managements/permissions",
-        permission: APP_PERMISSIONS.PERMISSIONS_VIEW,
-      },
+      // {
+      //   title: "permissions",
+      //   url: "/office/dashboard/access-managements/permissions",
+      //   permission: APP_PERMISSIONS.PERMISSIONS_VIEW,
+      // },
     ],
   },
 
@@ -162,12 +162,12 @@ export const NAV_ITEMS: NavItem[] = [
   // SYSTEM SETTINGS
   // =========================================================
 
-  {
-    title: "system_settings",
-    url: "/office/dashboard/system-settings",
-    icon: Settings,
-    permission: APP_PERMISSIONS.SYSTEM_SETTINGS_VIEW,
-  },
+  // {
+  //   title: "system_settings",
+  //   url: "/office/dashboard/system-settings",
+  //   icon: Settings,
+  //   permission: APP_PERMISSIONS.SYSTEM_SETTINGS_VIEW,
+  // },
 
   // =========================================================
   // AUDIT
@@ -229,11 +229,15 @@ export const NAV_ITEMS: NavItem[] = [
 
       {
         title: "tariffs",
-        url: "/office/dashboard/revenue-managements/tariffs",
+        url: "/office/dashboard/revenue-managements/tariff-versions",
         permission: APP_PERMISSIONS.TARIFF_VIEW,
       },
     ],
   },
+
+
+
+  
 
   // =========================================================
   // DATA VALIDATION
@@ -250,225 +254,225 @@ export const NAV_ITEMS: NavItem[] = [
   // DATA REPORTS
   // =========================================================
 
-  {
-    title: "data_reports",
-    url: "/data/reports",
-    icon: FileText,
-    permission: APP_PERMISSIONS.REPORTS_VIEW,
-  },
+  // {
+  //   title: "data_reports",
+  //   url: "/data/reports",
+  //   icon: FileText,
+  //   permission: APP_PERMISSIONS.REPORTS_VIEW,
+  // },
 
   // =========================================================
   // REVENUE OPERATIONS
   // =========================================================
 
-  {
-    title: "revenue_operations",
-    url: "#",
-    icon: ClipboardList,
+  // {
+  //   title: "revenue_operations",
+  //   url: "#",
+  //   icon: ClipboardList,
 
-    items: [
-      {
-        title: "assessments",
-        url: "/office/dashboard/assessments",
-        permission: APP_PERMISSIONS.ASSESSMENT_VIEW,
-      },
+  //   items: [
+  //     {
+  //       title: "assessments",
+  //       url: "/office/dashboard/assessments",
+  //       permission: APP_PERMISSIONS.ASSESSMENT_VIEW,
+  //     },
 
-      {
-        title: "invoices",
-        url: "/office/dashboard/invoices",
-        permission: APP_PERMISSIONS.INVOICE_VIEW,
-      },
+  //     {
+  //       title: "invoices",
+  //       url: "/office/dashboard/invoices",
+  //       permission: APP_PERMISSIONS.INVOICE_VIEW,
+  //     },
 
-      {
-        title: "penalties",
-        url: "/office/dashboard/penalties",
-        permission: APP_PERMISSIONS.PENALTY_VIEW,
-      },
+  //     {
+  //       title: "penalties",
+  //       url: "/office/dashboard/penalties",
+  //       permission: APP_PERMISSIONS.PENALTY_VIEW,
+  //     },
 
-      {
-        title: "discounts",
-        url: "/office/dashboard/discounts",
-        permission: APP_PERMISSIONS.DISCOUNT_VIEW,
-      },
+  //     {
+  //       title: "discounts",
+  //       url: "/office/dashboard/discounts",
+  //       permission: APP_PERMISSIONS.DISCOUNT_VIEW,
+  //     },
 
-      {
-        title: "revenue_adjustments",
-        url: "/office/dashboard/revenue-adjustments",
-        permission: APP_PERMISSIONS.REVENUE_ADJUSTMENTS_VIEW,
-      },
+  //     {
+  //       title: "revenue_adjustments",
+  //       url: "/office/dashboard/revenue-adjustments",
+  //       permission: APP_PERMISSIONS.REVENUE_ADJUSTMENTS_VIEW,
+  //     },
 
-      {
-        title: "revenue_complaints",
-        url: "/office/dashboard/revenue-complaints",
-        permission: APP_PERMISSIONS.REVENUE_COMPLAINTS_VIEW,
-      },
-    ],
-  },
+  //     {
+  //       title: "revenue_complaints",
+  //       url: "/office/dashboard/revenue-complaints",
+  //       permission: APP_PERMISSIONS.REVENUE_COMPLAINTS_VIEW,
+  //     },
+  //   ],
+  // },
 
   // =========================================================
   // ASSESSMENT DECISIONS
   // =========================================================
 
-  {
-    title: "assessment_decisions",
-    url: "#",
-    icon: CheckCircle2,
+  // {
+  //   title: "assessment_decisions",
+  //   url: "#",
+  //   icon: CheckCircle2,
 
-    items: [
-      {
-        title: "pending_assessments",
-        url: "/office/dashboard/assessments/pendings",
-        permission: APP_PERMISSIONS.ASSESSMENT_VIEW,
-      },
+  //   items: [
+  //     {
+  //       title: "pending_assessments",
+  //       url: "/office/dashboard/assessments/pendings",
+  //       permission: APP_PERMISSIONS.ASSESSMENT_VIEW,
+  //     },
 
-      {
-        title: "decision_history",
-        url: "/office/dashboard/assessments/history",
-        permission: APP_PERMISSIONS.ASSESSMENT_VIEW_HISTORY,
-      },
-    ],
-  },
+  //     {
+  //       title: "decision_history",
+  //       url: "/office/dashboard/assessments/history",
+  //       permission: APP_PERMISSIONS.ASSESSMENT_VIEW_HISTORY,
+  //     },
+  //   ],
+  // },
 
   // =========================================================
   // COLLECTIONS
   // =========================================================
 
-  {
-    title: "collections",
-    url: "#",
-    icon: Inbox,
+  // {
+  //   title: "collections",
+  //   url: "#",
+  //   icon: Inbox,
 
-    items: [
-      {
-        title: "pending_collections",
-        url: "/revenue/collections/pending",
-        permission: APP_PERMISSIONS.REVENUE_VIEW,
-      },
+  //   items: [
+  //     {
+  //       title: "pending_collections",
+  //       url: "/revenue/collections/pending",
+  //       permission: APP_PERMISSIONS.REVENUE_VIEW,
+  //     },
 
-      {
-        title: "completed_collections",
-        url: "/revenue/collections/completed",
-        permission: APP_PERMISSIONS.REVENUE_VIEW,
-      },
-    ],
-  },
+  //     {
+  //       title: "completed_collections",
+  //       url: "/revenue/collections/completed",
+  //       permission: APP_PERMISSIONS.REVENUE_VIEW,
+  //     },
+  //   ],
+  // },
 
   // =========================================================
   // PAYMENTS
   // =========================================================
 
-  {
-    title: "payments",
-    url: "#",
-    icon: Wallet,
+  // {
+  //   title: "payments",
+  //   url: "#",
+  //   icon: Wallet,
 
-    items: [
-      {
-        title: "payments",
-        url: "/revenue/payments",
-        permission: APP_PERMISSIONS.PAYMENT_VIEW,
-      },
+  //   items: [
+  //     {
+  //       title: "payments",
+  //       url: "/revenue/payments",
+  //       permission: APP_PERMISSIONS.PAYMENT_VIEW,
+  //     },
 
-      {
-        title: "payment_history",
-        url: "/revenue/payments/history",
-        permission: APP_PERMISSIONS.PAYMENT_VIEW_HISTORY,
-      },
-    ],
-  },
+  //     {
+  //       title: "payment_history",
+  //       url: "/revenue/payments/history",
+  //       permission: APP_PERMISSIONS.PAYMENT_VIEW_HISTORY,
+  //     },
+  //   ],
+  // },
 
   // =========================================================
   // RECEIPTS
   // =========================================================
 
-  {
-    title: "receipts",
-    url: "/revenue/receipts",
-    icon: FileText,
-    permission: APP_PERMISSIONS.RECEIPT_VIEW,
-  },
+  // {
+  //   title: "receipts",
+  //   url: "/revenue/receipts",
+  //   icon: FileText,
+  //   permission: APP_PERMISSIONS.RECEIPT_VIEW,
+  // },
 
   // =========================================================
   // REVENUE REPORTS
   // =========================================================
 
-  {
-    title: "revenue_reports",
-    url: "/revenue/reports",
-    icon: FileText,
-    permission: APP_PERMISSIONS.REVENUE_REPORTS_VIEW,
-  },
+  // {
+  //   title: "revenue_reports",
+  //   url: "/revenue/reports",
+  //   icon: FileText,
+  //   permission: APP_PERMISSIONS.REVENUE_REPORTS_VIEW,
+  // },
 
   // =========================================================
   // PLANS
   // =========================================================
 
-  {
-    title: "plans",
-    url: "/office/dashboard/plans",
-    icon: Target,
-    permission: APP_PERMISSIONS.PLANS_VIEW,
-  },
+  // {
+  //   title: "plans",
+  //   url: "/office/dashboard/plans",
+  //   icon: Target,
+  //   permission: APP_PERMISSIONS.PLANS_VIEW,
+  // },
 
   // =========================================================
   // PERFORMANCE REPORTS
   // =========================================================
 
-  {
-    title: "performance_reports",
-    url: "/office/dashboard/reports/performance",
-    icon: FileText,
-    permission: APP_PERMISSIONS.REPORTS_VIEW,
-  },
+  // {
+  //   title: "performance_reports",
+  //   url: "/office/dashboard/reports/performance",
+  //   icon: FileText,
+  //   permission: APP_PERMISSIONS.REPORTS_VIEW,
+  // },
 
   // =========================================================
   // REPORTS
   // =========================================================
 
-  {
-    title: "reports",
-    url: "/office/dashboard/reports",
-    icon: FileText,
-    permission: APP_PERMISSIONS.REPORTS_VIEW,
-  },
+  // {
+  //   title: "reports",
+  //   url: "/office/dashboard/reports",
+  //   icon: FileText,
+  //   permission: APP_PERMISSIONS.REPORTS_VIEW,
+  // },
 
   // =========================================================
   // KPI
   // =========================================================
 
-  {
-    title: "kpi",
-    url: "/office/dashboard/kpi",
-    icon: Target,
-    permission: APP_PERMISSIONS.KPI_VIEW,
-  },
+  // {
+  //   title: "kpi",
+  //   url: "/office/dashboard/kpi",
+  //   icon: Target,
+  //   permission: APP_PERMISSIONS.KPI_VIEW,
+  // },
 
   // =========================================================
   // EVIDENCE
   // =========================================================
 
-  {
-    title: "evidence",
-    url: "/office/dashboard/evidence",
-    icon: FileText,
-    permission: APP_PERMISSIONS.EVIDENCE_VIEW,
-  },
+  // {
+  //   title: "evidence",
+  //   url: "/office/dashboard/evidence",
+  //   icon: FileText,
+  //   permission: APP_PERMISSIONS.EVIDENCE_VIEW,
+  // },
 
   // =========================================================
   // REGISTRATION
   // =========================================================
 
-  {
-    title: "taxpayer_registration",
-    url: "/registration/taxpayers",
-    icon: Users,
-    permission: APP_PERMISSIONS.CITIZENS_VIEW,
-  },
+  // {
+  //   title: "taxpayer_registration",
+  //   url: "/registration/taxpayers",
+  //   icon: Users,
+  //   permission: APP_PERMISSIONS.CITIZENS_VIEW,
+  // },
 
-  {
-    title: "registration_reports",
-    url: "/registration/reports",
-    icon: FileText,
-    permission: APP_PERMISSIONS.REPORTS_VIEW,
-  },
+  // {
+  //   title: "registration_reports",
+  //   url: "/registration/reports",
+  //   icon: FileText,
+  //   permission: APP_PERMISSIONS.REPORTS_VIEW,
+  // },
 ];

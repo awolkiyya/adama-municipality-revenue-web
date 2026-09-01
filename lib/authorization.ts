@@ -838,7 +838,7 @@ BASE_FIELD_VIEW: {
 */
 
 REVENUE_CATEGORY_VIEW: {
-  resource: "revenue_categories",
+  resource: "revenue_categorys",
   action: "view",
 },
 

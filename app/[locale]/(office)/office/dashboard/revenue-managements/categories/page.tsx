@@ -22,7 +22,6 @@ import {
 import { useRouter } from 'next/navigation'
 import { DataTablePagination } from '@/components/table/data-pagination'
 import { Toolbar } from '@/components/commen/Toolbar'
-import { SearchInput } from '../../sectors/page'
 import { Filters } from '@/components/commen/Filters'
 import { ExportDropdown } from '@/components/commen/ExportDropdown'
 import { CommentType, FilterField } from '@/types/commen'
@@ -34,6 +33,7 @@ import { CommenTable } from '@/components/table/CommenTable'
 import { useRevenueCategories } from '@/hooks/revenue/revenueCategory.hook'
 import { RevenueCategorySummary } from '@/types/revenue/revenue-category'
 import { StatCard, StatCardGrid } from '@/components/cards/StatCard'
+import { SearchInput } from '@/components/input/SearchInput'
 
 
 
@@ -254,6 +254,8 @@ function RevenueCategoriesPage() {
                     value={filters}
                     onChange={setFilters}
                     onReset={() => setFilters(INITIAL_FILTERS)}
+                    layout="row"
+                    resetPosition="end"
                   />
                 </div>
 

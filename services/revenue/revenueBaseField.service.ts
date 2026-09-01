@@ -121,7 +121,7 @@ export const baseFieldService = {
 
       const res =
         await api.post<ApiResponse<BaseField>>(
-          "/base-fields",
+          "/revenue/base-fields",
           data
         );
 
@@ -157,7 +157,7 @@ export const baseFieldService = {
 
       const res =
         await api.patch<ApiResponse<BaseField>>(
-          `/base-fields/${id}`,
+          `/revenue/base-fields/${id}`,
           data
         );
 
@@ -192,7 +192,7 @@ export const baseFieldService = {
 
       const res =
         await api.patch<ApiResponse<BaseField>>(
-          `/base-fields/${id}/activate`
+          `/revenue/base-fields/${id}/activate`
         );
 
 
@@ -226,7 +226,7 @@ export const baseFieldService = {
 
       const res =
         await api.patch<ApiResponse<BaseField>>(
-          `/base-fields/${id}/deactivate`
+          `/revenue/base-fields/${id}/deactivate`
         );
 
 
@@ -260,7 +260,7 @@ export const baseFieldService = {
 
       const res =
         await api.delete<ApiResponse<null>>(
-          `/base-fields/${id}`
+          `/revenue/base-fields/${id}`
         );
 
 

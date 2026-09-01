@@ -1,0 +1,64 @@
+name: Deploy Frontend (Next.js + Docker)
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Deploy to Server
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          timeout: 30s
+          command_timeout: 15m
+          script_stop: true
+
+          script: |
+            set -e
+
+            echo "======================================"
+            echo "🚀 Starting Commercial Enforcement Admin Deployment"
+            echo "======================================"
+
+            cd /home/tradmin/apps/commercial_enforcement_web
+
+            echo "📍 Current directory:"
+            pwd
+
+            echo "📥 Pulling latest code..."
+            git fetch origin main
+            git reset --hard origin/main
+
+            echo "🐳 Building Docker images..."
+            docker compose build --pull
+
+            echo "🚀 Recreating containers..."
+            docker compose up -d --force-recreate frontend nginx
+
+            echo "🧹 Cleaning unused images..."
+            docker image prune -af
+            docker builder prune -f
+
+            echo "📦 Container status..."
+            docker compose ps
+
+            echo "⏳ Waiting for application..."
+            sleep 10
+
+            echo "🏥 Running health check..."
+            curl -f http://localhost/health
+
+            echo "======================================"
+            echo "✅ Deployment completed successfully"
+            echo "======================================"

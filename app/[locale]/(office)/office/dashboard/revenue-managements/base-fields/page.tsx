@@ -1,180 +1,817 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
-import { Banner } from "@/components/banner/topBanner";
-import { FloatingParticles } from "@/components/design/FloatingParticles";
-import { IconBadge } from "@/components/commen/icon-badge";
+import {
+  Hash,
+  Divide,
+  Percent,
+  Type as TypeIcon,
+  Calendar,
+  ToggleLeft,
+  ListChecks,
+  Search,
+  Plus,
+  Pencil,
+  Trash2,
+  X,
+  ChevronLeft,
+  ChevronRight,
+  SlidersHorizontal,
+  CircleCheck,
+  CircleSlash,
+  Ruler,
+  AlertTriangle,
+  Inbox,
+  Loader2,
+} from "lucide-react";
 
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
+import {
+  BaseField,
+  BaseFieldDataType,
+  BaseFieldFilters,
+} from "@/types/revenue/revenue-baseField";
 
-import { CircleDot, Database, Loader2, Plus, Ruler, Search } from "lucide-react";
+import { MeasurementUnit } from "@/types/revenue/revenue-unit";
+import { MeasurementUnitDropdown } from "@/components/input/MeasurmentUnitDropDown";
 
-import { Filters } from "@/components/commen/Filters";
-import { Toolbar } from "@/components/commen/Toolbar";
-import { ExportDropdown } from "@/components/commen/ExportDropdown";
-
-import { CommenTable } from "@/components/table/CommenTable";
-import { CommentType, FilterField } from "@/types/commen";
-import { DataTablePagination } from "@/components/table/data-pagination";
-
-import { useSelector } from "react-redux";
-import { RootState } from "@/lib/store/store";
-import { resolveActions } from "@/components/table/permissions/ResolveActions";
-import { CommentTableRegistry } from "@/components/table/registry";
-
-import { BaseField } from "@/types/revenue/revenue-baseField";
-
+import {
+  useBaseFields,
+  useCreateBaseField,
+  useUpdateBaseField,
+  useActivateBaseField,
+  useDeactivateBaseField,
+  useDeleteBaseField,
+} from "@/hooks/revenue/revenueBaseField.hook";
 
 import { toast } from "sonner";
-import { useBaseFields, useCreateBaseField, useUpdateBaseField } from "@/hooks/revenue/revenueBaseField.hook";
+import FieldPanel from "@/components/dialogs/FieldPanel";
+import { Banner } from "@/components/banner/topBanner";
+import { IconBadge } from "@/components/commen/icon-badge";
+import { FloatingParticles } from "@/components/design/FloatingParticles";
+import { Button } from "@/components/ui/button";
 
-/**
- * ASSUMPTIONS — these names weren't in what you shared, so they're guesses
- * based on the Sector page's conventions. If your codebase uses different
- * names, these are the only spots that need to change:
- *
- * - Hooks: useBaseFields / useCreateBaseField / useUpdateBaseField from "@/hooks/useRevenue.hook"
- * - Dialog: BaseFieldDialog from "@/components/dialogs/BaseFieldModal" (same prop
- *   shape as SectorDialog: open, onOpenChange, baseField, isLoading, onSubmit)
- * - Registry key: CommentTableRegistry.baseField
- * - Table type: "baseField"
- * - BaseField fields referenced below: id, name, code, dataType, unit, is_active
- */
+// ============================================================
+// DATA TYPE PRESENTATION
+// ============================================================
 
-/* =========================
-   FILTERS
-========================= */
-export const baseFieldFilters: FilterField[] = [
+const DATA_TYPE_META: Record<
+  BaseFieldDataType,
   {
-    key: "status",
-    label: "Status",
-    type: "select",
-    defaultValue: "ALL",
-    icon: CircleDot,
-    options: [
-      { label: "All", value: "ALL" },
-      { label: "Active", value: "ACTIVE" },
-      { label: "Inactive", value: "INACTIVE" },
-    ],
+    label: string;
+    icon: React.ElementType;
+    needsUnit: boolean;
+  }
+> = {
+  NUMBER: {
+    label: "Number",
+    icon: Hash,
+    needsUnit: true,
   },
-  {
-    key: "dataType",
-    label: "Data Type",
-    type: "select",
-    defaultValue: "ALL",
-    icon: Ruler,
-    options: [
-      { label: "All Types", value: "ALL" },
-      { label: "Number", value: "NUMBER" },
-      { label: "Percentage", value: "PERCENTAGE" },
-      { label: "Text", value: "TEXT" },
-      { label: "Date", value: "DATE" },
-      { label: "Boolean", value: "BOOLEAN" },
-    ],
-  },
-];
 
-const INITIAL_FILTERS = {
-  status: "ALL",
-  dataType: "ALL",
+  DECIMAL: {
+    label: "Decimal",
+    icon: Divide,
+    needsUnit: true,
+  },
+
+  PERCENTAGE: {
+    label: "Percentage",
+    icon: Percent,
+    needsUnit: false,
+  },
+
+  TEXT: {
+    label: "Text",
+    icon: TypeIcon,
+    needsUnit: false,
+  },
+
+  DATE: {
+    label: "Date",
+    icon: Calendar,
+    needsUnit: false,
+  },
+
+  BOOLEAN: {
+    label: "Boolean",
+    icon: ToggleLeft,
+    needsUnit: false,
+  },
+
+  SELECT: {
+    label: "Select",
+    icon: ListChecks,
+    needsUnit: false,
+  },
 };
 
-/* =========================
-   SEARCH INPUT
-========================= */
-export function SearchInput({
-  className,
-  ...props
-}: React.ComponentProps<typeof Input>) {
+const DATA_TYPES =
+  Object.keys(DATA_TYPE_META) as BaseFieldDataType[];
+
+// ============================================================
+// FORM STATE
+// ============================================================
+
+interface FieldFormState {
+  name: string;
+  code: string;
+  data_type: BaseFieldDataType;
+  measurement_unit_id: string;
+  description: string;
+  is_active: boolean;
+}
+
+const emptyForm: FieldFormState = {
+  name: "",
+  code: "",
+  data_type: "NUMBER",
+  measurement_unit_id: "",
+  description: "",
+  is_active: true,
+};
+
+
+// ============================================================
+// ERROR HELPER
+// ============================================================
+
+function getErrorMessage(
+  error: any,
+  fallback: string,
+): string {
   return (
-    <div className="relative w-full max-w-md">
-      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-      <Input className={`w-full py-5 pl-9 ${className ?? ""}`} {...props} />
+    error?.response?.data?.message ??
+    error?.message ??
+    fallback
+  );
+}
+
+// ============================================================
+// DATA TYPE BADGE
+// ============================================================
+
+function DataTypeBadge({
+  type,
+}: {
+  type: BaseFieldDataType;
+}) {
+  const meta = DATA_TYPE_META[type];
+
+  if (!meta) {
+    return (
+      <span className="inline-flex items-center rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-700">
+        {type}
+      </span>
+    );
+  }
+
+  const Icon = meta.icon;
+
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-700">
+      <Icon
+        size={13}
+        strokeWidth={2}
+        className="text-teal-700"
+      />
+
+      {meta.label}
+    </span>
+  );
+}
+
+// ============================================================
+// STATUS BADGE
+// ============================================================
+
+function StatusBadge({
+  active,
+  loading = false,
+}: {
+  active: boolean;
+  loading?: boolean;
+}) {
+  if (loading) {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-500">
+        <Loader2
+          size={13}
+          className="animate-spin"
+        />
+
+        Updating...
+      </span>
+    );
+  }
+
+  if (active) {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-md bg-teal-50 px-2 py-1 text-xs font-medium text-teal-800">
+        <CircleCheck
+          size={13}
+          strokeWidth={2}
+        />
+
+        Active
+      </span>
+    );
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-md bg-amber-50 px-2 py-1 text-xs font-medium text-amber-800">
+      <CircleSlash
+        size={13}
+        strokeWidth={2}
+      />
+
+      Inactive
+    </span>
+  );
+}
+
+// ============================================================
+// ICON BUTTON
+// ============================================================
+
+function IconButton({
+  icon: Icon,
+  label,
+  onClick,
+  tone = "default",
+  disabled = false,
+}: {
+  icon: React.ElementType;
+  label: string;
+  onClick: () => void;
+  tone?: "default" | "danger";
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+      disabled={disabled}
+      className={
+        "inline-flex h-8 w-8 items-center justify-center rounded-md border border-transparent text-slate-500 transition-colors " +
+        "hover:border-slate-200 hover:bg-slate-100 hover:text-slate-900 " +
+        "disabled:cursor-not-allowed disabled:opacity-50 " +
+        (tone === "danger"
+          ? "hover:!border-red-200 hover:!bg-red-50 hover:!text-red-700"
+          : "")
+      }
+    >
+      <Icon
+        size={16}
+        strokeWidth={2}
+      />
+    </button>
+  );
+}
+// ============================================================
+// DELETE CONFIRMATION
+// ============================================================
+
+function DeleteConfirm({
+  field,
+  isLoading,
+  onCancel,
+  onConfirm,
+}: {
+  field: BaseField;
+  isLoading: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4"
+      onClick={onCancel}
+    >
+      <div
+        role="alertdialog"
+        aria-modal="true"
+        className="w-full max-w-sm rounded-lg bg-white p-5 shadow-2xl"
+        onClick={(event) =>
+          event.stopPropagation()
+        }
+      >
+        <div className="flex items-start gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-50 text-red-600">
+            <Trash2 size={16} />
+          </div>
+
+          <div>
+            <h3 className="text-sm font-semibold text-slate-900">
+              Delete this field?
+            </h3>
+
+            <p className="mt-1 text-sm text-slate-500">
+              <span className="font-mono text-slate-700">
+                {field.code}
+              </span>{" "}
+              will be permanently removed.
+              Reports or forms referencing
+              it may break.
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={isLoading}
+            className="rounded-md border border-slate-300 px-3.5 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Cancel
+          </button>
+
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={isLoading}
+            className="inline-flex items-center rounded-md bg-red-600 px-3.5 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isLoading && (
+              <Loader2
+                size={14}
+                className="mr-2 animate-spin"
+              />
+            )}
+
+            {isLoading
+              ? "Deleting..."
+              : "Delete field"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
 
-/* =========================
-   PAGE
-========================= */
-export default function BaseFieldsPage() {
-  const user = useSelector((state: RootState) => state.auth.user);
+// ============================================================
+// MAIN MANAGER
+// ============================================================
 
-  const [open, setOpen] = useState(false);
-  const [selectedBaseField, setSelectedBaseField] = useState<BaseField | null>(null);
+export default function BaseFieldManager() {
+  // ==========================================================
+  // SERVER STATE
+  // ==========================================================
 
-  const [search, setSearch] = useState("");
+  const [filters, setFilters] =
+    useState<BaseFieldFilters>({
+      page: 1,
+      per_page: 8,
+      search: "",
+      dataType: undefined,
+      isActive: undefined,
+    });
 
-  const [filters, setFilters] = useState<Record<string, any>>(INITIAL_FILTERS);
+  const [searchInput, setSearchInput] =
+    useState("");
 
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  // ==========================================================
+  // UI STATE
+  // ==========================================================
 
-  const createBaseField = useCreateBaseField();
-  const updateBaseField = useUpdateBaseField();
+  const [panelOpen, setPanelOpen] =
+    useState(false);
 
-  const { data, isLoading } = useBaseFields({
-    page,
-    per_page: pageSize,
+  const [editingField, setEditingField] =
+    useState<BaseField | null>(null);
 
-    search,
+  const [pendingDelete, setPendingDelete] =
+    useState<BaseField | null>(null);
 
-    dataType: filters.dataType === "ALL" ? undefined : filters.dataType,
+  const [statusUpdatingId, setStatusUpdatingId] =
+    useState<string | null>(null);
 
-    isActive:
-      filters.status === "ACTIVE"
-        ? true
-        : filters.status === "INACTIVE"
-          ? false
-          : undefined,
-  });
+  // ==========================================================
+  // QUERY
+  // ==========================================================
 
-  const baseFields = data?.data ?? [];
-  const meta = data?.meta;
+  const {
+    data,
+    isLoading,
+    isFetching,
+  } = useBaseFields(filters);
 
-  /* =========================
-     TABLE DATA
-  ========================= */
-  const tableData = useMemo(() => {
-    return baseFields.map((field) => ({
-      ...field,
+  const fields =
+    data?.data ?? [];
 
-      id: field.id,
-      name: field.name,
-      code: field.code,
-      dataType: field.data_type,
-      unit_code: field.unit_code,
-    }));
-  }, [baseFields]);
+  const meta =
+    data?.meta;
 
-  if (!user?.role) {
-    return (
-      <div className="flex h-40 flex-col items-center justify-center gap-3 text-center">
-        <Loader2 className="size-6 animate-spin text-muted-foreground" />
-        <div className="flex flex-col gap-0.5">
-          <p className="text-sm font-medium text-foreground">Checking permissions</p>
-          <p className="text-xs text-muted-foreground">This will only take a moment</p>
-        </div>
-      </div>
+  // ==========================================================
+  // MUTATIONS
+  // ==========================================================
+
+  const createBaseField =
+    useCreateBaseField();
+
+  const updateBaseField =
+    useUpdateBaseField();
+
+  const activateBaseField =
+    useActivateBaseField();
+
+  const deactivateBaseField =
+    useDeactivateBaseField();
+
+  const deleteBaseField =
+    useDeleteBaseField();
+
+  // ==========================================================
+  // DEBOUNCED SEARCH
+  // ==========================================================
+
+  useEffect(() => {
+    const timer =
+      setTimeout(() => {
+        setFilters((current) => ({
+          ...current,
+          search:
+            searchInput.trim() || undefined,
+          page: 1,
+        }));
+      }, 300);
+
+    return () =>
+      clearTimeout(timer);
+  }, [searchInput]);
+
+  // ==========================================================
+  // EXISTING CODES
+  // ==========================================================
+
+  const existingCodes =
+    useMemo(
+      () =>
+        new Set(
+          fields.map(
+            (field) =>
+              field.code,
+          ),
+        ),
+      [fields],
+    );
+
+  // ==========================================================
+  // PAGINATION
+  // ==========================================================
+
+  const currentPage =
+    meta?.current_page ??
+    filters.page ??
+    1;
+
+  const lastPage =
+    meta?.last_page ??
+    1;
+
+  const total =
+    meta?.total ?? 0;
+
+  const perPage =
+    meta?.per_page ??
+    filters.per_page ??
+    8;
+
+  // ==========================================================
+  // OPEN CREATE
+  // ==========================================================
+
+  function openCreate() {
+    setEditingField(null);
+    setPanelOpen(true);
+  }
+
+  // ==========================================================
+  // OPEN EDIT
+  // ==========================================================
+
+  function openEdit(
+    field: BaseField,
+  ) {
+    setEditingField(field);
+    setPanelOpen(true);
+  }
+
+  // ==========================================================
+  // CLOSE PANEL
+  // ==========================================================
+
+  function closePanel() {
+    if (
+      createBaseField.isPending ||
+      updateBaseField.isPending
+    ) {
+      return;
+    }
+
+    setPanelOpen(false);
+    setEditingField(null);
+  }
+
+  // ==========================================================
+  // SAVE
+  // ==========================================================
+
+  function handleSave(
+    formData: FieldFormState,
+  ) {
+    const payload: Partial<BaseField> =
+      {
+        name: formData.name.trim(),
+
+        code: formData.code
+          .trim()
+          .toUpperCase(),
+
+        data_type:
+          formData.data_type,
+
+        measurement_unit_id:
+          formData.measurement_unit_id ||
+          undefined,
+
+        description:
+          formData.description.trim() ||
+          undefined,
+
+        is_active:
+          formData.is_active,
+      };
+
+    // ========================================================
+    // UPDATE
+    // ========================================================
+
+    if (editingField) {
+      updateBaseField.mutate(
+        {
+          id: editingField.id,
+          data: payload,
+        },
+        {
+          onSuccess: () => {
+            toast.success(
+              "Base field updated successfully",
+            );
+
+            setPanelOpen(false);
+            setEditingField(null);
+          },
+
+          onError: (
+            error: any,
+          ) => {
+            toast.error(
+              getErrorMessage(
+                error,
+                "Failed to update base field",
+              ),
+            );
+          },
+        },
+      );
+
+      return;
+    }
+
+    // ========================================================
+    // CREATE
+    // ========================================================
+
+    createBaseField.mutate(
+      payload,
+      {
+        onSuccess: () => {
+          toast.success(
+            "Base field created successfully",
+          );
+
+          setPanelOpen(false);
+          setEditingField(null);
+        },
+
+        onError: (
+          error: any,
+        ) => {
+          toast.error(
+            getErrorMessage(
+              error,
+              "Failed to create base field",
+            ),
+          );
+        },
+      },
     );
   }
 
-  const actions = resolveActions(CommentTableRegistry.baseField, user.role.name);
-  // role based action here
+  // ==========================================================
+  // TOGGLE ACTIVE
+  // ==========================================================
+
+  function toggleActive(
+    field: BaseField,
+  ) {
+    if (
+      statusUpdatingId !== null ||
+      activateBaseField.isPending ||
+      deactivateBaseField.isPending
+    ) {
+      return;
+    }
+
+    setStatusUpdatingId(
+      field.id,
+    );
+
+    const mutation =
+      field.is_active
+        ? deactivateBaseField
+        : activateBaseField;
+
+    mutation.mutate(
+      field.id,
+      {
+        onSuccess: () => {
+          toast.success(
+            field.is_active
+              ? "Base field deactivated successfully"
+              : "Base field activated successfully",
+          );
+        },
+
+        onError: (
+          error: any,
+        ) => {
+          toast.error(
+            getErrorMessage(
+              error,
+              "Failed to change base field status",
+            ),
+          );
+        },
+
+        onSettled: () => {
+          setStatusUpdatingId(
+            null,
+          );
+        },
+      },
+    );
+  }
+
+  // ==========================================================
+  // DELETE
+  // ==========================================================
+
+  function confirmDelete() {
+    if (!pendingDelete) {
+      return;
+    }
+
+    deleteBaseField.mutate(
+      pendingDelete.id,
+      {
+        onSuccess: () => {
+          toast.success(
+            "Base field deleted successfully",
+          );
+
+          setPendingDelete(null);
+        },
+
+        onError: (
+          error: any,
+        ) => {
+          toast.error(
+            getErrorMessage(
+              error,
+              "Failed to delete base field",
+            ),
+          );
+        },
+      },
+    );
+  }
+
+  // ==========================================================
+  // FILTER COUNT
+  // ==========================================================
+
+  const activeFilterCount =
+    (filters.dataType
+      ? 1
+      : 0) +
+    (filters.isActive !== undefined
+      ? 1
+      : 0);
+
+  // ==========================================================
+  // CLEAR FILTERS
+  // ==========================================================
+
+  function clearFilters() {
+    setSearchInput("");
+
+    setFilters(
+      (current) => ({
+        ...current,
+        search: undefined,
+        dataType:
+          undefined,
+        isActive:
+          undefined,
+        page: 1,
+      }),
+    );
+  }
+
+  // ==========================================================
+  // PAGE CHANGE
+  // ==========================================================
+
+  const setPage =
+    useCallback(
+      (page: number) => {
+        setFilters(
+          (current) => ({
+            ...current,
+            page: Math.max(
+              1,
+              Math.min(
+                page,
+                lastPage,
+              ),
+            ),
+          }),
+        );
+      },
+      [lastPage],
+    );
+
+  // ==========================================================
+  // EMPTY
+  // ==========================================================
+
+  const isEmpty =
+    !isLoading &&
+    fields.length === 0;
+
+  // ==========================================================
+  // RENDER
+  // ==========================================================
 
   return (
-    <div className="m-auto max-w-5xl space-y-6">
-      {/* ================= HEADER ================= */}
+    <div className="min-h-screen bg-slate-50 px-4 py-8 font-sans sm:px-8">
+      <div className="mx-auto max-w-6xl">
+
+        {/* ====================================================
+            HEADER
+        ==================================================== */}
+
+         {/* ======================================================
+          HEADER
+      ====================================================== */}
+
       <Banner
-        description="Create and manage reusable base fields used in revenue calculations, tariff formulas, and service assessments."
+        description="
+        Reusable field definitions
+        available across forms,
+        templates, and reports.
+        "
         badge={
           <IconBadge
-            className="gap-2 rounded-full bg-black/20 p-3 text-[10px] text-white"
-            icon={<Database className="h-3 w-3" />}
+            className="
+              gap-2
+              rounded-full
+              bg-black/20
+              p-3
+              text-[10px]
+              text-white
+            "
+            icon={
+              <Ruler
+                className="
+                  h-3
+                  w-3
+                "
+              />
+            }
           >
-            {"Base Fields"}
+            Base fields
           </IconBadge>
         }
         background={
@@ -189,119 +826,579 @@ export default function BaseFieldsPage() {
         actions={
           <Button
             variant="outline"
-            onClick={() => {
-              setSelectedBaseField(null);
-              setOpen(true);
-            }}
+            onClick={openCreate}
           >
-            <Plus className="h-4 w-4" />
+            <Plus
+              className="
+                h-4
+                w-4
+              "
+            />
+
             Create New
           </Button>
         }
-        overlayClassName="bg-gradient-to-r from-primary/95 via-primary/80 to-primary/50"
-        className="text-white"
+        overlayClassName="
+          bg-gradient-to-r
+          from-primary/95
+          via-primary/80
+          to-primary/50
+        "
+        className="
+          text-white
+        "
       />
 
-      {/* ================= TOOLBAR ================= */}
-      <Toolbar
-        search={
-          <SearchInput
-            placeholder="Search base fields..."
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1);
-            }}
-          />
-        }
-        right={
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            {/* Filters */}
-            <div className="flex-1">
-              <Filters
-                schema={baseFieldFilters}
-                value={filters}
-                onChange={(next) => {
-                  setFilters(next);
-                  setPage(1);
-                }}
-                onReset={() => {
-                  setFilters(INITIAL_FILTERS);
-                  setPage(1);
-                }}
-              />
-            </div>
+        {/* <div className="mb-6 flex flex-col gap-1">
+          <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-teal-700">
+            <Ruler size={13} />
+
+            Data catalog
           </div>
+
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h1 className="text-2xl font-semibold text-slate-900">
+                Base fields
+              </h1>
+
+              <p className="mt-1 text-sm text-slate-500">
+                Reusable field definitions
+                available across forms,
+                templates, and reports.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={openCreate}
+              className="inline-flex items-center gap-1.5 rounded-md bg-teal-700 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-teal-800"
+            >
+              <Plus size={16} />
+
+              New field
+            </button>
+          </div>
+        </div> */}
+
+        {/* ====================================================
+            TOOLBAR
+        ==================================================== */}
+
+        <div className="mb-4 flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-3 sm:flex-row sm:items-center">
+
+          {/* SEARCH */}
+
+          <div className="relative flex-1">
+            <Search
+              size={15}
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+            />
+
+            <input
+              type="text"
+              value={searchInput}
+              onChange={(event) =>
+                setSearchInput(
+                  event.target.value,
+                )
+              }
+              placeholder="Search by name or code"
+              className="w-full rounded-md border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-teal-500 focus:bg-white focus:ring-2 focus:ring-teal-500/20"
+            />
+          </div>
+
+          {/* FILTERS */}
+
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1.5 text-xs text-slate-400">
+              <SlidersHorizontal size={13} />
+            </div>
+
+            {/* DATA TYPE */}
+
+            <select
+              value={
+                filters.dataType ??
+                ""
+              }
+              onChange={(event) =>
+                setFilters(
+                  (current) => ({
+                    ...current,
+
+                    dataType:
+                      event.target
+                        .value
+                        ? (event.target
+                            .value as BaseFieldDataType)
+                        : undefined,
+
+                    page: 1,
+                  }),
+                )
+              }
+              className="rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm text-slate-700 outline-none focus:border-teal-500"
+            >
+              <option value="">
+                All types
+              </option>
+
+              {DATA_TYPES.map(
+                (dataType) => (
+                  <option
+                    key={dataType}
+                    value={dataType}
+                  >
+                    {
+                      DATA_TYPE_META[
+                        dataType
+                      ].label
+                    }
+                  </option>
+                ),
+              )}
+            </select>
+
+            {/* STATUS */}
+
+            <select
+              value={
+                filters.isActive ===
+                undefined
+                  ? ""
+                  : filters.isActive
+                    ? "active"
+                    : "inactive"
+              }
+              onChange={(event) =>
+                setFilters(
+                  (current) => ({
+                    ...current,
+
+                    isActive:
+                      event.target
+                        .value === ""
+                        ? undefined
+                        : event.target
+                              .value ===
+                            "active",
+
+                    page: 1,
+                  }),
+                )
+              }
+              className="rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm text-slate-700 outline-none focus:border-teal-500"
+            >
+              <option value="">
+                Any status
+              </option>
+
+              <option value="active">
+                Active
+              </option>
+
+              <option value="inactive">
+                Inactive
+              </option>
+            </select>
+
+            {/* CLEAR */}
+
+            {activeFilterCount >
+              0 && (
+              <button
+                type="button"
+                onClick={
+                  clearFilters
+                }
+                className="inline-flex items-center gap-1 rounded-md px-2 py-2 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+              >
+                <X size={12} />
+
+                Clear
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* ====================================================
+            TABLE
+        ==================================================== */}
+
+        <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+
+          {/* LOADING */}
+
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center gap-3 px-6 py-20 text-center">
+              <Loader2
+                size={28}
+                className="animate-spin text-teal-700"
+              />
+
+              <div>
+                <p className="text-sm font-medium text-slate-700">
+                  Loading base fields
+                </p>
+
+                <p className="mt-1 text-xs text-slate-400">
+                  Please wait...
+                </p>
+              </div>
+            </div>
+          ) : isEmpty ? (
+            /* ==================================================
+               EMPTY
+            ================================================== */
+
+            <div className="flex flex-col items-center justify-center gap-2 px-6 py-16 text-center">
+              <Inbox
+                size={28}
+                className="text-slate-300"
+              />
+
+              <p className="text-sm font-medium text-slate-700">
+                No fields match these
+                filters
+              </p>
+
+              <p className="text-xs text-slate-400">
+                Try a different search
+                term or clear your
+                filters.
+              </p>
+
+              {(filters.search ||
+                activeFilterCount >
+                  0) && (
+                <button
+                  type="button"
+                  onClick={
+                    clearFilters
+                  }
+                  className="mt-1 text-xs font-medium text-teal-700 hover:underline"
+                >
+                  Reset search and
+                  filters
+                </button>
+              )}
+            </div>
+          ) : (
+            /* ==================================================
+               DATA
+            ================================================== */
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                    <th className="px-4 py-3 font-medium">
+                      Field
+                    </th>
+
+                    <th className="px-4 py-3 font-medium">
+                      Type
+                    </th>
+
+                    <th className="px-4 py-3 font-medium">
+                      Unit
+                    </th>
+
+                    <th className="px-4 py-3 font-medium">
+                      Status
+                    </th>
+
+                    <th className="px-4 py-3 font-medium">
+                      Updated
+                    </th>
+
+                    <th className="px-4 py-3 text-right font-medium">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {fields.map(
+                    (field) => {
+                      const statusLoading =
+                        statusUpdatingId ===
+                        field.id;
+
+                      return (
+                        <tr
+                          key={
+                            field.id
+                          }
+                          className="border-b border-slate-100 last:border-0 hover:bg-slate-50/60"
+                        >
+                          {/* FIELD */}
+
+                          <td className="px-4 py-3">
+                            <div className="font-medium text-slate-900">
+                              {
+                                field.name
+                              }
+                            </div>
+
+                            <div className="font-mono text-xs text-slate-400">
+                              {
+                                field.code
+                              }
+                            </div>
+                          </td>
+
+                          {/* TYPE */}
+
+                          <td className="px-4 py-3">
+                            <DataTypeBadge
+                              type={
+                                field.data_type
+                              }
+                            />
+                          </td>
+
+                          {/* UNIT */}
+
+                          <td className="px-4 py-3 text-slate-500">
+                            {field.unit_code ? (
+                              <span className="font-mono text-xs">
+                                {
+                                  field.unit_code
+                                }
+                              </span>
+                            ) : (
+                              <span className="text-slate-300">
+                                —
+                              </span>
+                            )}
+                          </td>
+
+                          {/* STATUS */}
+
+                          <td className="px-4 py-3">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                toggleActive(
+                                  field,
+                                )
+                              }
+                              disabled={
+                                statusLoading ||
+                                statusUpdatingId !==
+                                  null
+                              }
+                              className="cursor-pointer disabled:cursor-not-allowed"
+                              title={
+                                field.is_active
+                                  ? "Deactivate field"
+                                  : "Activate field"
+                              }
+                            >
+                              <StatusBadge
+                                active={
+                                  field.is_active
+                                }
+                                loading={
+                                  statusLoading
+                                }
+                              />
+                            </button>
+                          </td>
+
+                          {/* UPDATED */}
+
+                          <td className="px-4 py-3 text-xs text-slate-400">
+                            {field.updated_at
+                              ? new Date(
+                                  field.updated_at,
+                                ).toLocaleDateString()
+                              : "—"}
+                          </td>
+
+                          {/* ACTIONS */}
+
+                          <td className="px-4 py-3">
+                            <div className="flex items-center justify-end gap-1">
+                              <IconButton
+                                icon={
+                                  Pencil
+                                }
+                                label={`Edit ${field.name}`}
+                                onClick={() =>
+                                  openEdit(
+                                    field,
+                                  )
+                                }
+                                disabled={
+                                  statusLoading ||
+                                  statusUpdatingId !==
+                                    null
+                                }
+                              />
+
+                              <IconButton
+                                icon={
+                                  Trash2
+                                }
+                                label={`Delete ${field.name}`}
+                                tone="danger"
+                                onClick={() =>
+                                  setPendingDelete(
+                                    field,
+                                  )
+                                }
+                                disabled={
+                                  statusLoading ||
+                                  statusUpdatingId !==
+                                    null
+                                }
+                              />
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    },
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* ==================================================
+              PAGINATION
+          ================================================== */}
+
+          {!isLoading &&
+            total > 0 && (
+              <div className="flex flex-col items-center justify-between gap-2 border-t border-slate-200 px-4 py-3 sm:flex-row">
+                <p className="text-xs text-slate-500">
+                  Showing{" "}
+                  <span className="font-medium text-slate-700">
+                    {Math.min(
+                      (currentPage -
+                        1) *
+                        perPage +
+                        1,
+                      total,
+                    )}
+                  </span>
+                  –
+                  <span className="font-medium text-slate-700">
+                    {Math.min(
+                      currentPage *
+                        perPage,
+                      total,
+                    )}
+                  </span>{" "}
+                  of{" "}
+                  <span className="font-medium text-slate-700">
+                    {total}
+                  </span>{" "}
+                  fields
+                </p>
+
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setPage(
+                        currentPage -
+                          1,
+                      )
+                    }
+                    disabled={
+                      currentPage <=
+                        1 ||
+                      isFetching
+                    }
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-slate-500 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <ChevronLeft
+                      size={15}
+                    />
+                  </button>
+
+                  <span className="px-2 text-xs font-medium text-slate-600">
+                    Page{" "}
+                    {currentPage}{" "}
+                    of{" "}
+                    {lastPage}
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setPage(
+                        currentPage +
+                          1,
+                      )
+                    }
+                    disabled={
+                      currentPage >=
+                        lastPage ||
+                      isFetching
+                    }
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-slate-500 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <ChevronRight
+                      size={15}
+                    />
+                  </button>
+                </div>
+              </div>
+            )}
+        </div>
+      </div>
+
+      {/* ======================================================
+          CREATE / EDIT PANEL
+      ====================================================== */}
+
+      <FieldPanel
+        open={panelOpen}
+        editing={editingField}
+        existingCodes={
+          existingCodes
+        }
+        isLoading={
+          createBaseField.isPending ||
+          updateBaseField.isPending
+        }
+        onClose={
+          closePanel
+        }
+        onSave={
+          handleSave
         }
       />
 
-      {/* ================= TABLE ================= */}
-      <CommenTable
-        type={"baseField" as CommentType}
-        data={tableData}
-        page={page}
-        pageSize={pageSize}
-        isLoading={isLoading}
-        actions={actions}
-        onView={(row) => console.log("view", row)}
-        onEdit={(row) => {
-          setSelectedBaseField(row);
-          setOpen(true);
-        }}
-        onDelete={(id) => console.log("delete", id)}
-      />
+      {/* ======================================================
+          DELETE CONFIRMATION
+      ====================================================== */}
 
-      {/* ===== PAGINATION ===== */}
-      <DataTablePagination
-        page={page}
-        pageSize={pageSize}
-        total={meta?.total ?? 0}
-        onPageChange={(newPage) => {
-          setPage(newPage);
-        }}
-        onPageSizeChange={(size) => {
-          setPageSize(size);
-          setPage(1);
-        }}
-      />
-
-      {/* <BaseFieldDialog
-        open={open}
-        onOpenChange={setOpen}
-        baseField={selectedBaseField}
-        isLoading={createBaseField.isPending || updateBaseField.isPending}
-        onSubmit={(data) => {
-          if (selectedBaseField) {
-            updateBaseField.mutate(
-              {
-                id: selectedBaseField.id,
-                data,
-              },
-              {
-                onSuccess: () => {
-                  toast.success("Base field updated successfully");
-                  setOpen(false);
-                  setSelectedBaseField(null);
-                },
-                onError: (error: any) => {
-                  toast.error(error?.message ?? "Failed to update base field");
-                },
-              }
-            );
-          } else {
-            createBaseField.mutate(data, {
-              onSuccess: () => {
-                toast.success("Base field created successfully");
-                setOpen(false);
-                setSelectedBaseField(null);
-              },
-              onError: (error: any) => {
-                toast.error(error?.message ?? "Failed to create base field");
-              },
-            });
+      {pendingDelete && (
+        <DeleteConfirm
+          field={
+            pendingDelete
           }
-        }}
-      /> */}
+          isLoading={
+            deleteBaseField.isPending
+          }
+          onCancel={() =>
+            !deleteBaseField.isPending &&
+            setPendingDelete(
+              null,
+            )
+          }
+          onConfirm={
+            confirmDelete
+          }
+        />
+      )}
     </div>
   );
 }
+

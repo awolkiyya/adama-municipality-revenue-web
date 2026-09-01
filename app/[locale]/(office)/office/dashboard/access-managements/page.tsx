@@ -38,6 +38,7 @@ import {
 import { resolveActions } from "@/components/table/permissions/ResolveActions";
 import { CommentTableRegistry } from "@/components/table/registry";
 import ProtectedRoute from "@/components/access/ProtectedRoute";
+import { SearchInput } from "@/components/input/SearchInput";
 
 
 
@@ -70,26 +71,6 @@ interface RoleRow {
   createdAt: string;
 }
 
-
-/* ============================================================
-   SEARCH INPUT
-============================================================ */
-
-function SearchInput({
-  className,
-  ...props
-}: React.ComponentProps<typeof Input>) {
-  return (
-    <div className="relative w-full max-w-md">
-      <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-
-      <Input
-        className={`pl-9 py-4 ${className ?? ""}`}
-        {...props}
-      />
-    </div>
-  );
-}
 
 
 /* ============================================================

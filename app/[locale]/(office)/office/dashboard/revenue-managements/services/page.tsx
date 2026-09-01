@@ -643,6 +643,8 @@ const summary: RevenueServiceSummary = {
                   value={filters}
                   onChange={handleFiltersChange}
                   onReset={handleResetFilters}
+                  layout="row"
+                  resetPosition="end"
                 />
               </div>
             </div>

@@ -35,7 +35,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 import {
-  TariffVersionFormDialog,
+  TariffVersionFormSheet,
   TariffVersionFormValues,
 } from "@/components/dialogs/TariffVersionFormDialog";
 
@@ -207,9 +207,11 @@ export default function TariffVersionsPage() {
   // generic type throughout the component.
   // -------------------------------------------------------------------------
 
+  console.log(tariffResponse?.data);
+
   const versions: TariffVersion[] =
-    Array.isArray(tariffResponse)
-      ? (tariffResponse as TariffVersion[])
+    Array.isArray(tariffResponse?.data)
+      ? (tariffResponse.data as TariffVersion[])
       : [];
 
   // -------------------------------------------------------------------------
@@ -910,7 +912,7 @@ export default function TariffVersionsPage() {
       {/* Create / Edit dialog */}
       {/* ================================================================= */}
 
-      <TariffVersionFormDialog
+      <TariffVersionFormSheet
         open={dialogOpen}
         onOpenChange={
           handleDialogOpenChange

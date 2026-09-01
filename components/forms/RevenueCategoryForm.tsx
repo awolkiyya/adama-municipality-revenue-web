@@ -44,15 +44,14 @@ export type RevenueDomain =
     | "SALE"
     | "CAPITAL";
 
-export interface RevenueCodeFormRow {
+    export interface RevenueCodeFormRow {
+        id?: string;
+        code: string;
+        name: string;
+        description: string;
+        isActive: boolean;
+    }
 
-    id?: string;
-    clientId?: string;
-    code: string;
-    name: string;
-    description: string;
-    isActive: boolean;
-}
 
 export interface RevenueCategoryFormValues {
     id?: string;
@@ -151,20 +150,16 @@ export function RevenueCategoryForm({
     };
 
     const addCodeRow = () => {
-        setValues((prev) => ({
-            ...prev,
-            // Give new rows a client-side id so `updateRevenueCodeSchema`
-            // (which requires a uuid `id`) doesn't reject them when editing
-            // an existing category. Ignored by the create-mode schema.
-            codes: [
-                ...prev.codes,
-                {
-                    ...EMPTY_CODE_ROW,
-                    clientId: crypto.randomUUID(),
-                },
-            ],
-        }));
-    };
+    setValues((prev) => ({
+        ...prev,
+        codes: [
+            ...prev.codes,
+            {
+                ...EMPTY_CODE_ROW,
+            },
+        ],
+    }));
+};
 
     const removeCodeRow = (index: number) => {
         setValues((prev) => ({

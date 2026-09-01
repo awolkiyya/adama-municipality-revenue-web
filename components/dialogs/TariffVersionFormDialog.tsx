@@ -3,13 +3,13 @@
 import { useEffect, useState } from "react";
 
 import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-    DialogDescription,
-    DialogFooter,
-} from "@/components/ui/dialog";
+    Sheet,
+    SheetContent,
+    SheetDescription,
+    SheetFooter,
+    SheetHeader,
+    SheetTitle,
+} from "@/components/ui/sheet";
 
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -134,26 +134,26 @@ const nextYear =
 
 const DEFAULT_VALUES:
     TariffVersionFormValues = {
-        year: String(nextYear),
+    year: String(nextYear),
 
-        name:
-            `${nextYear} Standard Tariff`,
+    name:
+        `${nextYear} Standard Tariff`,
 
-        description: "",
+    description: "",
 
-        effective_from:
-            `${nextYear}-01-01`,
+    effective_from:
+        `${nextYear}-01-01`,
 
-        effective_to: "",
+    effective_to: "",
 
-        isActive: false,
-    };
+    isActive: false,
+};
 
 // ============================================================================
 // PROPS
 // ============================================================================
 
-interface TariffVersionFormDialogProps {
+interface TariffVersionFormSheetProps {
     open: boolean;
 
     onOpenChange: (
@@ -211,14 +211,14 @@ function SectionLabel({
 // COMPONENT
 // ============================================================================
 
-export function TariffVersionFormDialog({
+export function TariffVersionFormSheet({
     open,
     onOpenChange,
     existingYears,
     hasActiveVersion,
     initialValues,
     onSubmit,
-}: TariffVersionFormDialogProps) {
+}: TariffVersionFormSheetProps) {
     // --------------------------------------------------------------------------
     // Mode
     // --------------------------------------------------------------------------
@@ -593,7 +593,7 @@ export function TariffVersionFormDialog({
                 });
 
                 /**
-                 * Parent closes the dialog after successful mutation.
+                 * Parent closes the sheet after successful mutation.
                  */
                 resetForm();
             } finally {
@@ -604,14 +604,14 @@ export function TariffVersionFormDialog({
         };
 
     // ==========================================================================
-    // DIALOG OPEN CHANGE
+    // SHEET OPEN CHANGE
     // ==========================================================================
 
     const handleOpenChange = (
         next: boolean
     ) => {
         /**
-         * Do not allow the dialog to close while a request is running.
+         * Do not allow the sheet to close while a request is running.
          */
         if (
             isSubmitting
@@ -631,346 +631,351 @@ export function TariffVersionFormDialog({
     // ==========================================================================
 
     return (
-        <Dialog
+        <Sheet
             open={open}
             onOpenChange={
                 handleOpenChange
             }
         >
-            <DialogContent className="max-w-4xl">
+            <SheetContent
+                side="right"
+                className="flex w-full flex-col sm:max-w-xl p-4"
+            >
                 {/* ================================================================= */}
                 {/* Header */}
                 {/* ================================================================= */}
 
-                <DialogHeader>
+                <SheetHeader className="border-b pb-4">
                     <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
                         <CalendarClock className="h-5 w-5" />
                     </div>
 
-                    <DialogTitle>
+                    <SheetTitle>
                         {isEditMode
                             ? "Edit Tariff Version"
                             : "New Tariff Version"}
-                    </DialogTitle>
+                    </SheetTitle>
 
-                    <DialogDescription>
+                    <SheetDescription>
                         {isEditMode
                             ? "Update the yearly tariff version and its effective period."
                             : "Create a new yearly pricing container. You can add individual pricing rules to it afterward."}
-                    </DialogDescription>
-                </DialogHeader>
+                    </SheetDescription>
+                </SheetHeader>
 
                 {/* ================================================================= */}
-                {/* Form */}
+                {/* Scrollable Form */}
                 {/* ================================================================= */}
 
-                <div className="space-y-6 py-2">
-                    {/* ============================================================= */}
-                    {/* Version Details */}
-                    {/* ============================================================= */}
+                <div className="min-h-0 flex-1 overflow-y-auto px-1 py-4">
+                    <div className="space-y-6">
+                        {/* ========================================================= */}
+                        {/* Version Details */}
+                        {/* ========================================================= */}
 
-                    <div className="space-y-3">
-                        <SectionLabel icon={Layers}>
-                            Version details
-                        </SectionLabel>
+                        <div className="space-y-3">
+                            <SectionLabel icon={Layers}>
+                                Version details
+                            </SectionLabel>
 
-                        <div className="grid grid-cols-[120px_1fr] gap-3">
-                            {/* ----------------------------------------------------- */}
-                            {/* Year */}
-                            {/* ----------------------------------------------------- */}
+                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-[100px_1fr]">
+                                {/* ------------------------------------------------- */}
+                                {/* Year */}
+                                {/* ------------------------------------------------- */}
 
-                            <div className="space-y-1.5">
-                                <Label htmlFor="year">
-                                    Year{" "}
-                                    <span className="text-red-500">
-                                        *
-                                    </span>
-                                </Label>
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="year">
+                                        Year{" "}
+                                        <span className="text-red-500">
+                                            *
+                                        </span>
+                                    </Label>
 
-                                <Input
-                                    id="year"
-                                    type="number"
-                                    value={
-                                        values.year
-                                    }
-                                    onChange={(
-                                        event
-                                    ) =>
-                                        handleYearChange(
+                                    <Input
+                                        id="year"
+                                        type="number"
+                                        value={
+                                            values.year
+                                        }
+                                        onChange={(
                                             event
-                                                .target
-                                                .value
-                                        )
-                                    }
-                                    placeholder="2027"
-                                    disabled={
-                                        isSubmitting
-                                    }
-                                    className={
-                                        errors.year
-                                            ? "border-red-400 focus-visible:ring-red-400"
-                                            : ""
-                                    }
-                                />
-                            </div>
-
-                            {/* ----------------------------------------------------- */}
-                            {/* Name */}
-                            {/* ----------------------------------------------------- */}
-
-                            <div className="space-y-1.5">
-                                <Label htmlFor="name">
-                                    Name{" "}
-                                    <span className="text-red-500">
-                                        *
-                                    </span>
-                                </Label>
-
-                                <Input
-                                    id="name"
-                                    value={
-                                        values.name
-                                    }
-                                    onChange={(
-                                        event
-                                    ) => {
-                                        setNameTouched(
-                                            true
-                                        );
-
-                                        setField(
-                                            "name",
-                                            event
-                                                .target
-                                                .value
-                                        );
-                                    }}
-                                    placeholder={`${values.year || nextYear} Standard Tariff`}
-                                    disabled={
-                                        isSubmitting
-                                    }
-                                    className={
-                                        errors.name
-                                            ? "border-red-400 focus-visible:ring-red-400"
-                                            : ""
-                                    }
-                                />
-                            </div>
-                        </div>
-
-                        {/* --------------------------------------------------------- */}
-                        {/* Year / Name Errors */}
-                        {/* --------------------------------------------------------- */}
-
-                        {(errors.year ||
-                            errors.name) && (
-                            <div className="space-y-1">
-                                {errors.year && (
-                                    <p className="flex items-center gap-1 text-xs text-red-500">
-                                        <AlertCircle className="h-3 w-3" />
-
-                                        {
+                                        ) =>
+                                            handleYearChange(
+                                                event
+                                                    .target
+                                                    .value
+                                            )
+                                        }
+                                        placeholder="2027"
+                                        disabled={
+                                            isSubmitting
+                                        }
+                                        className={
                                             errors.year
+                                                ? "border-red-400 focus-visible:ring-red-400"
+                                                : ""
                                         }
-                                    </p>
-                                )}
+                                    />
+                                </div>
 
-                                {errors.name && (
-                                    <p className="flex items-center gap-1 text-xs text-red-500">
-                                        <AlertCircle className="h-3 w-3" />
+                                {/* ------------------------------------------------- */}
+                                {/* Name */}
+                                {/* ------------------------------------------------- */}
 
-                                        {
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="name">
+                                        Name{" "}
+                                        <span className="text-red-500">
+                                            *
+                                        </span>
+                                    </Label>
+
+                                    <Input
+                                        id="name"
+                                        value={
+                                            values.name
+                                        }
+                                        onChange={(
+                                            event
+                                        ) => {
+                                            setNameTouched(
+                                                true
+                                            );
+
+                                            setField(
+                                                "name",
+                                                event
+                                                    .target
+                                                    .value
+                                            );
+                                        }}
+                                        placeholder={`${values.year || nextYear} Standard Tariff`}
+                                        disabled={
+                                            isSubmitting
+                                        }
+                                        className={
                                             errors.name
+                                                ? "border-red-400 focus-visible:ring-red-400"
+                                                : ""
                                         }
-                                    </p>
-                                )}
+                                    />
+                                </div>
                             </div>
-                        )}
 
-                        {/* --------------------------------------------------------- */}
-                        {/* Description */}
-                        {/* --------------------------------------------------------- */}
-
-                        <div className="space-y-1.5">
-                            <Label htmlFor="description">
-                                Description{" "}
-                                <span className="text-muted-foreground">
-                                    (optional)
-                                </span>
-                            </Label>
-
-                            <Textarea
-                                id="description"
-                                value={
-                                    values.description
-                                }
-                                onChange={(
-                                    event
-                                ) =>
-                                    setField(
-                                        "description",
-                                        event
-                                            .target
-                                            .value
-                                    )
-                                }
-                                placeholder="Internal note about what changed in this version…"
-                                rows={2}
-                                disabled={
-                                    isSubmitting
-                                }
-                                className="resize-none"
-                            />
-                        </div>
-                    </div>
-
-                    {/* ============================================================= */}
-                    {/* Effective Period */}
-                    {/* ============================================================= */}
-
-                    <div className="space-y-3">
-                        <SectionLabel icon={CalendarRange}>
-                            Effective period
-                        </SectionLabel>
-
-                        <div className="grid grid-cols-2 gap-3">
                             {/* ----------------------------------------------------- */}
-                            {/* Effective From */}
+                            {/* Year / Name Errors */}
                             {/* ----------------------------------------------------- */}
 
-                            <div className="space-y-1.5">
-                                <Label htmlFor="effectiveFrom">
-                                    Effective From{" "}
-                                    <span className="text-red-500">
-                                        *
-                                    </span>
-                                </Label>
+                            {(errors.year ||
+                                errors.name) && (
+                                <div className="space-y-1">
+                                    {errors.year && (
+                                        <p className="flex items-center gap-1 text-xs text-red-500">
+                                            <AlertCircle className="h-3 w-3" />
 
-                                <EthiopianDatePicker
-                                    value={parseDate(
-                                        values.effective_from
+                                            {
+                                                errors.year
+                                            }
+                                        </p>
                                     )}
-                                    onChange={(
-                                        date: Date
-                                    ) =>
-                                        setField(
-                                            "effective_from",
-                                            formatDateForForm(
-                                                date
-                                            )
-                                        )
-                                    }
-                                />
 
-                                {errors.effectiveFrom && (
-                                    <p className="flex items-center gap-1 text-xs text-red-500">
-                                        <AlertCircle className="h-3 w-3" />
+                                    {errors.name && (
+                                        <p className="flex items-center gap-1 text-xs text-red-500">
+                                            <AlertCircle className="h-3 w-3" />
 
-                                        {
-                                            errors.effectiveFrom
-                                        }
-                                    </p>
-                                )}
-                            </div>
-
-                            {/* ----------------------------------------------------- */}
-                            {/* Effective To */}
-                            {/* ----------------------------------------------------- */}
-
-                            <div className="space-y-1.5">
-                                <Label htmlFor="effectiveTo">
-                                    Effective To
-                                </Label>
-
-                                <EthiopianDatePicker
-                                    value={parseDate(
-                                        values.effective_to
+                                            {
+                                                errors.name
+                                            }
+                                        </p>
                                     )}
-                                    onChange={(
-                                        date: Date
-                                    ) =>
-                                        setField(
-                                            "effective_to",
-                                            formatDateForForm(
-                                                date
-                                            )
-                                        )
-                                    }
-                                />
-
-                                {errors.effectiveTo ? (
-                                    <p className="flex items-center gap-1 text-xs text-red-500">
-                                        <AlertCircle className="h-3 w-3" />
-
-                                        {
-                                            errors.effectiveTo
-                                        }
-                                    </p>
-                                ) : (
-                                    <p className="text-[11px] text-muted-foreground">
-                                        Leave blank for an open-ended version
-                                    </p>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* ============================================================= */}
-                    {/* Status */}
-                    {/* ============================================================= */}
-
-                    <div className="space-y-3">
-                        <SectionLabel icon={Sparkles}>
-                            Status
-                        </SectionLabel>
-
-                        <div className="flex items-center justify-between rounded-lg border bg-muted/30 px-4 py-3">
-                            <div>
-                                <Label
-                                    htmlFor="isActive"
-                                    className="text-sm"
-                                >
-                                    Set as active version
-                                </Label>
-
-                                <p className="text-xs text-muted-foreground">
-                                    New assessments will use this version&apos;s pricing
-                                </p>
-                            </div>
-
-                            <Switch
-                                id="isActive"
-                                checked={
-                                    values.isActive
-                                }
-                                onCheckedChange={(
-                                    checked
-                                ) =>
-                                    setField(
-                                        "isActive",
-                                        checked
-                                    )
-                                }
-                                disabled={
-                                    isSubmitting
-                                }
-                            />
-                        </div>
-
-                        {/* --------------------------------------------------------- */}
-                        {/* Active warning */}
-                        {/* --------------------------------------------------------- */}
-
-                        {values.isActive &&
-                            hasActiveVersion && (
-                                <div className="flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-2.5 dark:border-amber-900/40 dark:bg-amber-950/20">
-                                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600" />
-
-                                    <p className="text-xs text-amber-800 dark:text-amber-300">
-                                        Another version is currently active. Activating this one will automatically deactivate it.
-                                    </p>
                                 </div>
                             )}
+
+                            {/* ----------------------------------------------------- */}
+                            {/* Description */}
+                            {/* ----------------------------------------------------- */}
+
+                            <div className="space-y-1.5">
+                                <Label htmlFor="description">
+                                    Description{" "}
+                                    <span className="text-muted-foreground">
+                                        (optional)
+                                    </span>
+                                </Label>
+
+                                <Textarea
+                                    id="description"
+                                    value={
+                                        values.description
+                                    }
+                                    onChange={(
+                                        event
+                                    ) =>
+                                        setField(
+                                            "description",
+                                            event
+                                                .target
+                                                .value
+                                        )
+                                    }
+                                    placeholder="Internal note about what changed in this version…"
+                                    rows={3}
+                                    disabled={
+                                        isSubmitting
+                                    }
+                                    className="resize-none"
+                                />
+                            </div>
+                        </div>
+
+                        {/* ========================================================= */}
+                        {/* Effective Period */}
+                        {/* ========================================================= */}
+
+                        <div className="space-y-3">
+                            <SectionLabel icon={CalendarRange}>
+                                Effective period
+                            </SectionLabel>
+
+                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                {/* ------------------------------------------------- */}
+                                {/* Effective From */}
+                                {/* ------------------------------------------------- */}
+
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="effectiveFrom">
+                                        Effective From{" "}
+                                        <span className="text-red-500">
+                                            *
+                                        </span>
+                                    </Label>
+
+                                    <EthiopianDatePicker
+                                        value={parseDate(
+                                            values.effective_from
+                                        )}
+                                        onChange={(
+                                            date: Date
+                                        ) =>
+                                            setField(
+                                                "effective_from",
+                                                formatDateForForm(
+                                                    date
+                                                )
+                                            )
+                                        }
+                                    />
+
+                                    {errors.effectiveFrom && (
+                                        <p className="flex items-center gap-1 text-xs text-red-500">
+                                            <AlertCircle className="h-3 w-3" />
+
+                                            {
+                                                errors.effectiveFrom
+                                            }
+                                        </p>
+                                    )}
+                                </div>
+
+                                {/* ------------------------------------------------- */}
+                                {/* Effective To */}
+                                {/* ------------------------------------------------- */}
+
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="effectiveTo">
+                                        Effective To
+                                    </Label>
+
+                                    <EthiopianDatePicker
+                                        value={parseDate(
+                                            values.effective_to
+                                        )}
+                                        onChange={(
+                                            date: Date
+                                        ) =>
+                                            setField(
+                                                "effective_to",
+                                                formatDateForForm(
+                                                    date
+                                                )
+                                            )
+                                        }
+                                    />
+
+                                    {errors.effectiveTo ? (
+                                        <p className="flex items-center gap-1 text-xs text-red-500">
+                                            <AlertCircle className="h-3 w-3" />
+
+                                            {
+                                                errors.effectiveTo
+                                            }
+                                        </p>
+                                    ) : (
+                                        <p className="text-[11px] text-muted-foreground">
+                                            Leave blank for an open-ended version
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* ========================================================= */}
+                        {/* Status */}
+                        {/* ========================================================= */}
+
+                        <div className="space-y-3">
+                            <SectionLabel icon={Sparkles}>
+                                Status
+                            </SectionLabel>
+
+                            <div className="flex items-center justify-between rounded-lg border bg-muted/30 px-4 py-3">
+                                <div className="min-w-0 pr-4">
+                                    <Label
+                                        htmlFor="isActive"
+                                        className="text-sm"
+                                    >
+                                        Set as active version
+                                    </Label>
+
+                                    <p className="text-xs text-muted-foreground">
+                                        New assessments will use this version&apos;s pricing
+                                    </p>
+                                </div>
+
+                                <Switch
+                                    id="isActive"
+                                    checked={
+                                        values.isActive
+                                    }
+                                    onCheckedChange={(
+                                        checked
+                                    ) =>
+                                        setField(
+                                            "isActive",
+                                            checked
+                                        )
+                                    }
+                                    disabled={
+                                        isSubmitting
+                                    }
+                                />
+                            </div>
+
+                            {/* ----------------------------------------------------- */}
+                            {/* Active warning */}
+                            {/* ----------------------------------------------------- */}
+
+                            {values.isActive &&
+                                hasActiveVersion && (
+                                    <div className="flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-2.5 dark:border-amber-900/40 dark:bg-amber-950/20">
+                                        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600" />
+
+                                        <p className="text-xs text-amber-800 dark:text-amber-300">
+                                            Another version is currently active. Activating this one will automatically deactivate it.
+                                        </p>
+                                    </div>
+                                )}
+                        </div>
                     </div>
                 </div>
 
@@ -978,7 +983,7 @@ export function TariffVersionFormDialog({
                 {/* Footer */}
                 {/* ================================================================= */}
 
-                <DialogFooter>
+                <SheetFooter className="border-t pt-4">
                     {/* Cancel */}
                     <Button
                         type="button"
@@ -1021,8 +1026,8 @@ export function TariffVersionFormDialog({
                             </>
                         )}
                     </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
+                </SheetFooter>
+            </SheetContent>
+        </Sheet>
     );
 }

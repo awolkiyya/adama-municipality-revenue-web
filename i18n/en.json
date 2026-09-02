@@ -97,6 +97,7 @@
     "revenue_categories": "Revenue Categories",
     "revenue_codes": "Revenue Codes",
     "revenue_services": "Revenue Services",
+    "interest_rates": "Interest Rates",
   
     "calculation_setup": "Calculation Setup",
     "measurement_units": "Measurement Units",
@@ -153,5 +154,5 @@
     "registration_dashboard": "Registration Dashboard",
     "taxpayer_registration": "Taxpayer Registration",
     "registration_reports": "Registration Reports"
-  }
+  }  
 }

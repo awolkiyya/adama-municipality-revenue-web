@@ -228,12 +228,28 @@ export const NAV_ITEMS: NavItem[] = [
       },
 
       {
-        title: "tariffs",
+        title: "tariff_management",
         url: "/office/dashboard/revenue-managements/tariff-versions",
         permission: APP_PERMISSIONS.TARIFF_VIEW,
       },
+
+      {
+        title: "penalty_rules",
+        url: "/office/dashboard/revenue-managements/penalty-rules",
+        icon: ShieldCheck,
+        permission: APP_PERMISSIONS.PENALTY_RULES_VIEW,
+      },
+
+      {
+        title: "interest_rates",
+        url: "/office/dashboard/revenue-managements/interest-rates",
+        icon: Landmark,
+        permission: APP_PERMISSIONS.INTEREST_RATES_VIEW,
+      },
     ],
   },
+
+
 
 
 

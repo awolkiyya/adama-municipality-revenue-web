@@ -941,4 +941,60 @@ SYSTEM_SETTINGS_VIEW: {
   action: "view",
 },
 
+INTEREST_RATES_VIEW: {
+  resource: "interest_rates",
+  action: "view",
+},
+
+INTEREST_RATES_CREATE: {
+  resource: "interest_rates",
+  action: "create",
+},
+
+INTEREST_RATES_UPDATE: {
+  resource: "interest_rates",
+  action: "update",
+},
+
+INTEREST_RATES_ACTIVATE: {
+  resource: "interest_rates",
+  action: "activate",
+},
+
+INTEREST_RATES_DEACTIVATE: {
+  resource: "interest_rates",
+  action: "deactivate",
+},
+
+INTEREST_RATES_VIEW_HISTORY: {
+  resource: "interest_rates",
+  action: "view_history",
+},
+
+
+/* |-------------------------------------------------------------------------- | Penalty Rule Configuration |-------------------------------------------------------------------------- */ 
+PENALTY_RULES_VIEW: { 
+  resource: "penalty_rules",
+  action: "view", 
+},
+PENALTY_RULES_CREATE: {
+  resource: "penalty_rules",
+  action: "create",
+},
+PENALTY_RULES_UPDATE: {
+  resource: "penalty_rules",
+  action: "update",
+}, 
+PENALTY_RULES_ACTIVATE: {
+   resource: "penalty_rules",
+   action: "activate",
+},
+PENALTY_RULES_DEACTIVATE: {
+   resource: "penalty_rules",
+   action: "deactivate",
+}, 
+PENALTY_RULES_VIEW_HISTORY: {
+   resource: "penalty_rules",
+   action: "view_history", },
+
 } satisfies Record<string, AppPermission>;

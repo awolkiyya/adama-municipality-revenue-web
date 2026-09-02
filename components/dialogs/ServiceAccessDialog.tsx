@@ -3,15 +3,12 @@
 import { useEffect, useMemo, useState } from "react";
 
 import {
-  ShieldCheck,
-  PencilLine,
-  Loader2,
   AlertCircle,
-  CheckCircle2,
   Building2,
-  UserCog,
-  ListChecks,
-  Power,
+  CheckCircle2,
+  Loader2,
+  Search,
+  ShieldCheck,
 } from "lucide-react";
 
 import {
@@ -23,55 +20,88 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-
-import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { SectorDropdown } from "../input/SectorDropDown";
-import { RoleDropdown } from "../input/RoleDropDown";
-import { ACTIONS, ServiceAction, TONE_STYLES } from "@/types/revenue/service-access-rule";
 
 /* =========================================================
    TYPES
 ========================================================= */
 
-interface FormValues {
+/**
+ * Sector available in the system.
+ */
+export interface Sector {
+  id: string;
+  name: string;
+}
+
+/**
+ * Existing access rule returned by the backend.
+ *
+ * One rule represents:
+ *
+ *     revenue service + sector
+ *
+ * isActive:
+ *     true  = sector is allowed
+ *     false = sector is not allowed
+ */
+export interface AccessRule {
+  id: string;
   sectorId: string;
-  roleId: number | null;
-  actions: ServiceAction[];
   isActive: boolean;
 }
 
-interface AccessRule extends FormValues {
-  id: string;
+/**
+ * Form state for one sector.
+ */
+export interface SectorAccess {
+  sectorId: string;
+  sectorName: string;
+  isActive: boolean;
 }
+
+/**
+ * Complete form payload.
+ */
+export interface FormValues {
+  sectors: SectorAccess[];
+}
+
+/* =========================================================
+   PROPS
+========================================================= */
 
 interface Props {
   open: boolean;
+
   onOpenChange: (open: boolean) => void;
+
+  /**
+   * Revenue service name displayed in the dialog.
+   */
   serviceName: string;
+
+  /**
+   * Complete list of sectors.
+   */
+  sectors: Sector[];
+
+  /**
+   * Existing access rules for this service.
+   */
   existingAccess: AccessRule[];
 
   /**
-   * Pass an existing rule to edit it. Omit / pass null to create a new one.
+   * Save sector access configuration.
    */
-  editingRule?: AccessRule | null;
-
-  onSubmit: (data: FormValues, ruleId?: string) => Promise<void>;
+  onSubmit: (
+    data: FormValues
+  ) => Promise<void>;
 }
-
-
-
-
-
-const EMPTY_VALUES: FormValues = {
-  sectorId: "",
-  roleId: null,
-  actions: [],
-  isActive: true,
-};
 
 /* =========================================================
    COMPONENT
@@ -81,339 +111,536 @@ export function ServiceAccessDialog({
   open,
   onOpenChange,
   serviceName,
+  sectors,
   existingAccess,
-  editingRule = null,
   onSubmit,
 }: Props) {
-  const isEditMode = !!editingRule;
+  const [sectorAccess, setSectorAccess] =
+    useState<SectorAccess[]>([]);
 
-  const [values, setValues] = useState<FormValues>(EMPTY_VALUES);
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [search, setSearch] =
+    useState("");
 
-  /* -----------------------------------------------------
-     Sync form state whenever the dialog opens, or the
-     rule being edited changes (switching between rules
-     without fully unmounting the dialog).
-  ----------------------------------------------------- */
+  const [error, setError] =
+    useState("");
+
+  const [loading, setLoading] =
+    useState(false);
+
+  /* =========================================================
+     INITIALIZE
+  ========================================================= */
+
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      return;
+    }
 
-    if (editingRule) {
-      setValues({
-        sectorId: editingRule.sectorId,
-        roleId: editingRule.roleId,
-        actions: editingRule.actions,
-        isActive: editingRule.isActive,
+    /**
+     * Build the complete sector access list.
+     *
+     * Every sector is displayed.
+     *
+     * Existing rule:
+     *     use existing isActive state
+     *
+     * No existing rule:
+     *     not allowed
+     */
+    const initialAccess: SectorAccess[] =
+      sectors.map((sector) => {
+        const existingRule =
+          existingAccess.find(
+            (rule) =>
+              rule.sectorId === sector.id
+          );
+
+        return {
+          sectorId: sector.id,
+          sectorName: sector.name,
+          isActive:
+            existingRule?.isActive ??
+            false,
+        };
       });
-    } else {
-      setValues(EMPTY_VALUES);
+
+    setSectorAccess(initialAccess);
+
+    setSearch("");
+
+    setError("");
+  }, [
+    open,
+    sectors,
+    existingAccess,
+  ]);
+
+  /* =========================================================
+     FILTER
+  ========================================================= */
+
+  const filteredSectors = useMemo(() => {
+    const query =
+      search.trim().toLowerCase();
+
+    if (!query) {
+      return sectorAccess;
+    }
+
+    return sectorAccess.filter(
+      (sector) =>
+        sector.sectorName
+          .toLowerCase()
+          .includes(query)
+    );
+  }, [
+    search,
+    sectorAccess,
+  ]);
+
+  /* =========================================================
+     SUMMARY
+  ========================================================= */
+
+  const allowedSectors = useMemo(
+    () =>
+      sectorAccess.filter(
+        (sector) => sector.isActive
+      ).length,
+    [sectorAccess]
+  );
+
+  const notAllowedSectors =
+    sectorAccess.length -
+    allowedSectors;
+
+  /* =========================================================
+     TOGGLE SECTOR
+  ========================================================= */
+
+  const toggleSector = (
+    sectorId: string,
+    isActive: boolean
+  ) => {
+    setSectorAccess((current) =>
+      current.map((sector) =>
+        sector.sectorId === sectorId
+          ? {
+              ...sector,
+              isActive,
+            }
+          : sector
+      )
+    );
+
+    setError("");
+  };
+
+  /* =========================================================
+     ALLOW ALL SECTORS
+  ========================================================= */
+
+  const allowAllSectors = () => {
+    setSectorAccess((current) =>
+      current.map((sector) => ({
+        ...sector,
+        isActive: true,
+      }))
+    );
+
+    setError("");
+  };
+
+  /* =========================================================
+     NOT ALLOW ALL SECTORS
+  ========================================================= */
+
+  const notAllowAllSectors = () => {
+    setSectorAccess((current) =>
+      current.map((sector) => ({
+        ...sector,
+        isActive: false,
+      }))
+    );
+
+    setError("");
+  };
+
+  /* =========================================================
+     CLOSE
+  ========================================================= */
+
+  const closeDialog = () => {
+    if (loading) {
+      return;
     }
 
     setError("");
-  }, [open, editingRule]);
 
-  /* -----------------------------------------------------
-     Duplicate rule detection (sector + role combo)
-     — excludes the rule currently being edited so editing
-     a rule doesn't falsely flag itself as a duplicate.
-  ----------------------------------------------------- */
-  const duplicateRule = useMemo(() => {
-    if (!values.sectorId || !values.roleId) return null;
+    setSearch("");
 
-    return (
-      existingAccess.find(
-        (a) =>
-          a.sectorId === values.sectorId &&
-          a.roleId === values.roleId &&
-          a.id !== editingRule?.id
-      ) ?? null
-    );
-  }, [values.sectorId, values.roleId, existingAccess, editingRule]);
-
-  // const selectedSector = SECTORS.find((s) => s.id === values.sectorId);
-  // const selectedRole = ROLES.find((r) => r.id === values.roleId);
-
-  const toggleAction = (code: ServiceAction) => {
-    setValues((prev) => ({
-      ...prev,
-      actions: prev.actions.includes(code)
-        ? prev.actions.filter((x) => x !== code)
-        : [...prev.actions, code],
-    }));
-  };
-
-  const selectAllActions = () => {
-    setValues((prev) => ({ ...prev, actionIds: ACTIONS.map((x) => x.id) }));
-  };
-
-  const clearActions = () => {
-    setValues((prev) => ({ ...prev, actionIds: [] }));
-  };
-
-  const closeDialog = () => {
-    setError("");
     onOpenChange(false);
   };
+
+  /* =========================================================
+     SUBMIT
+  ========================================================= */
 
   const submit = async () => {
     setError("");
 
-    if (!values.sectorId) {
-      setError("Select a sector to continue.");
-      return;
-    }
+    if (sectorAccess.length === 0) {
+      setError(
+        "No sectors are available to configure."
+      );
 
-    if (!values.roleId) {
-      setError("Select a role to continue.");
-      return;
-    }
-
-    if (values.actions.length === 0) {
-      setError("Select at least one action.");
-      return;
-    }
-
-    if (duplicateRule) {
-      setError("This sector and role combination already has an access rule.");
       return;
     }
 
     setLoading(true);
 
     try {
-      await onSubmit(values, editingRule?.id);
-      closeDialog();
+      await onSubmit({
+        sectors: sectorAccess,
+      });
+
+      onOpenChange(false);
+    } catch (error) {
+      console.error(
+        "Failed to save service access:",
+        error
+      );
+
+      setError(
+        "Failed to save service access. Please try again."
+      );
     } finally {
       setLoading(false);
     }
   };
 
+  /* =========================================================
+     RENDER
+  ========================================================= */
+
   return (
     <Dialog
       open={open}
-      onOpenChange={(v) => {
-        if (!loading) onOpenChange(v);
+      onOpenChange={(value) => {
+        if (!loading) {
+          onOpenChange(value);
+        }
       }}
     >
-      <DialogContent className="max-h-[90vh] overflow-y-auto rounded-2xl sm:max-w-2xl lg:max-w-4xl">
-        {/* HEADER */}
-        <DialogHeader>
+      <DialogContent className="max-h-[92vh] overflow-hidden rounded-2xl p-0 sm:max-w-4xl">
+        {/* ===================================================
+            HEADER
+        =================================================== */}
+
+        <DialogHeader className="border-b px-6 py-5">
           <div className="flex items-start gap-3">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-              {isEditMode ? <PencilLine size={20} /> : <ShieldCheck size={20} />}
+              <ShieldCheck size={20} />
             </div>
 
             <div className="min-w-0">
               <DialogTitle className="text-xl">
-                {isEditMode ? "Edit Access Rule" : "Create Access Rule"}
+                Configure Sector Access
               </DialogTitle>
-              <DialogDescription>
-                {isEditMode ? "Update workflow permission for" : "Configure workflow permission for"}
-                <span className="mx-1 font-semibold text-foreground">{serviceName}</span>
+
+              <DialogDescription className="mt-1">
+                Control which sectors are allowed to
+                access{" "}
+                <span className="font-semibold text-foreground">
+                  {serviceName}
+                </span>
               </DialogDescription>
             </div>
           </div>
         </DialogHeader>
 
-        <div className="space-y-6 py-4">
-          {/* WORKFLOW OWNER */}
-          <div className="space-y-4 rounded-xl border border-border/60 bg-muted/20 p-4">
-            <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-              <Building2 size={15} className="text-muted-foreground" />
-              Workflow Owner
-            </h3>
+        {/* ===================================================
+            CONTENT
+        =================================================== */}
 
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label className="flex items-center gap-1.5 text-xs">
-                  <Building2 size={13} className="text-muted-foreground" />
-                  Sector
-                </Label>
+        <div className="max-h-[calc(92vh-170px)] overflow-y-auto">
+          <div className="space-y-5 px-6 py-5">
 
-                <SectorDropdown
+            {/* =================================================
+                SERVICE
+            ================================================= */}
 
-                  value={
-                    values.sectorId || null
-                  }
+            <div className="rounded-xl border border-border/60 bg-muted/20 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-xs text-muted-foreground">
+                    Revenue Service
+                  </p>
 
+                  <p className="mt-1 truncate text-sm font-semibold">
+                    {serviceName}
+                  </p>
+                </div>
 
-                  onChange={(value,item)=>{
-
-
-                    setValues(prev=>({
-
-                      ...prev,
-
-                      sectorId:value
-
-                    }));
-
-
-                    // setSelectedSector(item);
-
-
-                  }}
-
-                  />
-              </div>
-
-              <div className="space-y-2">
-                <Label className="flex items-center gap-1.5 text-xs">
-                  <UserCog size={13} className="text-muted-foreground" />
-                  Role
-                </Label>
-
-                <RoleDropdown
-
-                    value={
-                      values.roleId || null
-                    }
-
-
-                    onChange={(value,item)=>{
-
-
-                      setValues(prev=>({
-
-                      ...prev,
-
-                      roleId:value
-
-                      }));
-
-
-                      // setSelectedRole(item);
-
-
-                    }}
-
-                    />
+                <Badge
+                  variant="secondary"
+                  className="shrink-0"
+                >
+                  Sector Access
+                </Badge>
               </div>
             </div>
 
-          </div>
+            {/* =================================================
+                SUMMARY
+            ================================================= */}
 
-          {/* ACTIONS */}
-          <div className="space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <Label className="flex items-center gap-1.5">
-                <ListChecks size={15} className="text-muted-foreground" />
-                Available Actions
-              </Label>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
+                <p className="text-lg font-semibold">
+                  {allowedSectors}
+                </p>
 
-              <div className="flex gap-2">
-                <Button size="sm" variant="outline" onClick={selectAllActions} type="button">
-                  Select all
-                </Button>
-                <Button size="sm" variant="ghost" onClick={clearActions} type="button">
-                  Clear
-                </Button>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {ACTIONS.map((action) => {
-                const isChecked = values.actions.includes(action.code as ServiceAction);
-                const tone = TONE_STYLES[action.tone];
-                const Icon = action.icon;
-
-                return (
-                  <button
-                    type="button"
-                    key={action.id}
-                    onClick={() => toggleAction(action.code as ServiceAction)}
-                    aria-pressed={isChecked}
-                    className={cn(
-                      "flex items-start gap-3 rounded-xl border p-3 text-left transition-all",
-                      isChecked ? tone.ring : "border-border/60 hover:bg-muted/60"
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors",
-                        isChecked ? tone.chipActive : tone.chip
-                      )}
-                    >
-                      <Icon size={16} className={isChecked ? tone.iconActive : tone.icon} />
-                    </span>
-
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-sm font-medium text-foreground">{action.name}</p>
-                        {isChecked && (
-                          <CheckCircle2 size={16} className="shrink-0 text-primary" />
-                        )}
-                      </div>
-                      <p className="mt-0.5 text-xs leading-snug text-muted-foreground">
-                        {action.description}
-                      </p>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Badge variant="secondary" className="gap-1.5">
-                <ListChecks size={12} />
-                {values.actions.length} / {ACTIONS.length} actions selected
-              </Badge>
-            </div>
-          </div>
-
-          {/* STATUS */}
-          <div className="flex items-center justify-between rounded-xl border border-border/60 p-4">
-            <div className="flex items-center gap-3">
-              <span
-                className={cn(
-                  "flex h-9 w-9 items-center justify-center rounded-lg transition-colors",
-                  values.isActive
-                    ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                    : "bg-slate-500/10 text-slate-500"
-                )}
-              >
-                <Power size={16} />
-              </span>
-              <div>
-                <p className="text-sm font-medium text-foreground">Active Rule</p>
                 <p className="text-xs text-muted-foreground">
-                  Allow this workflow access immediately.
+                  Allowed sectors
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-border/60 bg-muted/20 p-4">
+                <p className="text-lg font-semibold">
+                  {notAllowedSectors}
+                </p>
+
+                <p className="text-xs text-muted-foreground">
+                  Not allowed
                 </p>
               </div>
             </div>
 
-            <Switch
-              checked={values.isActive}
-              onCheckedChange={(v) => setValues((prev) => ({ ...prev, isActive: v }))}
-            />
-          </div>
+            {/* =================================================
+                SEARCH + BULK ACTIONS
+            ================================================= */}
 
-          {/* ERROR */}
-          {error && (
-            <div className="flex items-center gap-2 rounded-xl bg-red-50 p-3 text-sm text-red-600 dark:bg-red-500/10 dark:text-red-400">
-              <AlertCircle size={17} className="shrink-0" />
-              {error}
+            <div className="space-y-3">
+              <div className="relative">
+                <Search
+                  size={16}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                />
+
+                <Input
+                  value={search}
+                  onChange={(event) =>
+                    setSearch(
+                      event.target.value
+                    )
+                  }
+                  placeholder="Search sectors..."
+                  className="pl-9"
+                  disabled={loading}
+                />
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={allowAllSectors}
+                  disabled={loading}
+                >
+                  Allow All
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={notAllowAllSectors}
+                  disabled={loading}
+                >
+                  Not Allow All
+                </Button>
+              </div>
             </div>
-          )}
+
+            {/* =================================================
+                ACCESS TABLE
+            ================================================= */}
+
+            <div className="overflow-hidden rounded-xl border border-border/60">
+              {/* =================================================
+                  TABLE HEADER
+              ================================================= */}
+
+              <div className="grid grid-cols-[minmax(240px,1fr)_140px] items-center border-b bg-muted/30 px-4 py-3">
+                <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Sector
+                </div>
+
+                <div className="text-center text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Access
+                </div>
+              </div>
+
+              {/* =================================================
+                  ROWS
+              ================================================= */}
+
+              {filteredSectors.length === 0 ? (
+                <div className="flex flex-col items-center justify-center px-6 py-12 text-center">
+                  <Building2
+                    size={30}
+                    className="text-muted-foreground/50"
+                  />
+
+                  <p className="mt-3 text-sm font-medium">
+                    No sectors found
+                  </p>
+
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Try a different search term.
+                  </p>
+                </div>
+              ) : (
+                <div className="divide-y divide-border/60">
+                  {filteredSectors.map(
+                    (sector) => (
+                      <div
+                        key={sector.sectorId}
+                        className={cn(
+                          "grid grid-cols-[minmax(240px,1fr)_140px] items-center px-4 py-4 transition-colors",
+                          sector.isActive
+                            ? "bg-emerald-500/[0.025]"
+                            : "bg-background"
+                        )}
+                      >
+                        {/* =====================================
+                            SECTOR
+                        ===================================== */}
+
+                        <div className="flex min-w-0 items-center gap-3">
+                          <div
+                            className={cn(
+                              "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg",
+                              sector.isActive
+                                ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                                : "bg-muted text-muted-foreground"
+                            )}
+                          >
+                            <Building2 size={16} />
+                          </div>
+
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium">
+                              {sector.sectorName}
+                            </p>
+
+                            <p className="mt-0.5 text-xs text-muted-foreground">
+                              {sector.isActive
+                                ? "Access allowed"
+                                : "Access not allowed"}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* =====================================
+                            ACCESS
+                        ===================================== */}
+
+                        <div className="flex items-center justify-center gap-3">
+                          <span
+                            className={cn(
+                              "text-xs font-medium",
+                              sector.isActive
+                                ? "text-emerald-600 dark:text-emerald-400"
+                                : "text-muted-foreground"
+                            )}
+                          >
+                            {sector.isActive
+                              ? "Allow"
+                              : "Not Allow"}
+                          </span>
+
+                          <Switch
+                            checked={
+                              sector.isActive
+                            }
+                            onCheckedChange={(
+                              checked
+                            ) =>
+                              toggleSector(
+                                sector.sectorId,
+                                checked
+                              )
+                            }
+                            disabled={loading}
+                            aria-label={`Toggle ${sector.sectorName} access`}
+                          />
+                        </div>
+                      </div>
+                    )
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* =================================================
+                ERROR
+            ================================================= */}
+
+            {error && (
+              <div className="flex items-start gap-2 rounded-xl bg-red-50 p-3 text-sm text-red-600 dark:bg-red-500/10 dark:text-red-400">
+                <AlertCircle
+                  size={17}
+                  className="mt-0.5 shrink-0"
+                />
+
+                <span>{error}</span>
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* FOOTER */}
-        <DialogFooter className="sticky bottom-0 gap-2 bg-background pt-3">
-          <Button variant="outline" disabled={loading} onClick={closeDialog}>
+        {/* ===================================================
+            FOOTER
+        =================================================== */}
+
+        <DialogFooter className="border-t px-6 py-4">
+          <Button
+            variant="outline"
+            disabled={loading}
+            onClick={closeDialog}
+            type="button"
+          >
             Cancel
           </Button>
 
-          <Button disabled={loading} onClick={submit}>
+          <Button
+            disabled={
+              loading ||
+              sectorAccess.length === 0
+            }
+            onClick={submit}
+            type="button"
+          >
             {loading ? (
               <>
-                <Loader2 className="mr-2 animate-spin" size={16} />
-                Saving
+                <Loader2
+                  className="mr-2 animate-spin"
+                  size={16}
+                />
+
+                Saving Changes
               </>
             ) : (
               <>
-                <CheckCircle2 className="mr-2" size={16} />
-                {isEditMode ? "Update Rule" : "Save Rule"}
+                <CheckCircle2
+                  className="mr-2"
+                  size={16}
+                />
+
+                Save Changes
               </>
             )}
           </Button>

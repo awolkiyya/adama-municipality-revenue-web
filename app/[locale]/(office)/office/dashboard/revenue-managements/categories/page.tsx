@@ -278,7 +278,7 @@ function RevenueCategoriesPage() {
             onEdit={(row) => {
               router.push(`/office/dashboard/revenue-managements/categories/${row.id}`)
             }}
-            onDelete={(id) => console.log("delete", id)}
+
         />
 
         <DataTablePagination

@@ -112,77 +112,77 @@ export interface UpdateServiceAccessRulePayload {
       tone: "indigo",
     },
   
-    {
-      id: "SUBMIT",
-      code: "SUBMIT",
-      name: "Submit Request",
-      description: "Submit request for assessment.",
-      icon: SendHorizonal,
-      tone: "purple",
-    },
+    // {
+    //   id: "SUBMIT",
+    //   code: "SUBMIT",
+    //   name: "Submit Request",
+    //   description: "Submit request for assessment.",
+    //   icon: SendHorizonal,
+    //   tone: "purple",
+    // },
   
-    {
-      id: "VERIFY",
-      code: "VERIFY",
-      name: "Verify Documents",
-      description: "Verify submitted documents.",
-      icon: ShieldCheck,
-      tone: "blue",
-    },
+    // {
+    //   id: "VERIFY",
+    //   code: "VERIFY",
+    //   name: "Verify Documents",
+    //   description: "Verify submitted documents.",
+    //   icon: ShieldCheck,
+    //   tone: "blue",
+    // },
   
-    {
-      id: "ASSESS",
-      code: "ASSESS",
-      name: "Perform Assessment",
-      description: "Calculate payable amount.",
-      icon: Calculator,
-      tone: "amber",
-    },
+    // {
+    //   id: "ASSESS",
+    //   code: "ASSESS",
+    //   name: "Perform Assessment",
+    //   description: "Calculate payable amount.",
+    //   icon: Calculator,
+    //   tone: "amber",
+    // },
   
-    {
-      id: "APPROVE",
-      code: "APPROVE",
-      name: "Approve Request",
-      description: "Approve assessment or service request.",
-      icon: BadgeCheck,
-      tone: "emerald",
-    },
+    // {
+    //   id: "APPROVE",
+    //   code: "APPROVE",
+    //   name: "Approve Request",
+    //   description: "Approve assessment or service request.",
+    //   icon: BadgeCheck,
+    //   tone: "emerald",
+    // },
   
-    {
-      id: "REJECT",
-      code: "REJECT",
-      name: "Reject Request",
-      description: "Reject invalid request.",
-      icon: XCircle,
-      tone: "rose",
-    },
+    // {
+    //   id: "REJECT",
+    //   code: "REJECT",
+    //   name: "Reject Request",
+    //   description: "Reject invalid request.",
+    //   icon: XCircle,
+    //   tone: "rose",
+    // },
   
-    {
-      id: "PAYMENT",
-      code: "PAYMENT",
-      name: "Process Payment",
-      description: "Receive payment and issue receipt.",
-      icon: Wallet,
-      tone: "purple",
-    },
+    // {
+    //   id: "PAYMENT",
+    //   code: "PAYMENT",
+    //   name: "Process Payment",
+    //   description: "Receive payment and issue receipt.",
+    //   icon: Wallet,
+    //   tone: "purple",
+    // },
   
-    {
-      id: "COMPLETE",
-      code: "COMPLETE",
-      name: "Complete Service",
-      description: "Mark service workflow as completed.",
-      icon: CheckCircle2,
-      tone: "emerald",
-    },
+    // {
+    //   id: "COMPLETE",
+    //   code: "COMPLETE",
+    //   name: "Complete Service",
+    //   description: "Mark service workflow as completed.",
+    //   icon: CheckCircle2,
+    //   tone: "emerald",
+    // },
   
-    {
-      id: "CANCEL",
-      code: "CANCEL",
-      name: "Cancel Request",
-      description: "Cancel service request.",
-      icon: XCircle,
-      tone: "rose",
-    },
+    // {
+    //   id: "CANCEL",
+    //   code: "CANCEL",
+    //   name: "Cancel Request",
+    //   description: "Cancel service request.",
+    //   icon: XCircle,
+    //   tone: "rose",
+    // },
   ];
   
  export const TONE_STYLES: Record<ActionTone, ToneStyle> = {

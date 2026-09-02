@@ -526,14 +526,14 @@ serviceCode: (row) => (
 revenueCode: (row) => (
   <div className="flex flex-col">
     <span className="font-medium text-sm text-foreground">
-      {row.revenue_code?.code ?? "-"}
+      {row.revenueCode?.code ?? "-"}
     </span>
   </div>
 ),
 
 
 serviceType: (row) => {
-  const type = String(row.service_type ?? "").toUpperCase();
+  const type = String(row.serviceType ?? "").toUpperCase();
 
   const variants: Record<string, string> = {
     REGISTRATION: "bg-blue-500/10 text-blue-600",
@@ -556,7 +556,7 @@ serviceType: (row) => {
 
 
 collectionMode: (row) => {
-  const mode = String(row.collection_mode ?? "").toUpperCase();
+  const mode = String(row.collectionMode ?? "").toUpperCase();
 
   const variants: Record<string, string> = {
     ASSESSMENT_ONLY: "bg-blue-500/10 text-blue-600",

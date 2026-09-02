@@ -22,7 +22,7 @@ import { CommentType, FilterField } from "@/types/commen";
 import { StatCard, StatCardGrid } from "@/components/cards/StatCard";
 import { RootState } from "@/lib/store/store";
 import { Toolbar } from "@/components/commen/Toolbar";
-import { Filters } from "@/components/commen/Filters";
+import { FilterSheet } from "@/components/commen/FilterSheet"; // ⬅ NEW — replaces Sheet/Badge/Separator/Filters imports
 import { ExportDropdown } from "@/components/commen/ExportDropdown";
 import { DataTablePagination } from "@/components/table/data-pagination";
 import { CommenTable } from "@/components/table/CommenTable";
@@ -30,18 +30,12 @@ import { resolveActions } from "@/components/table/permissions/ResolveActions";
 import { CommentTableRegistry } from "@/components/table/registry";
 
 import { useRevenueServices } from "@/hooks/revenue/revenueService.hook";
-import {
-  RevenueServiceSummary,
-} from "@/types/revenue/revenu-service";
+import { RevenueServiceSummary } from "@/types/revenue/revenu-service";
 
 /*
 |--------------------------------------------------------------------------
 | Search Input
 |--------------------------------------------------------------------------
-|
-| Avoid importing SearchInput from another page.
-| Keep this page independent.
-|
 */
 
 function SearchInput({
@@ -66,7 +60,7 @@ function SearchInput({
 
 /*
 |--------------------------------------------------------------------------
-| Revenue Service Filters
+| Revenue Service Filters Schema
 |--------------------------------------------------------------------------
 */
 
@@ -78,37 +72,15 @@ export const revenueServiceFilters: FilterField[] = [
     defaultValue: "ALL",
     icon: Layers,
     options: [
-      {
-        label: "All Domains",
-        value: "ALL",
-      },
-      {
-        label: "Tax",
-        value: "TAX",
-      },
-      {
-        label: "Rent",
-        value: "RENT",
-      },
-      {
-        label: "Investment",
-        value: "INVESTMENT",
-      },
-      {
-        label: "Service",
-        value: "SERVICE",
-      },
-      {
-        label: "Sale",
-        value: "SALE",
-      },
-      {
-        label: "Capital",
-        value: "CAPITAL",
-      },
+      { label: "All Domains", value: "ALL" },
+      { label: "Tax", value: "TAX" },
+      { label: "Rent", value: "RENT" },
+      { label: "Investment", value: "INVESTMENT" },
+      { label: "Service", value: "SERVICE" },
+      { label: "Sale", value: "SALE" },
+      { label: "Capital", value: "CAPITAL" },
     ],
   },
-
   {
     key: "code",
     label: "Revenue Code",
@@ -116,21 +88,11 @@ export const revenueServiceFilters: FilterField[] = [
     defaultValue: "ALL",
     icon: Layers,
     options: [
-      {
-        label: "All Revenue Codes",
-        value: "ALL",
-      },
-      {
-        label: "1701 - Gibira Mana Magaalaa (Baaxii fi Gooroo)",
-        value: "1701",
-      },
-      {
-        label: "1719 - Other Revenue Code",
-        value: "1719",
-      },
+      { label: "All Revenue Codes", value: "ALL" },
+      { label: "1701 - Gibira Mana Magaalaa (Baaxii fi Gooroo)", value: "1701" },
+      { label: "1719 - Other Revenue Code", value: "1719" },
     ],
   },
-
   {
     key: "collection_mode",
     label: "Collection Mode",
@@ -138,25 +100,12 @@ export const revenueServiceFilters: FilterField[] = [
     defaultValue: "ALL",
     icon: Layers,
     options: [
-      {
-        label: "All Modes",
-        value: "ALL",
-      },
-      {
-        label: "Assessment Only",
-        value: "ASSESSMENT_ONLY",
-      },
-      {
-        label: "Field Collection",
-        value: "FIELD_COLLECTION",
-      },
-      {
-        label: "Assessment & Field Collection",
-        value: "BOTH",
-      },
+      { label: "All Modes", value: "ALL" },
+      { label: "Assessment Only", value: "ASSESSMENT_ONLY" },
+      { label: "Field Collection", value: "FIELD_COLLECTION" },
+      { label: "Assessment & Field Collection", value: "BOTH" },
     ],
   },
-
   {
     key: "status",
     label: "Status",
@@ -164,18 +113,9 @@ export const revenueServiceFilters: FilterField[] = [
     defaultValue: "ALL",
     icon: CircleDot,
     options: [
-      {
-        label: "All",
-        value: "ALL",
-      },
-      {
-        label: "Active",
-        value: "ACTIVE",
-      },
-      {
-        label: "Inactive",
-        value: "INACTIVE",
-      },
+      { label: "All", value: "ALL" },
+      { label: "Active", value: "ACTIVE" },
+      { label: "Inactive", value: "INACTIVE" },
     ],
   },
 ];
@@ -197,13 +137,6 @@ const INITIAL_FILTERS = {
 |--------------------------------------------------------------------------
 | Safe Default Summary
 |--------------------------------------------------------------------------
-|
-| This prevents:
-|
-| Cannot read properties of undefined (reading 'total')
-|
-| during the initial React render.
-|
 */
 
 const EMPTY_SUMMARY: RevenueServiceSummary = {
@@ -221,37 +154,27 @@ const EMPTY_SUMMARY: RevenueServiceSummary = {
 function RevenueServicesPage() {
   const router = useRouter();
 
-  const user = useSelector(
-    (state: RootState) => state.auth.user
-  );
+  const user = useSelector((state: RootState) => state.auth.user);
 
-  /*
-  |--------------------------------------------------------------------------
-  | Pagination
-  |--------------------------------------------------------------------------
-  */
-
+  /* ================= Pagination ================= */
   const [page, setPage] = useState<number>(1);
-
   const [perPage, setPerPage] = useState<number>(10);
 
-  /*
-  |--------------------------------------------------------------------------
-  | Search
-  |--------------------------------------------------------------------------
-  */
-
+  /* ================= Search ================= */
   const [search, setSearch] = useState<string>("");
 
   /*
   |--------------------------------------------------------------------------
-  | Filters
+  | Filters (applied)
   |--------------------------------------------------------------------------
+  |
+  | The FilterSheet component now owns ALL of the draft/apply/reset/badge
+  | logic internally. This page only needs to know the currently APPLIED
+  | value and a callback for when the user hits "Apply Filters".
+  |
   */
 
-  const [filters, setFilters] = useState<
-    Record<string, any>
-  >(INITIAL_FILTERS);
+  const [filters, setFilters] = useState<Record<string, any>>(INITIAL_FILTERS);
 
   /*
   |--------------------------------------------------------------------------
@@ -265,80 +188,29 @@ function RevenueServicesPage() {
       per_page: perPage,
     };
 
-    /*
-    |--------------------------------------------------------------------------
-    | Search
-    |--------------------------------------------------------------------------
-    */
-
     const trimmedSearch = search.trim();
-
     if (trimmedSearch.length > 0) {
       params.search = trimmedSearch;
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Revenue Domain
-    |--------------------------------------------------------------------------
-    */
-
-    if (
-      filters.revenue_domain &&
-      filters.revenue_domain !== "ALL"
-    ) {
-      params.revenue_domain =
-        filters.revenue_domain;
+    if (filters.revenue_domain && filters.revenue_domain !== "ALL") {
+      params.revenue_domain = filters.revenue_domain;
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Revenue Code
-    |--------------------------------------------------------------------------
-    */
-
-    if (
-      filters.code &&
-      filters.code !== "ALL"
-    ) {
+    if (filters.code && filters.code !== "ALL") {
       params.code = filters.code;
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Collection Mode
-    |--------------------------------------------------------------------------
-    */
-
-    if (
-      filters.collection_mode &&
-      filters.collection_mode !== "ALL"
-    ) {
-      params.collection_mode =
-        filters.collection_mode;
+    if (filters.collection_mode && filters.collection_mode !== "ALL") {
+      params.collection_mode = filters.collection_mode;
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Active Status
-    |--------------------------------------------------------------------------
-    */
-
-    if (
-      filters.status &&
-      filters.status !== "ALL"
-    ) {
-      params.is_active =
-        filters.status === "ACTIVE";
+    if (filters.status && filters.status !== "ALL") {
+      params.is_active = filters.status === "ACTIVE";
     }
 
     return params;
-  }, [
-    filters,
-    search,
-    page,
-    perPage,
-  ]);
+  }, [filters, search, page, perPage]);
 
   /*
   |--------------------------------------------------------------------------
@@ -346,53 +218,15 @@ function RevenueServicesPage() {
   |--------------------------------------------------------------------------
   */
 
-  const {
-    data,
-    isLoading,
-    isFetching,
-    isError,
-    error,
-  } = useRevenueServices(queryFilters);
-/*
-|--------------------------------------------------------------------------
-| Safe API Data
-|--------------------------------------------------------------------------
-*/
+  const { data, isLoading, isFetching, isError, error } = useRevenueServices(queryFilters);
 
-const services = data?.data ?? [];
+  const services = data?.data ?? [];
 
-/*
-|--------------------------------------------------------------------------
-| Normalize Summary
-|--------------------------------------------------------------------------
-|
-| The API meta.summary is currently typed loosely as `{}`.
-| Do not assign it directly to RevenueServiceSummary.
-|
-| Normalize each property so the UI always receives:
-|
-| {
-|   total: number;
-|   active: number;
-|   inactive: number;
-| }
-|
-*/
-
-const summary: RevenueServiceSummary = {
-  total: Number(
-    data?.meta?.summary?.total ?? 0
-  ),
-
-  active: Number(
-    data?.meta?.summary?.active ?? 0
-  ),
-
-  inactive: Number(
-    data?.meta?.summary?.inactive ?? 0
-  ),
-};
-
+  const summary: RevenueServiceSummary = {
+    total: Number(data?.meta?.summary?.total ?? 0),
+    active: Number(data?.meta?.summary?.active ?? 0),
+    inactive: Number(data?.meta?.summary?.inactive ?? 0),
+  };
 
   const meta = data?.meta;
 
@@ -406,30 +240,15 @@ const summary: RevenueServiceSummary = {
     return (
       <div className="flex h-40 flex-col items-center justify-center gap-3 text-center">
         <Loader2 className="size-6 animate-spin text-muted-foreground" />
-
         <div className="flex flex-col gap-0.5">
-          <p className="text-sm font-medium text-foreground">
-            Checking permissions
-          </p>
-
-          <p className="text-xs text-muted-foreground">
-            This will only take a moment
-          </p>
+          <p className="text-sm font-medium text-foreground">Checking permissions</p>
+          <p className="text-xs text-muted-foreground">This will only take a moment</p>
         </div>
       </div>
     );
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | Table Actions
-  |--------------------------------------------------------------------------
-  */
-
-  const actions = resolveActions(
-    CommentTableRegistry.revenueService,
-    user.role.name
-  );
+  const actions = resolveActions(CommentTableRegistry.revenueService, user.role.name);
 
   /*
   |--------------------------------------------------------------------------
@@ -437,23 +256,14 @@ const summary: RevenueServiceSummary = {
   |--------------------------------------------------------------------------
   */
 
-  const handleSearchChange = (
-    event: React.ChangeEvent<HTMLInputElement>
-  ) => {
+  const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setSearch(event.target.value);
     setPage(1);
   };
 
-  const handleFiltersChange = (
-    value: Record<string, any>
-  ) => {
-    setFilters(value);
-    setPage(1);
-  };
-
-  const handleResetFilters = () => {
-    setFilters(INITIAL_FILTERS);
-    setPage(1);
+  const handleFiltersApply = (next: Record<string, any>) => {
+    setFilters(next);
+    setPage(1); // reset pagination whenever the applied filter set changes
   };
 
   const handlePageChange = (newPage: number) => {
@@ -477,21 +287,12 @@ const summary: RevenueServiceSummary = {
         <Banner
           description="Manage revenue services, assessment rules, required fields, and collection methods."
           badge={
-            <IconBadge
-              className="gap-2 rounded-full bg-black/20 p-3 text-xs text-white"
-              icon={<Wrench className="h-4 w-4" />}
-            >
+            <IconBadge className="gap-2 rounded-full bg-black/20 p-3 text-xs text-white" icon={<Wrench className="h-4 w-4" />}>
               Revenue Services
             </IconBadge>
           }
           background={
-            <FloatingParticles
-              color="#040404"
-              count={35}
-              speed={0.2}
-              connectDistance={100}
-              position="bottom-right"
-            />
+            <FloatingParticles color="#040404" count={35} speed={0.2} connectDistance={100} position="bottom-right" />
           }
           overlayClassName="bg-gradient-to-r from-primary/95 via-primary/80 to-primary/50"
           className="mx-5 text-white"
@@ -499,26 +300,15 @@ const summary: RevenueServiceSummary = {
 
         <div className="mx-4 rounded-lg border border-destructive/30 bg-destructive/5 p-6 md:mx-6">
           <div className="flex flex-col gap-2">
-            <h2 className="font-semibold text-destructive">
-              Failed to load revenue services
-            </h2>
-
+            <h2 className="font-semibold text-destructive">Failed to load revenue services</h2>
             <p className="text-sm text-muted-foreground">
-              We could not retrieve the revenue service
-              list. Please try again.
+              We could not retrieve the revenue service list. Please try again.
             </p>
-
             {error instanceof Error && (
-              <p className="text-xs text-muted-foreground">
-                {error.message}
-              </p>
+              <p className="text-xs text-muted-foreground">{error.message}</p>
             )}
-
             <div className="mt-2">
-              <Button
-                variant="outline"
-                onClick={() => window.location.reload()}
-              >
+              <Button variant="outline" onClick={() => window.location.reload()}>
                 Retry
               </Button>
             </div>
@@ -536,30 +326,17 @@ const summary: RevenueServiceSummary = {
 
   return (
     <div className="flex flex-col gap-6 pb-10">
-      {/*
-      |--------------------------------------------------------------------------
-      | Header
-      |--------------------------------------------------------------------------
-      */}
+      {/* ================= Header ================= */}
 
       <Banner
         description="Manage revenue services, assessment rules, required fields, and collection methods."
         badge={
-          <IconBadge
-            className="gap-2 rounded-full bg-black/20 p-3 text-xs text-white"
-            icon={<Wrench className="h-4 w-4" />}
-          >
+          <IconBadge className="gap-2 rounded-full bg-black/20 p-3 text-xs text-white" icon={<Wrench className="h-4 w-4" />}>
             Revenue Services
           </IconBadge>
         }
         background={
-          <FloatingParticles
-            color="#040404"
-            count={35}
-            speed={0.2}
-            connectDistance={100}
-            position="bottom-right"
-          />
+          <FloatingParticles color="#040404" count={35} speed={0.2} connectDistance={100} position="bottom-right" />
         }
         overlayClassName="bg-gradient-to-r from-primary/95 via-primary/80 to-primary/50"
         className="mx-5 text-white"
@@ -567,11 +344,7 @@ const summary: RevenueServiceSummary = {
           <div className="flex flex-wrap items-center gap-3">
             <Button
               variant="secondary"
-              onClick={() =>
-                router.push(
-                  "/office/dashboard/revenue-managements/services/create"
-                )
-              }
+              onClick={() => router.push("/office/dashboard/revenue-managements/services/create")}
               className="py-4"
             >
               <Plus className="mr-2 h-4 w-4" />
@@ -586,11 +359,7 @@ const summary: RevenueServiceSummary = {
       />
 
       <div className="flex flex-col gap-6 px-4 md:px-6">
-        {/*
-        |--------------------------------------------------------------------------
-        | Statistics
-        |--------------------------------------------------------------------------
-        */}
+        {/* ================= Statistics ================= */}
 
         <div className="relative">
           {isFetching && !isLoading && (
@@ -601,31 +370,13 @@ const summary: RevenueServiceSummary = {
           )}
 
           <StatCardGrid columns={3}>
-            <StatCard
-              label="Total Services"
-              value={summary.total}
-              icon={Layers}
-            />
-
-            <StatCard
-              label="Active"
-              value={summary.active}
-              icon={CheckCircle2}
-            />
-
-            <StatCard
-              label="Inactive"
-              value={summary.inactive}
-              icon={CircleOff}
-            />
+            <StatCard label="Total Services" value={summary.total} icon={Layers} />
+            <StatCard label="Active" value={summary.active} icon={CheckCircle2} />
+            <StatCard label="Inactive" value={summary.inactive} icon={CircleOff} />
           </StatCardGrid>
         </div>
 
-        {/*
-        |--------------------------------------------------------------------------
-        | Toolbar
-        |--------------------------------------------------------------------------
-        */}
+        {/* ================= Toolbar ================= */}
 
         <Toolbar
           search={
@@ -636,26 +387,18 @@ const summary: RevenueServiceSummary = {
             />
           }
           right={
-            <div className="flex flex-1 flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <div className="flex-1">
-                <Filters
-                  schema={revenueServiceFilters}
-                  value={filters}
-                  onChange={handleFiltersChange}
-                  onReset={handleResetFilters}
-                  layout="row"
-                  resetPosition="end"
-                />
-              </div>
-            </div>
+            <FilterSheet
+              schema={revenueServiceFilters}
+              value={filters}
+              defaultValues={INITIAL_FILTERS}
+              onChange={handleFiltersApply}
+              title="Filter Revenue Services"
+              description="Narrow down the list by domain, code, collection mode, or status."
+            />
           }
         />
 
-        {/*
-        |--------------------------------------------------------------------------
-        | Table
-        |--------------------------------------------------------------------------
-        */}
+        {/* ================= Table ================= */}
 
         <CommenTable
           type={"revenueService" as CommentType}
@@ -665,30 +408,20 @@ const summary: RevenueServiceSummary = {
           isLoading={isLoading || isFetching}
           actions={actions}
           onView={(row) => {
-            router.push(
-              `/office/dashboard/revenue-managements/services/${row.id}`
-            );
+            router.push(`/office/dashboard/revenue-managements/services/${row.id}`);
           }}
           onEdit={(row) => {
-            router.push(
-              `/office/dashboard/revenue-managements/services/${row.id}/edit`
-            );
+            router.push(`/office/dashboard/revenue-managements/services/${row.id}/edit`);
           }}
           onDelete={(id) => {
             console.log("delete", id);
           }}
           onManageAccess={(row) => {
-            router.push(
-              `/office/dashboard/revenue-managements/services/${row.id}/access`
-            );
+            router.push(`/office/dashboard/revenue-managements/services/${row.id}/access`);
           }}
         />
 
-        {/*
-        |--------------------------------------------------------------------------
-        | Pagination
-        |--------------------------------------------------------------------------
-        */}
+        {/* ================= Pagination ================= */}
 
         <DataTablePagination
           page={page}

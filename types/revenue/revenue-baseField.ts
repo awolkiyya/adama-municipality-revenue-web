@@ -9,7 +9,11 @@ export type BaseFieldDataType =
   | "TEXT"
   | "DATE"
   | "BOOLEAN"
-  | "SELECT";
+  | "SELECT"
+  | "CHECKBOX"
+  | "RADIO"
+  | "FILE"
+  ;
 
 // ============================================================
 // BASE FIELD

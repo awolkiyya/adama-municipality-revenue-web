@@ -206,7 +206,7 @@ user: {
   
   
       delete: {
-        enabled: true,
+        enabled: false,
       },
   
   
@@ -216,7 +216,7 @@ user: {
   
   
       toggleStatus: {
-        enabled: true,
+        enabled: false,
       },
   
   
@@ -247,7 +247,7 @@ user: {
       "collectionMode",
       "requiredFields",
       "status",
-      "created_at",
+      "createdAt",
     ],
   
     actions: {
@@ -260,11 +260,11 @@ user: {
       },
   
       delete: {
-        enabled: true,
+        enabled: false,
       },
   
       toggleStatus: {
-        enabled: true,
+        enabled: false,
       },
   
       manageAccess: {

@@ -1338,13 +1338,13 @@ export function RevenueServiceForm({
                                                                         {selectedBaseField.data_type}
                                                                     </Badge>
 
-                                                                    {selectedBaseField.measurement_unit && (
+                                                                    {/* {selectedBaseField.measurement_unit && (
                                                                         <Badge variant="outline">
                                                                             {selectedBaseField.measurement_unit.symbol
                                                                                 ? `${selectedBaseField.measurement_unit.code} (${selectedBaseField.measurement_unit.symbol})`
                                                                                 : selectedBaseField.measurement_unit.code}
                                                                         </Badge>
-                                                                    )}
+                                                                    )} */}
                                                                 </div>
 
                                                                 {selectedBaseField.description && (
@@ -1414,54 +1414,33 @@ export function RevenueServiceForm({
 
             </div>
 
-            {/* =====================================================
+           {/* =====================================================
                 STICKY ACTION BAR
             ====================================================== */}
 
-            <div className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 backdrop-blur">
+            <div className="sticky inset-x-0 bottom-0 z-40 -mx-6 my-5 border-t bg-background/95 px-6 backdrop-blur supports-[backdrop-filter]:bg-background/80">
 
-                <div className="mx-auto flex max-w-7xl items-center justify-end gap-3 px-6 py-3.5">
+            <div className="mx-auto flex max-w-7xl items-center justify-end gap-3 py-3.5">
 
-                    <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() =>
-                            router.back()
-                        }
-                        disabled={
-                            isSubmitting
-                        }
-                    >
-                        Cancel
-                    </Button>
+                <Button type="button" variant="outline" onClick={() => router.back()} disabled={isSubmitting}>
+                    Cancel
+                </Button>
 
-                    <Button
-                        type="submit"
-                        disabled={
-                            isSubmitting
-                        }
-                        className="min-w-[160px]"
-                    >
+                <Button type="submit" disabled={isSubmitting} className="min-w-[160px]">
+                    {isSubmitting ? (
+                        <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Saving...
+                        </>
+                    ) : (
+                        <>
+                            <Save className="mr-2 h-4 w-4" />
+                            {mode === "create" ? "Create Service" : "Save Changes"}
+                        </>
+                    )}
+                </Button>
 
-                        {isSubmitting ? (
-                            <>
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                Saving...
-                            </>
-                        ) : (
-                            <>
-                                <Save className="mr-2 h-4 w-4" />
-
-                                {mode ===
-                                "create"
-                                    ? "Create Service"
-                                    : "Save Changes"}
-                            </>
-                        )}
-
-                    </Button>
-
-                </div>
+            </div>
 
             </div>
 

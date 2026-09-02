@@ -938,6 +938,8 @@ export default function TariffVersionDetailPage() {
             onReset={
               handleFiltersReset
             }
+            layout="row"
+            resetPosition="end"
           />
         }
       />

@@ -30,6 +30,9 @@ import {
   AlertTriangle,
   Inbox,
   Loader2,
+  FileText,
+  CheckSquare,
+  CircleDot,
 } from "lucide-react";
 
 import {
@@ -61,7 +64,7 @@ import { toast } from "sonner";
 // DATA TYPE PRESENTATION
 // ============================================================
 
-const DATA_TYPE_META: Record<
+export const DATA_TYPE_META: Record<
   BaseFieldDataType,
   {
     label: string;
@@ -110,9 +113,25 @@ const DATA_TYPE_META: Record<
     icon: ListChecks,
     needsUnit: false,
   },
+  FILE: {
+    label: "File",
+    icon: FileText,
+    needsUnit: false,
+  },
+  CHECKBOX: {
+    label: "Checkbox",
+    icon: CheckSquare,
+    needsUnit: false,
+  },
+ 
+  RADIO: {
+    label: "Radio",
+    icon: CircleDot,
+    needsUnit: false,
+  },
 };
 
-const DATA_TYPES =
+export const DATA_TYPES =
   Object.keys(DATA_TYPE_META) as BaseFieldDataType[];
 
 

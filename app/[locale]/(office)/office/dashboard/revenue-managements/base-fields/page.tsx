@@ -16,6 +16,7 @@ import {
   Calendar,
   ToggleLeft,
   ListChecks,
+  FileText,
   Search,
   Plus,
   Pencil,
@@ -51,7 +52,7 @@ import {
 } from "@/hooks/revenue/revenueBaseField.hook";
 
 import { toast } from "sonner";
-import FieldPanel from "@/components/dialogs/FieldPanel";
+import FieldPanel, { DATA_TYPE_META, DATA_TYPES } from "@/components/dialogs/FieldPanel";
 import { Banner } from "@/components/banner/topBanner";
 import { IconBadge } from "@/components/commen/icon-badge";
 import { FloatingParticles } from "@/components/design/FloatingParticles";
@@ -60,64 +61,11 @@ import { Button } from "@/components/ui/button";
 // ============================================================
 // DATA TYPE PRESENTATION
 // ============================================================
+// NOTE: "FILE" was added here. It must also exist on the
+// BaseFieldDataType union in "@/types/revenue/revenue-baseField",
+// and on whatever type-selection UI FieldPanel renders internally
+// (see the callout at the bottom of this file).
 
-const DATA_TYPE_META: Record<
-  BaseFieldDataType,
-  {
-    label: string;
-    icon: React.ElementType;
-    needsUnit: boolean;
-  }
-> = {
-  NUMBER: {
-    label: "Number",
-    icon: Hash,
-    needsUnit: true,
-  },
-
-  DECIMAL: {
-    label: "Decimal",
-    icon: Divide,
-    needsUnit: true,
-  },
-
-  PERCENTAGE: {
-    label: "Percentage",
-    icon: Percent,
-    needsUnit: false,
-  },
-
-  TEXT: {
-    label: "Text",
-    icon: TypeIcon,
-    needsUnit: false,
-  },
-
-  DATE: {
-    label: "Date",
-    icon: Calendar,
-    needsUnit: false,
-  },
-
-  BOOLEAN: {
-    label: "Boolean",
-    icon: ToggleLeft,
-    needsUnit: false,
-  },
-
-  SELECT: {
-    label: "Select",
-    icon: ListChecks,
-    needsUnit: false,
-  },
-};
-
-const DATA_TYPES =
-  Object.keys(DATA_TYPE_META) as BaseFieldDataType[];
-
-// ============================================================
-// FORM STATE
-// ============================================================
 
 interface FieldFormState {
   name: string;
@@ -782,104 +730,68 @@ export default function BaseFieldManager() {
             HEADER
         ==================================================== */}
 
-         {/* ======================================================
-          HEADER
-      ====================================================== */}
-
-      <Banner
-        description="
-        Reusable field definitions
-        available across forms,
-        templates, and reports.
-        "
-        badge={
-          <IconBadge
-            className="
-              gap-2
-              rounded-full
-              bg-black/20
-              p-3
-              text-[10px]
-              text-white
-            "
-            icon={
-              <Ruler
+        <Banner
+          description="
+          Reusable field definitions
+          available across forms,
+          templates, and reports.
+          "
+          badge={
+            <IconBadge
+              className="
+                gap-2
+                rounded-full
+                bg-black/20
+                p-3
+                text-[10px]
+                text-white
+              "
+              icon={
+                <Ruler
+                  className="
+                    h-3
+                    w-3
+                  "
+                />
+              }
+            >
+              Base fields
+            </IconBadge>
+          }
+          background={
+            <FloatingParticles
+              color="#040404"
+              count={35}
+              speed={0.2}
+              connectDistance={100}
+              position="bottom-right"
+            />
+          }
+          actions={
+            <Button
+              variant="outline"
+              onClick={openCreate}
+            >
+              <Plus
                 className="
-                  h-3
-                  w-3
+                  h-4
+                  w-4
                 "
               />
-            }
-          >
-            Base fields
-          </IconBadge>
-        }
-        background={
-          <FloatingParticles
-            color="#040404"
-            count={35}
-            speed={0.2}
-            connectDistance={100}
-            position="bottom-right"
-          />
-        }
-        actions={
-          <Button
-            variant="outline"
-            onClick={openCreate}
-          >
-            <Plus
-              className="
-                h-4
-                w-4
-              "
-            />
 
-            Create New
-          </Button>
-        }
-        overlayClassName="
-          bg-gradient-to-r
-          from-primary/95
-          via-primary/80
-          to-primary/50
-        "
-        className="
-          text-white
-        "
-      />
-
-        {/* <div className="mb-6 flex flex-col gap-1">
-          <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-teal-700">
-            <Ruler size={13} />
-
-            Data catalog
-          </div>
-
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <h1 className="text-2xl font-semibold text-slate-900">
-                Base fields
-              </h1>
-
-              <p className="mt-1 text-sm text-slate-500">
-                Reusable field definitions
-                available across forms,
-                templates, and reports.
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={openCreate}
-              className="inline-flex items-center gap-1.5 rounded-md bg-teal-700 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-teal-800"
-            >
-              <Plus size={16} />
-
-              New field
-            </button>
-          </div>
-        </div> */}
+              Create New
+            </Button>
+          }
+          overlayClassName="
+            bg-gradient-to-r
+            from-primary/95
+            via-primary/80
+            to-primary/50
+          "
+          className="
+            text-white
+          "
+        />
 
         {/* ====================================================
             TOOLBAR
@@ -1401,4 +1313,3 @@ export default function BaseFieldManager() {
     </div>
   );
 }
-

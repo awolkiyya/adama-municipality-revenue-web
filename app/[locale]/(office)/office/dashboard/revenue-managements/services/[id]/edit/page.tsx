@@ -45,6 +45,8 @@ function toFormValues(
         service.revenue_service_fields ??
         [];
 
+    console.log("some test",service);
+
     return {
         id: service.id,
 
@@ -55,8 +57,8 @@ function toFormValues(
         */
 
         revenueCodeId:
-            service.revenue_code?.id ??
-            service.revenue_code_id ??
+            service.revenueCodeId             ??
+            service.revenueCode.id ??
             "",
 
         /*
@@ -74,7 +76,7 @@ function toFormValues(
             "",
 
         serviceType:
-            service.service_type ??
+            service.serviceType ??
             "",
 
         collectionMode:
@@ -130,7 +132,7 @@ function toFormValues(
                         */
 
                         required:
-                            field.is_required ??
+                            field.isRequired ??
                             field.required ??
                             false,
 

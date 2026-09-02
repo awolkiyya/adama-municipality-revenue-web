@@ -647,40 +647,38 @@ export function RevenueCategoryForm({
                 </section>
             </div>
 
-            {/* ================= STICKY ACTION BAR ================= */}
-            <div className="fixed inset-x-0 bottom-0 z-0 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-                <div className="mx-auto flex max-w-7xl items-end justify-end  py-3.5">
-                    <div className="flex items-center gap-3">
-                        {!showErrorBanner && summary.total > 0 && (
-                            <span className="hidden items-center gap-1.5 text-xs text-muted-foreground sm:flex">
-                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
-                                {summary.total} code{summary.total !== 1 ? "s" : ""} ready
-                            </span>
+           {/* ================= STICKY ACTION BAR ================= */}
+            <div className="sticky inset-x-0 bottom-0 z-40 -mx-6 my-5 border-t bg-background/95 px-6 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+                <div className="mx-auto flex max-w-7xl items-center justify-end gap-3 py-3.5">
+                    {!showErrorBanner && summary.total > 0 && (
+                        <span className="hidden items-center gap-1.5 text-xs text-muted-foreground sm:flex">
+                            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                            {summary.total} code{summary.total !== 1 ? "s" : ""} ready
+                        </span>
+                    )}
+
+                    <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => router.back()}
+                        disabled={isSubmitting}
+                    >
+                        Cancel
+                    </Button>
+
+                    <Button type="submit" disabled={isSubmitting} className="min-w-[160px]">
+                        {isSubmitting ? (
+                            <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Saving...
+                            </>
+                        ) : (
+                            <>
+                                <Save className="mr-2 h-4 w-4" />
+                                {mode === "create" ? "Create Category" : "Save Changes"}
+                            </>
                         )}
-
-                        <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => router.back()}
-                            disabled={isSubmitting}
-                        >
-                            Cancel
-                        </Button>
-
-                        <Button type="submit" disabled={isSubmitting} className="min-w-[160px]">
-                            {isSubmitting ? (
-                                <>
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    Saving...
-                                </>
-                            ) : (
-                                <>
-                                    <Save className="mr-2 h-4 w-4" />
-                                    {mode === "create" ? "Create Category" : "Save Changes"}
-                                </>
-                            )}
-                        </Button>
-                    </div>
+                    </Button>
                 </div>
             </div>
         </form>

@@ -162,12 +162,12 @@ export const NAV_ITEMS: NavItem[] = [
   // SYSTEM SETTINGS
   // =========================================================
 
-  // {
-  //   title: "system_settings",
-  //   url: "/office/dashboard/system-settings",
-  //   icon: Settings,
-  //   permission: APP_PERMISSIONS.SYSTEM_SETTINGS_VIEW,
-  // },
+  {
+    title: "system_settings",
+    url: "/office/dashboard/system-settings",
+    icon: Settings,
+    permission: APP_PERMISSIONS.SYSTEM_SETTINGS_VIEW,
+  },
 
   // =========================================================
   // AUDIT

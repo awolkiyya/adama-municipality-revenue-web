@@ -941,60 +941,72 @@ SYSTEM_SETTINGS_VIEW: {
   action: "view",
 },
 
-INTEREST_RATES_VIEW: {
-  resource: "interest_rates",
+
+// Interest Rule
+
+INTEREST_RULES_VIEW: {
+  resource: "interest_rules",
   action: "view",
 },
 
-INTEREST_RATES_CREATE: {
-  resource: "interest_rates",
+INTEREST_RULES_CREATE: {
+  resource: "interest_rules",
   action: "create",
 },
 
-INTEREST_RATES_UPDATE: {
-  resource: "interest_rates",
+INTEREST_RULES_UPDATE: {
+  resource: "interest_rules",
   action: "update",
 },
 
-INTEREST_RATES_ACTIVATE: {
-  resource: "interest_rates",
+INTEREST_RULES_ACTIVATE: {
+  resource: "interest_rules",
   action: "activate",
 },
 
-INTEREST_RATES_DEACTIVATE: {
-  resource: "interest_rates",
+INTEREST_RULES_DEACTIVATE: {
+  resource: "interest_rules",
   action: "deactivate",
 },
 
-INTEREST_RATES_VIEW_HISTORY: {
-  resource: "interest_rates",
+INTEREST_RULES_VIEW_HISTORY: {
+  resource: "interest_rules",
   action: "view_history",
 },
 
 
-/* |-------------------------------------------------------------------------- | Penalty Rule Configuration |-------------------------------------------------------------------------- */ 
-PENALTY_RULES_VIEW: { 
+/* 
+-------------------------------------------------------------------------- 
+ Penalty Rule Configuration 
+ -------------------------------------------------------------------------- */ 
+PENALTY_RULES_VIEW: {
   resource: "penalty_rules",
-  action: "view", 
+  action: "view",
 },
+
 PENALTY_RULES_CREATE: {
   resource: "penalty_rules",
   action: "create",
 },
+
 PENALTY_RULES_UPDATE: {
   resource: "penalty_rules",
   action: "update",
-}, 
-PENALTY_RULES_ACTIVATE: {
-   resource: "penalty_rules",
-   action: "activate",
 },
+
+PENALTY_RULES_ACTIVATE: {
+  resource: "penalty_rules",
+  action: "activate",
+},
+
 PENALTY_RULES_DEACTIVATE: {
-   resource: "penalty_rules",
-   action: "deactivate",
-}, 
+  resource: "penalty_rules",
+  action: "deactivate",
+},
+
 PENALTY_RULES_VIEW_HISTORY: {
-   resource: "penalty_rules",
-   action: "view_history", },
+  resource: "penalty_rules",
+  action: "view_history",
+},
 
 } satisfies Record<string, AppPermission>;

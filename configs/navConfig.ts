@@ -242,9 +242,9 @@ export const NAV_ITEMS: NavItem[] = [
 
       {
         title: "interest_rates",
-        url: "/office/dashboard/revenue-managements/interest-rates",
+        url: "/office/dashboard/revenue-managements/interest-rules",
         icon: Landmark,
-        permission: APP_PERMISSIONS.INTEREST_RATES_VIEW,
+        permission: APP_PERMISSIONS.INTEREST_RULES_VIEW,
       },
     ],
   },

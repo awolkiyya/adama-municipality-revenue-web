@@ -13,7 +13,7 @@ const nextConfig: NextConfig = {
   // X-Powered-By: Next.js
   poweredByHeader: false,
 
-  allowedDevOrigins: ['192.168.3.1'],
+  allowedDevOrigins: ['192.168.3.1','172.25.10.74'],
 
   async rewrites() {
     return [

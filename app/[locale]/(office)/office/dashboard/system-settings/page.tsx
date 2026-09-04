@@ -1,6 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 
 import {
   AlertCircle,
@@ -10,17 +14,16 @@ import {
   Check,
   CheckCircle2,
   ChevronRight,
-  CircleDollarSign,
   FileCheck2,
   FileText,
   Info,
   Landmark,
+  Loader2,
   Receipt,
   RotateCcw,
   Save,
   Settings2,
   ShieldCheck,
-  SlidersHorizontal,
   WalletCards,
 } from "lucide-react";
 
@@ -39,163 +42,111 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
+
+import { EthiopianDatePicker } from "@/components/input/EthiopianDatePicker";
+
+import {
+  useRevenueSettings,
+  useUpdateRevenueSettings,
+} from "@/hooks/revenue/revenueSetting.hook";
+
+import type {
+  PaymentMethod,
+  RevenueSettingResource,
+  UpdateRevenueSettingPayload,
+} from "@/types/revenue/revenueSetting";
 
 
 /*
 |--------------------------------------------------------------------------
-| Types
+| Settings Section
 |--------------------------------------------------------------------------
 */
-
-type PaymentMethod =
-  | "CASH"
-  | "BANK"
-  | "MOBILE_MONEY"
-  | "CARD";
 
 type SettingsSection =
   | "overview"
   | "payment-period"
-  | "calculation"
   | "assessment"
   | "invoice"
   | "payment"
   | "receipt";
 
 
-type RevenueSettings = {
-  payment_start_month: string;
-  payment_start_day: number;
-
-  payment_end_month: string;
-  payment_end_day: number;
-
-  calendar_type: "ETHIOPIAN" | "GREGORIAN";
-
-  penalty_enabled: boolean;
-  interest_enabled: boolean;
-
-  assessment_auto_calculation: boolean;
-  assessment_manual_adjustment: boolean;
-  assessment_requires_approval: boolean;
-  assessment_reassessment_allowed: boolean;
-
-  invoice_auto_numbering: boolean;
-  invoice_prefix: string;
-  invoice_allow_partial_payment: boolean;
-  invoice_allow_overpayment: boolean;
-  invoice_allow_overdue_payment: boolean;
-
-  payment_confirmation_required: boolean;
-  payment_auto_receipt: boolean;
-  payment_allow_partial: boolean;
-  payment_methods: PaymentMethod[];
-
-  receipt_auto_numbering: boolean;
-  receipt_prefix: string;
-  receipt_allow_reprint: boolean;
-
-  currency: string;
-  decimal_places: number;
-  percentage_precision: number;
-
-  rounding_mode:
-    | "HALF_UP"
-    | "HALF_DOWN"
-    | "HALF_EVEN"
-    | "UP"
-    | "DOWN";
-
-  calculation_order:
-    | "PENALTY_THEN_INTEREST"
-    | "INTEREST_THEN_PENALTY";
-};
-
-
-/*
-|--------------------------------------------------------------------------
-| Default Settings
-|--------------------------------------------------------------------------
-*/
-
-const DEFAULT_SETTINGS: RevenueSettings = {
-  payment_start_month: "Adooleessa",
-  payment_start_day: 1,
-
-  payment_end_month: "Guraandhala",
-  payment_end_day: 30,
-
-  calendar_type: "ETHIOPIAN",
-
-  penalty_enabled: true,
-  interest_enabled: true,
-
-  assessment_auto_calculation: true,
-  assessment_manual_adjustment: false,
-  assessment_requires_approval: false,
-  assessment_reassessment_allowed: true,
-
-  invoice_auto_numbering: true,
-  invoice_prefix: "INV",
-
-  invoice_allow_partial_payment: true,
-  invoice_allow_overpayment: false,
-  invoice_allow_overdue_payment: true,
-
-  payment_confirmation_required: true,
-  payment_auto_receipt: true,
-  payment_allow_partial: true,
-
-  payment_methods: [
-    "CASH",
-    "BANK",
-    "MOBILE_MONEY",
-  ],
-
-  receipt_auto_numbering: true,
-  receipt_prefix: "REC",
-  receipt_allow_reprint: true,
-
-  currency: "ETB",
-  decimal_places: 2,
-  percentage_precision: 4,
-
-  rounding_mode: "HALF_UP",
-
-  calculation_order: "PENALTY_THEN_INTEREST",
-};
-
-
 /*
 |--------------------------------------------------------------------------
 | Ethiopian Months
 |--------------------------------------------------------------------------
+|
+| API stores months as integers:
+|
+| 1  = Fulbaana
+| 2  = Onkololeessa
+| ...
+| 13 = Pagume
+|
+| These names are presentation-only.
+|
 */
 
 const ETHIOPIAN_MONTHS = [
-  "Meskerem",
-  "Tikimt",
-  "Hidar",
-  "Tahsas",
-  "Tir",
-  "Yekatit",
-  "Megabit",
-  "Miazia",
-  "Ginbot",
-  "Sene",
-  "Hamle",
-  "Nehase",
-  "Pagume",
+  { value: 1, label: "Fulbaana" },
+  { value: 2, label: "Onkololeessa" },
+  { value: 3, label: "Sadaasa" },
+  { value: 4, label: "Muddee" },
+  { value: 5, label: "Amajjii" },
+  { value: 6, label: "Guraandhala" },
+  { value: 7, label: "Bitootessa" },
+  { value: 8, label: "Elba" },
+  { value: 9, label: "Caamsaa" },
+  { value: 10, label: "Waxabajjii" },
+  { value: 11, label: "Adooleessa" },
+  { value: 12, label: "Hagayya" },
+  { value: 13, label: "Pagume" },
+] as const;
+
+
+/*
+|--------------------------------------------------------------------------
+| Payment Method Metadata
+|--------------------------------------------------------------------------
+*/
+
+const PAYMENT_METHOD_OPTIONS: {
+  id: PaymentMethod;
+  label: string;
+  description: string;
+  icon: React.ElementType;
+}[] = [
+  {
+    id: "CASH",
+    label: "Cash",
+    description:
+      "Payment at authorized collection offices.",
+    icon: Banknote,
+  },
+  {
+    id: "BANK",
+    label: "Bank",
+    description:
+      "Payment through supported banks.",
+    icon: Landmark,
+  },
+  {
+    id: "MOBILE_MONEY",
+    label: "Mobile Money",
+    description:
+      "Payment through supported mobile channels.",
+    icon: WalletCards,
+  },
+  {
+    id: "CARD",
+    label: "Card",
+    description:
+      "Payment through supported card channels.",
+    icon: WalletCards,
+  },
 ];
 
 
@@ -222,12 +173,6 @@ const NAVIGATION: {
     label: "Payment Period",
     description: "Revenue collection period",
     icon: CalendarDays,
-  },
-  {
-    id: "calculation",
-    label: "Calculation",
-    description: "Currency & calculation rules",
-    icon: CircleDollarSign,
   },
   {
     id: "assessment",
@@ -258,6 +203,39 @@ const NAVIGATION: {
 
 /*
 |--------------------------------------------------------------------------
+| Helpers
+|--------------------------------------------------------------------------
+*/
+
+function monthName(
+  month: number | null | undefined,
+): string {
+  if (!month) {
+    return "Not configured";
+  }
+
+  return (
+    ETHIOPIAN_MONTHS.find(
+      (item) => item.value === month,
+    )?.label ?? `Month ${month}`
+  );
+}
+
+
+function formatEthiopianDate(
+  month: number | null | undefined,
+  day: number | null | undefined,
+): string {
+  if (!month || !day) {
+    return "Not configured";
+  }
+
+  return `${monthName(month)} ${day}`;
+}
+
+
+/*
+|--------------------------------------------------------------------------
 | Setting Row
 |--------------------------------------------------------------------------
 */
@@ -273,7 +251,9 @@ function SettingRow({
 }) {
   return (
     <div className="flex items-center justify-between gap-8 py-5">
+
       <div className="min-w-0">
+
         <div className="text-sm font-medium">
           {title}
         </div>
@@ -281,11 +261,13 @@ function SettingRow({
         <div className="mt-1 max-w-2xl text-sm leading-5 text-muted-foreground">
           {description}
         </div>
+
       </div>
 
       <div className="shrink-0">
         {children}
       </div>
+
     </div>
   );
 }
@@ -312,10 +294,13 @@ function SectionHeader({
     <div className="flex gap-4">
 
       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border bg-muted/50">
+
         <Icon className="h-4.5 w-4.5 text-muted-foreground" />
+
       </div>
 
       <div>
+
         <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
           {eyebrow}
         </div>
@@ -327,6 +312,7 @@ function SectionHeader({
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
           {description}
         </p>
+
       </div>
 
     </div>
@@ -341,14 +327,97 @@ function SectionHeader({
 */
 
 export default function RevenueGeneralSettingsPage() {
+
+  /*
+  |--------------------------------------------------------------------------
+  | API
+  |--------------------------------------------------------------------------
+  */
+
+  const {
+    data,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useRevenueSettings();
+
+
+  const updateRevenueSettings =
+    useUpdateRevenueSettings();
+
+
+  /*
+  |--------------------------------------------------------------------------
+  | Server Configuration
+  |--------------------------------------------------------------------------
+  */
+
+  const serverSettings =
+    data?.data ?? null;
+
+
+  /*
+  |--------------------------------------------------------------------------
+  | Local Editable Settings
+  |--------------------------------------------------------------------------
+  */
+
   const [settings, setSettings] =
-    useState<RevenueSettings>(DEFAULT_SETTINGS);
+    useState<RevenueSettingResource | null>(
+      null,
+    );
+
+
+  /*
+  |--------------------------------------------------------------------------
+  | Last Saved Snapshot
+  |--------------------------------------------------------------------------
+  */
+
+  const [savedSettings, setSavedSettings] =
+    useState<RevenueSettingResource | null>(
+      null,
+    );
+
+
+  /*
+  |--------------------------------------------------------------------------
+  | Active Section
+  |--------------------------------------------------------------------------
+  */
 
   const [activeSection, setActiveSection] =
     useState<SettingsSection>("overview");
 
-  const [saved, setSaved] =
-    useState(false);
+
+  /*
+  |--------------------------------------------------------------------------
+  | Sync API -> Local State
+  |--------------------------------------------------------------------------
+  */
+
+  useEffect(() => {
+
+    if (!serverSettings) {
+      return;
+    }
+
+    const normalized: RevenueSettingResource = {
+      ...serverSettings,
+
+      enabled_payment_methods:
+        Array.isArray(
+          serverSettings.enabled_payment_methods,
+        )
+          ? serverSettings.enabled_payment_methods
+          : [],
+    };
+
+    setSettings(normalized);
+    setSavedSettings(normalized);
+
+  }, [serverSettings]);
 
 
   /*
@@ -358,29 +427,46 @@ export default function RevenueGeneralSettingsPage() {
   */
 
   const isDirty = useMemo(() => {
+
+    if (!settings || !savedSettings) {
+      return false;
+    }
+
     return (
       JSON.stringify(settings) !==
-      JSON.stringify(DEFAULT_SETTINGS)
+      JSON.stringify(savedSettings)
     );
-  }, [settings]);
+
+  }, [
+    settings,
+    savedSettings,
+  ]);
 
 
   /*
   |--------------------------------------------------------------------------
-  | Update
+  | Generic Update
   |--------------------------------------------------------------------------
   */
 
-  function update<K extends keyof RevenueSettings>(
+  function update<K extends keyof RevenueSettingResource>(
     key: K,
-    value: RevenueSettings[K],
+    value: RevenueSettingResource[K],
   ) {
-    setSettings((current) => ({
-      ...current,
-      [key]: value,
-    }));
 
-    setSaved(false);
+    setSettings((current) => {
+
+      if (!current) {
+        return current;
+      }
+
+      return {
+        ...current,
+        [key]: value,
+      };
+
+    });
+
   }
 
 
@@ -391,8 +477,150 @@ export default function RevenueGeneralSettingsPage() {
   */
 
   function resetSettings() {
-    setSettings(DEFAULT_SETTINGS);
-    setSaved(false);
+
+    if (!savedSettings) {
+      return;
+    }
+
+    setSettings({
+      ...savedSettings,
+
+      enabled_payment_methods: [
+        ...savedSettings.enabled_payment_methods,
+      ],
+    });
+
+  }
+
+
+  /*
+  |--------------------------------------------------------------------------
+  | Build Update Payload
+  |--------------------------------------------------------------------------
+  */
+
+  function buildUpdatePayload(
+    current: RevenueSettingResource,
+  ): UpdateRevenueSettingPayload {
+
+    return {
+
+      /*
+      |--------------------------------------------------------------------------
+      | Payment Period
+      |--------------------------------------------------------------------------
+      */
+
+      payment_start_month:
+        current.payment_start_month,
+
+      payment_start_day:
+        current.payment_start_day,
+
+      payment_end_month:
+        current.payment_end_month,
+
+      payment_end_day:
+        current.payment_end_day,
+
+
+      /*
+      |--------------------------------------------------------------------------
+      | Penalty / Interest
+      |--------------------------------------------------------------------------
+      */
+
+      penalty_enabled:
+        current.penalty_enabled,
+
+      interest_enabled:
+        current.interest_enabled,
+
+
+      /*
+      |--------------------------------------------------------------------------
+      | Assessment
+      |--------------------------------------------------------------------------
+      */
+
+      assessment_auto_calculation:
+        current.assessment_auto_calculation,
+
+      assessment_allow_manual_adjustment:
+        current.assessment_allow_manual_adjustment,
+
+      assessment_requires_approval:
+        current.assessment_requires_approval,
+
+      assessment_reassessment_allowed:
+        current.assessment_reassessment_allowed,
+
+
+      /*
+      |--------------------------------------------------------------------------
+      | Invoice
+      |--------------------------------------------------------------------------
+      */
+
+      invoice_auto_numbering:
+        current.invoice_auto_numbering,
+
+      invoice_prefix:
+        current.invoice_prefix.trim(),
+
+      invoice_allow_overpayment:
+        current.invoice_allow_overpayment,
+
+      invoice_allow_overdue_payment:
+        current.invoice_allow_overdue_payment,
+
+
+      /*
+      |--------------------------------------------------------------------------
+      | Payment
+      |--------------------------------------------------------------------------
+      */
+
+      payment_confirmation_required:
+        current.payment_confirmation_required,
+
+      payment_auto_receipt:
+        current.payment_auto_receipt,
+
+      enabled_payment_methods:
+        current.enabled_payment_methods,
+
+
+      /*
+      |--------------------------------------------------------------------------
+      | Receipt
+      |--------------------------------------------------------------------------
+      */
+
+      receipt_auto_numbering:
+        current.receipt_auto_numbering,
+
+      receipt_prefix:
+        current.receipt_prefix.trim(),
+
+      receipt_allow_reprint:
+        current.receipt_allow_reprint,
+
+
+      /*
+      |--------------------------------------------------------------------------
+      | Metadata
+      |--------------------------------------------------------------------------
+      */
+
+      legal_reference:
+        current.legal_reference,
+
+      description:
+        current.description,
+
+    };
+
   }
 
 
@@ -403,15 +631,22 @@ export default function RevenueGeneralSettingsPage() {
   */
 
   function saveSettings() {
-    /*
-     * Replace with:
-     *
-     * PUT /api/revenue/settings
-     */
 
-    console.log(settings);
+    if (!settings) {
+      return;
+    }
 
-    setSaved(true);
+    if (!settings.id) {
+      return;
+    }
+
+    updateRevenueSettings.mutate({
+      id: settings.id,
+
+      data:
+        buildUpdatePayload(settings),
+    });
+
   }
 
 
@@ -424,22 +659,51 @@ export default function RevenueGeneralSettingsPage() {
   function togglePaymentMethod(
     method: PaymentMethod,
   ) {
+
+    if (!settings) {
+      return;
+    }
+
+    const currentMethods =
+      settings.enabled_payment_methods ?? [];
+
+
     const exists =
-      settings.payment_methods.includes(method);
+      currentMethods.includes(method);
+
 
     const next = exists
-      ? settings.payment_methods.filter(
+      ? currentMethods.filter(
           (item) => item !== method,
         )
       : [
-          ...settings.payment_methods,
+          ...currentMethods,
           method,
         ];
 
+
+    /*
+    |--------------------------------------------------------------------------
+    | Prevent Empty Payment Methods
+    |--------------------------------------------------------------------------
+    |
+    | Backend requires at least one enabled method.
+    |
+    */
+
+    if (
+      exists &&
+      currentMethods.length === 1
+    ) {
+      return;
+    }
+
+
     update(
-      "payment_methods",
+      "enabled_payment_methods",
       next,
     );
+
   }
 
 
@@ -452,12 +716,113 @@ export default function RevenueGeneralSettingsPage() {
   function navigate(
     section: SettingsSection,
   ) {
+
     setActiveSection(section);
 
     window.scrollTo({
       top: 0,
       behavior: "smooth",
     });
+
+  }
+
+
+  /*
+  |--------------------------------------------------------------------------
+  | Loading State
+  |--------------------------------------------------------------------------
+  */
+
+  if (isLoading) {
+
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+
+        <div className="flex flex-col items-center gap-3 text-center">
+
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+
+          <div>
+
+            <p className="text-sm font-medium">
+              Loading revenue settings
+            </p>
+
+            <p className="mt-1 text-xs text-muted-foreground">
+              Retrieving the active Revenue Management configuration.
+            </p>
+
+          </div>
+
+        </div>
+
+      </div>
+    );
+
+  }
+
+
+  /*
+  |--------------------------------------------------------------------------
+  | Error State
+  |--------------------------------------------------------------------------
+  */
+
+  if (isError || !settings) {
+
+    return (
+      <div className="min-h-[60vh] bg-muted/20">
+
+        <div className="mx-auto flex max-w-xl items-center justify-center px-6 py-20">
+
+          <Card className="w-full">
+
+            <CardHeader>
+
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl border bg-muted/40">
+
+                <AlertCircle className="h-5 w-5 text-muted-foreground" />
+
+              </div>
+
+              <CardTitle className="mt-4 text-base">
+                Unable to load revenue settings
+              </CardTitle>
+
+              <CardDescription>
+                The active Revenue Management configuration
+                could not be retrieved.
+              </CardDescription>
+
+            </CardHeader>
+
+            <CardContent>
+
+              <Button
+                variant="outline"
+                onClick={() => refetch()}
+              >
+                <RotateCcw className="mr-2 h-4 w-4" />
+                Try Again
+              </Button>
+
+              {error && (
+                <p className="mt-3 text-xs text-muted-foreground">
+                  {error instanceof Error
+                    ? error.message
+                    : "An unexpected error occurred."}
+                </p>
+              )}
+
+            </CardContent>
+
+          </Card>
+
+        </div>
+
+      </div>
+    );
+
   }
 
 
@@ -469,6 +834,7 @@ export default function RevenueGeneralSettingsPage() {
 
   return (
     <div className="min-h-screen bg-muted/20">
+
 
       {/* ==========================================================
           HEADER
@@ -518,14 +884,16 @@ export default function RevenueGeneralSettingsPage() {
                     className="gap-1.5 font-normal"
                   >
                     <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                    Active
+                    {settings.is_active
+                      ? "Active"
+                      : "Inactive"}
                   </Badge>
 
                 </div>
 
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Manage the global configuration and operational
-                  behavior of the revenue management system.
+                  Manage global configuration and operational
+                  behavior for the Revenue Management system.
                 </p>
 
               </div>
@@ -547,22 +915,36 @@ export default function RevenueGeneralSettingsPage() {
                 </Badge>
               )}
 
+
               <Button
                 variant="outline"
                 size="sm"
-                disabled={!isDirty}
+                disabled={
+                  !isDirty ||
+                  updateRevenueSettings.isPending
+                }
                 onClick={resetSettings}
               >
                 <RotateCcw className="mr-2 h-4 w-4" />
                 Reset
               </Button>
 
+
               <Button
                 size="sm"
-                disabled={!isDirty}
+                disabled={
+                  !isDirty ||
+                  updateRevenueSettings.isPending
+                }
                 onClick={saveSettings}
               >
-                {saved ? (
+
+                {updateRevenueSettings.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : updateRevenueSettings.isSuccess && !isDirty ? (
                   <>
                     <Check className="mr-2 h-4 w-4" />
                     Saved
@@ -573,6 +955,7 @@ export default function RevenueGeneralSettingsPage() {
                     Save Changes
                   </>
                 )}
+
               </Button>
 
             </div>
@@ -590,17 +973,21 @@ export default function RevenueGeneralSettingsPage() {
 
       <main className="mx-auto max-w-[1500px] px-6 py-6">
 
+
         {/* ========================================================
             SUMMARY
         ========================================================= */}
 
         <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
 
+
           {/* Payment Period */}
 
           <button
             type="button"
-            onClick={() => navigate("payment-period")}
+            onClick={() =>
+              navigate("payment-period")
+            }
             className="text-left"
           >
 
@@ -611,7 +998,9 @@ export default function RevenueGeneralSettingsPage() {
                 <div className="flex items-start justify-between">
 
                   <div className="flex h-9 w-9 items-center justify-center rounded-lg border bg-muted/40">
+
                     <CalendarDays className="h-4 w-4 text-muted-foreground" />
+
                   </div>
 
                   <ArrowRight className="h-4 w-4 text-muted-foreground" />
@@ -625,60 +1014,23 @@ export default function RevenueGeneralSettingsPage() {
                   </p>
 
                   <p className="mt-1 text-sm font-semibold">
-                    {settings.payment_start_month}{" "}
-                    {settings.payment_start_day}
+
+                    {formatEthiopianDate(
+                      settings.payment_start_month,
+                      settings.payment_start_day,
+                    )}
+
                     {" → "}
-                    {settings.payment_end_month}{" "}
-                    {settings.payment_end_day}
+
+                    {formatEthiopianDate(
+                      settings.payment_end_month,
+                      settings.payment_end_day,
+                    )}
+
                   </p>
 
                   <p className="mt-1 text-xs text-muted-foreground">
                     Ethiopian Calendar
-                  </p>
-
-                </div>
-
-              </CardContent>
-
-            </Card>
-
-          </button>
-
-
-          {/* Currency */}
-
-          <button
-            type="button"
-            onClick={() => navigate("calculation")}
-            className="text-left"
-          >
-
-            <Card className="transition-shadow hover:shadow-sm">
-
-              <CardContent className="p-5">
-
-                <div className="flex items-start justify-between">
-
-                  <div className="flex h-9 w-9 items-center justify-center rounded-lg border bg-muted/40">
-                    <CircleDollarSign className="h-4 w-4 text-muted-foreground" />
-                  </div>
-
-                  <ArrowRight className="h-4 w-4 text-muted-foreground" />
-
-                </div>
-
-                <div className="mt-4">
-
-                  <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                    Currency
-                  </p>
-
-                  <p className="mt-1 text-sm font-semibold">
-                    {settings.currency}
-                  </p>
-
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {settings.decimal_places} decimal places
                   </p>
 
                 </div>
@@ -699,7 +1051,9 @@ export default function RevenueGeneralSettingsPage() {
               <div className="flex items-start justify-between">
 
                 <div className="flex h-9 w-9 items-center justify-center rounded-lg border bg-muted/40">
+
                   <ShieldCheck className="h-4 w-4 text-muted-foreground" />
+
                 </div>
 
                 <Badge
@@ -747,7 +1101,9 @@ export default function RevenueGeneralSettingsPage() {
               <div className="flex items-start justify-between">
 
                 <div className="flex h-9 w-9 items-center justify-center rounded-lg border bg-muted/40">
+
                   <Landmark className="h-4 w-4 text-muted-foreground" />
+
                 </div>
 
                 <Badge
@@ -784,6 +1140,56 @@ export default function RevenueGeneralSettingsPage() {
             </CardContent>
 
           </Card>
+
+
+          {/* Payment Methods */}
+
+          <button
+            type="button"
+            onClick={() =>
+              navigate("payment")
+            }
+            className="text-left"
+          >
+
+            <Card className="transition-shadow hover:shadow-sm">
+
+              <CardContent className="p-5">
+
+                <div className="flex items-start justify-between">
+
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg border bg-muted/40">
+
+                    <WalletCards className="h-4 w-4 text-muted-foreground" />
+
+                  </div>
+
+                  <ArrowRight className="h-4 w-4 text-muted-foreground" />
+
+                </div>
+
+                <div className="mt-4">
+
+                  <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    Payment Methods
+                  </p>
+
+                  <p className="mt-1 text-sm font-semibold">
+                    {settings.enabled_payment_methods.length}{" "}
+                    enabled
+                  </p>
+
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Available payment channels
+                  </p>
+
+                </div>
+
+              </CardContent>
+
+            </Card>
+
+          </button>
 
         </div>
 
@@ -883,6 +1289,7 @@ export default function RevenueGeneralSettingsPage() {
 
                       </button>
                     );
+
                   })}
 
                 </nav>
@@ -891,13 +1298,11 @@ export default function RevenueGeneralSettingsPage() {
                 <Separator className="my-3" />
 
 
-                {/* Policy Links */}
-
                 <div className="px-3 pb-2 pt-1">
 
                   <p className="text-[11px] leading-4 text-muted-foreground">
-                    Penalty and interest policies are managed
-                    independently to preserve legal rule separation.
+                    Tariff, penalty, and interest calculation rules
+                    are managed independently from global settings.
                   </p>
 
                 </div>
@@ -942,6 +1347,9 @@ export default function RevenueGeneralSettingsPage() {
 
                     <div className="grid gap-4 md:grid-cols-2">
 
+
+                      {/* Payment Period */}
+
                       <div className="rounded-xl border bg-muted/20 p-5">
 
                         <div className="flex items-center gap-3">
@@ -955,11 +1363,19 @@ export default function RevenueGeneralSettingsPage() {
                             </p>
 
                             <p className="mt-1 text-sm font-semibold">
-                              {settings.payment_start_month}{" "}
-                              {settings.payment_start_day}
+
+                              {formatEthiopianDate(
+                                settings.payment_start_month,
+                                settings.payment_start_day,
+                              )}
+
                               {" → "}
-                              {settings.payment_end_month}{" "}
-                              {settings.payment_end_day}
+
+                              {formatEthiopianDate(
+                                settings.payment_end_month,
+                                settings.payment_end_day,
+                              )}
+
                             </p>
 
                           </div>
@@ -969,28 +1385,7 @@ export default function RevenueGeneralSettingsPage() {
                       </div>
 
 
-                      <div className="rounded-xl border bg-muted/20 p-5">
-
-                        <div className="flex items-center gap-3">
-
-                          <CircleDollarSign className="h-4 w-4 text-muted-foreground" />
-
-                          <div>
-
-                            <p className="text-xs text-muted-foreground">
-                              Currency
-                            </p>
-
-                            <p className="mt-1 text-sm font-semibold">
-                              {settings.currency}
-                            </p>
-
-                          </div>
-
-                        </div>
-
-                      </div>
-
+                      {/* Penalty */}
 
                       <div className="rounded-xl border bg-muted/20 p-5">
 
@@ -1017,6 +1412,8 @@ export default function RevenueGeneralSettingsPage() {
                       </div>
 
 
+                      {/* Interest */}
+
                       <div className="rounded-xl border bg-muted/20 p-5">
 
                         <div className="flex items-center gap-3">
@@ -1033,6 +1430,32 @@ export default function RevenueGeneralSettingsPage() {
                               {settings.interest_enabled
                                 ? "Enabled"
                                 : "Disabled"}
+                            </p>
+
+                          </div>
+
+                        </div>
+
+                      </div>
+
+
+                      {/* Payment Methods */}
+
+                      <div className="rounded-xl border bg-muted/20 p-5">
+
+                        <div className="flex items-center gap-3">
+
+                          <WalletCards className="h-4 w-4 text-muted-foreground" />
+
+                          <div>
+
+                            <p className="text-xs text-muted-foreground">
+                              Payment Methods
+                            </p>
+
+                            <p className="mt-1 text-sm font-semibold">
+                              {settings.enabled_payment_methods.length}{" "}
+                              enabled
                             </p>
 
                           </div>
@@ -1069,24 +1492,33 @@ export default function RevenueGeneralSettingsPage() {
                     {[
                       {
                         label: "Payment period",
-                        status: true,
+                        status:
+                          settings.payment_start_month !== null &&
+                          settings.payment_start_day !== null &&
+                          settings.payment_end_month !== null &&
+                          settings.payment_end_day !== null,
                       },
                       {
                         label: "Assessment configuration",
-                        status: settings.assessment_auto_calculation,
+                        status:
+                          settings.assessment_auto_calculation,
                       },
                       {
                         label: "Invoice configuration",
-                        status: settings.invoice_auto_numbering,
+                        status:
+                          settings.invoice_auto_numbering &&
+                          settings.invoice_prefix.trim().length > 0,
                       },
                       {
                         label: "Payment configuration",
                         status:
-                          settings.payment_methods.length > 0,
+                          settings.enabled_payment_methods.length > 0,
                       },
                       {
                         label: "Receipt configuration",
-                        status: settings.receipt_auto_numbering,
+                        status:
+                          settings.receipt_auto_numbering &&
+                          settings.receipt_prefix.trim().length > 0,
                       },
                     ].map((item) => (
 
@@ -1140,11 +1572,15 @@ export default function RevenueGeneralSettingsPage() {
                       </p>
 
                       <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                        General Settings controls global system
-                        behavior. Penalty rates and interest rates
-                        remain in their dedicated policy modules.
-                        Invoice due dates are resolved when invoices
-                        are created and should be stored on the invoice.
+
+                        General Settings controls global operational
+                        behavior. Tariff calculation controls are
+                        configured on individual tariff rules.
+                        Penalty and interest rates are managed in
+                        their dedicated policy modules. Invoice due
+                        dates are resolved when invoices are created
+                        and persisted on the invoice.
+
                       </p>
 
                     </div>
@@ -1184,126 +1620,211 @@ export default function RevenueGeneralSettingsPage() {
 
                     <div className="grid gap-5 md:grid-cols-2">
 
-                      <div className="space-y-2">
+
+                      {/* Start */}
+
+                      <div className="space-y-3">
 
                         <Label>
                           Payment Start
                         </Label>
 
-                        <div className="grid grid-cols-[1fr_100px] gap-2">
+                        <div className="rounded-xl border bg-muted/20 p-4">
 
-                          <Select
-                            value={
-                              settings.payment_start_month
-                            }
-                            onValueChange={(value) =>
-                              update(
-                                "payment_start_month",
-                                value,
-                              )
-                            }
-                          >
+                          <p className="text-sm font-medium">
+                            {formatEthiopianDate(
+                              settings.payment_start_month,
+                              settings.payment_start_day,
+                            )}
+                          </p>
 
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Ethiopian calendar date
+                          </p>
 
-                            <SelectContent>
+                        </div>
+
+                        <EthiopianDatePicker />
+
+                        <div className="grid grid-cols-2 gap-3">
+
+                          <div className="space-y-2">
+
+                            <Label className="text-xs">
+                              Month
+                            </Label>
+
+                            <select
+                              value={
+                                settings.payment_start_month ??
+                                ""
+                              }
+                              onChange={(event) =>
+                                update(
+                                  "payment_start_month",
+                                  event.target.value
+                                    ? Number(event.target.value)
+                                    : null,
+                                )
+                              }
+                              className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                            >
+
+                              <option value="">
+                                Select month
+                              </option>
 
                               {ETHIOPIAN_MONTHS.map(
                                 (month) => (
-                                  <SelectItem
-                                    key={month}
-                                    value={month}
+                                  <option
+                                    key={month.value}
+                                    value={month.value}
                                   >
-                                    {month}
-                                  </SelectItem>
+                                    {month.label}
+                                  </option>
                                 ),
                               )}
 
-                            </SelectContent>
+                            </select>
 
-                          </Select>
+                          </div>
 
-                          <Input
-                            type="number"
-                            min={1}
-                            max={31}
-                            value={
-                              settings.payment_start_day
-                            }
-                            onChange={(event) =>
-                              update(
-                                "payment_start_day",
-                                Number(
-                                  event.target.value,
-                                ),
-                              )
-                            }
-                          />
+
+                          <div className="space-y-2">
+
+                            <Label className="text-xs">
+                              Day
+                            </Label>
+
+                            <Input
+                              type="number"
+                              min={1}
+                              max={
+                                settings.payment_start_month ===
+                                13
+                                  ? 6
+                                  : 30
+                              }
+                              value={
+                                settings.payment_start_day ??
+                                ""
+                              }
+                              onChange={(event) =>
+                                update(
+                                  "payment_start_day",
+                                  event.target.value
+                                    ? Number(event.target.value)
+                                    : null,
+                                )
+                              }
+                            />
+
+                          </div>
 
                         </div>
 
                       </div>
 
 
-                      <div className="space-y-2">
+                      {/* End */}
+
+                      <div className="space-y-3">
 
                         <Label>
                           Payment End / Due Date
                         </Label>
 
-                        <div className="grid grid-cols-[1fr_100px] gap-2">
+                        <div className="rounded-xl border bg-muted/20 p-4">
 
-                          <Select
-                            value={
-                              settings.payment_end_month
-                            }
-                            onValueChange={(value) =>
-                              update(
-                                "payment_end_month",
-                                value,
-                              )
-                            }
-                          >
+                          <p className="text-sm font-medium">
+                            {formatEthiopianDate(
+                              settings.payment_end_month,
+                              settings.payment_end_day,
+                            )}
+                          </p>
 
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Ethiopian calendar date
+                          </p>
 
-                            <SelectContent>
+                        </div>
+
+                        <EthiopianDatePicker />
+
+                        <div className="grid grid-cols-2 gap-3">
+
+                          <div className="space-y-2">
+
+                            <Label className="text-xs">
+                              Month
+                            </Label>
+
+                            <select
+                              value={
+                                settings.payment_end_month ??
+                                ""
+                              }
+                              onChange={(event) =>
+                                update(
+                                  "payment_end_month",
+                                  event.target.value
+                                    ? Number(event.target.value)
+                                    : null,
+                                )
+                              }
+                              className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                            >
+
+                              <option value="">
+                                Select month
+                              </option>
 
                               {ETHIOPIAN_MONTHS.map(
                                 (month) => (
-                                  <SelectItem
-                                    key={month}
-                                    value={month}
+                                  <option
+                                    key={month.value}
+                                    value={month.value}
                                   >
-                                    {month}
-                                  </SelectItem>
+                                    {month.label}
+                                  </option>
                                 ),
                               )}
 
-                            </SelectContent>
+                            </select>
 
-                          </Select>
+                          </div>
 
-                          <Input
-                            type="number"
-                            min={1}
-                            max={31}
-                            value={
-                              settings.payment_end_day
-                            }
-                            onChange={(event) =>
-                              update(
-                                "payment_end_day",
-                                Number(
-                                  event.target.value,
-                                ),
-                              )
-                            }
-                          />
+
+                          <div className="space-y-2">
+
+                            <Label className="text-xs">
+                              Day
+                            </Label>
+
+                            <Input
+                              type="number"
+                              min={1}
+                              max={
+                                settings.payment_end_month ===
+                                13
+                                  ? 6
+                                  : 30
+                              }
+                              value={
+                                settings.payment_end_day ??
+                                ""
+                              }
+                              onChange={(event) =>
+                                update(
+                                  "payment_end_day",
+                                  event.target.value
+                                    ? Number(event.target.value)
+                                    : null,
+                                )
+                              }
+                            />
+
+                          </div>
 
                         </div>
 
@@ -1313,44 +1834,6 @@ export default function RevenueGeneralSettingsPage() {
 
 
                     <Separator className="my-6" />
-
-
-                    <SettingRow
-                      title="Calendar system"
-                      description="Calendar used to interpret the configured revenue payment period."
-                    >
-
-                      <Select
-                        value={
-                          settings.calendar_type
-                        }
-                        onValueChange={(value) =>
-                          update(
-                            "calendar_type",
-                            value as RevenueSettings["calendar_type"],
-                          )
-                        }
-                      >
-
-                        <SelectTrigger className="w-[210px]">
-                          <SelectValue />
-                        </SelectTrigger>
-
-                        <SelectContent>
-
-                          <SelectItem value="ETHIOPIAN">
-                            Ethiopian Calendar
-                          </SelectItem>
-
-                          <SelectItem value="GREGORIAN">
-                            Gregorian Calendar
-                          </SelectItem>
-
-                        </SelectContent>
-
-                      </Select>
-
-                    </SettingRow>
 
                   </CardContent>
 
@@ -1380,7 +1863,9 @@ export default function RevenueGeneralSettingsPage() {
                       <div className="flex items-center gap-3">
 
                         <div className="rounded-lg border p-2">
+
                           <CalendarDays className="h-4 w-4" />
+
                         </div>
 
                         <div>
@@ -1390,8 +1875,12 @@ export default function RevenueGeneralSettingsPage() {
                           </p>
 
                           <p className="text-sm font-semibold">
-                            {settings.payment_start_month}{" "}
-                            {settings.payment_start_day}
+
+                            {formatEthiopianDate(
+                              settings.payment_start_month,
+                              settings.payment_start_day,
+                            )}
+
                           </p>
 
                         </div>
@@ -1405,25 +1894,33 @@ export default function RevenueGeneralSettingsPage() {
                           </p>
 
                           <p className="text-sm font-semibold">
-                            {settings.payment_end_month}{" "}
-                            {settings.payment_end_day}
+
+                            {formatEthiopianDate(
+                              settings.payment_end_month,
+                              settings.payment_end_day,
+                            )}
+
                           </p>
 
                         </div>
 
                         <div className="rounded-lg border p-2">
+
                           <CheckCircle2 className="h-4 w-4" />
+
                         </div>
 
                       </div>
 
                     </div>
 
+
                     <div className="mt-4 flex gap-3 rounded-lg border bg-muted/30 p-4">
 
                       <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
 
                       <p className="text-sm leading-5 text-muted-foreground">
+
                         The configured period is used when generating
                         revenue obligations. The resolved actual
                         <strong className="font-medium text-foreground">
@@ -1432,6 +1929,7 @@ export default function RevenueGeneralSettingsPage() {
                         {" "}must be persisted on each invoice so
                         historical invoices remain unchanged if this
                         configuration is later modified.
+
                       </p>
 
                     </div>
@@ -1451,12 +1949,13 @@ export default function RevenueGeneralSettingsPage() {
                       icon={ShieldCheck}
                       eyebrow="Charge Engines"
                       title="Penalty & Interest"
-                      description="Control whether configured penalty and bank-interest policies are active globally."
+                      description="Control whether configured penalty and interest policies are active globally."
                     />
 
                   </CardHeader>
 
                   <CardContent>
+
 
                     <SettingRow
                       title="Penalty calculation"
@@ -1477,11 +1976,13 @@ export default function RevenueGeneralSettingsPage() {
 
                     </SettingRow>
 
+
                     <Separator />
+
 
                     <SettingRow
                       title="Interest calculation"
-                      description="Allow active bank-interest policies to be applied according to their configured basis."
+                      description="Allow active interest policies to be applied according to their configured basis."
                     >
 
                       <Switch
@@ -1508,214 +2009,6 @@ export default function RevenueGeneralSettingsPage() {
 
 
             {/* ====================================================
-                CALCULATION
-            ===================================================== */}
-
-            {activeSection === "calculation" && (
-
-              <Card>
-
-                <CardHeader>
-
-                  <SectionHeader
-                    icon={CircleDollarSign}
-                    eyebrow="Financial Engine"
-                    title="Calculation Settings"
-                    description="Define the financial conventions used consistently throughout Revenue Management."
-                  />
-
-                </CardHeader>
-
-                <CardContent>
-
-                  <div className="grid gap-5 md:grid-cols-2">
-
-                    <div className="space-y-2">
-
-                      <Label>
-                        Currency
-                      </Label>
-
-                      <Select
-                        value={settings.currency}
-                        onValueChange={(value) =>
-                          update(
-                            "currency",
-                            value,
-                          )
-                        }
-                      >
-
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-
-                        <SelectContent>
-
-                          <SelectItem value="ETB">
-                            Ethiopian Birr (ETB)
-                          </SelectItem>
-
-                          <SelectItem value="USD">
-                            US Dollar (USD)
-                          </SelectItem>
-
-                        </SelectContent>
-
-                      </Select>
-
-                    </div>
-
-
-                    <div className="space-y-2">
-
-                      <Label>
-                        Decimal Places
-                      </Label>
-
-                      <Input
-                        type="number"
-                        min={0}
-                        max={6}
-                        value={settings.decimal_places}
-                        onChange={(event) =>
-                          update(
-                            "decimal_places",
-                            Number(
-                              event.target.value,
-                            ),
-                          )
-                        }
-                      />
-
-                    </div>
-
-
-                    <div className="space-y-2">
-
-                      <Label>
-                        Percentage Precision
-                      </Label>
-
-                      <Input
-                        type="number"
-                        min={0}
-                        max={8}
-                        value={
-                          settings.percentage_precision
-                        }
-                        onChange={(event) =>
-                          update(
-                            "percentage_precision",
-                            Number(
-                              event.target.value,
-                            ),
-                          )
-                        }
-                      />
-
-                    </div>
-
-
-                    <div className="space-y-2">
-
-                      <Label>
-                        Rounding Mode
-                      </Label>
-
-                      <Select
-                        value={settings.rounding_mode}
-                        onValueChange={(value) =>
-                          update(
-                            "rounding_mode",
-                            value as RevenueSettings["rounding_mode"],
-                          )
-                        }
-                      >
-
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-
-                        <SelectContent>
-
-                          <SelectItem value="HALF_UP">
-                            Half Up
-                          </SelectItem>
-
-                          <SelectItem value="HALF_DOWN">
-                            Half Down
-                          </SelectItem>
-
-                          <SelectItem value="HALF_EVEN">
-                            Half Even
-                          </SelectItem>
-
-                          <SelectItem value="UP">
-                            Up
-                          </SelectItem>
-
-                          <SelectItem value="DOWN">
-                            Down
-                          </SelectItem>
-
-                        </SelectContent>
-
-                      </Select>
-
-                    </div>
-
-                  </div>
-
-
-                  <Separator className="my-6" />
-
-
-                  <SettingRow
-                    title="Calculation order"
-                    description="Defines how the revenue engine applies configured penalty and interest calculations."
-                  >
-
-                    <Select
-                      value={
-                        settings.calculation_order
-                      }
-                      onValueChange={(value) =>
-                        update(
-                          "calculation_order",
-                          value as RevenueSettings["calculation_order"],
-                        )
-                      }
-                    >
-
-                      <SelectTrigger className="w-[250px]">
-                        <SelectValue />
-                      </SelectTrigger>
-
-                      <SelectContent>
-
-                        <SelectItem value="PENALTY_THEN_INTEREST">
-                          Penalty → Interest
-                        </SelectItem>
-
-                        <SelectItem value="INTEREST_THEN_PENALTY">
-                          Interest → Penalty
-                        </SelectItem>
-
-                      </SelectContent>
-
-                    </Select>
-
-                  </SettingRow>
-
-                </CardContent>
-
-              </Card>
-
-            )}
-
-
-            {/* ====================================================
                 ASSESSMENT
             ===================================================== */}
 
@@ -1736,6 +2029,7 @@ export default function RevenueGeneralSettingsPage() {
 
                 <CardContent>
 
+
                   <SettingRow
                     title="Automatic calculation"
                     description="Use the backend Decision Provider to calculate assessment amounts."
@@ -1755,7 +2049,9 @@ export default function RevenueGeneralSettingsPage() {
 
                   </SettingRow>
 
+
                   <Separator />
+
 
                   <SettingRow
                     title="Manual adjustment"
@@ -1764,11 +2060,11 @@ export default function RevenueGeneralSettingsPage() {
 
                     <Switch
                       checked={
-                        settings.assessment_manual_adjustment
+                        settings.assessment_allow_manual_adjustment
                       }
                       onCheckedChange={(value) =>
                         update(
-                          "assessment_manual_adjustment",
+                          "assessment_allow_manual_adjustment",
                           value,
                         )
                       }
@@ -1776,7 +2072,9 @@ export default function RevenueGeneralSettingsPage() {
 
                   </SettingRow>
 
+
                   <Separator />
+
 
                   <SettingRow
                     title="Approval required"
@@ -1797,7 +2095,9 @@ export default function RevenueGeneralSettingsPage() {
 
                   </SettingRow>
 
+
                   <Separator />
+
 
                   <SettingRow
                     title="Reassessment allowed"
@@ -1846,6 +2146,7 @@ export default function RevenueGeneralSettingsPage() {
 
                 <CardContent>
 
+
                   <SettingRow
                     title="Automatic numbering"
                     description="Generate invoice numbers automatically."
@@ -1872,7 +2173,7 @@ export default function RevenueGeneralSettingsPage() {
                   <div className="py-5">
 
                     <Label>
-                      Invoice prefix
+                      Invoice Prefix
                     </Label>
 
                     <p className="mt-1 text-sm text-muted-foreground">
@@ -1880,15 +2181,14 @@ export default function RevenueGeneralSettingsPage() {
                     </p>
 
                     <Input
-                      className="mt-3 max-w-xs"
+                      className="mt-3 w-full py-5"
                       value={
                         settings.invoice_prefix
                       }
                       onChange={(event) =>
                         update(
                           "invoice_prefix",
-                          event.target.value
-                            .toUpperCase(),
+                          event.target.value.toUpperCase(),
                         )
                       }
                     />
@@ -1900,31 +2200,8 @@ export default function RevenueGeneralSettingsPage() {
 
 
                   <SettingRow
-                    title="Allow partial payment"
-                    description="Allow taxpayers to settle an invoice through multiple payments."
-                  >
-
-                    <Switch
-                      checked={
-                        settings.invoice_allow_partial_payment
-                      }
-                      onCheckedChange={(value) =>
-                        update(
-                          "invoice_allow_partial_payment",
-                          value,
-                        )
-                      }
-                    />
-
-                  </SettingRow>
-
-
-                  <Separator />
-
-
-                  <SettingRow
                     title="Allow overpayment"
-                    description="Allow a payment amount greater than the outstanding invoice balance."
+                    description="Allow a payment amount to exceed the invoice outstanding balance."
                   >
 
                     <Switch
@@ -1979,6 +2256,7 @@ export default function RevenueGeneralSettingsPage() {
 
               <div className="space-y-6">
 
+
                 <Card>
 
                   <CardHeader>
@@ -1993,6 +2271,7 @@ export default function RevenueGeneralSettingsPage() {
                   </CardHeader>
 
                   <CardContent>
+
 
                     <SettingRow
                       title="Payment confirmation required"
@@ -2013,7 +2292,9 @@ export default function RevenueGeneralSettingsPage() {
 
                     </SettingRow>
 
+
                     <Separator />
+
 
                     <SettingRow
                       title="Automatic receipt"
@@ -2034,31 +2315,12 @@ export default function RevenueGeneralSettingsPage() {
 
                     </SettingRow>
 
-                    <Separator />
-
-                    <SettingRow
-                      title="Allow partial payment"
-                      description="Allow taxpayers to pay less than the total outstanding balance."
-                    >
-
-                      <Switch
-                        checked={
-                          settings.payment_allow_partial
-                        }
-                        onCheckedChange={(value) =>
-                          update(
-                            "payment_allow_partial",
-                            value,
-                          )
-                        }
-                      />
-
-                    </SettingRow>
-
                   </CardContent>
 
                 </Card>
 
+
+                {/* Payment Methods */}
 
                 <Card>
 
@@ -2078,91 +2340,79 @@ export default function RevenueGeneralSettingsPage() {
 
                   <CardContent>
 
-                    <div className="grid gap-3 md:grid-cols-2">
+                    <div className="grid gap-3">
 
-                      {[
-                        {
-                          id: "CASH" as PaymentMethod,
-                          label: "Cash",
-                          description:
-                            "Payment at authorized collection offices.",
-                          icon: Banknote,
-                        },
+                      {PAYMENT_METHOD_OPTIONS.map(
+                        (method) => {
 
-                        {
-                          id: "BANK" as PaymentMethod,
-                          label: "Bank",
-                          description:
-                            "Payment through supported banks.",
-                          icon: Landmark,
-                        },
+                          const Icon =
+                            method.icon;
 
-                        {
-                          id: "MOBILE_MONEY" as PaymentMethod,
-                          label: "Mobile Money",
-                          description:
-                            "Payment through supported mobile channels.",
-                          icon: WalletCards,
-                        },
+                          const checked =
+                            settings.enabled_payment_methods.includes(
+                              method.id,
+                            );
 
-                        {
-                          id: "CARD" as PaymentMethod,
-                          label: "Card",
-                          description:
-                            "Debit or credit card payment.",
-                          icon: WalletCards,
-                        },
+                          return (
+                            <label
+                              key={method.id}
+                              className={[
+                                "flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition-colors",
+                                checked
+                                  ? "bg-muted/40"
+                                  : "hover:bg-muted/30",
+                              ].join(" ")}
+                            >
 
-                      ].map((method) => {
+                              <Checkbox
+                                checked={checked}
+                                disabled={
+                                  checked &&
+                                  settings.enabled_payment_methods.length ===
+                                    1
+                                }
+                                onCheckedChange={() =>
+                                  togglePaymentMethod(
+                                    method.id,
+                                  )
+                                }
+                              />
 
-                        const Icon = method.icon;
+                              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border bg-background">
 
-                        const checked =
-                          settings.payment_methods.includes(
-                            method.id,
+                                <Icon className="h-4 w-4 text-muted-foreground" />
+
+                              </div>
+
+                              <div className="min-w-0">
+
+                                <p className="text-sm font-medium">
+                                  {method.label}
+                                </p>
+
+                                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                                  {method.description}
+                                </p>
+
+                              </div>
+
+                            </label>
                           );
 
-                        return (
-                          <label
-                            key={method.id}
-                            className={[
-                              "flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition-colors",
-                              checked
-                                ? "bg-muted/40"
-                                : "hover:bg-muted/30",
-                            ].join(" ")}
-                          >
+                        },
+                      )}
 
-                            <Checkbox
-                              checked={checked}
-                              onCheckedChange={() =>
-                                togglePaymentMethod(
-                                  method.id,
-                                )
-                              }
-                            />
+                    </div>
 
-                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border bg-background">
+                    <div className="mt-4 flex gap-3 rounded-lg border bg-muted/30 p-4">
 
-                              <Icon className="h-4 w-4 text-muted-foreground" />
+                      <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
 
-                            </div>
-
-                            <div className="min-w-0">
-
-                              <p className="text-sm font-medium">
-                                {method.label}
-                              </p>
-
-                              <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                                {method.description}
-                              </p>
-
-                            </div>
-
-                          </label>
-                        );
-                      })}
+                      <p className="text-xs leading-5 text-muted-foreground">
+                        At least one payment method must remain enabled.
+                        Payment-method-specific configuration can be
+                        managed independently when required.
+                      </p>
 
                     </div>
 
@@ -2196,6 +2446,7 @@ export default function RevenueGeneralSettingsPage() {
 
                 <CardContent>
 
+
                   <SettingRow
                     title="Automatic numbering"
                     description="Generate receipt numbers automatically after successful payment."
@@ -2222,7 +2473,7 @@ export default function RevenueGeneralSettingsPage() {
                   <div className="py-5">
 
                     <Label>
-                      Receipt prefix
+                      Receipt Prefix
                     </Label>
 
                     <p className="mt-1 text-sm text-muted-foreground">
@@ -2230,15 +2481,14 @@ export default function RevenueGeneralSettingsPage() {
                     </p>
 
                     <Input
-                      className="mt-3 max-w-xs"
+                      className="mt-3 w-full py-5"
                       value={
                         settings.receipt_prefix
                       }
                       onChange={(event) =>
                         update(
                           "receipt_prefix",
-                          event.target.value
-                            .toUpperCase(),
+                          event.target.value.toUpperCase(),
                         )
                       }
                     />
@@ -2319,17 +2569,35 @@ export default function RevenueGeneralSettingsPage() {
               <Button
                 variant="ghost"
                 size="sm"
+                disabled={
+                  updateRevenueSettings.isPending
+                }
                 onClick={resetSettings}
               >
                 Discard
               </Button>
 
+
               <Button
                 size="sm"
+                disabled={
+                  updateRevenueSettings.isPending
+                }
                 onClick={saveSettings}
               >
-                <Save className="mr-2 h-4 w-4" />
-                Save Changes
+
+                {updateRevenueSettings.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save className="mr-2 h-4 w-4" />
+                    Save Changes
+                  </>
+                )}
+
               </Button>
 
             </div>

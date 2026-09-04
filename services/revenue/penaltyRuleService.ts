@@ -1,14 +1,15 @@
+
 import { api } from "@/lib/api";
 import { normalizeApiError } from "@/lib/api-error";
-import { ApiResponse, ListResponse } from "@/types/api";
-import { PenaltyRule, PenaltyRuleFilters } from "@/types/revenue/penality.";
 
-
+import type {
+  ApiResponse,
+  ListResponse,
+} from "@/types/api";
+import { PenaltyRule, PenaltyRuleFilters, PenaltyRuleHistory, PenaltyRulePayload } from "@/types/revenue/penality.";
 
 
 export const penaltyRuleService = {
-
-
   /**
    * ============================================================
    * GET ALL PENALTY RULES
@@ -17,70 +18,53 @@ export const penaltyRuleService = {
    * GET /revenue/penalty-rules
    *
    * Supports:
-   *
    * - search
-   * - revenue_service_id
-   * - scope
    * - is_active
-   * - calculation_type
+   * - start_type
+   * - calculation_basis
    * - sort_by
    * - sort_direction
    * - page
    * - per_page
    */
   getPenaltyRules: async (
-    params?: PenaltyRuleFilters
+    params?: PenaltyRuleFilters,
   ): Promise<ListResponse<PenaltyRule>> => {
-
     try {
+      const cleanParams = Object.entries(
+        params ?? {},
+      ).reduce(
+        (
+          acc,
+          [key, value],
+        ) => {
+          if (
+            value !== undefined &&
+            value !== null &&
+            value !== "" &&
+            value !== "ALL"
+          ) {
+            acc[key] = value;
+          }
 
-      const cleanParams =
-        Object.entries(params || {})
-          .reduce(
-            (acc, [key, value]) => {
-
-              if (
-                value !== undefined &&
-                value !== null &&
-                value !== "" &&
-                value !== "ALL"
-              ) {
-
-                acc[key] = value;
-
-              }
-
-              return acc;
-
-            },
-            {} as Record<string, any>
-          );
-
+          return acc;
+        },
+        {} as Record<string, unknown>,
+      );
 
       const res =
         await api.get<ListResponse<PenaltyRule>>(
           "/revenue/penalty-rules",
           {
             params: cleanParams,
-          }
+          },
         );
 
-
       return res.data;
-
     } catch (error) {
-
       throw normalizeApiError(error);
-
     }
-
   },
-
-
-
-
-
-
 
   /**
    * ============================================================
@@ -90,32 +74,19 @@ export const penaltyRuleService = {
    * GET /revenue/penalty-rules/{id}
    */
   getPenaltyRuleById: async (
-    id: string
+    id: string,
   ): Promise<ApiResponse<PenaltyRule>> => {
-
     try {
-
       const res =
         await api.get<ApiResponse<PenaltyRule>>(
-          `/revenue/penalty-rules/${id}`
+          `/revenue/penalty-rules/${id}`,
         );
 
-
       return res.data;
-
     } catch (error) {
-
       throw normalizeApiError(error);
-
     }
-
   },
-
-
-
-
-
-
 
   /**
    * ============================================================
@@ -123,35 +94,26 @@ export const penaltyRuleService = {
    * ============================================================
    *
    * POST /revenue/penalty-rules
+   *
+   * Uses PenaltyRulePayload because API write values
+   * are sent as numbers, while PenaltyRule response values
+   * are represented as strings.
    */
   createPenaltyRule: async (
-    data: Partial<PenaltyRule>
+    data: PenaltyRulePayload,
   ): Promise<ApiResponse<PenaltyRule>> => {
-
     try {
-
       const res =
         await api.post<ApiResponse<PenaltyRule>>(
           "/revenue/penalty-rules",
-          data
+          data,
         );
 
-
       return res.data;
-
     } catch (error) {
-
       throw normalizeApiError(error);
-
     }
-
   },
-
-
-
-
-
-
 
   /**
    * ============================================================
@@ -162,33 +124,20 @@ export const penaltyRuleService = {
    */
   updatePenaltyRule: async (
     id: string,
-    data: Partial<PenaltyRule>
+    data: Partial<PenaltyRulePayload>,
   ): Promise<ApiResponse<PenaltyRule>> => {
-
     try {
-
       const res =
         await api.patch<ApiResponse<PenaltyRule>>(
           `/revenue/penalty-rules/${id}`,
-          data
+          data,
         );
 
-
       return res.data;
-
     } catch (error) {
-
       throw normalizeApiError(error);
-
     }
-
   },
-
-
-
-
-
-
 
   /**
    * ============================================================
@@ -198,32 +147,19 @@ export const penaltyRuleService = {
    * PATCH /revenue/penalty-rules/{id}/activate
    */
   activatePenaltyRule: async (
-    id: string
+    id: string,
   ): Promise<ApiResponse<PenaltyRule>> => {
-
     try {
-
       const res =
         await api.patch<ApiResponse<PenaltyRule>>(
-          `/revenue/penalty-rules/${id}/activate`
+          `/revenue/penalty-rules/${id}/activate`,
         );
 
-
       return res.data;
-
     } catch (error) {
-
       throw normalizeApiError(error);
-
     }
-
   },
-
-
-
-
-
-
 
   /**
    * ============================================================
@@ -233,32 +169,19 @@ export const penaltyRuleService = {
    * PATCH /revenue/penalty-rules/{id}/deactivate
    */
   deactivatePenaltyRule: async (
-    id: string
+    id: string,
   ): Promise<ApiResponse<PenaltyRule>> => {
-
     try {
-
       const res =
         await api.patch<ApiResponse<PenaltyRule>>(
-          `/revenue/penalty-rules/${id}/deactivate`
+          `/revenue/penalty-rules/${id}/deactivate`,
         );
 
-
       return res.data;
-
     } catch (error) {
-
       throw normalizeApiError(error);
-
     }
-
   },
-
-
-
-
-
-
 
   /**
    * ============================================================
@@ -268,26 +191,21 @@ export const penaltyRuleService = {
    * GET /revenue/penalty-rules/{id}/history
    */
   getPenaltyRuleHistory: async (
-    id: string
-  ): Promise<ApiResponse<any[]>> => {
-
+    id: string,
+  ): Promise<
+    ApiResponse<PenaltyRuleHistory[]>
+  > => {
     try {
-
       const res =
-        await api.get<ApiResponse<any[]>>(
-          `/revenue/penalty-rules/${id}/history`
+        await api.get<
+          ApiResponse<PenaltyRuleHistory[]>
+        >(
+          `/revenue/penalty-rules/${id}/history`,
         );
 
-
       return res.data;
-
     } catch (error) {
-
       throw normalizeApiError(error);
-
     }
-
   },
-
-
 };

@@ -20,10 +20,13 @@ import type {
   ApiResponse,
   ListResponse,
 } from "@/types/api";
-import { PenaltyRule, PenaltyRuleFilters, PenaltyRuleHistory } from "@/types/revenue/penality.";
-import { penaltyRuleService } from "@/services/revenue/penaltyRuleService";
 
 
+
+import {
+  penaltyRuleService,
+} from "@/services/revenue/penaltyRuleService";
+import { PenaltyRule, PenaltyRuleFilters, PenaltyRuleHistory, PenaltyRulePayload } from "@/types/revenue/penality.";
 
 // =====================================================
 // QUERY KEYS
@@ -89,22 +92,8 @@ export const penaltyRuleKeys = {
 
 };
 
-
 // =====================================================
 // GET PENALTY RULES
-// =====================================================
-//
-// GET /revenue/penalty-rules
-//
-// Supports:
-//
-// - search
-// - revenue_service_id
-// - scope
-// - is_active
-// - calculation_type
-// - sorting
-// - pagination
 // =====================================================
 
 export const usePenaltyRules = (
@@ -138,7 +127,6 @@ export const usePenaltyRules = (
   });
 
 };
-
 
 // =====================================================
 // GET PENALTY RULE DETAIL
@@ -175,7 +163,6 @@ export const usePenaltyRule = (
 
 };
 
-
 // =====================================================
 // GET PENALTY RULE HISTORY
 // =====================================================
@@ -211,22 +198,21 @@ export const usePenaltyRuleHistory = (
 
 };
 
-
 // =====================================================
 // CREATE PENALTY RULE
 // =====================================================
 //
-// Creates either:
+// UI:
 //
-// GLOBAL rule
-//
-// revenue_service_id = null
-//
-// OR
-//
-// SERVICE-SPECIFIC rule
-//
-// revenue_service_id = UUID
+// PenaltyFormValues
+//      ↓
+// penaltyFormToPayload()
+//      ↓
+// PenaltyRulePayload
+//      ↓
+// useCreatePenaltyRule()
+//      ↓
+// Laravel API
 // =====================================================
 
 export const useCreatePenaltyRule = () => {
@@ -237,10 +223,14 @@ export const useCreatePenaltyRule = () => {
   const queryClient =
     useQueryClient();
 
-  return useMutation({
+  return useMutation<
+    ApiResponse<PenaltyRule>,
+    Error,
+    PenaltyRulePayload
+  >({
 
     mutationFn: (
-      data: Partial<PenaltyRule>,
+      data: PenaltyRulePayload,
     ) =>
       penaltyRuleService.createPenaltyRule(
         data,
@@ -267,9 +257,14 @@ export const useCreatePenaltyRule = () => {
 
 };
 
-
 // =====================================================
 // UPDATE PENALTY RULE
+// =====================================================
+//
+// Update uses the same API payload model.
+//
+// Partial<PenaltyRulePayload> is used because an update
+// may contain only the fields being changed.
 // =====================================================
 
 export const useUpdatePenaltyRule = () => {
@@ -277,14 +272,18 @@ export const useUpdatePenaltyRule = () => {
   const queryClient =
     useQueryClient();
 
-  return useMutation({
+  return useMutation<
+    ApiResponse<PenaltyRule>,
+    Error,
+    {
+      id: string;
+      data: Partial<PenaltyRulePayload>;
+    }
+  >({
 
     mutationFn: ({
       id,
       data,
-    }: {
-      id: string;
-      data: Partial<PenaltyRule>;
     }) =>
       penaltyRuleService.updatePenaltyRule(
         id,
@@ -325,16 +324,8 @@ export const useUpdatePenaltyRule = () => {
 
 };
 
-
 // =====================================================
 // ACTIVATE PENALTY RULE
-// =====================================================
-//
-// INACTIVE
-//
-// ->
-//
-// ACTIVE
 // =====================================================
 
 export const useActivatePenaltyRule = () => {
@@ -385,16 +376,8 @@ export const useActivatePenaltyRule = () => {
 
 };
 
-
 // =====================================================
 // DEACTIVATE PENALTY RULE
-// =====================================================
-//
-// ACTIVE
-//
-// ->
-//
-// INACTIVE
 // =====================================================
 
 export const useDeactivatePenaltyRule = () => {

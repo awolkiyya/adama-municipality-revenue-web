@@ -1,47 +1,58 @@
 "use client";
 
-import { PenaltyForm, PenaltyFormValues } from "@/components/forms/penalty-form";
-import { useRouter } from "next/navigation";
-
-const EMPTY_FORM: PenaltyFormValues = {
-  name: "",
-
-  initial_rate: "5",
-  increment_rate: "2",
-  maximum_rate: "25",
+import {
+  PenaltyForm,
+  type PenaltyFormValues,
+} from "@/components/forms/penalty-form";
 
 
 
-  calculation_basis: "PRINCIPAL",
+import {
+  useCreatePenaltyRule,
+} from "@/hooks/revenue/penaltyRule.hook";
+import { EMPTY_PENALTY_FORM, penaltyFormToPayload } from "@/types/revenue/penality.";
 
-  effective_from: new Date().toISOString().split("T")[0],
-  effective_to: "",
-
-  legal_reference: "",
-  description: "",
-
-  is_active: true,
-  start_type: "FIXED_FISCAL_MONTH",
-  start_fiscal_month: "",
-  increment_period: "MONTH"
-};
+/* ================================================================
+   PAGE
+================================================================ */
 
 export default function CreatePenaltyPage() {
-  const router = useRouter();
+  const createPenaltyRule =
+    useCreatePenaltyRule();
 
-  const handleSubmit = async (values: PenaltyFormValues) => {
-    // POST /penalty-rules
+  /* ==============================================================
+     SUBMIT
+  ============================================================== */
 
-    console.log(values);
+  const handleSubmit = async (
+    values: PenaltyFormValues,
+  ) => {
+    /**
+     * The form keeps numeric values as strings.
+     *
+     * Convert the UI model into the API payload at this
+     * boundary before sending it to the mutation.
+     */
+    const payload =
+      penaltyFormToPayload(values);
 
-    router.push("/revenue/penalties");
+    await createPenaltyRule.mutateAsync(
+      payload,
+    );
   };
 
+  /* ================================================================
+     RENDER
+  ================================================================ */
+
   return (
-    <div className="mx-auto max-w-5xl p-6">
+    <div className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6 lg:px-8">
       <PenaltyForm
         mode="create"
-        initialValues={EMPTY_FORM}
+        initialValues={EMPTY_PENALTY_FORM}
+        isSubmitting={
+          createPenaltyRule.isPending
+        }
         onSubmit={handleSubmit}
       />
     </div>

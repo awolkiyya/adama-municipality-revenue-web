@@ -428,18 +428,19 @@ export function mapFormToTariffRulePayload(
   };
 }
 
-/*
-|--------------------------------------------------------------------------
-| Base Field Data Type
-|--------------------------------------------------------------------------
-*/
+ /*
+ |--------------------------------------------------------------------------
+ | Base Field Data Type
+ |--------------------------------------------------------------------------
+ */
 
-export type BaseFieldDataType =
-  | "NUMBER"
-  | "DECIMAL"
-  | "TEXT"
-  | "BOOLEAN"
-  | "DATE";
+ export type BaseFieldDataType =
+ | "NUMBER"
+ | "DECIMAL"
+ | "TEXT"
+ | "BOOLEAN"
+ | "DATE"
+ | "SELECT";
 
 /*
 |--------------------------------------------------------------------------
@@ -455,110 +456,50 @@ export const CONDITION_OPERATORS: Record<
   }[]
 > = {
   NUMBER: [
-    {
-      value: "equals",
-      label: "Equals",
-    },
-    {
-      value: "not_equals",
-      label: "Not Equals",
-    },
-    {
-      value: "greater_than",
-      label: "Greater Than",
-    },
-    {
-      value: "greater_than_or_equal",
-      label: "Greater Than or Equal",
-    },
-    {
-      value: "less_than",
-      label: "Less Than",
-    },
-    {
-      value: "less_than_or_equal",
-      label: "Less Than or Equal",
-    },
+    { value: "equals", label: "Equals" },
+    { value: "not_equals", label: "Not Equals" },
+    { value: "greater_than", label: "Greater Than" },
+    { value: "greater_than_or_equal", label: "Greater Than or Equal" },
+    { value: "less_than", label: "Less Than" },
+    { value: "less_than_or_equal", label: "Less Than or Equal" },
   ],
 
   DECIMAL: [
-    {
-      value: "equals",
-      label: "Equals",
-    },
-    {
-      value: "not_equals",
-      label: "Not Equals",
-    },
-    {
-      value: "greater_than",
-      label: "Greater Than",
-    },
-    {
-      value: "greater_than_or_equal",
-      label: "Greater Than or Equal",
-    },
-    {
-      value: "less_than",
-      label: "Less Than",
-    },
-    {
-      value: "less_than_or_equal",
-      label: "Less Than or Equal",
-    },
+    { value: "equals", label: "Equals" },
+    { value: "not_equals", label: "Not Equals" },
+    { value: "greater_than", label: "Greater Than" },
+    { value: "greater_than_or_equal", label: "Greater Than or Equal" },
+    { value: "less_than", label: "Less Than" },
+    { value: "less_than_or_equal", label: "Less Than or Equal" },
   ],
 
   TEXT: [
-    {
-      value: "equals",
-      label: "Equals",
-    },
-    {
-      value: "not_equals",
-      label: "Not Equals",
-    },
-    {
-      value: "contains",
-      label: "Contains",
-    },
+    { value: "equals", label: "Equals" },
+    { value: "not_equals", label: "Not Equals" },
+    { value: "contains", label: "Contains" },
+  ],
+
+  SELECT: [
+    { value: "equals", label: "Is" },
+    { value: "not_equals", label: "Is Not" },
+    { value: "greater_than", label: "Greater Than" },
+    { value: "greater_than_or_equal", label: "Greater Than or Equal" },
+    { value: "less_than", label: "Less Than" },
+    { value: "less_than_or_equal", label: "Less Than or Equal" },
   ],
 
   BOOLEAN: [
-    {
-      value: "equals",
-      label: "Equals",
-    },
-    {
-      value: "not_equals",
-      label: "Not Equals",
-    },
+    { value: "equals", label: "Equals" },
+    { value: "not_equals", label: "Not Equals" },
   ],
 
   DATE: [
-    {
-      value: "equals",
-      label: "Equals",
-    },
-    {
-      value: "not_equals",
-      label: "Not Equals",
-    },
-    {
-      value: "greater_than",
-      label: "After",
-    },
-    {
-      value: "greater_than_or_equal",
-      label: "On or After",
-    },
-    {
-      value: "less_than",
-      label: "Before",
-    },
-    {
-      value: "less_than_or_equal",
-      label: "On or Before",
-    },
+    { value: "equals", label: "Equals" },
+    { value: "not_equals", label: "Not Equals" },
+    { value: "greater_than", label: "After" },
+    { value: "greater_than_or_equal", label: "On or After" },
+    { value: "less_than", label: "Before" },
+    { value: "less_than_or_equal", label: "On or Before" },
   ],
 };
 
@@ -585,6 +526,9 @@ export function getFieldDataType(
 
     case "DATE":
       return "DATE";
+
+    case "SELECT":
+      return "SELECT";
 
     case "TEXT":
     default:

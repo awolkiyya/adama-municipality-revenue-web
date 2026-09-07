@@ -17,7 +17,6 @@ export type PenaltyFormValues = {
 
   start_type: StartType;
 
-  start_fiscal_month: string;
 
   increment_period: "MONTH";
 
@@ -150,7 +149,6 @@ export const EMPTY_PENALTY_FORM: PenaltyFormValues = {
 
   start_type: "FIXED_FISCAL_MONTH",
 
-  start_fiscal_month: "7",
 
   increment_period: "MONTH",
 
@@ -182,7 +180,6 @@ export type PenaltyRulePayload = {
 
   start_type: StartType;
 
-  start_fiscal_month: number | null;
 
   increment_period: "MONTH";
 
@@ -219,14 +216,6 @@ export function penaltyFormToPayload(
 
     start_type:
       form.start_type,
-
-    start_fiscal_month:
-      form.start_type ===
-      "FIXED_FISCAL_MONTH"
-        ? Number(
-            form.start_fiscal_month,
-          )
-        : null,
 
     increment_period:
       "MONTH",

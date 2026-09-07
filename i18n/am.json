@@ -141,84 +141,76 @@
 
   },
 
-
-    "navigation": {
-      "dashboard": "ዳሽቦርድ",
+  "navigation": {
+    "dashboard": "ዳሽቦርድ",
   
-      "user_access": "የተጠቃሚ እና የመዳረሻ አስተዳደር",
-      "users": "ተጠቃሚዎች",
-      "taxpayers": "ግብር ከፋዮች",
-      "access_managements": "የመዳረሻ አስተዳደር",
+    "user_access": "የተጠቃሚ እና የመዳረሻ አስተዳደር",
+    "users": "ተጠቃሚዎች",
+    "taxpayers": "ግብር ከፋዮች",
+    "access_managements": "የመዳረሻ አስተዳደር",
   
-      "administrative_structure": "የአስተዳደር መዋቅር",
-      "administrative_units": "የአስተዳደር ክፍሎች",
-      "sectors": "ዘርፎች",
+    "administrative_structure": "የአስተዳደር መዋቅር",
+    "administrative_units": "የአስተዳደር ክፍሎች",
+    "sectors": "ዘርፎች",
   
-      "workflow_configuration": "የስራ ሂደት ማዋቀር",
-      "service_sector_access": "የአገልግሎት ዘርፍ መዳረሻ",
+    "workflow_configuration": "የስራ ሂደት ማዋቀር",
+    "service_sector_access": "የአገልግሎት ዘርፍ መዳረሻ",
   
-      "system_settings": "የስርዓት ቅንብሮች",
-      "audit_logs": "የኦዲት መዝገቦች",
-      
-      "calculation_setup": "የስሌት ማዋቀሪያ",
-      "measurement_units": "የመለኪያ አሃዶች",
-      "base_fields": "መሰረታዊ መስኮች",
-      "formula_variables": "የፎርሙላ ተለዋዋጮች",
+    "system_settings": "የስርዓት ቅንብሮች",
+    "audit_logs": "የኦዲት መዝገቦች",
   
+    "calculation_setup": "የስሌት ማዋቀሪያ",
+    "measurement_units": "የመለኪያ አሃዶች",
+    "base_fields": "መሰረታዊ መስኮች",
+    "formula_variables": "የፎርሙላ ተለዋዋጮች",
   
-      "data_dashboard": "የመረጃ ዳሽቦርድ",
+    "data_dashboard": "የመረጃ ዳሽቦርድ",
   
-      "revenue_configuration": "የገቢ ማዋቀሪያ",
-      "revenue_categories": "የገቢ ምድቦች",
-      "revenue_codes": "የገቢ ኮዶች",
-      "revenue_services": "የገቢ አገልግሎቶች",
+    "revenue_configuration": "የገቢ ማዋቀሪያ",
+    "revenue_categories": "የገቢ ምድቦች",
+    "revenue_codes": "የገቢ ኮዶች",
+    "revenue_services": "የገቢ አገልግሎቶች",
+    "interest_rates": "የወለድ መጠኖች",
+    "penalty_rules": "የቅጣት ደንቦች",
   
+    "tariff_management": "የታሪፍ አስተዳደር",
+    "tariff_versions": "የታሪፍ ስሪቶች",
+    "tariff_rules": "የታሪፍ ደንቦች",
   
-      "tariff_management": "የታሪፍ አስተዳደር",
-      "tariff_versions": "የታሪፍ ስሪቶች",
-      "tariff_rules": "የታሪፍ ደንቦች",
+    "data_validation": "የመረጃ ማረጋገጫ",
+    "data_reports": "የመረጃ ሪፖርቶች",
   
+    "executive_dashboard": "የአመራር ዳሽቦርድ",
+    "revenue_overview": "የገቢ አጠቃላይ እይታ",
+    "performance_reports": "የአፈጻጸም ሪፖርቶች",
   
-      "data_validation": "የመረጃ ማረጋገጫ",
-      "data_reports": "የመረጃ ሪፖርቶች",
+    "sector_dashboard": "የዘርፍ ዳሽቦርድ",
+    "revenue_data_entry": "የገቢ መረጃ ማስገቢያ",
+    "sector_reports": "የዘርፍ ሪፖርቶች",
   
+    "decision_dashboard": "የውሳኔ ዳሽቦርድ",
+    "pending_approvals": "በመጠባበቅ ላይ ያሉ ማጽደቆች",
+    "decision_history": "የውሳኔ ታሪክ",
   
-      "executive_dashboard": "የአመራር ዳሽቦርድ",
-      "revenue_overview": "የገቢ አጠቃላይ እይታ",
-      "performance_reports": "የአፈጻጸም ሪፖርቶች",
+    "collections": "ማሰባሰብ",
+    "pending_collections": "በመጠባበቅ ላይ ያሉ ስብስቦች",
+    "completed_collections": "የተጠናቀቁ ስብስቦች",
   
+    "payments": "ክፍያዎች",
+    "create_payment": "ክፍያ መመዝገብ",
+    "payment_history": "የክፍያ ታሪክ",
   
-      "sector_dashboard": "የዘርፍ ዳሽቦርድ",
-      "revenue_data_entry": "የገቢ መረጃ ማስገቢያ",
-      "sector_reports": "የዘርፍ ሪፖርቶች",
+    "reports": "ሪፖርቶች",
+    "receipts": "ደረሰኞች",
+    "collection_reports": "የስብስብ ሪፖርቶች",
   
+    "registration_dashboard": "የምዝገባ ዳሽቦርድ",
+    "taxpayer_registration": "የግብር ከፋይ ምዝገባ",
+    "registration_reports": "የምዝገባ ሪፖርቶች",
   
-      "decision_dashboard": "የውሳኔ ዳሽቦርድ",
-      "pending_approvals": "በመጠባበቅ ላይ ያሉ ማጽደቆች",
-      "decision_history": "የውሳኔ ታሪክ",
-  
-  
-      "collections": "ማሰባሰብ",
-      "pending_collections": "በመጠባበቅ ላይ ያሉ ስብስቦች",
-      "completed_collections": "የተጠናቀቁ ስብስቦች",
-  
-  
-      "payments": "ክፍያዎች",
-      "create_payment": "ክፍያ መመዝገብ",
-      "payment_history": "የክፍያ ታሪክ",
-  
-  
-      "reports": "ሪፖርቶች",
-      "receipts": "ደረሰኞች",
-      "collection_reports": "የስብስብ ሪፖርቶች",
-  
-  
-      "registration_dashboard": "የምዝገባ ዳሽቦርድ",
-      "taxpayer_registration": "የግብር ከፋይ ምዝገባ",
-      "registration_reports": "የምዝገባ ሪፖርቶች",
+    "platform": "መድረክ",
+    "shared": "የጋራ"
+  }
   
   
-      "platform": "መድረክ",
-      "shared": "የጋራ"
-    }
 }

@@ -1,4 +1,4 @@
-// hooks/revenue/penaltyRule.hook.ts
+// hooks/revenue/interestRule.hook.ts
 
 "use client";
 
@@ -20,26 +20,22 @@ import type {
   ApiResponse,
   ListResponse,
 } from "@/types/api";
+import { InterestRule, InterestRuleFilters, InterestRuleHistory, InterestRulePayload } from "@/types/revenue/interestRule";
+import { interestRuleService } from "@/services/revenue/interestRule.service";
 
-
-
-import {
-  penaltyRuleService,
-} from "@/services/revenue/penaltyRuleService";
-import { PenaltyRule, PenaltyRuleFilters, PenaltyRuleHistory, PenaltyRulePayload } from "@/types/revenue/penality.";
 
 // =====================================================
 // QUERY KEYS
 // =====================================================
 
-export const penaltyRuleKeys = {
+export const interestRuleKeys = {
 
   // ---------------------------------------------------
   // ROOT
   // ---------------------------------------------------
 
   all: [
-    "penalty-rules",
+    "interest-rules",
   ],
 
   // ---------------------------------------------------
@@ -47,14 +43,14 @@ export const penaltyRuleKeys = {
   // ---------------------------------------------------
 
   lists: () => [
-    ...penaltyRuleKeys.all,
+    ...interestRuleKeys.all,
     "list",
   ],
 
   list: (
-    params?: PenaltyRuleFilters,
+    params?: InterestRuleFilters,
   ) => [
-    ...penaltyRuleKeys.lists(),
+    ...interestRuleKeys.lists(),
     params,
   ],
 
@@ -63,14 +59,14 @@ export const penaltyRuleKeys = {
   // ---------------------------------------------------
 
   details: () => [
-    ...penaltyRuleKeys.all,
+    ...interestRuleKeys.all,
     "detail",
   ],
 
   detail: (
     id: string,
   ) => [
-    ...penaltyRuleKeys.details(),
+    ...interestRuleKeys.details(),
     id,
   ],
 
@@ -79,39 +75,51 @@ export const penaltyRuleKeys = {
   // ---------------------------------------------------
 
   histories: () => [
-    ...penaltyRuleKeys.all,
+    ...interestRuleKeys.all,
     "history",
   ],
 
   history: (
     id: string,
   ) => [
-    ...penaltyRuleKeys.histories(),
+    ...interestRuleKeys.histories(),
     id,
+  ],
+
+  // ---------------------------------------------------
+  // APPLICABLE
+  // ---------------------------------------------------
+
+  applicable: (
+    effectiveDate?: string,
+  ) => [
+    ...interestRuleKeys.all,
+    "applicable",
+    effectiveDate ?? null,
   ],
 
 };
 
 // =====================================================
-// GET PENALTY RULES
+// GET INTEREST RULES
 // =====================================================
 
-export const usePenaltyRules = (
-  params?: PenaltyRuleFilters,
+export const useInterestRules = (
+  params?: InterestRuleFilters,
 ) => {
 
   return useQuery<
-    ListResponse<PenaltyRule>
+    ListResponse<InterestRule>
   >({
 
     queryKey:
-      penaltyRuleKeys.list(
+      interestRuleKeys.list(
         params,
       ),
 
     queryFn:
       () =>
-        penaltyRuleService.getPenaltyRules(
+        interestRuleService.getInterestRules(
           params,
         ),
 
@@ -129,26 +137,26 @@ export const usePenaltyRules = (
 };
 
 // =====================================================
-// GET PENALTY RULE DETAIL
+// GET INTEREST RULE DETAIL
 // =====================================================
 
-export const usePenaltyRule = (
+export const useInterestRule = (
   id: string,
   enabled = true,
 ) => {
 
   return useQuery<
-    ApiResponse<PenaltyRule>
+    ApiResponse<InterestRule>
   >({
 
     queryKey:
-      penaltyRuleKeys.detail(
+      interestRuleKeys.detail(
         id,
       ),
 
     queryFn:
       () =>
-        penaltyRuleService.getPenaltyRuleById(
+        interestRuleService.getInterestRuleById(
           id,
         ),
 
@@ -164,26 +172,26 @@ export const usePenaltyRule = (
 };
 
 // =====================================================
-// GET PENALTY RULE HISTORY
+// GET INTEREST RULE HISTORY
 // =====================================================
 
-export const usePenaltyRuleHistory = (
+export const useInterestRuleHistory = (
   id: string,
   enabled = true,
 ) => {
 
   return useQuery<
-    ApiResponse<PenaltyRuleHistory[]>
+    ApiResponse<InterestRuleHistory[]>
   >({
 
     queryKey:
-      penaltyRuleKeys.history(
+      interestRuleKeys.history(
         id,
       ),
 
     queryFn:
       () =>
-        penaltyRuleService.getPenaltyRuleHistory(
+        interestRuleService.getInterestRuleHistory(
           id,
         ),
 
@@ -199,23 +207,66 @@ export const usePenaltyRuleHistory = (
 };
 
 // =====================================================
-// CREATE PENALTY RULE
+// GET APPLICABLE INTEREST RULE
+// =====================================================
+//
+// The backend determines which active interest rule
+// applies to the requested effective date.
+//
+// The frontend does NOT calculate interest.
+//
+
+export const useApplicableInterestRule = (
+  effectiveDate?: string,
+  enabled = true,
+) => {
+
+  return useQuery<
+    ApiResponse<InterestRule | null>
+  >({
+
+    queryKey:
+      interestRuleKeys.applicable(
+        effectiveDate,
+      ),
+
+    queryFn:
+      () =>
+        interestRuleService.getApplicableInterestRule(
+          effectiveDate,
+        ),
+
+    enabled:
+      enabled,
+
+    staleTime:
+      1000 * 60 * 5,
+
+  });
+
+};
+
+// =====================================================
+// CREATE INTEREST RULE
 // =====================================================
 //
 // UI:
 //
-// PenaltyFormValues
+// InterestRuleFormValues
 //      ↓
-// penaltyFormToPayload()
+// interestRuleFormToPayload()
 //      ↓
-// PenaltyRulePayload
+// InterestRulePayload
 //      ↓
-// useCreatePenaltyRule()
+// useCreateInterestRule()
 //      ↓
 // Laravel API
-// =====================================================
+//
+// The frontend only sends configuration.
+// Interest calculation is performed by the backend.
+//
 
-export const useCreatePenaltyRule = () => {
+export const useCreateInterestRule = () => {
 
   const router =
     useRouter();
@@ -224,31 +275,38 @@ export const useCreatePenaltyRule = () => {
     useQueryClient();
 
   return useMutation<
-    ApiResponse<PenaltyRule>,
+    ApiResponse<InterestRule>,
     Error,
-    PenaltyRulePayload
+    InterestRulePayload
   >({
 
     mutationFn: (
-      data: PenaltyRulePayload,
+      data: InterestRulePayload,
     ) =>
-      penaltyRuleService.createPenaltyRule(
+      interestRuleService.createInterestRule(
         data,
       ),
 
     onSuccess: () => {
 
+      // Refresh all interest-rule lists.
       queryClient.invalidateQueries({
         queryKey:
-          penaltyRuleKeys.lists(),
+          interestRuleKeys.lists(),
+      });
+
+      // Applicable rule may have changed.
+      queryClient.invalidateQueries({
+        queryKey:
+          interestRuleKeys.all,
       });
 
       toast.success(
-        "Penalty rule created successfully",
+        "Interest rule created successfully",
       );
 
       router.push(
-        "/office/dashboard/revenue-managements/penalty-rules",
+        "/office/dashboard/revenue/interest-rules",
       );
 
     },
@@ -258,28 +316,26 @@ export const useCreatePenaltyRule = () => {
 };
 
 // =====================================================
-// UPDATE PENALTY RULE
+// UPDATE INTEREST RULE
 // =====================================================
 //
 // Update uses the same API payload model.
 //
-// Partial<PenaltyRulePayload> is used because an update
+// Partial<InterestRulePayload> is used because an update
 // may contain only the fields being changed.
-// =====================================================
+//
 
-export const useUpdatePenaltyRule = () => {
-  const router =
-  useRouter();
+export const useUpdateInterestRule = () => {
 
   const queryClient =
     useQueryClient();
 
   return useMutation<
-    ApiResponse<PenaltyRule>,
+    ApiResponse<InterestRule>,
     Error,
     {
       id: string;
-      data: Partial<PenaltyRulePayload>;
+      data: Partial<InterestRulePayload>;
     }
   >({
 
@@ -287,7 +343,7 @@ export const useUpdatePenaltyRule = () => {
       id,
       data,
     }) =>
-      penaltyRuleService.updatePenaltyRule(
+      interestRuleService.updateInterestRule(
         id,
         data,
       ),
@@ -297,30 +353,37 @@ export const useUpdatePenaltyRule = () => {
       variables,
     ) => {
 
+      // Refresh list.
       queryClient.invalidateQueries({
         queryKey:
-          penaltyRuleKeys.lists(),
+          interestRuleKeys.lists(),
       });
 
+      // Refresh detail.
       queryClient.invalidateQueries({
         queryKey:
-          penaltyRuleKeys.detail(
+          interestRuleKeys.detail(
             variables.id,
           ),
       });
 
+      // Refresh history.
       queryClient.invalidateQueries({
         queryKey:
-          penaltyRuleKeys.history(
+          interestRuleKeys.history(
             variables.id,
           ),
+      });
+
+      // Configuration may affect which rule
+      // is applicable.
+      queryClient.invalidateQueries({
+        queryKey:
+          interestRuleKeys.all,
       });
 
       toast.success(
-        "Penalty rule updated successfully",
-      );
-      router.push(
-        "/office/dashboard/revenue-managements/penalty-rules",
+        "Interest rule updated successfully",
       );
 
     },
@@ -330,20 +393,24 @@ export const useUpdatePenaltyRule = () => {
 };
 
 // =====================================================
-// ACTIVATE PENALTY RULE
+// ACTIVATE INTEREST RULE
 // =====================================================
 
-export const useActivatePenaltyRule = () => {
+export const useActivateInterestRule = () => {
 
   const queryClient =
     useQueryClient();
 
-  return useMutation({
+  return useMutation<
+    ApiResponse<InterestRule>,
+    Error,
+    string
+  >({
 
     mutationFn: (
       id: string,
     ) =>
-      penaltyRuleService.activatePenaltyRule(
+      interestRuleService.activateInterestRule(
         id,
       ),
 
@@ -352,27 +419,36 @@ export const useActivatePenaltyRule = () => {
       id,
     ) => {
 
+      // Refresh lists.
       queryClient.invalidateQueries({
         queryKey:
-          penaltyRuleKeys.lists(),
+          interestRuleKeys.lists(),
       });
 
+      // Refresh detail.
       queryClient.invalidateQueries({
         queryKey:
-          penaltyRuleKeys.detail(
+          interestRuleKeys.detail(
             id,
           ),
       });
 
+      // Refresh history.
       queryClient.invalidateQueries({
         queryKey:
-          penaltyRuleKeys.history(
+          interestRuleKeys.history(
             id,
           ),
+      });
+
+      // Active rule may have changed.
+      queryClient.invalidateQueries({
+        queryKey:
+          interestRuleKeys.all,
       });
 
       toast.success(
-        "Penalty rule activated successfully",
+        "Interest rule activated successfully",
       );
 
     },
@@ -382,20 +458,24 @@ export const useActivatePenaltyRule = () => {
 };
 
 // =====================================================
-// DEACTIVATE PENALTY RULE
+// DEACTIVATE INTEREST RULE
 // =====================================================
 
-export const useDeactivatePenaltyRule = () => {
+export const useDeactivateInterestRule = () => {
 
   const queryClient =
     useQueryClient();
 
-  return useMutation({
+  return useMutation<
+    ApiResponse<InterestRule>,
+    Error,
+    string
+  >({
 
     mutationFn: (
       id: string,
     ) =>
-      penaltyRuleService.deactivatePenaltyRule(
+      interestRuleService.deactivateInterestRule(
         id,
       ),
 
@@ -404,27 +484,36 @@ export const useDeactivatePenaltyRule = () => {
       id,
     ) => {
 
+      // Refresh lists.
       queryClient.invalidateQueries({
         queryKey:
-          penaltyRuleKeys.lists(),
+          interestRuleKeys.lists(),
       });
 
+      // Refresh detail.
       queryClient.invalidateQueries({
         queryKey:
-          penaltyRuleKeys.detail(
+          interestRuleKeys.detail(
             id,
           ),
       });
 
+      // Refresh history.
       queryClient.invalidateQueries({
         queryKey:
-          penaltyRuleKeys.history(
+          interestRuleKeys.history(
             id,
           ),
+      });
+
+      // Active rule may have changed.
+      queryClient.invalidateQueries({
+        queryKey:
+          interestRuleKeys.all,
       });
 
       toast.success(
-        "Penalty rule deactivated successfully",
+        "Interest rule deactivated successfully",
       );
 
     },

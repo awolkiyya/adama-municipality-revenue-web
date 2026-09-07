@@ -110,76 +110,73 @@
     }
 
   },
-   
-  "navigation": {
-   
-     "dashboard":"Gabatee Hojii",
-   
-     "user_access":"Bulchiinsa Fayyadamtootaa fi Hayyamaa",
-     "users": "Fayyadamtoota",
-     "taxpayers": "Kaffaltoota Gibiraa",
-     "access_managements": "Bulchiinsa Mirga Seeni",
-   
-     "administrative_structure":"Caasaa Bulchiinsaa",
-     "administrative_units":"Kutaa Bulchiinsaa",
-     "sectors":"Dameewwan",
 
-     "calculation_setup":"Qindaa'ina Shallaggii",
-    "measurement_units":"Safartuuwwan Madaallii",
-    "base_fields":"Dirreewwan Bu'uuraa",
-    "formula_variables":"Jijjiiramoota Foormulaa",
-   
-     "workflow_configuration":"Qindaa'ina Adeemsa Hojii",
-     "service_sector_access":"Hayyama Tajaajila fi Damee",
-   
-     "system_settings":"Qindaa'ina Sirnaa",
-     "audit_logs":"Galmee Hordoffii",
-   
-   
-     "revenue_configuration":"Qindaa'ina Galii",
-     "revenue_categories":"Ramaddii Galii",
-     "revenue_codes":"Koodii Galii",
-     "revenue_services":"Tajaajila Galii",
-   
-     "tariff_management":"Bulchiinsa Tariffii",
-     "tariff_versions":"Gosa Tariffii",
-     "tariff_rules":"Seera Tariffii",
-   
-     "data_validation":"Mirkaneessa Odeeffannoo",
-     "data_reports":"Gabaasa Odeeffannoo",
-   
-   
-     "executive_dashboard":"Gabatee Hoggansaa",
-     "revenue_overview":"Ilaalcha Galii",
-     "performance_reports":"Gabaasa Raawwii",
-   
-   
-     "sector_dashboard":"Gabatee Damee",
-     "revenue_data_entry":"Galmee Odeeffannoo Galii",
-     "sector_reports":"Gabaasa Damee",
-   
-   
-     "decision_dashboard":"Gabatee Murtii",
-     "pending_approvals":"Eegaa Raggaasisaa",
-     "decision_history":"Seenaa Murtii",
-   
-   
-     "collections":"Sassaabbii",
-     "pending_collections":"Sassaabbii Eegaa Jiru",
-     "completed_collections":"Sassaabbii Xumurame",
-   
-     "payments":"Kaffaltii",
-     "create_payment":"Galmeessi Kaffaltii",
-     "payment_history":"Seenaa Kaffaltii",
-   
-     "reports":"Gabaasa",
-     "receipts":"Ragaa Kaffaltii",
-     "collection_reports":"Gabaasa Sassaabbii",
-   
-   
-     "registration_dashboard":"Gabatee Galmee",
-     "taxpayer_registration":"Galmee Kaffaltootaa",
-     "registration_reports":"Gabaasa Galmee"
-   
-    }
+  "navigation": {
+    "dashboard": "Gabatee Hojii",
+  
+    "user_access": "Bulchiinsa Fayyadamtootaa fi Hayyamaa",
+    "users": "Fayyadamtoota",
+    "taxpayers": "Kaffaltoota Gibiraa",
+    "access_managements": "Bulchiinsa Mirga Seeni",
+  
+    "administrative_structure": "Caasaa Bulchiinsaa",
+    "administrative_units": "Kutaa Bulchiinsaa",
+    "sectors": "Dameewwan",
+  
+    "calculation_setup": "Qindaa'ina Shallaggii",
+    "measurement_units": "Safartuuwwan Madaallii",
+    "base_fields": "Dirreewwan Bu'uuraa",
+    "formula_variables": "Jijjiiramoota Foormulaa",
+  
+    "workflow_configuration": "Qindaa'ina Adeemsa Hojii",
+    "service_sector_access": "Hayyama Tajaajila fi Damee",
+  
+    "system_settings": "Qindaa'ina Sirnaa",
+    "audit_logs": "Galmee Hordoffii",
+  
+    "revenue_configuration": "Qindaa'ina Galii",
+    "revenue_categories": "Ramaddii Galii",
+    "revenue_codes": "Koodii Galii",
+    "revenue_services": "Tajaajila Galii",
+    "interest_rates": "Sadarkaa Dhala Galii",
+    "penalty_rules": "Seerota Adabbii",
+  
+    "tariff_management": "Bulchiinsa Tariffii",
+    "tariff_versions": "Gosa Tariffii",
+    "tariff_rules": "Seera Tariffii",
+  
+    "data_validation": "Mirkaneessa Odeeffannoo",
+    "data_reports": "Gabaasa Odeeffannoo",
+  
+    "executive_dashboard": "Gabatee Hoggansaa",
+    "revenue_overview": "Ilaalcha Galii",
+    "performance_reports": "Gabaasa Raawwii",
+  
+    "sector_dashboard": "Gabatee Damee",
+    "revenue_data_entry": "Galmee Odeeffannoo Galii",
+    "sector_reports": "Gabaasa Damee",
+  
+    "decision_dashboard": "Gabatee Murtii",
+    "pending_approvals": "Eegaa Raggaasisaa",
+    "decision_history": "Seenaa Murtii",
+  
+    "collections": "Sassaabbii",
+    "pending_collections": "Sassaabbii Eegaa Jiru",
+    "completed_collections": "Sassaabbii Xumurame",
+  
+    "payments": "Kaffaltii",
+    "create_payment": "Galmeessi Kaffaltii",
+    "payment_history": "Seenaa Kaffaltii",
+  
+    "reports": "Gabaasa",
+    "receipts": "Ragaa Kaffaltii",
+    "collection_reports": "Gabaasa Sassaabbii",
+  
+    "registration_dashboard": "Gabatee Galmee",
+    "taxpayer_registration": "Galmee Kaffaltootaa",
+    "registration_reports": "Gabaasa Galmee"
+  }
+  
+  
+  
 }

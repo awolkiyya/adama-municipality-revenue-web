@@ -1,8 +1,6 @@
-// app/.../revenue/penalties/page.tsx
-
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import {
@@ -17,7 +15,19 @@ import {
   Power,
   ShieldCheck,
   XCircle,
+  MoreHorizontal,
+
 } from "lucide-react";
+
+
+
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 import { Button } from "@/components/ui/button";
 
@@ -42,8 +52,11 @@ import {
   useActivatePenaltyRule,
   useDeactivatePenaltyRule,
 } from "@/hooks/revenue/penaltyRule.hook";
-import { PenaltyRule, PenaltyRuleFilters, RevenueService } from "@/types/revenue/penality.";
 
+import {
+  PenaltyRule,
+  PenaltyRuleFilters,
+} from "@/types/revenue/penality.";
 
 
 // =====================================================
@@ -55,17 +68,33 @@ type StatusFilter =
   | "ACTIVE"
   | "INACTIVE";
 
+type ServiceFilter =
+  | "ALL"
+  | "DEFAULT"
+  | "LIZZ";
+
+
+// =====================================================
+// CONSTANTS
+// =====================================================
+
+const PAGE_SIZE = 10;
+
+const CREATE_PATH =
+  "/office/dashboard/revenue-managements/penalty-rules/create";
+
 
 // =====================================================
 // HELPERS
 // =====================================================
 
 function formatRate(
-  value: string | number | null,
-) {
+  value: string | number | null | undefined,
+): string {
   if (
     value === null ||
-    value === undefined
+    value === undefined ||
+    value === ""
   ) {
     return "—";
   }
@@ -75,48 +104,26 @@ function formatRate(
 
 
 // =====================================================
-// SERVICE NAME
-// =====================================================
-
-function getServiceName(
-  rule: PenaltyRule,
-  services: RevenueService[],
-) {
-  if (!rule.revenue_service_id) {
-    return "Default";
-  }
-
-  return (
-    rule.revenue_service?.name ??
-    services.find(
-      (service) =>
-        service.id ===
-        rule.revenue_service_id,
-    )?.name ??
-    "Unknown Service"
-  );
-}
-
-
-// =====================================================
 // START LABEL
 // =====================================================
 
 function getStartLabel(
   startType: PenaltyRule["start_type"],
-) {
+): string {
   switch (startType) {
-    case "DUE_DATE":
-      return "Due Date";
+    /**
+     * Penalty starts from the date the agreement
+     * was signed.
+     */
+    case "AGREEMENT_DATE":
+      return "From Agreement Signing Date";
 
-    case "AGREEMENT_START":
-      return "Agreement Start";
-
-    case "AFTER_GRACE_PERIOD":
-      return "After Grace Period";
-
-    case "FISCAL_YEAR_START":
-      return "Fiscal Year Start";
+    /**
+     * Penalty starts from the fiscal month
+     * configured in the penalty rule.
+     */
+    case "FIXED_FISCAL_MONTH":
+      return "From Fiscal Month Set by Penalty Rule";
 
     default:
       return startType;
@@ -125,14 +132,20 @@ function getStartLabel(
 
 
 // =====================================================
-// DATE
+// DATE FORMATTER
 // =====================================================
 
 function formatDate(
-  value: string | null,
-) {
+  value: string | null | undefined,
+): string {
   if (!value) {
     return "No end date";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "—";
   }
 
   return new Intl.DateTimeFormat(
@@ -142,7 +155,7 @@ function formatDate(
       month: "short",
       year: "numeric",
     },
-  ).format(new Date(value));
+  ).format(date);
 }
 
 
@@ -159,20 +172,13 @@ function RevenuePenalties() {
   // ===================================================
 
   const [search, setSearch] =
-    useState("");
+    useState<string>("");
 
   const [statusFilter, setStatusFilter] =
     useState<StatusFilter>("ALL");
 
-  /**
-   * Values:
-   *
-   * ALL       -> all policies
-   * DEFAULT   -> default policy
-   * service ID -> specific service override
-   */
   const [serviceFilter, setServiceFilter] =
-    useState("ALL");
+    useState<ServiceFilter>("ALL");
 
 
   // ===================================================
@@ -180,13 +186,11 @@ function RevenuePenalties() {
   // ===================================================
 
   const [page, setPage] =
-    useState(1);
-
-  const pageSize = 10;
+    useState<number>(1);
 
 
   // ===================================================
-  // RESET PAGE WHEN FILTER CHANGES
+  // RESET PAGE WHEN FILTERS CHANGE
   // ===================================================
 
   useEffect(() => {
@@ -204,37 +208,32 @@ function RevenuePenalties() {
 
   const queryParams: PenaltyRuleFilters = {
     page,
-
-    per_page:
-      pageSize,
-
+    per_page: PAGE_SIZE,
+  
     search:
-      search.trim() ||
-      undefined,
-
-
-    scope:
-      serviceFilter === "DEFAULT"
-        ? "DEFAULT"
-        : serviceFilter === "ALL"
-          ? "ALL"
-          : "LIZZ",
-
+      search.trim() || undefined,
+  
     is_active:
       statusFilter === "ACTIVE"
         ? true
         : statusFilter === "INACTIVE"
           ? false
           : undefined,
-
+  
+    start_type:
+      serviceFilter === "DEFAULT"
+        ? "FIXED_FISCAL_MONTH"
+        : serviceFilter === "LIZZ"
+          ? "AGREEMENT_DATE"
+          : undefined,
+  
     sort_by: "name",
-
     sort_direction: "asc",
   };
 
 
   // ===================================================
-  // GET PENALTY RULES
+  // FETCH PENALTY RULES
   // ===================================================
 
   const {
@@ -276,23 +275,23 @@ function RevenuePenalties() {
     data?.meta;
 
   const currentPage =
-    meta?.current_page ??
-    page;
+    meta?.current_page ?? page;
 
   const totalPages =
-    meta?.last_page ??
-    1;
+    Math.max(
+      meta?.last_page ?? 1,
+      1,
+    );
 
   const total =
-    meta?.total ??
-    rules.length;
+    meta?.total ?? rules.length;
 
   const from =
     meta?.from ??
     (
-      rules.length
+      rules.length > 0
         ? (currentPage - 1) *
-            pageSize +
+            PAGE_SIZE +
           1
         : 0
     );
@@ -301,23 +300,23 @@ function RevenuePenalties() {
     meta?.to ??
     Math.min(
       currentPage *
-        pageSize,
+        PAGE_SIZE,
       total,
     );
 
 
   // ===================================================
-  // STATS
+  // PAGE STATISTICS
   // ===================================================
   //
-  // NOTE:
-  // These statistics represent the currently loaded
-  // page because the endpoint is paginated.
+  // IMPORTANT:
+  // Because this endpoint is paginated, these counts
+  // represent the currently loaded page only.
   //
-  // Total uses the API's global meta.total.
+  // `total` is the global API total.
   //
-  // For global Active / Default / Override counts,
-  // create a backend summary endpoint.
+  // If global Active / Default / Override counts are
+  // required, expose a backend summary endpoint.
   // ===================================================
 
   const activeCount =
@@ -329,58 +328,16 @@ function RevenuePenalties() {
   const defaultCount =
     rules.filter(
       (rule) =>
-        rule.revenue_service_id ===
-        null,
+        rule.start_type ===
+        "FIXED_FISCAL_MONTH",
     ).length;
 
   const overrideCount =
     rules.filter(
       (rule) =>
-        rule.revenue_service_id !==
-        null,
+        rule.start_type ===
+        "AGREEMENT_DATE",
     ).length;
-
-
-  // ===================================================
-  // SERVICES
-  // ===================================================
-  //
-  // Currently derived from the services included in
-  // the returned penalty rules.
-  //
-  // Ideally, replace this with useRevenueServices()
-  // so every service is available in the filter even
-  // when it is not present on the current page.
-  // ===================================================
-
-  const services =
-    useMemo<RevenueService[]>(
-      () => {
-        const map =
-          new Map<
-            string,
-            RevenueService
-          >();
-
-        rules.forEach(
-          (rule) => {
-            if (
-              rule.revenue_service
-            ) {
-              map.set(
-                rule.revenue_service.id,
-                rule.revenue_service,
-              );
-            }
-          },
-        );
-
-        return Array.from(
-          map.values(),
-        );
-      },
-      [rules],
-    );
 
 
   // ===================================================
@@ -390,7 +347,7 @@ function RevenuePenalties() {
   const handleCreate =
     () => {
       router.push(
-        "/office/dashboard/revenue-managements/penalty-rules/create",
+        CREATE_PATH,
       );
     };
 
@@ -413,9 +370,7 @@ function RevenuePenalties() {
     async (
       rule: PenaltyRule,
     ) => {
-      if (
-        rule.is_active
-      ) {
+      if (rule.is_active) {
         await deactivateMutation.mutateAsync(
           rule.id,
         );
@@ -434,19 +389,22 @@ function RevenuePenalties() {
   const isActionLoading =
     (
       id: string,
-    ) =>
-      (
-        activateMutation.isPending &&
-        activateMutation.variables === id
-      ) ||
-      (
-        deactivateMutation.isPending &&
-        deactivateMutation.variables === id
+    ): boolean => {
+      return (
+        (
+          activateMutation.isPending &&
+          activateMutation.variables === id
+        ) ||
+        (
+          deactivateMutation.isPending &&
+          deactivateMutation.variables === id
+        )
       );
+    };
 
 
   // ===================================================
-  // ERROR
+  // ERROR STATE
   // ===================================================
 
   if (isError) {
@@ -457,7 +415,7 @@ function RevenuePenalties() {
 
           <div className="flex items-start gap-3">
 
-            <AlertCircle className="mt-0.5 h-5 w-5 text-destructive" />
+            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-destructive" />
 
             <div className="flex-1">
 
@@ -468,7 +426,7 @@ function RevenuePenalties() {
               <p className="mt-1 text-sm text-muted-foreground">
                 {error instanceof Error
                   ? error.message
-                  : "An unexpected error occurred."}
+                  : "An unexpected error occurred while loading penalty rules."}
               </p>
 
               <Button
@@ -530,89 +488,106 @@ function RevenuePenalties() {
         className="text-white"
         actions={
           <Button
-            onClick={
-              handleCreate
-            }
+            onClick={handleCreate}
             className="p-4"
           >
             <Plus className="mr-2 h-4 w-4" />
-
             Add Penalty Rule
           </Button>
         }
       />
 
-{/* =================================================
-    TOOLBAR
-================================================= */}
 
-<Toolbar
-  search={
-    <SearchInput
-      placeholder="Search penalty rules..."
-      value={search}
-      onChange={(e) => setSearch(e.target.value)}
-      className="min-w-[280px]"
-    />
-  }
+      {/* ==================================================
+          TOOLBAR
+      ================================================== */}
 
-  right={
-    <>
-      <Select
-        value={serviceFilter}
-        onValueChange={setServiceFilter}
-      >
-        <SelectTrigger className="w-[190px] py-5">
-          <SelectValue placeholder="Policy" />
-        </SelectTrigger>
-
-        <SelectContent>
-          <SelectItem value="ALL">
-            All Policies
-          </SelectItem>
-
-          <SelectItem value="DEFAULT">
-            Default Policy
-          </SelectItem>
-
-          {services.map((service) => (
-            <SelectItem
-              key={service.id}
-              value={service.id}
-            >
-              {service.name} Override
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-
-      <Select
-        value={statusFilter}
-        onValueChange={(value) =>
-          setStatusFilter(value as StatusFilter)
+      <Toolbar
+        search={
+          <SearchInput
+            placeholder="Search penalty rules..."
+            value={search}
+            onChange={(event) =>
+              setSearch(
+                event.target.value,
+              )
+            }
+            className="min-w-[280px]"
+          />
         }
-      >
-        <SelectTrigger className="w-[150px] py-5">
-          <SelectValue placeholder="Status" />
-        </SelectTrigger>
 
-        <SelectContent>
-          <SelectItem value="ALL">
-            All Status
-          </SelectItem>
+        right={
+          <>
+            {/* Policy Filter */}
 
-          <SelectItem value="ACTIVE">
-            Active
-          </SelectItem>
+            <Select
+              value={serviceFilter}
+              onValueChange={(
+                value,
+              ) =>
+                setServiceFilter(
+                  value as ServiceFilter,
+                )
+              }
+            >
+              <SelectTrigger className="w-[220px] py-5">
+                <SelectValue placeholder="Policy" />
+              </SelectTrigger>
 
-          <SelectItem value="INACTIVE">
-            Inactive
-          </SelectItem>
-        </SelectContent>
-      </Select>
-    </>
-  }
-/>
+              <SelectContent>
+
+                <SelectItem value="ALL">
+                  All Policies
+                </SelectItem>
+
+                <SelectItem value="DEFAULT">
+                  Default Policy
+                </SelectItem>
+
+                <SelectItem value="LIZZ">
+                  Lizz Override
+                </SelectItem>
+
+              </SelectContent>
+            </Select>
+
+
+            {/* Status Filter */}
+
+            <Select
+              value={statusFilter}
+              onValueChange={(
+                value,
+              ) =>
+                setStatusFilter(
+                  value as StatusFilter,
+                )
+              }
+            >
+              <SelectTrigger className="w-[150px] py-5">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+
+              <SelectContent>
+
+                <SelectItem value="ALL">
+                  All Status
+                </SelectItem>
+
+                <SelectItem value="ACTIVE">
+                  Active
+                </SelectItem>
+
+                <SelectItem value="INACTIVE">
+                  Inactive
+                </SelectItem>
+
+              </SelectContent>
+            </Select>
+
+          </>
+        }
+      />
 
 
       {/* ==================================================
@@ -762,9 +737,6 @@ function RevenuePenalties() {
                   Rates
                 </th>
 
-                <th className="px-4 py-3 text-left font-medium">
-                  Start
-                </th>
 
                 <th className="px-4 py-3 text-left font-medium">
                   Effective Period
@@ -813,9 +785,7 @@ function RevenuePenalties() {
 
                 </tr>
 
-
               ) : rules.length === 0 ? (
-
 
                 /* ==================================================
                    EMPTY
@@ -839,9 +809,8 @@ function RevenuePenalties() {
                         </p>
 
                         <p className="text-sm text-muted-foreground">
-                          Try changing your
-                          filters or create
-                          a new penalty rule.
+                          Try changing your filters
+                          or create a new penalty rule.
                         </p>
 
                       </div>
@@ -852,9 +821,7 @@ function RevenuePenalties() {
 
                 </tr>
 
-
               ) : (
-
 
                 /* ==================================================
                    ROWS
@@ -862,26 +829,36 @@ function RevenuePenalties() {
 
                 rules.map(
                   (
-                    rule,
+                    rule: PenaltyRule,
                   ) => {
-
-                    const serviceName =
-                      getServiceName(
-                        rule,
-                        services,
-                      );
 
                     const actionLoading =
                       isActionLoading(
                         rule.id,
                       );
 
+                    /**
+                     * IMPORTANT:
+                     *
+                     * Do not infer service identity
+                     * from start_type.
+                     *
+                     * The backend should provide the
+                     * actual service/scope information.
+                     *
+                     * Until that relation is available,
+                     * we use the current filter context.
+                     */
+                    const isLizzOverride =
+                      serviceFilter ===
+                      "LIZZ" ||
+                      rule.start_type ===
+                      "AGREEMENT_DATE";
+
                     return (
 
                       <tr
-                        key={
-                          rule.id
-                        }
+                        key={rule.id}
                         className="transition-colors hover:bg-muted/30"
                       >
 
@@ -892,19 +869,15 @@ function RevenuePenalties() {
 
                         <td className="px-4 py-4">
 
-                          <div className="min-w-[220px]">
+                          <div className="">
 
                             <p className="font-medium">
-                              {
-                                rule.name
-                              }
+                              {rule.name}
                             </p>
 
                             {rule.legal_reference && (
                               <p className="mt-1 text-xs text-muted-foreground">
-                                {
-                                  rule.legal_reference
-                                }
+                                {rule.legal_reference}
                               </p>
                             )}
 
@@ -919,18 +892,17 @@ function RevenuePenalties() {
 
                         <td className="px-4 py-4">
 
-                          {rule.revenue_service_id ? (
+                          {isLizzOverride ? (
 
                             <div className="space-y-1">
 
                               <Badge variant="secondary">
-                                Service Override
+                                Lizz Service Override
                               </Badge>
 
                               <p className="text-xs text-muted-foreground">
-                                {
-                                  serviceName
-                                }
+                                Applies to Lizz
+                                service
                               </p>
 
                             </div>
@@ -963,16 +935,17 @@ function RevenuePenalties() {
                           <div>
 
                             <p className="font-medium">
-                              {
-                                rule.calculation_type
-                              }
+                              {rule.start_type}
                             </p>
 
                             <p className="text-xs text-muted-foreground">
                               Basis:{" "}
-                              {
-                                rule.calculation_basis
-                              }
+                              {rule.calculation_basis}
+                            </p>
+                            <p className="font-medium">
+                              Start :  {getStartLabel(
+                                rule.start_type,
+                              )}
                             </p>
 
                           </div>
@@ -988,98 +961,45 @@ function RevenuePenalties() {
 
                           <div className="min-w-[160px]">
 
-                            {rule.calculation_type ===
-                            "FIXED" ? (
+                            <p className="font-medium">
 
-                              <p className="font-medium">
-                                {
-                                  rule.fixed_amount ??
-                                  "—"
-                                }
-                              </p>
+                              {formatRate(
+                                rule.initial_rate,
+                              )}
 
-                            ) : (
+                              {rule.increment_rate !==
+                                null &&
+                                rule.increment_rate !==
+                                  undefined && (
 
-                              <>
+                                <span className="text-muted-foreground">
 
-                                <p className="font-medium">
+                                  {" + "}
 
                                   {formatRate(
-                                    rule.initial_rate,
+                                    rule.increment_rate,
                                   )}
 
-                                  {rule.increment_rate !==
-                                    null && (
-                                    <span className="text-muted-foreground">
-                                      {" "}
-                                      +{" "}
-                                      {formatRate(
-                                        rule.increment_rate,
-                                      )}
-                                      /
-                                      {
-                                        rule.increment_period?.toLowerCase()
-                                      }
-                                    </span>
-                                  )}
+                                  {rule.increment_period
+                                    ? ` / ${rule.increment_period.toLowerCase()}`
+                                    : ""}
 
-                                </p>
+                                </span>
 
-                                {rule.maximum_rate !==
-                                  null && (
-
-                                  <p className="text-xs text-muted-foreground">
-                                    Maximum:{" "}
-                                    {formatRate(
-                                      rule.maximum_rate,
-                                    )}
-                                  </p>
-
-                                )}
-
-                              </>
-
-                            )}
-
-                          </div>
-
-                        </td>
-
-
-                        {/* ======================================
-                            START
-                        ====================================== */}
-
-                        <td className="px-4 py-4">
-
-                          <div className="min-w-[160px]">
-
-                            <p className="font-medium">
-                              {getStartLabel(
-                                rule.start_type,
                               )}
+
                             </p>
 
-                            {rule.start_type ===
-                              "AFTER_GRACE_PERIOD" && (
+                            {rule.maximum_rate !==
+                              null &&
+                              rule.maximum_rate !==
+                                undefined && (
 
                               <p className="text-xs text-muted-foreground">
-
-                                After{" "}
-                                {
-                                  rule.start_offset_value
-                                }{" "}
-                                {
-                                  rule.start_offset_unit.toLowerCase()
-                                }
-
-                                {
-                                  rule.start_offset_value !==
-                                  1
-                                    ? "s"
-                                    : ""
-                                }
-
+                                Maximum:{" "}
+                                {formatRate(
+                                  rule.maximum_rate,
+                                )}
                               </p>
 
                             )}
@@ -1087,6 +1007,8 @@ function RevenuePenalties() {
                           </div>
 
                         </td>
+
+
 
 
                         {/* ======================================
@@ -1149,77 +1071,57 @@ function RevenuePenalties() {
                         </td>
 
 
-                        {/* ======================================
-                            ACTIONS
-                        ====================================== */}
+                      {/* ======================================
+    ACTIONS
+====================================== */}
 
-                        <td className="px-4 py-4">
+<td className="px-4 py-4">
+  <div className="flex justify-end">
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={actionLoading}
+          className="gap-2"
+        >
+          {actionLoading ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <MoreHorizontal className="h-4 w-4" />
+          )}
 
-                          <div className="flex justify-end gap-2">
+          Actions
+        </Button>
+      </DropdownMenuTrigger>
 
+      <DropdownMenuContent align="end" className="w-44">
+        {/* Edit */}
+        <DropdownMenuItem
+          onClick={() => handleEdit(rule)}
+          disabled={actionLoading}
+          className="gap-2"
+        >
+          <Edit3 className="h-4 w-4" />
+          Edit
+        </DropdownMenuItem>
 
-                            {/* Edit */}
+        <DropdownMenuSeparator />
 
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() =>
-                                handleEdit(
-                                  rule,
-                                )
-                              }
-                              className="gap-1"
-                              disabled={
-                                actionLoading
-                              }
-                            >
+        {/* Activate / Deactivate */}
+        <DropdownMenuItem
+          onClick={() => toggleStatus(rule)}
+          disabled={actionLoading}
+          className="gap-2"
+        >
+          <Power className="h-4 w-4" />
 
-                              <Edit3 className="h-3.5 w-3.5" />
-
-                              Edit
-
-                            </Button>
-
-
-                            {/* Activate / Deactivate */}
-
-                            <Button
-                              variant={
-                                rule.is_active
-                                  ? "outline"
-                                  : "default"
-                              }
-                              size="sm"
-                              disabled={
-                                actionLoading
-                              }
-                              onClick={() =>
-                                toggleStatus(
-                                  rule,
-                                )
-                              }
-                              className="gap-1"
-                            >
-
-                              {actionLoading ? (
-
-                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-
-                              ) : (
-
-                                <Power className="h-3.5 w-3.5" />
-
-                              )}
-
-                              {rule.is_active
-                                ? "Deactivate"
-                                : "Activate"}
-
-                            </Button>
-
-                          </div>
-
-                        </td>
+          {rule.is_active ? "Deactivate" : "Activate"}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  </div>
+</td>
 
                       </tr>
 
@@ -1243,7 +1145,6 @@ function RevenuePenalties() {
         {total > 0 && (
 
           <div className="flex flex-col gap-3 border-t px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-
 
             {/* Showing */}
 
@@ -1272,21 +1173,19 @@ function RevenuePenalties() {
                 variant="outline"
                 size="sm"
                 disabled={
-                  currentPage <=
-                    1 ||
+                  currentPage <= 1 ||
                   isFetching
                 }
                 onClick={() =>
                   setPage(
-                    (
-                      value,
-                    ) =>
+                    (value) =>
                       Math.max(
                         1,
                         value - 1,
                       ),
                   )
                 }
+                aria-label="Previous page"
               >
 
                 <ChevronLeft className="h-4 w-4" />
@@ -1296,9 +1195,7 @@ function RevenuePenalties() {
 
               <span className="min-w-[70px] text-center text-sm">
 
-                {currentPage}{" "}
-                /{" "}
-                {totalPages}
+                {currentPage} / {totalPages}
 
               </span>
 
@@ -1313,15 +1210,14 @@ function RevenuePenalties() {
                 }
                 onClick={() =>
                   setPage(
-                    (
-                      value,
-                    ) =>
+                    (value) =>
                       Math.min(
                         totalPages,
                         value + 1,
                       ),
                   )
                 }
+                aria-label="Next page"
               >
 
                 <ChevronRight className="h-4 w-4" />

@@ -36,6 +36,8 @@ import {
   EMPTY_INTEREST_RULE_FORM,
 } from "@/types/revenue/interestRule";
 
+import { EthiopianDatePicker } from "../input/EthiopianDatePicker";
+
 // =====================================================
 // TYPES
 // =====================================================
@@ -108,6 +110,89 @@ function RuleBadge({
 }
 
 // =====================================================
+// DATE HELPERS
+// =====================================================
+
+/**
+ * Convert a YYYY-MM-DD API/form date into a local
+ * JavaScript Date object for EthiopianDatePicker.
+ *
+ * Using local year/month/day avoids UTC timezone shifts.
+ */
+function formDateToDate(
+  value: string,
+): Date | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  const parts = value.split("-");
+
+  if (parts.length !== 3) {
+    return undefined;
+  }
+
+  const year = Number(parts[0]);
+  const month = Number(parts[1]);
+  const day = Number(parts[2]);
+
+  if (
+    !Number.isInteger(year) ||
+    !Number.isInteger(month) ||
+    !Number.isInteger(day)
+  ) {
+    return undefined;
+  }
+
+  const date = new Date(
+    year,
+    month - 1,
+    day,
+  );
+
+  if (
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  ) {
+    return undefined;
+  }
+
+  return date;
+}
+
+/**
+ * Convert a JavaScript Date returned by
+ * EthiopianDatePicker into YYYY-MM-DD.
+ *
+ * The backend continues to receive a normal ISO-style
+ * calendar date. The user only selects the date through
+ * the Ethiopian calendar UI.
+ */
+function dateToFormDate(
+  date?: Date,
+): string {
+  if (!date) {
+    return "";
+  }
+
+  const year =
+    date.getFullYear();
+
+  const month =
+    String(
+      date.getMonth() + 1,
+    ).padStart(2, "0");
+
+  const day =
+    String(
+      date.getDate(),
+    ).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+// =====================================================
 // COMPONENT
 // =====================================================
 
@@ -122,19 +207,21 @@ export function InterestRuleForm({
     useState<InterestRuleFormValues>({
       ...EMPTY_INTEREST_RULE_FORM,
       ...(initialValues ?? {}),
-      rate_period: FIXED_RATE_PERIOD,
+      rate_period:
+        FIXED_RATE_PERIOD,
       calculation_method:
         FIXED_CALCULATION_METHOD,
     });
 
-  const [errors, setErrors] = useState<
-    Partial<
-      Record<
-        keyof InterestRuleFormValues,
-        string
+  const [errors, setErrors] =
+    useState<
+      Partial<
+        Record<
+          keyof InterestRuleFormValues,
+          string
+        >
       >
-    >
-  >({});
+    >({});
 
   // ===================================================
   // UPDATE FIELD
@@ -158,6 +245,47 @@ export function InterestRuleForm({
   };
 
   // ===================================================
+  // DATE CHANGE HANDLERS
+  // ===================================================
+
+  const handleEffectiveFromChange = (
+    date: Date,
+  ) => {
+    const value =
+      dateToFormDate(date);
+
+    updateField(
+      "effective_from",
+      value,
+    );
+
+    /*
+     * If the existing effective-to date is now
+     * before the newly selected effective-from date,
+     * clear it rather than leaving an invalid range.
+     */
+    if (
+      form.effective_to &&
+      value &&
+      form.effective_to < value
+    ) {
+      updateField(
+        "effective_to",
+        "",
+      );
+    }
+  };
+
+  const handleEffectiveToChange = (
+    date: Date,
+  ) => {
+    updateField(
+      "effective_to",
+      dateToFormDate(date),
+    );
+  };
+
+  // ===================================================
   // VALIDATION
   // ===================================================
 
@@ -169,7 +297,8 @@ export function InterestRuleForm({
       >
     > = {};
 
-    const rate = Number(form.rate);
+    const rate =
+      Number(form.rate);
 
     if (!form.rate.trim()) {
       nextErrors.rate =
@@ -197,10 +326,14 @@ export function InterestRuleForm({
         "Effective to cannot be before effective from.";
     }
 
-    setErrors(nextErrors);
+    setErrors(
+      nextErrors,
+    );
 
     return (
-      Object.keys(nextErrors).length === 0
+      Object.keys(
+        nextErrors,
+      ).length === 0
     );
   };
 
@@ -219,27 +352,33 @@ export function InterestRuleForm({
 
     /*
      * These values are fixed by the business rule.
-     * Do not allow the UI to submit another period or
-     * calculation method.
+     *
+     * The frontend does not calculate interest.
      */
     const payload: InterestRuleFormValues = {
       ...form,
-      rate_period: FIXED_RATE_PERIOD,
+      rate_period:
+        FIXED_RATE_PERIOD,
       calculation_method:
         FIXED_CALCULATION_METHOD,
     };
 
-    await onSubmit(payload);
+    await onSubmit(
+      payload,
+    );
   };
 
   // ===================================================
   // DERIVED PREVIEW
   // ===================================================
 
-  const annualRate = Number(form.rate);
+  const annualRate =
+    Number(form.rate);
 
   const monthlyRate =
-    Number.isFinite(annualRate)
+    Number.isFinite(
+      annualRate,
+    )
       ? annualRate / 12
       : 0;
 
@@ -249,7 +388,9 @@ export function InterestRuleForm({
 
   return (
     <form
-      onSubmit={handleSubmit}
+      onSubmit={
+        handleSubmit
+      }
       className="mx-auto w-full max-w-5xl space-y-6 pb-8"
     >
       {/* =================================================
@@ -258,16 +399,17 @@ export function InterestRuleForm({
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-start gap-3">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          onClick={() =>{}
-            // router.back()
-          }
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => {
+              // router.back()
+            }}
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border bg-muted/50">
             <Landmark className="h-5 w-5 text-foreground" />
           </div>
@@ -367,8 +509,12 @@ export function InterestRuleForm({
 
             <div className="mt-2 flex items-baseline gap-1">
               <span className="text-3xl font-bold tracking-tight">
-                {Number.isFinite(monthlyRate)
-                  ? monthlyRate.toFixed(4)
+                {Number.isFinite(
+                  monthlyRate,
+                )
+                  ? monthlyRate.toFixed(
+                      4,
+                    )
                   : "—"}
               </span>
 
@@ -458,8 +604,12 @@ export function InterestRuleForm({
                   inputMode="decimal"
                   step="0.0001"
                   min="0"
-                  value={form.rate}
-                  onChange={(event) =>
+                  value={
+                    form.rate
+                  }
+                  onChange={(
+                    event,
+                  ) =>
                     updateField(
                       "rate",
                       event.target.value,
@@ -467,7 +617,9 @@ export function InterestRuleForm({
                   }
                   placeholder="24.7250"
                   className="h-11 pr-10 text-lg font-semibold"
-                  disabled={isSubmitting}
+                  disabled={
+                    isSubmitting
+                  }
                 />
 
                 <Percent className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -475,7 +627,9 @@ export function InterestRuleForm({
 
               {errors.rate ? (
                 <p className="text-xs text-destructive">
-                  {errors.rate}
+                  {
+                    errors.rate
+                  }
                 </p>
               ) : (
                 <p className="text-xs text-muted-foreground">
@@ -604,18 +758,24 @@ export function InterestRuleForm({
             </label>
           </div>
 
-          <div className="mt-3 max-w-md">
+          <div className="mt-3 max-w-full">
             <Select
-              value={form.calculation_basis}
-              onValueChange={(value) =>
+              value={
+                form.calculation_basis
+              }
+              onValueChange={(
+                value,
+              ) =>
                 updateField(
                   "calculation_basis",
                   value as CalculationBasis,
                 )
               }
-              disabled={isSubmitting}
+              disabled={
+                isSubmitting
+              }
             >
-              <SelectTrigger className="h-11">
+              <SelectTrigger className="h-11 w-full py-5">
                 <SelectValue />
               </SelectTrigger>
 
@@ -684,38 +844,34 @@ export function InterestRuleForm({
         />
 
         <div className="mt-6 grid gap-5 md:grid-cols-2">
-          {/* From */}
+          {/* Effective From */}
 
-          <div className="grid gap-2">
-            <label
-              htmlFor="effective-from"
-              className="text-sm font-medium"
-            >
+          <div className="grid min-w-0 gap-2">
+            <label className="text-sm font-medium">
               Effective From
               <span className="ml-1 text-destructive">
                 *
               </span>
             </label>
 
-            <Input
-              id="effective-from"
-              type="date"
-              value={form.effective_from}
-              onChange={(event) =>
-                updateField(
-                  "effective_from",
-                  event.target.value,
-                )
+            <EthiopianDatePicker
+              value={formDateToDate(
+                form.effective_from,
+              )}
+              onChange={
+                handleEffectiveFromChange
               }
-              className="h-11"
-              disabled={isSubmitting}
+              error={
+                errors.effective_from
+              }
+              placeholder="Select Ethiopian date"
+              disabled={
+                isSubmitting
+              }
+              yearMode="FULL"
             />
 
-            {errors.effective_from ? (
-              <p className="text-xs text-destructive">
-                {errors.effective_from}
-              </p>
-            ) : (
+            {!errors.effective_from && (
               <p className="text-xs text-muted-foreground">
                 First date on which this bank rate can be
                 applied.
@@ -723,37 +879,35 @@ export function InterestRuleForm({
             )}
           </div>
 
-          {/* To */}
+          {/* Effective To */}
 
-          <div className="grid gap-2">
-            <label
-              htmlFor="effective-to"
-              className="text-sm font-medium"
-            >
+          <div className="grid min-w-0 gap-2">
+            <label className="text-sm font-medium">
               Effective To
             </label>
 
-            <Input
-              id="effective-to"
-              type="date"
-              value={form.effective_to}
-              min={
-                form.effective_from ||
-                undefined
+            <EthiopianDatePicker
+              value={formDateToDate(
+                form.effective_to,
+              )}
+              onChange={
+                handleEffectiveToChange
               }
-              onChange={(event) =>
-                updateField(
-                  "effective_to",
-                  event.target.value,
-                )
+              error={
+                errors.effective_to
               }
-              className="h-11"
-              disabled={isSubmitting}
+              placeholder="Select Ethiopian date"
+              disabled={
+                isSubmitting
+              }
+              yearMode="FULL"
             />
 
             {errors.effective_to ? (
               <p className="text-xs text-destructive">
-                {errors.effective_to}
+                {
+                  errors.effective_to
+                }
               </p>
             ) : (
               <p className="text-xs text-muted-foreground">
@@ -789,8 +943,12 @@ export function InterestRuleForm({
 
             <Input
               id="legal-reference"
-              value={form.legal_reference}
-              onChange={(event) =>
+              value={
+                form.legal_reference
+              }
+              onChange={(
+                event,
+              ) =>
                 updateField(
                   "legal_reference",
                   event.target.value,
@@ -798,7 +956,9 @@ export function InterestRuleForm({
               }
               placeholder="e.g. Revenue Regulation 2026, Article 18"
               className="h-11"
-              disabled={isSubmitting}
+              disabled={
+                isSubmitting
+              }
             />
 
             <p className="text-xs text-muted-foreground">
@@ -820,8 +980,12 @@ export function InterestRuleForm({
 
             <textarea
               id="description"
-              value={form.description}
-              onChange={(event) =>
+              value={
+                form.description
+              }
+              onChange={(
+                event,
+              ) =>
                 updateField(
                   "description",
                   event.target.value,
@@ -829,7 +993,9 @@ export function InterestRuleForm({
               }
               placeholder="Describe the legal and operational purpose of this interest policy..."
               rows={4}
-              disabled={isSubmitting}
+              disabled={
+                isSubmitting
+              }
               className="
                 min-h-[120px]
                 w-full
@@ -890,8 +1056,12 @@ export function InterestRuleForm({
                 </p>
 
                 <p className="mt-0.5 font-semibold">
-                  {Number.isFinite(monthlyRate)
-                    ? monthlyRate.toFixed(4)
+                  {Number.isFinite(
+                    monthlyRate,
+                  )
+                    ? monthlyRate.toFixed(
+                        4,
+                      )
                     : "—"}
                   %
                 </p>
@@ -944,8 +1114,12 @@ export function InterestRuleForm({
             <Button
               type="button"
               variant="outline"
-              onClick={onCancel}
-              disabled={isSubmitting}
+              onClick={
+                onCancel
+              }
+              disabled={
+                isSubmitting
+              }
               className="h-10"
             >
               Cancel
@@ -954,7 +1128,9 @@ export function InterestRuleForm({
 
           <Button
             type="submit"
-            disabled={isSubmitting}
+            disabled={
+              isSubmitting
+            }
             className="h-10 min-w-[160px]"
           >
             {isSubmitting

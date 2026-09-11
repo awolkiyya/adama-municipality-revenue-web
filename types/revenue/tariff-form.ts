@@ -17,6 +17,7 @@ export type ConditionOperator =
 
 export interface Condition {
   fieldId: string;
+  fieldName:string;
   operator: ConditionOperator;
   value: string;
 }
@@ -253,6 +254,7 @@ export function mapRuleToFormShape(
 
     conditions: rule.conditions?.map((condition) => ({
       fieldId: condition.fieldId,
+      fieldName:condition.fieldName,
       operator: condition.operator,
       value: condition.value,
     })) ?? [],

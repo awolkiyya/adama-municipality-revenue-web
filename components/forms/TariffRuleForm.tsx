@@ -506,7 +506,7 @@ export default function TariffRuleForm({
   const addCondition = () => {
     setForm((prev) => ({
       ...prev,
-      conditions: [...prev.conditions, { fieldId: "", operator: "equals", value: "" }],
+      conditions: [...prev.conditions, { fieldId: "",fieldName:"", operator: "equals", value: "" }],
     }));
   };
 
@@ -635,7 +635,7 @@ export default function TariffRuleForm({
       : form.conditions
           .map(
             (c) =>
-              `${c.fieldId || "field"} ${OPERATOR_LABELS[c.operator]} ${c.value || "value"}`
+              `${c.fieldName || "field"} ${OPERATOR_LABELS[c.operator]} ${c.value || "value"}`
           )
           .join(", and ");
 
@@ -1302,12 +1302,13 @@ export default function TariffRuleForm({
                               {/* BASE FIELD */}
 
                               <div className="sm:col-span-4">
-                                <BaseFieldDropdown
+                              <BaseFieldDropdown
                                   value={condition.fieldId || null}
                                   onChange={(value, item) => {
                                     const nextFieldId = value ?? "";
 
                                     updateCondition(index, "fieldId", nextFieldId);
+                                    updateCondition(index, "fieldName", item?.name ?? "");
 
                                     // The old value/operator may not be valid
                                     // for the new field's data type, so reset
@@ -1317,6 +1318,7 @@ export default function TariffRuleForm({
 
                                     setConditionFieldForRow(index, item ?? null);
                                   }}
+
                                 />
                               </div>
 
@@ -1545,7 +1547,7 @@ export default function TariffRuleForm({
                   ) : (
                     form.conditions.map((c, i) => (
                       <p key={i} className="font-mono text-sm">
-                        {i === 0 ? "IF" : "AND"} {c.fieldId || "field"}{" "}
+                        {i === 0 ? "IF" : "AND"} {c.fieldName || "field"}{" "}
                         {OPERATOR_LABELS[c.operator]} {c.value || "value"}
                       </p>
                     ))
@@ -1595,7 +1597,7 @@ export default function TariffRuleForm({
               </p>
 
               <p>
-                Priority {form.priority} · Step {form.executionOrder}
+                Priority {form.priority}
               </p>
 
               {priorityCollision && (
@@ -1605,12 +1607,12 @@ export default function TariffRuleForm({
                 </p>
               )}
 
-              {executionOrderCollision && (
+              {/* {executionOrderCollision && (
                 <p className="mt-1 flex items-start gap-1 text-xs text-amber-700">
                   <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
                   Conflicts with {executionOrderCollision.name} at this step
                 </p>
-              )}
+              )} */}
             </div>
 
             <Separator />

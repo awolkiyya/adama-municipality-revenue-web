@@ -214,7 +214,7 @@ export function PermissionSelector({
           type="multiple"
           value={openAccordionValues}
           onValueChange={setOpenModules}
-          className="space-y-2"
+          className="space-y-2 p-5 border-0"
         >
           {filteredGroups.map((group) => (
   <PermissionModuleCard

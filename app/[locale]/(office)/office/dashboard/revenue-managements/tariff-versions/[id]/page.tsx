@@ -953,7 +953,7 @@ export default function TariffVersionDetailPage() {
           "tariffRule" as CommentType
         }
         data={
-          filteredTableData
+          rules
         }
         page={page}
         pageSize={

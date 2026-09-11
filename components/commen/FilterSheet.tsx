@@ -141,7 +141,7 @@ export function FilterSheet({
 
       <Sheet open={isOpen} onOpenChange={handleOpenChange}>
         <SheetTrigger asChild>
-          <Button variant="outline" className="relative gap-2">
+          <Button variant="outline" className="relative gap-2 p-5">
             <SlidersHorizontal className="h-4 w-4" />
             Filters
             {activeFilterCount > 0 && (
@@ -155,7 +155,7 @@ export function FilterSheet({
           </Button>
         </SheetTrigger>
 
-        <SheetContent side="right" className={`flex w-full flex-col py-5 ${contentClassName}`}>
+        <SheetContent side="right" className={`flex w-full flex-col p-5 ${contentClassName}`}>
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
               <SlidersHorizontal className="h-4 w-4" />

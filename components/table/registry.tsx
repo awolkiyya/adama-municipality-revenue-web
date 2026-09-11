@@ -311,7 +311,7 @@ user: {
       "code",
       "name",
       "serviceName",
-      "serviceCode",
+      "revenueCode",
       "calculationType",
       "amount",
       "status",

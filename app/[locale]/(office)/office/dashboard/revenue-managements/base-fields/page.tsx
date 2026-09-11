@@ -52,7 +52,7 @@ import {
 } from "@/hooks/revenue/revenueBaseField.hook";
 
 import { toast } from "sonner";
-import FieldPanel, { DATA_TYPE_META, DATA_TYPES } from "@/components/dialogs/FieldPanel";
+import FieldPanel, { DATA_TYPE_META, DATA_TYPES, FieldFormState } from "@/components/dialogs/FieldPanel";
 import { Banner } from "@/components/banner/topBanner";
 import { IconBadge } from "@/components/commen/icon-badge";
 import { FloatingParticles } from "@/components/design/FloatingParticles";
@@ -67,23 +67,6 @@ import { Button } from "@/components/ui/button";
 // (see the callout at the bottom of this file).
 
 
-interface FieldFormState {
-  name: string;
-  code: string;
-  data_type: BaseFieldDataType;
-  measurement_unit_id: string;
-  description: string;
-  is_active: boolean;
-}
-
-const emptyForm: FieldFormState = {
-  name: "",
-  code: "",
-  data_type: "NUMBER",
-  measurement_unit_id: "",
-  description: "",
-  is_active: true,
-};
 
 
 // ============================================================
@@ -477,28 +460,17 @@ export default function BaseFieldManager() {
   function handleSave(
     formData: FieldFormState,
   ) {
-    const payload: Partial<BaseField> =
-      {
-        name: formData.name.trim(),
-
-        code: formData.code
-          .trim()
-          .toUpperCase(),
-
-        data_type:
-          formData.data_type,
-
-        measurement_unit_id:
-          formData.measurement_unit_id ||
-          undefined,
-
-        description:
-          formData.description.trim() ||
-          undefined,
-
-        is_active:
-          formData.is_active,
-      };
+    const payload: Partial<BaseField> = {
+      name: formData.name.trim(),
+      code: formData.code.trim().toUpperCase(),
+      data_type: formData.data_type,
+      measurement_unit_id: formData.measurement_unit_id || undefined,
+      description: formData.description.trim() || undefined,
+      is_active: formData.is_active,
+      options: DATA_TYPE_META[formData.data_type].needsOptions
+        ? formData.options
+        : [],
+    };
 
     // ========================================================
     // UPDATE

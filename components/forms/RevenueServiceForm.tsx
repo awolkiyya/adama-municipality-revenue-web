@@ -51,6 +51,7 @@ import { RevenueCode } from "@/types/revenue/revenue-code";
 import { ServiceType } from "@/types/service.type";
 import { CollectionMode } from "@/types/revenue/revenu-service";
 import { BaseField } from "@/types/revenue/revenue-baseField";
+import { BaseFieldDropdown } from "../input/BaseFieldsDropdown";
 
 
 /*
@@ -1159,82 +1160,14 @@ export function RevenueServiceForm({
                                                                     </span>
                                                                 </Label>
 
-                                                                <Select
-                                                                    value={
-                                                                        field.baseFieldId
-                                                                    }
-                                                                    onValueChange={(
-                                                                        value
-                                                                    ) =>
-                                                                        handleBaseFieldChange(
-                                                                            index,
-                                                                            value
-                                                                        )
-                                                                    }
-                                                                >
-
-                                                                    <SelectTrigger className="h-10 w-full py-5">
-
-                                                                        <SelectValue placeholder="Select base field" />
-
-                                                                    </SelectTrigger>
-
-                                                                    <SelectContent>
-
-                                                                        {baseFields
-                                                                            .filter(
-                                                                                (
-                                                                                    baseField
-                                                                                ) =>
-                                                                                    !values.fields.some(
-                                                                                        (
-                                                                                            existing,
-                                                                                            existingIndex
-                                                                                        ) =>
-                                                                                            existingIndex !==
-                                                                                                index &&
-                                                                                            existing.baseFieldId ===
-                                                                                                baseField.id
-                                                                                    )
-                                                                            )
-                                                                            .map(
-                                                                                (
-                                                                                    baseField
-                                                                                ) => (
-
-                                                                                    <SelectItem
-                                                                                        key={
-                                                                                            baseField.id
-                                                                                        }
-                                                                                        value={
-                                                                                            baseField.id
-                                                                                        }
-                                                                                    >
-
-                                                                                        <div className="flex items-center gap-2">
-
-                                                                                            <span className="font-medium">
-                                                                                                {
-                                                                                                    baseField.name
-                                                                                                }
-                                                                                            </span>
-
-                                                                                            <span className="font-mono text-[10px] text-muted-foreground">
-                                                                                                {
-                                                                                                    baseField.code
-                                                                                                }
-                                                                                            </span>
-
-                                                                                        </div>
-
-                                                                                    </SelectItem>
-
-                                                                                )
-                                                                            )}
-
-                                                                    </SelectContent>
-
-                                                                </Select>
+                                                                <BaseFieldDropdown
+                                                                    value={field.baseFieldId || null}
+                                                                    excludeIds={values.fields
+                                                                        .filter((_, existingIndex) => existingIndex !== index)
+                                                                        .map((existing) => existing.baseFieldId)
+                                                                        .filter(Boolean)}
+                                                                    onChange={(value, item) => handleBaseFieldChange(index, value)}
+                                                                    />
 
                                                                 {fieldError && (
                                                                     <p className="text-xs text-red-500">

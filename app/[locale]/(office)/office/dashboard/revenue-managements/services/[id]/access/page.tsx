@@ -5,10 +5,8 @@ import { useParams } from "next/navigation";
 
 import {
   ShieldCheck,
-  Plus,
   MoreHorizontal,
   Power,
-  Trash2,
   Loader2,
   AlertCircle,
   Building2,
@@ -26,14 +24,11 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 
 import { ServiceAccessDialog } from "@/components/dialogs/ServiceAccessDialog";
 
 import { useRevenueService } from "@/hooks/revenue/revenueService.hook";
-
-import DeleteModal from "@/components/dialogs/deleteModal";
 
 import { SectorDropdown } from "@/components/input/SectorDropDown";
 
@@ -47,31 +42,33 @@ import { IconBadge } from "@/components/commen/icon-badge";
 import { FloatingParticles } from "@/components/design/FloatingParticles";
 
 import {
-  ServiceAccessRule,
   ServiceAccessRuleSummary,
 } from "@/types/revenue/service-access-rule";
 
 import { DataTablePagination } from "@/components/table/data-pagination";
 
 import {
-  useCreateServiceAccessRule,
-  useDeleteServiceAccessRule,
   useServiceAccessRules,
-  useUpdateServiceAccessRule,
+  useSyncServiceAccessRules,
 } from "@/hooks/revenue/revenueServiceAccessRule.hook";
 
 import { SearchInput } from "@/components/input/SearchInput";
-import { FilterSheet } from "@/components/commen/FilterSheet";
 import { cn } from "@/lib/utils";
+
 import { useSectors } from "@/hooks/useAdminUnit.hook";
 
 /* =========================================================
    TYPES
 ========================================================= */
 
-interface AccessRuleFormValues {
+interface SectorAccess {
   sectorId: string;
+  sectorName: string;
   isActive: boolean;
+}
+
+interface ServiceAccessFormValues {
+  sectors: SectorAccess[];
 }
 
 /* =========================================================
@@ -147,17 +144,11 @@ export default function ServiceAccessPage() {
   const meta = rulesResponse?.meta;
 
   /* =======================================================
-     MUTATIONS
+     BULK SYNC MUTATION
   ======================================================= */
 
-  const createRule =
-    useCreateServiceAccessRule();
-
-  const updateRule =
-    useUpdateServiceAccessRule();
-
-  const deleteRule =
-    useDeleteServiceAccessRule();
+  const syncAccessRules =
+    useSyncServiceAccessRules();
 
   /* =======================================================
      FILTERS
@@ -180,49 +171,39 @@ export default function ServiceAccessPage() {
   const [pageSize, setPageSize] =
     useState(10);
 
+  /* =======================================================
+     FETCH SECTORS
+  ======================================================= */
 
-    /* ===================================================
-   FETCH SECTORS
-=================================================== */
+  const {
+    data: sectorsResponse,
+    isLoading: isSectorsLoading,
+    isError: isSectorsError,
+  } = useSectors({
+    page: 1,
+    per_page: 1000,
+    search: "",
+    is_active: true,
+    sort_by: "name",
+    sort_order: "asc",
+  });
 
-const {
-  data: sectorsResponse,
-  isLoading: isSectorsLoading,
-  isError: isSectorsError,
-} = useSectors({
-  page: 1,
-  per_page: 1000,
-  search: "",
-  // cluster_id: cluster?.id,
-  is_active: true,
-  sort_by: "name",
-  sort_order: "asc",
-});
+  const sectors = sectorsResponse?.data ?? [];
 
-const sectors = sectorsResponse?.data ?? [];
+  /* =======================================================
+     DIALOG
+  ======================================================= */
+
+  const [accessDialogOpen, setAccessDialogOpen] =
+    useState(false);
 
   /* =======================================================
      SELECTION
   ======================================================= */
 
   const [selectedIds, setSelectedIds] =
-    useState<Set<string>>(new Set());
-
-  /* =======================================================
-     DIALOGS
-  ======================================================= */
-
-  const [addOpen, setAddOpen] =
-    useState(false);
-
-  const [editingRule, setEditingRule] =
-    useState<ServiceAccessRule | null>(
-      null
-    );
-
-  const [removing, setRemoving] =
-    useState<ServiceAccessRule[] | null>(
-      null
+    useState<Set<string>>(
+      new Set()
     );
 
   /* =======================================================
@@ -355,139 +336,190 @@ const sectors = sectorsResponse?.data ?? [];
   };
 
   /* =======================================================
-     STATUS TOGGLE
-  ======================================================= */
-
-  const handleStatusToggle = async (
-    row: ServiceAccessRule
-  ) => {
-    try {
-      await updateRule.mutateAsync({
-        serviceId,
-        ruleId: row.id,
-        data: {
-          is_active: !row.isActive,
-        },
-      });
-
-      await refetch();
-    } catch (err) {
-      console.error(
-        "Failed to update sector access:",
-        err
-      );
-    }
-  };
-
-  /* =======================================================
      BULK STATUS
   ======================================================= */
 
   const handleBulkStatus = async (
     isActive: boolean
   ) => {
-    const targets = rows.filter((row) =>
-      selectedIds.has(row.id)
+    const selectedRows = rows.filter(
+      (row) => selectedIds.has(row.id)
     );
 
-    if (!targets.length) {
+    if (!selectedRows.length) {
       return;
     }
 
-    try {
-      await Promise.all(
-        targets.map((row) =>
-          updateRule.mutateAsync({
-            serviceId,
-            ruleId: row.id,
-            data: {
-              is_active: isActive,
-            },
-          })
-        )
+    /*
+    |--------------------------------------------------------------------------
+    | Build complete sector configuration.
+    |
+    | The backend expects ALL sectors, not only selected rows.
+    |--------------------------------------------------------------------------
+    */
+
+    const accessMap = new Map<
+      string,
+      boolean
+    >();
+
+    rows.forEach((row) => {
+      accessMap.set(
+        row.sector.id,
+        row.isActive
       );
+    });
 
-      await refetch();
-    } catch (err) {
-      console.error(
-        "Failed to update sector access:",
-        err
+    selectedRows.forEach((row) => {
+      accessMap.set(
+        row.sector.id,
+        isActive
       );
-    } finally {
-      setSelectedIds(new Set());
-    }
-  };
+    });
 
-  /* =======================================================
-     DELETE
-  ======================================================= */
-
-  const handleConfirmRemove = async () => {
-    if (!removing) {
-      return;
-    }
-
-    try {
-      await Promise.all(
-        removing.map((row) =>
-          deleteRule.mutateAsync({
-            serviceId,
-            ruleId: row.id,
-          })
-        )
-      );
-
-      await refetch();
-
-      setSelectedIds((prev) => {
-        const next = new Set(prev);
-
-        removing.forEach((row) =>
-          next.delete(row.id)
-        );
-
-        return next;
-      });
-    } catch (err) {
-      console.error(
-        "Failed to remove sector access rule(s):",
-        err
-      );
-    } finally {
-      setRemoving(null);
-    }
-  };
-
-  /* =======================================================
-     CREATE / UPDATE
-  ======================================================= */
-
-  const handleCreateOrUpdate = async (
-    values: AccessRuleFormValues,
-    ruleId?: string
-  ) => {
-    const data = {
-      sector_id: values.sectorId,
-      is_active: values.isActive,
+    const payload: ServiceAccessFormValues = {
+      sectors: sectors.map((sector) => ({
+        sectorId: sector.id,
+        sectorName: sector.name,
+        isActive:
+          accessMap.get(sector.id) ??
+          false,
+      })),
     };
 
-    if (ruleId) {
-      await updateRule.mutateAsync({
+    try {
+      await syncAccessRules.mutateAsync({
         serviceId,
-        ruleId,
-        data,
+        data: payload,
       });
-    } else {
-      await createRule.mutateAsync({
-        serviceId,
-        data,
-      });
+
+      await refetch();
+
+      setSelectedIds(
+        new Set()
+      );
+    } catch (err) {
+      console.error(
+        "Failed to synchronize sector access:",
+        err
+      );
+    }
+  };
+
+  /* =======================================================
+     ALLOW ALL
+  ======================================================= */
+
+  const handleAllowAll = async () => {
+    if (!sectors.length) {
+      return;
     }
 
-    await refetch();
+    const payload: ServiceAccessFormValues = {
+      sectors: sectors.map((sector) => ({
+        sectorId: sector.id,
+        sectorName: sector.name,
+        isActive: true,
+      })),
+    };
 
-    setAddOpen(false);
-    setEditingRule(null);
+    try {
+      await syncAccessRules.mutateAsync({
+        serviceId,
+        data: payload,
+      });
+
+      await refetch();
+
+      setSelectedIds(
+        new Set()
+      );
+    } catch (err) {
+      console.error(
+        "Failed to allow all sectors:",
+        err
+      );
+    }
+  };
+
+  /* =======================================================
+     NOT ALLOW ALL
+  ======================================================= */
+
+  const handleNotAllowAll = async () => {
+    if (!sectors.length) {
+      return;
+    }
+
+    const payload: ServiceAccessFormValues = {
+      sectors: sectors.map((sector) => ({
+        sectorId: sector.id,
+        sectorName: sector.name,
+        isActive: false,
+      })),
+    };
+
+    try {
+      await syncAccessRules.mutateAsync({
+        serviceId,
+        data: payload,
+      });
+
+      await refetch();
+
+      setSelectedIds(
+        new Set()
+      );
+    } catch (err) {
+      console.error(
+        "Failed to deactivate all sectors:",
+        err
+      );
+    }
+  };
+
+  /* =======================================================
+     CREATE / UPDATE / BULK SYNC
+  ======================================================= */
+
+  const handleSubmitAccess = async (
+    values: ServiceAccessFormValues
+  ) => {
+    /*
+    |--------------------------------------------------------------------------
+    | This is now the ONLY save operation.
+    |
+    | PUT:
+    | /revenue/services/{serviceId}/access-rules
+    |
+    | Payload:
+    | {
+    |   sectors: [...]
+    | }
+    |--------------------------------------------------------------------------
+    */
+
+    try {
+      await syncAccessRules.mutateAsync({
+        serviceId,
+        data: values,
+      });
+
+      await refetch();
+
+      setAccessDialogOpen(false);
+
+      setSelectedIds(
+        new Set()
+      );
+    } catch (err) {
+      console.error(
+        "Failed to synchronize service access:",
+        err
+      );
+
+      throw err;
+    }
   };
 
   /* =======================================================
@@ -568,13 +600,31 @@ const sectors = sectorsResponse?.data ?? [];
         overlayClassName="bg-gradient-to-r from-primary/95 via-primary/80 to-primary/50"
         className="text-white"
         actions={
-          <Button
-            onClick={() => setAddOpen(true)}
-            className="gap-2 py-5"
-          >
-            <Plus size={16} />
-            Add sector
-          </Button>
+          <div className="flex flex-wrap gap-2">
+
+            <Button
+              onClick={() =>
+                setAccessDialogOpen(true)
+              }
+              className="gap-2 py-5"
+              disabled={
+                isSectorsLoading ||
+                syncAccessRules.isPending
+              }
+            >
+              {syncAccessRules.isPending ? (
+                <Loader2
+                  size={16}
+                  className="animate-spin"
+                />
+              ) : (
+                <Wrench size={16} />
+              )}
+
+              Configure access
+            </Button>
+
+          </div>
         }
       />
 
@@ -631,33 +681,16 @@ const sectors = sectorsResponse?.data ?? [];
                   value: string,
                   _item: Sector
                 ) => {
-                  setSectorFilter(value);
+                  setSectorFilter(
+                    value
+                  );
 
                   setPage(1);
                 }}
               />
             </div>
 
-            {/* -----------------------------------------------
-                STATUS FILTER
-            ----------------------------------------------- */}
 
-            <div className="flex-1">
-              <FilterSheet
-                schema={sectorFilters}
-                value={filters}
-                defaultValues={
-                  INITIAL_FILTERS
-                }
-                onChange={(next: any) => {
-                  setFilters(next);
-
-                  setPage(1);
-                }}
-                title="Filter Sector Access"
-                description="Filter sectors by access status."
-              />
-            </div>
           </div>
         }
       />
@@ -668,6 +701,7 @@ const sectors = sectorsResponse?.data ?? [];
 
       {selectedIds.size > 0 && (
         <div className="flex flex-col gap-3 rounded-lg border bg-muted/40 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+
           <p className="text-sm font-medium">
             {selectedIds.size} selected
           </p>
@@ -679,11 +713,19 @@ const sectors = sectorsResponse?.data ?? [];
             <Button
               size="sm"
               variant="outline"
+              disabled={
+                syncAccessRules.isPending
+              }
               onClick={() =>
                 handleBulkStatus(true)
               }
             >
-              <Power className="mr-1.5 h-3.5 w-3.5" />
+              {syncAccessRules.isPending ? (
+                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Power className="mr-1.5 h-3.5 w-3.5" />
+              )}
+
               Allow
             </Button>
 
@@ -692,32 +734,20 @@ const sectors = sectorsResponse?.data ?? [];
             <Button
               size="sm"
               variant="outline"
+              disabled={
+                syncAccessRules.isPending
+              }
               onClick={() =>
                 handleBulkStatus(false)
               }
             >
-              <Power className="mr-1.5 h-3.5 w-3.5" />
+              {syncAccessRules.isPending ? (
+                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Power className="mr-1.5 h-3.5 w-3.5" />
+              )}
+
               Not Allow
-            </Button>
-
-            {/* REMOVE */}
-
-            <Button
-              size="sm"
-              variant="outline"
-              className="text-destructive hover:text-destructive"
-              onClick={() =>
-                setRemoving(
-                  rows.filter((row) =>
-                    selectedIds.has(
-                      row.id
-                    )
-                  )
-                )
-              }
-            >
-              <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-              Remove
             </Button>
 
             {/* CLEAR */}
@@ -725,6 +755,9 @@ const sectors = sectorsResponse?.data ?? [];
             <Button
               size="sm"
               variant="ghost"
+              disabled={
+                syncAccessRules.isPending
+              }
               onClick={() =>
                 setSelectedIds(
                   new Set()
@@ -736,12 +769,12 @@ const sectors = sectorsResponse?.data ?? [];
           </div>
         </div>
       )}
-
       {/* =====================================================
           TABLE
       ===================================================== */}
 
-      {isRulesLoading ? (
+      {isRulesLoading ||
+      isSectorsLoading ? (
         <div className="flex min-h-[200px] items-center justify-center gap-3 text-muted-foreground">
           <Loader2 className="h-5 w-5 animate-spin" />
           Loading sector access...
@@ -759,20 +792,24 @@ const sectors = sectorsResponse?.data ?? [];
             </p>
 
             <p className="max-w-sm text-sm text-muted-foreground">
-              Add a sector to control whether it
-              is allowed to access this revenue
-              service.
+              Configure sector access to control
+              which sectors are allowed to use this
+              revenue service.
             </p>
 
             <Button
               onClick={() =>
-                setAddOpen(true)
+                setAccessDialogOpen(true)
               }
               className="mt-2 gap-2"
+              disabled={
+                isSectorsLoading
+              }
             >
-              <Plus size={16} />
-              Add sector
+              <Wrench size={16} />
+              Configure access
             </Button>
+
           </CardContent>
         </Card>
       ) : (
@@ -787,6 +824,7 @@ const sectors = sectorsResponse?.data ?? [];
               ================================================= */}
 
               <thead className="sticky top-0 z-10 border-b bg-muted/50">
+
                 <tr>
 
                   <th className="w-10 px-4 py-3">
@@ -818,6 +856,7 @@ const sectors = sectorsResponse?.data ?? [];
                   <th className="w-10" />
 
                 </tr>
+
               </thead>
 
               {/* =================================================
@@ -866,6 +905,7 @@ const sectors = sectorsResponse?.data ?? [];
                       ========================================= */}
 
                       <td className="px-4 py-4">
+
                         <Checkbox
                           checked={selectedIds.has(
                             row.id
@@ -877,6 +917,7 @@ const sectors = sectorsResponse?.data ?? [];
                           }
                           aria-label={`Select ${row.sector.name}`}
                         />
+
                       </td>
 
                       {/* =========================================
@@ -960,25 +1001,15 @@ const sectors = sectorsResponse?.data ?? [];
 
                           <DropdownMenuContent align="end">
 
-                            {/* EDIT */}
-
-                            <DropdownMenuItem
-                              onClick={() =>
-                                setEditingRule(
-                                  row
-                                )
-                              }
-                            >
-                              <Building2 className="mr-2 h-4 w-4" />
-                              Edit Sector
-                            </DropdownMenuItem>
-
                             {/* ALLOW / NOT ALLOW */}
 
                             <DropdownMenuItem
+                              disabled={
+                                syncAccessRules.isPending
+                              }
                               onClick={() =>
-                                handleStatusToggle(
-                                  row
+                                handleBulkStatus(
+                                  !row.isActive
                                 )
                               }
                             >
@@ -989,23 +1020,8 @@ const sectors = sectorsResponse?.data ?? [];
                                 : "Allow"}
                             </DropdownMenuItem>
 
-                            <DropdownMenuSeparator />
-
-                            {/* REMOVE */}
-
-                            <DropdownMenuItem
-                              className="text-destructive focus:text-destructive"
-                              onClick={() =>
-                                setRemoving([
-                                  row,
-                                ])
-                              }
-                            >
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              Remove
-                            </DropdownMenuItem>
-
                           </DropdownMenuContent>
+
                         </DropdownMenu>
 
                       </td>
@@ -1015,9 +1031,11 @@ const sectors = sectorsResponse?.data ?? [];
                 )}
 
               </tbody>
+
             </table>
 
           </div>
+
         </Card>
       )}
 
@@ -1040,56 +1058,24 @@ const sectors = sectorsResponse?.data ?? [];
       />
 
       {/* =====================================================
-          ADD / EDIT DIALOG
+          SERVICE ACCESS DIALOG
       ===================================================== */}
 
       <ServiceAccessDialog
-        open={
-          addOpen ||
-          !!editingRule
+        open={accessDialogOpen}
+        onOpenChange={
+          setAccessDialogOpen
         }
-        onOpenChange={(value) => {
-          if (!value) {
-            setAddOpen(false);
-            setEditingRule(null);
-          }
-        }}
         sectors={sectors}
         serviceName={service.name}
         existingAccess={
           existingAccessForDialog
         }
-        editingRule={
-          editingRule
-            ? {
-                id: editingRule.id,
-                sectorId:
-                  editingRule.sector.id,
-                isActive:
-                  editingRule.isActive,
-              }
-            : null
-        }
         onSubmit={
-          handleCreateOrUpdate
-        }
-      />
-
-      {/* =====================================================
-          DELETE CONFIRMATION
-      ===================================================== */}
-
-      <DeleteModal
-        isOpen={!!removing}
-        onClose={() =>
-          setRemoving(null)
-        }
-        action={
-          handleConfirmRemove
+          handleSubmitAccess
         }
       />
 
     </div>
   );
 }
-

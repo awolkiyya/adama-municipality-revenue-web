@@ -19,24 +19,29 @@ export type BaseFieldDataType =
 // BASE FIELD
 // ============================================================
 
+export interface BaseFieldOption {
+  id?: string;
+  base_field_id?: string;
+  value: string;
+  label: string;
+  sort_order: number;
+  is_default: boolean;
+}
+
+
+
+
 export interface BaseField {
   id: string;
-
   name: string;
-
   code: string;
-
   data_type: BaseFieldDataType;
-  measurement_unit_id?:string|null;
-
+  measurement_unit_id?: string | null;
   unit_code?: string | null;
-
   description?: string | null;
-
   is_active: boolean;
-
+  options?: BaseFieldOption[];
   created_at?: string;
-
   updated_at?: string;
 }
 

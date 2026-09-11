@@ -526,7 +526,7 @@ serviceCode: (row) => (
 revenueCode: (row) => (
   <div className="flex flex-col">
     <span className="font-medium text-sm text-foreground">
-      {row.revenueCode?.code ?? "-"}
+      {row.revenueCode?.code ?? row.service?.revenueCode?.code ?? "-"}
     </span>
   </div>
 ),

@@ -343,6 +343,9 @@ export default function AssessmentWorkspace() {
   // ACTIONS
   // ===================================================
 
+  /**
+   * Create a completely new assessment.
+   */
   const handleNewAssessment =
     () => {
 
@@ -353,6 +356,9 @@ export default function AssessmentWorkspace() {
     };
 
 
+  /**
+   * Register a taxpayer.
+   */
   const handleRegisterTaxpayer =
     () => {
 
@@ -363,6 +369,35 @@ export default function AssessmentWorkspace() {
     };
 
 
+  /**
+   * Register an existing agreement.
+   *
+   * This is specifically for obligations that existed
+   * before the system and need to continue from their
+   * current financial state.
+   *
+   * The existing agreement page should handle:
+   *
+   * - taxpayer selection
+   * - service selection
+   * - original obligation
+   * - previous payments
+   * - opening balance
+   * - remaining payment schedule
+   */
+  const handleRegisterExistingAgreement =
+    () => {
+
+      router.push(
+        "/office/dashboard/assessments/existing",
+      );
+
+    };
+
+
+  /**
+   * View assessment.
+   */
   const handleViewAssessment =
     (
       row: any,
@@ -379,6 +414,9 @@ export default function AssessmentWorkspace() {
     };
 
 
+  /**
+   * Edit assessment.
+   */
   const handleEditAssessment =
     (
       row: any,
@@ -395,6 +433,11 @@ export default function AssessmentWorkspace() {
     };
 
 
+  /**
+   * Delete assessment.
+   *
+   * Actual delete mutation can be connected later.
+   */
   const handleDeleteAssessment =
     (
       id: string,
@@ -431,7 +474,6 @@ export default function AssessmentWorkspace() {
   // ===================================================
 
   if (
-    !user?.role ||
     !config
   ) {
 
@@ -493,11 +535,17 @@ export default function AssessmentWorkspace() {
         config={
           config
         }
+
         onCreate={
           handleNewAssessment
         }
+
         onRegisterTaxpayer={
           handleRegisterTaxpayer
+        }
+
+        onRegisterExistingAgreement={
+          handleRegisterExistingAgreement
         }
       />
 
@@ -505,6 +553,7 @@ export default function AssessmentWorkspace() {
       {/* =================================================
           SUMMARY
           ================================================= */}
+
       {/*
         The normal assessment workspace shows the
         complete assessment summary.
@@ -518,9 +567,11 @@ export default function AssessmentWorkspace() {
           total={
             total
           }
+
           summary={
             summary
           }
+
           config={
             config
           }
@@ -584,6 +635,8 @@ export default function AssessmentWorkspace() {
           );
 
         }}
+
+        
       />
 
 

@@ -467,9 +467,10 @@ export default function BaseFieldManager() {
       measurement_unit_id: formData.measurement_unit_id || undefined,
       description: formData.description.trim() || undefined,
       is_active: formData.is_active,
-      options: DATA_TYPE_META[formData.data_type].needsOptions
-        ? formData.options
-        : [],
+    
+      ...(DATA_TYPE_META[formData.data_type].needsOptions
+        ? { options: formData.options }
+        : {}),
     };
 
     // ========================================================

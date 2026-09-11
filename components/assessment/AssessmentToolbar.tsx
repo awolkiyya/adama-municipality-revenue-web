@@ -7,12 +7,26 @@
 import {
   CalendarDays,
   CircleDot,
+  Filter as FilterIcon,
   Search,
 } from "lucide-react";
 
 import {
   Input,
 } from "@/components/ui/input";
+
+import {
+  Button,
+} from "@/components/ui/button";
+
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 
 import {
   Filters,
@@ -140,32 +154,14 @@ function buildStatusFilter(
     AssessmentStatus[],
 ): FilterField {
 
-  const labels:
-    Record<
-      AssessmentStatus,
-      string
-    > = {
-
-    ALL:
-      "All",
-
-    DRAFT:
-      "Draft",
-
-    PENDING_APPROVAL:
-      "Pending Approval",
-
-    APPROVED:
-      "Approved",
-
-    RETURNED:
-      "Returned",
-
-    CANCELLED:
-      "Cancelled",
-
+  const labels: Record<AssessmentStatus, string> = {
+    ALL: "All",
+    DRAFT: "Draft",
+    PENDING_APPROVAL: "Pending Approval",
+    APPROVED: "Approved",
+    RETURNED: "Returned",
+    CANCELLED: "Cancelled",
   };
-
 
   return {
 
@@ -460,51 +456,119 @@ export function AssessmentToolbar({
           >
 
             {/* =================================================
-                FILTERS
+                FILTERS (IN SHEET)
                 ================================================= */}
 
             <div
               className="
+                flex
                 w-full
-                min-w-0
+                shrink-0
+                items-center
 
-                sm:w-full
+                sm:w-auto
+                sm:self-end
 
                 lg:w-auto
-                lg:min-w-0
-                lg:shrink
+                lg:shrink-0
               "
             >
 
-              <Filters<AssessmentFilters>
+              <Sheet>
 
-                schema={
-                  filtersSchema
-                }
+                <SheetTrigger asChild>
 
-                value={
-                  filters
-                }
+                  <Button
+                    variant="outline"
+                    className="
+                      h-10
+                      gap-2
+                    "
+                  >
 
-                onChange={
-                  (
-                    value,
-                  ) => {
+                    <FilterIcon
+                      className="
+                        size-4
+                      "
+                    />
 
-                    setFilters(
-                      value,
-                    );
+                    Filters
 
-                    onPageReset();
+                  </Button>
 
-                  }
-                }
+                </SheetTrigger>
 
-                onReset={
-                  reset
-                }
+                <SheetContent
+                  side="right"
+                  className="
+                    flex
+                    w-full
+                    flex-col
+                    gap-0
 
-              />
+                    sm:max-w-md
+                  "
+                >
+
+                  <SheetHeader>
+
+                    <SheetTitle>
+                      Filters
+                    </SheetTitle>
+
+                    <SheetDescription>
+                      Refine the list using the filters below.
+                    </SheetDescription>
+
+                  </SheetHeader>
+
+                  <div
+                    className="
+                      flex-1
+                      overflow-y-auto
+                      px-4
+                      py-4
+                    "
+                  >
+
+                    <Filters<AssessmentFilters>
+
+                      schema={
+                        filtersSchema
+                      }
+
+                      value={
+                        filters
+                      }
+
+                      onChange={
+                        (
+                          value,
+                        ) => {
+
+                          setFilters(
+                            value,
+                          );
+
+                          onPageReset();
+
+                        }
+                      }
+
+                      onReset={
+                        reset
+                      }
+
+                      layout="column"
+                      resetPosition="end"
+
+                    />
+
+                  </div>
+
+                </SheetContent>
+
+              </Sheet>
 
             </div>
 

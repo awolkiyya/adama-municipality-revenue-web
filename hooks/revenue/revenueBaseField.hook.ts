@@ -149,10 +149,6 @@ import { baseFieldService } from "@/services/revenue/revenueBaseField.service";
         );
   
   
-        router.push(
-          "/office/dashboard/settings/base-fields"
-        );
-  
   
       },
   

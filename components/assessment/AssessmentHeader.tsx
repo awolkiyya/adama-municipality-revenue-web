@@ -1,8 +1,8 @@
+"use client";
+
 // =====================================================
 // ASSESSMENT HEADER
 // =====================================================
-
-"use client";
 
 import {
   Banner,
@@ -39,6 +39,9 @@ type AssessmentHeaderProps = {
 
   onRegisterTaxpayer:
     () => void;
+
+  onRegisterExistingAgreement:
+    () => void;
 };
 
 
@@ -52,6 +55,8 @@ export function AssessmentHeader({
   onCreate,
 
   onRegisterTaxpayer,
+
+  onRegisterExistingAgreement,
 
 }: AssessmentHeaderProps) {
 
@@ -127,6 +132,11 @@ export function AssessmentHeader({
                 const Icon =
                   action.icon;
 
+
+                // =====================================
+                // CREATE ASSESSMENT
+                // =====================================
+
                 if (
                   action.action ===
                   "CREATE"
@@ -163,6 +173,54 @@ export function AssessmentHeader({
                   );
                 }
 
+
+                // =====================================
+                // REGISTER EXISTING AGREEMENT
+                // =====================================
+
+                if (
+                  action.action ===
+                  "REGISTER_EXISTING_AGREEMENT"
+                ) {
+
+                  return (
+                    <Button
+                      key={
+                        action.key
+                      }
+                      type="button"
+                      variant="outline"
+                      onClick={
+                        onRegisterExistingAgreement
+                      }
+                      className="
+                        border-white/30
+                        bg-white/10
+                        text-white
+                        backdrop-blur-sm
+                        hover:bg-white
+                        hover:text-primary
+                      "
+                    >
+
+                      <Icon
+                        className="
+                          mr-2
+                          h-4
+                          w-4
+                        "
+                      />
+
+                      {action.label}
+
+                    </Button>
+                  );
+                }
+
+
+                // =====================================
+                // REGISTER TAXPAYER
+                // =====================================
 
                 if (
                   action.action ===
@@ -203,6 +261,10 @@ export function AssessmentHeader({
                   );
                 }
 
+
+                // =====================================
+                // UNKNOWN ACTION
+                // =====================================
 
                 return null;
               },

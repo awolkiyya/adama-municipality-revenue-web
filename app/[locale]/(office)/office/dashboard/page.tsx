@@ -2,14 +2,23 @@
 
 import React from "react";
 import {
-  Sparkles,
   Construction,
+  FileUp,
+  List,
+  Sparkles,
+  UserPlus,
 } from "lucide-react";
+
+import Link from "next/link";
 
 import { useSelector } from "react-redux";
 
 import { RootState } from "@/lib/store/store";
+
 import ProtectedRoute from "@/components/access/ProtectedRoute";
+import Can from "@/components/access/Can";
+
+import { Button } from "@/components/ui/button";
 
 function getGreeting() {
   const hour = new Date().getHours();
@@ -74,6 +83,56 @@ function DashboardContent() {
           This space will be ready soon — check back
           shortly for updates.
         </p>
+
+        {/* Taxpayer Actions */}
+        <div className="mt-7 flex flex-wrap items-center justify-center gap-2">
+
+          {/* View Taxpayers */}
+          <Can
+            resource="citizens"
+            action="read"
+          >
+            <Button asChild>
+              <Link href="/citizens">
+                <List className="mr-2 size-4" />
+                View Taxpayers
+              </Link>
+            </Button>
+          </Can>
+
+          {/* Register Taxpayer */}
+          <Can
+            resource="citizens"
+            action="create"
+          >
+            <Button
+              asChild
+              variant="outline"
+            >
+              <Link href="/citizens/create">
+                <UserPlus className="mr-2 size-4" />
+                Register Taxpayer
+              </Link>
+            </Button>
+          </Can>
+
+          {/* Import Taxpayers */}
+          <Can
+            resource="citizens"
+            action="import"
+          >
+            <Button
+              asChild
+              variant="outline"
+            >
+              <Link href="/citizens/import">
+                <FileUp className="mr-2 size-4" />
+                Import Taxpayers
+              </Link>
+            </Button>
+          </Can>
+
+        </div>
       </div>
     </div>
   );

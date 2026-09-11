@@ -19,6 +19,7 @@ export type Gender = "MALE" | "FEMALE" | "OTHER";
 
 export type PermissionAction =
   | "view"
+  | "read"
   | "create"
   | "update"
   | "delete"

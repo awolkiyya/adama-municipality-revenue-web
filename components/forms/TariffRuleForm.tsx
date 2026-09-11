@@ -54,7 +54,7 @@ import ServiceDropdown from "@/components/input/ServiceDropDown";
 import { RevenueService } from "@/types/revenue/revenu-service";
 
 import { MeasurementUnitDropdown } from "@/components/input/MeasurmentUnitDropDown";
-import { BaseField } from "@/types/revenue/revenue-baseField";
+import { BaseField, BaseFieldOption } from "@/types/revenue/revenue-baseField";
 import { MeasurementUnit } from "@/types/revenue/revenue-unit";
 
 import {
@@ -74,18 +74,41 @@ import { BaseFieldDropdown } from "@/components/input/BasefieldDropDown";
 // Condition value input
 // ---------------------------------------------------------------------------
 
-interface ConditionValueInputProps {
+
+
+type ConditionValueInputProps = {
   fieldType: BaseFieldDataType;
   value: string;
+  options?: BaseFieldOption[];
   onChange: (value: string) => void;
-}
+};
 
 function ConditionValueInput({
   fieldType,
   value,
+  options = [],
   onChange,
 }: ConditionValueInputProps) {
   switch (fieldType) {
+    case "SELECT":
+      return (
+        <Select value={value} onValueChange={onChange}>
+          <SelectTrigger className="w-full py-5">
+            <SelectValue placeholder="Select value" />
+          </SelectTrigger>
+
+          <SelectContent>
+            {options
+              .sort((a, b) => a.sort_order - b.sort_order)
+              .map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+          </SelectContent>
+        </Select>
+      );
+
     case "NUMBER":
       return (
         <Input
@@ -107,7 +130,6 @@ function ConditionValueInput({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           className="py-5"
-
         />
       );
 
@@ -132,7 +154,6 @@ function ConditionValueInput({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           className="py-5"
-
         />
       );
 
@@ -145,7 +166,6 @@ function ConditionValueInput({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           className="py-5"
-
         />
       );
   }
@@ -1353,6 +1373,7 @@ export default function TariffRuleForm({
                                 <ConditionValueInput
                                   fieldType={fieldType}
                                   value={condition.value}
+                                  options={selectedField?.options ?? []}
                                   onChange={(value) => updateCondition(index, "value", value)}
                                 />
                               </div>

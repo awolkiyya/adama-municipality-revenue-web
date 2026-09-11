@@ -158,28 +158,6 @@ export const NAV_ITEMS: NavItem[] = [
     ],
   },
 
-  // =========================================================
-  // SYSTEM SETTINGS
-  // =========================================================
-
-  {
-    title: "system_settings",
-    url: "/office/dashboard/system-settings",
-    icon: Settings,
-    permission: APP_PERMISSIONS.SYSTEM_SETTINGS_VIEW,
-  },
-
-  // =========================================================
-  // AUDIT
-  // =========================================================
-
-  {
-    title: "audit_logs",
-    url: "/office/dashboard/audits",
-    icon: ShieldCheck,
-    permission: APP_PERMISSIONS.AUDIT_VIEW,
-  },
-
 
   // =========================================================
   // CALCULATION SETUP
@@ -250,53 +228,83 @@ export const NAV_ITEMS: NavItem[] = [
   },
 
 
-   // =========================================================
-  // REVENUE OPERATIONS
+  // =========================================================
+// REVENUE OPERATIONS
+// =========================================================
+
+{
+  title: "revenue_operations",
+  url: "#",
+  icon: ClipboardList,
+
+  items: [
+    {
+      title: "assessments",
+      url: "/office/dashboard/assessments",
+      permission: APP_PERMISSIONS.ASSESSMENT_VIEW,
+    },
+
+    {
+      title: "invoices",
+      url: "/office/dashboard/invoices",
+      permission: APP_PERMISSIONS.INVOICE_VIEW,
+    },
+
+    {
+      title: "field_collection",
+      url: "/office/dashboard/field-collection",
+      icon: Wallet,
+      permission: APP_PERMISSIONS.FIELD_COLLECTION_VIEW,
+    },
+
+    {
+      title: "penalties",
+      url: "/office/dashboard/penalties",
+      permission: APP_PERMISSIONS.PENALTY_VIEW,
+    },
+
+    {
+      title: "discounts",
+      url: "/office/dashboard/discounts",
+      permission: APP_PERMISSIONS.DISCOUNT_VIEW,
+    },
+
+    {
+      title: "revenue_adjustments",
+      url: "/office/dashboard/revenue-adjustments",
+      permission: APP_PERMISSIONS.REVENUE_ADJUSTMENTS_VIEW,
+    },
+
+    {
+      title: "revenue_complaints",
+      url: "/office/dashboard/revenue-complaints",
+      permission: APP_PERMISSIONS.REVENUE_COMPLAINTS_VIEW,
+    },
+  ],
+},
+
+    // =========================================================
+  // SYSTEM SETTINGS
   // =========================================================
 
   {
-    title: "revenue_operations",
-    url: "#",
-    icon: ClipboardList,
-
-    items: [
-      {
-        title: "assessments",
-        url: "/office/dashboard/assessments",
-        permission: APP_PERMISSIONS.ASSESSMENT_VIEW,
-      },
-
-      {
-        title: "invoices",
-        url: "/office/dashboard/invoices",
-        permission: APP_PERMISSIONS.INVOICE_VIEW,
-      },
-
-      {
-        title: "penalties",
-        url: "/office/dashboard/penalties",
-        permission: APP_PERMISSIONS.PENALTY_VIEW,
-      },
-
-      {
-        title: "discounts",
-        url: "/office/dashboard/discounts",
-        permission: APP_PERMISSIONS.DISCOUNT_VIEW,
-      },
-
-      {
-        title: "revenue_adjustments",
-        url: "/office/dashboard/revenue-adjustments",
-        permission: APP_PERMISSIONS.REVENUE_ADJUSTMENTS_VIEW,
-      },
-
-      {
-        title: "revenue_complaints",
-        url: "/office/dashboard/revenue-complaints",
-        permission: APP_PERMISSIONS.REVENUE_COMPLAINTS_VIEW,
-      },
-    ],
+    title: "system_settings",
+    url: "/office/dashboard/system-settings",
+    icon: Settings,
+    permission: APP_PERMISSIONS.SYSTEM_SETTINGS_VIEW,
   },
+
+  // =========================================================
+  // AUDIT
+  // =========================================================
+
+  {
+    title: "audit_logs",
+    url: "/office/dashboard/audits",
+    icon: ShieldCheck,
+    permission: APP_PERMISSIONS.AUDIT_VIEW,
+  },
+
 
 
 

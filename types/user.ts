@@ -21,6 +21,7 @@ export type PermissionAction =
   | "view"
   | "read"
   | "create"
+  | "decide"
   | "update"
   | "delete"
   | "update_password"

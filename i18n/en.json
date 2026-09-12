@@ -76,87 +76,132 @@
     }
   },
 
-"navigation": {
-  "dashboard": "Dashboard",
+  "navigation": {
 
-  "user_access": "User & Access Management",
-  "users": "Users",
-  "taxpayers": "Taxpayers",
-  "access_managements": "Access Management",
-
-  "administrative_structure": "Administrative Structure",
-  "administrative_units": "Administrative Units",
-  "sectors": "Sectors",
-
-  "workflow_configuration": "Workflow Configuration",
-  "service_sector_access": "Service Sector Access",
-
-  "system_settings": "System Settings",
-  "audit_logs": "Audit Logs",
-
-  "revenue_configuration": "Revenue Configuration",
-  "revenue_categories": "Revenue Categories",
-  "revenue_codes": "Revenue Codes",
-  "revenue_services": "Revenue Services",
-  "interest_rates": "Interest Rates",
-  "penalty_rules": "Penalty Rules",
-
-  "calculation_setup": "Calculation Setup",
-  "measurement_units": "Measurement Units",
-  "base_fields": "Base Fields",
-  "formula_variables": "Formula Variables",
-
-  "tariff_management": "Tariff Management",
-  "tariff_versions": "Tariff Versions",
-  "tariff_rules": "Tariff Rules",
-
-  "data_validation": "Data Validation",
-  "data_reports": "Data Reports",
-
-  "executive_dashboard": "Executive Dashboard",
-  "revenue_overview": "Revenue Overview",
-  "performance_reports": "Performance Reports",
-
-  "sector_dashboard": "Sector Dashboard",
-
-  "revenue_operations": "Revenue Operations",
-  "revenue_data": "Revenue Data",
-  "assessments": "Assessments",
-  "invoices": "Invoices",
-
-  "workflow": "Workflow",
-  "drafts": "Drafts",
-  "pending_approval": "Pending Approval",
-  "submitted": "Submitted",
-  "returned": "Returned",
-
-  "reports": "Reports",
-  "revenue_reports": "Revenue Reports",
-  "sector_performance_reports": "Performance Reports",
-
-  "decision_dashboard": "Decision Dashboard",
-
-  "assessment_decisions": "Assessment Decisions",
-  "pending_assessments": "Pending Assessments",
-  "decision_history": "Decision History",
-
-  "decision_reports": "Decision Reports",
-
-  "collections": "Collections",
-  "pending_collections": "Pending Collections",
-  "completed_collections": "Completed Collections",
-
-  "payments": "Payments",
-  "create_payment": "Create Payment",
-  "payment_history": "Payment History",
-
-  "receipts": "Receipts",
-  "collection_reports": "Collection Reports",
-
-  "registration_dashboard": "Registration Dashboard",
-  "taxpayer_registration": "Taxpayer Registration",
-  "registration_reports": "Registration Reports"
-}
+    "dashboard": "Dashboard",
+    "roles": "Roles",
+  
+    "user_access": "User & Access Management",
+  
+    "users": "Users",
+  
+    "taxpayers": "Taxpayers",
+  
+    "access_managements": "Access Management",
+  
+    "administrative_structure": "Administrative Structure",
+  
+    "administrative_units": "Administrative Units",
+  
+    "sectors": "Sectors",
+  
+    "workflow_configuration": "Workflow Configuration",
+  
+    "service_sector_access": "Service Sector Access",
+  
+    "system_settings": "System Settings",
+  
+    "audit_logs": "Audit Logs",
+  
+    "revenue_configuration": "Revenue Configuration",
+  
+    "revenue_categories": "Revenue Categories",
+  
+    "revenue_codes": "Revenue Codes",
+  
+    "revenue_services": "Revenue Services",
+  
+    "interest_rates": "Interest Rates",
+  
+    "penalty_rules": "Penalty Rules",
+  
+    "calculation_setup": "Calculation Setup",
+  
+    "measurement_units": "Measurement Units",
+  
+    "base_fields": "Base Fields",
+  
+    "formula_variables": "Formula Variables",
+  
+    "tariff_management": "Tariff Management",
+  
+    "tariff_versions": "Tariff Versions",
+  
+    "tariff_rules": "Tariff Rules",
+  
+    "data_validation": "Data Validation",
+  
+    "data_reports": "Data Reports",
+  
+    "executive_dashboard": "Executive Dashboard",
+  
+    "revenue_overview": "Revenue Overview",
+  
+    "performance_reports": "Performance Reports",
+  
+    "sector_dashboard": "Sector Dashboard",
+  
+    "revenue_operations": "Revenue Operations",
+  
+    "revenue_data": "Revenue Data",
+  
+    "assessments": "Assessments",
+  
+    "invoices": "Invoices",
+  
+    "field_collection": "Field Collection",
+  
+    "penalty_discount_requests": "Penalty Discount Requests",
+  
+    "workflow": "Workflow",
+  
+    "drafts": "Drafts",
+  
+    "pending_approval": "Pending Approval",
+  
+    "submitted": "Submitted",
+  
+    "returned": "Returned",
+  
+    "reports": "Reports",
+  
+    "revenue_reports": "Revenue Reports",
+  
+    "sector_performance_reports": "Performance Reports",
+  
+    "decision_dashboard": "Decision Dashboard",
+  
+    "assessment_decisions": "Assessment Decisions",
+  
+    "pending_assessments": "Pending Assessments",
+  
+    "decision_history": "Decision History",
+  
+    "decision_reports": "Decision Reports",
+  
+    "collections": "Collections",
+  
+    "pending_collections": "Pending Collections",
+  
+    "completed_collections": "Completed Collections",
+  
+    "payments": "Payments",
+  
+    "create_payment": "Create Payment",
+  
+    "payment_history": "Payment History",
+  
+    "receipts": "Receipts",
+  
+    "collection_reports": "Collection Reports",
+  
+    "registration_dashboard": "Registration Dashboard",
+  
+    "taxpayer_registration": "Taxpayer Registration",
+  
+    "registration_reports": "Registration Reports"
+  
+  }
 
 
   

@@ -264,9 +264,10 @@ export const NAV_ITEMS: NavItem[] = [
     },
 
     {
-      title: "discounts",
-      url: "/office/dashboard/discounts",
-      permission: APP_PERMISSIONS.DISCOUNT_VIEW,
+      title: "penalty_discount_requests",
+      url: "/office/dashboard/penalty-discount-requests",
+      icon: FileText,
+      permission: APP_PERMISSIONS.PENALTY_DISCOUNT_REQUESTS_VIEW,
     },
 
     {

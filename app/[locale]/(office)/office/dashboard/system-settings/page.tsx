@@ -1,3 +1,4 @@
+
 "use client";
 
 import {
@@ -57,6 +58,17 @@ import type {
   UpdateRevenueSettingPayload,
 } from "@/types/revenue/revenueSetting";
 
+import {
+  ETH_MONTHS,
+  gregorianToEth,
+} from "@/utils/ethiopianCalendar";
+
+import {
+  generateEthCalendar,
+} from "@/utils/generateEthCalendar";
+
+import { EthiopianDatePicker } from "@/components/input/EthiopianDatePicker";
+
 /*
 |--------------------------------------------------------------------------
 | Types
@@ -65,50 +77,11 @@ import type {
 
 type SettingsSection =
   | "overview"
-  | "payment-period"
+  | "payment-due-date"
   | "assessment"
   | "invoice"
   | "payment"
   | "receipt";
-
-/*
-|--------------------------------------------------------------------------
-| Ethiopian Months
-|--------------------------------------------------------------------------
-|
-| API representation:
-|
-| 1  = Fulbaana
-| 2  = Onkololeessa
-| 3  = Sadaasa
-| 4  = Muddee
-| 5  = Amajjii
-| 6  = Guraandhala
-| 7  = Bitootessa
-| 8  = Elba
-| 9  = Caamsaa
-| 10 = Waxabajjii
-| 11 = Adooleessa
-| 12 = Hagayya
-| 13 = Pagume
-|
-*/
-
-const ETHIOPIAN_MONTHS = [
-  { value: 1, label: "Fulbaana" },
-  { value: 2, label: "Onkololeessa" },
-  { value: 3, label: "Sadaasa" },
-  { value: 4, label: "Muddee" },
-  { value: 5, label: "Amajjii" },
-  { value: 6, label: "Guraandhala" },
-  { value: 7, label: "Bitootessa" },
-  { value: 8, label: "Elba" },
-  { value: 9, label: "Caamsaa" },
-  { value: 10, label: "Waxabajjii" },
-  { value: 11, label: "Adooleessa" },
-  { value: 12, label: "Hagayya" },
-  { value: 13, label: "Pagume" },
-] as const;
 
 /*
 |--------------------------------------------------------------------------
@@ -167,9 +140,9 @@ const NAVIGATION: {
     icon: Settings2,
   },
   {
-    id: "payment-period",
-    label: "Payment Period",
-    description: "Revenue collection period",
+    id: "payment-due-date",
+    label: "Payment Due Date",
+    description: "Annual revenue deadline",
     icon: CalendarDays,
   },
   {
@@ -200,56 +173,198 @@ const NAVIGATION: {
 
 /*
 |--------------------------------------------------------------------------
-| Helpers
+| Ethiopian Annual Date Helpers
 |--------------------------------------------------------------------------
 */
 
-function monthName(
-  month: number | null | undefined,
-): string {
-  if (!month) {
-    return "Not configured";
+/**
+ * Parse the database representation:
+ *
+ *     "08-30"
+ *
+ * into:
+ *
+ *     { month: 8, day: 30 }
+ *
+ * The year is intentionally absent because this is
+ * a recurring annual date.
+ */
+function parseAnnualPaymentDueDate(
+  value: string | null | undefined,
+): {
+  month: number;
+  day: number;
+} | null {
+  if (!value) {
+    return null;
   }
 
-  return (
-    ETHIOPIAN_MONTHS.find(
-      (item) => item.value === month,
-    )?.label ?? `Month ${month}`
-  );
-}
+  const match = /^(\d{2})-(\d{2})$/.exec(value.trim());
 
-function formatEthiopianDate(
-  month: number | null | undefined,
-  day: number | null | undefined,
-): string {
-  if (!month || !day) {
-    return "Not configured";
+  if (!match) {
+    return null;
   }
 
-  return `${monthName(month)} ${day}`;
+  const month = Number(match[1]);
+  const day = Number(match[2]);
+
+  if (!isValidEthiopianDate(month, day)) {
+    return null;
+  }
+
+  return {
+    month,
+    day,
+  };
 }
 
-function getMaxDay(
-  month: number | null | undefined,
-): number {
+/**
+ * Ethiopian month 1-12 have 30 days.
+ * Ethiopian month 13 (Pagume) has 1-6 days.
+ */
+function getMaxDay(month: number): number {
   return month === 13 ? 6 : 30;
 }
 
+/**
+ * Validate Ethiopian month/day.
+ */
 function isValidEthiopianDate(
   month: number | null | undefined,
   day: number | null | undefined,
 ): boolean {
-  if (!month || !day) {
+  if (
+    month === null ||
+    month === undefined ||
+    day === null ||
+    day === undefined
+  ) {
     return false;
   }
 
-  return (
-    month >= 1 &&
-    month <= 13 &&
-    day >= 1 &&
-    day <= getMaxDay(month)
-  );
+  if (month < 1 || month > 13) {
+    return false;
+  }
+
+  if (day < 1 || day > getMaxDay(month)) {
+    return false;
+  }
+
+  return true;
 }
+
+/**
+ * Validate the API/database representation:
+ *
+ *     MM-DD
+ */
+function isValidAnnualPaymentDueDate(
+  value: string | null | undefined,
+): boolean {
+  if (!value) {
+    return true;
+  }
+
+  return parseAnnualPaymentDueDate(value) !== null;
+}
+
+/**
+ * Convert:
+ *
+ *     month + day
+ *
+ * into:
+ *
+ *     "MM-DD"
+ */
+function buildAnnualPaymentDueDate(
+  month: number,
+  day: number,
+): string {
+  return `${String(month).padStart(2, "0")}-${String(day).padStart(
+    2,
+    "0",
+  )}`;
+}
+
+/**
+ * Return the Ethiopian month name.
+ */
+function monthName(month: number): string {
+  return ETH_MONTHS[month - 1] ?? `Month ${month}`;
+}
+
+/**
+ * Format:
+ *
+ *     "08-30"
+ *
+ * as:
+ *
+ *     "Hamle 30"
+ *
+ * The year is intentionally not displayed because
+ * annual_payment_due_date is recurring every Ethiopian year.
+ */
+function formatAnnualPaymentDueDate(
+  value: string | null | undefined,
+): string {
+  if (!value) {
+    return "Not configured";
+  }
+
+  const parsed = parseAnnualPaymentDueDate(value);
+
+  if (!parsed) {
+    return "Invalid date";
+  }
+
+  return `${monthName(parsed.month)} ${parsed.day}`;
+}
+
+/**
+ * Convert the annual MM-DD value into a Gregorian Date
+ * that can be supplied to EthiopianDatePicker.
+ *
+ * IMPORTANT:
+ *
+ * The Ethiopian year used here is only a UI carrier.
+ * It is NOT part of the persisted configuration.
+ */
+function annualPaymentDueDateToGregorian(
+  value: string | null | undefined,
+): Date | undefined {
+  const parsed = parseAnnualPaymentDueDate(value);
+
+  if (!parsed) {
+    return undefined;
+  }
+
+  const today = new Date();
+
+  const currentEthYear = gregorianToEth(today).year;
+
+  const calendar = generateEthCalendar(
+    currentEthYear,
+    parsed.month,
+  );
+
+  const selectedDay = calendar.find(
+    (item) =>
+      item &&
+      item.year === currentEthYear &&
+      item.month === parsed.month &&
+      item.day === parsed.day,
+  );
+
+  return selectedDay?.gregorian;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Clone Settings
+|--------------------------------------------------------------------------
+*/
 
 function cloneSettings(
   settings: RevenueSettingResource,
@@ -398,7 +513,9 @@ export default function RevenueGeneralSettingsPage() {
   */
 
   const [activeSection, setActiveSection] =
-    useState<SettingsSection>("overview");
+    useState<SettingsSection>(
+      "overview",
+    );
 
   /*
   |--------------------------------------------------------------------------
@@ -421,8 +538,13 @@ export default function RevenueGeneralSettingsPage() {
           : [],
     };
 
-    setSettings(cloneSettings(normalized));
-    setSavedSettings(cloneSettings(normalized));
+    setSettings(
+      cloneSettings(normalized),
+    );
+
+    setSavedSettings(
+      cloneSettings(normalized),
+    );
   }, [serverSettings]);
 
   /*
@@ -440,7 +562,27 @@ export default function RevenueGeneralSettingsPage() {
       JSON.stringify(settings) !==
       JSON.stringify(savedSettings)
     );
-  }, [settings, savedSettings]);
+  }, [
+    settings,
+    savedSettings,
+  ]);
+
+  /*
+  |--------------------------------------------------------------------------
+  | Annual Payment Due Date
+  |--------------------------------------------------------------------------
+  */
+
+  const annualPaymentDueDate =
+    useMemo(
+      () =>
+        annualPaymentDueDateToGregorian(
+          settings?.annual_payment_due_date,
+        ),
+      [
+        settings?.annual_payment_due_date,
+      ],
+    );
 
   /*
   |--------------------------------------------------------------------------
@@ -448,64 +590,77 @@ export default function RevenueGeneralSettingsPage() {
   |--------------------------------------------------------------------------
   */
 
-  const validationErrors = useMemo(() => {
-    if (!settings) {
-      return [];
-    }
+  const validationErrors =
+    useMemo(() => {
+      if (!settings) {
+        return [];
+      }
 
-    const errors: string[] = [];
+      const errors: string[] = [];
 
-    if (
-      !isValidEthiopianDate(
-        settings.payment_start_month,
-        settings.payment_start_day,
-      )
-    ) {
-      errors.push(
-        "Payment start date is invalid.",
-      );
-    }
+      /*
+      |--------------------------------------------------------------------------
+      | Annual Payment Due Date
+      |--------------------------------------------------------------------------
+      */
 
-    if (
-      !isValidEthiopianDate(
-        settings.payment_end_month,
-        settings.payment_end_day,
-      )
-    ) {
-      errors.push(
-        "Payment end date is invalid.",
-      );
-    }
+      if (
+        !isValidAnnualPaymentDueDate(
+          settings.annual_payment_due_date,
+        )
+      ) {
+        errors.push(
+          "Annual payment due date is invalid. Use a valid Ethiopian calendar MM-DD date.",
+        );
+      }
 
-    if (
-      settings.invoice_auto_numbering &&
-      !settings.invoice_prefix.trim()
-    ) {
-      errors.push(
-        "Invoice prefix is required when automatic invoice numbering is enabled.",
-      );
-    }
+      /*
+      |--------------------------------------------------------------------------
+      | Invoice Prefix
+      |--------------------------------------------------------------------------
+      */
 
-    if (
-      settings.receipt_auto_numbering &&
-      !settings.receipt_prefix.trim()
-    ) {
-      errors.push(
-        "Receipt prefix is required when automatic receipt numbering is enabled.",
-      );
-    }
+      if (
+        settings.invoice_auto_numbering &&
+        !settings.invoice_prefix.trim()
+      ) {
+        errors.push(
+          "Invoice prefix is required when automatic invoice numbering is enabled.",
+        );
+      }
 
-    if (
-      !settings.enabled_payment_methods ||
-      settings.enabled_payment_methods.length === 0
-    ) {
-      errors.push(
-        "At least one payment method must remain enabled.",
-      );
-    }
+      /*
+      |--------------------------------------------------------------------------
+      | Receipt Prefix
+      |--------------------------------------------------------------------------
+      */
 
-    return errors;
-  }, [settings]);
+      if (
+        settings.receipt_auto_numbering &&
+        !settings.receipt_prefix.trim()
+      ) {
+        errors.push(
+          "Receipt prefix is required when automatic receipt numbering is enabled.",
+        );
+      }
+
+      /*
+      |--------------------------------------------------------------------------
+      | Payment Methods
+      |--------------------------------------------------------------------------
+      */
+
+      if (
+        !settings.enabled_payment_methods ||
+        settings.enabled_payment_methods.length === 0
+      ) {
+        errors.push(
+          "At least one payment method must remain enabled.",
+        );
+      }
+
+      return errors;
+    }, [settings]);
 
   const hasValidationErrors =
     validationErrors.length > 0;
@@ -516,7 +671,9 @@ export default function RevenueGeneralSettingsPage() {
   |--------------------------------------------------------------------------
   */
 
-  function update<K extends keyof RevenueSettingResource>(
+  function update<
+    K extends keyof RevenueSettingResource,
+  >(
     key: K,
     value: RevenueSettingResource[K],
   ) {
@@ -534,6 +691,48 @@ export default function RevenueGeneralSettingsPage() {
 
   /*
   |--------------------------------------------------------------------------
+  | Annual Payment Due Date Change
+  |--------------------------------------------------------------------------
+  */
+
+  function handleAnnualPaymentDueDateChange(
+    date: Date,
+  ) {
+    const eth = gregorianToEth(date);
+
+    if (
+      !isValidEthiopianDate(
+        eth.month,
+        eth.day,
+      )
+    ) {
+      return;
+    }
+
+    update(
+      "annual_payment_due_date",
+      buildAnnualPaymentDueDate(
+        eth.month,
+        eth.day,
+      ),
+    );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Clear Annual Payment Due Date
+  |--------------------------------------------------------------------------
+  */
+
+  function clearAnnualPaymentDueDate() {
+    update(
+      "annual_payment_due_date",
+      null,
+    );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
   | Reset
   |--------------------------------------------------------------------------
   */
@@ -543,7 +742,9 @@ export default function RevenueGeneralSettingsPage() {
       return;
     }
 
-    setSettings(cloneSettings(savedSettings));
+    setSettings(
+      cloneSettings(savedSettings),
+    );
   }
 
   /*
@@ -558,21 +759,12 @@ export default function RevenueGeneralSettingsPage() {
     return {
       /*
       |--------------------------------------------------------------------------
-      | Payment Period
+      | Annual Payment Due Date
       |--------------------------------------------------------------------------
       */
 
-      payment_start_month:
-        current.payment_start_month,
-
-      payment_start_day:
-        current.payment_start_day,
-
-      payment_end_month:
-        current.payment_end_month,
-
-      payment_end_day:
-        current.payment_end_day,
+      annual_payment_due_date:
+        current.annual_payment_due_date,
 
       /*
       |--------------------------------------------------------------------------
@@ -634,10 +826,9 @@ export default function RevenueGeneralSettingsPage() {
       payment_auto_receipt:
         current.payment_auto_receipt,
 
-      enabled_payment_methods:
-        [
-          ...current.enabled_payment_methods,
-        ],
+      enabled_payment_methods: [
+        ...current.enabled_payment_methods,
+      ],
 
       /*
       |--------------------------------------------------------------------------
@@ -837,18 +1028,14 @@ export default function RevenueGeneralSettingsPage() {
 
   return (
     <div className="min-h-screen bg-muted/20">
-
       {/* ==========================================================
           HEADER
       =========================================================== */}
 
       <header className="border-b bg-background">
         <div className="mx-auto max-w-[1500px] px-6 py-5">
-
           <div className="mb-4 flex items-center gap-2 text-xs text-muted-foreground">
-            <span>
-              Revenue Management
-            </span>
+            <span>Revenue Management</span>
 
             <ChevronRight className="h-3.5 w-3.5" />
 
@@ -858,17 +1045,13 @@ export default function RevenueGeneralSettingsPage() {
           </div>
 
           <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-
             <div className="flex items-start gap-3">
-
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border bg-muted/40">
                 <Settings2 className="h-5 w-5" />
               </div>
 
               <div>
-
                 <div className="flex flex-wrap items-center gap-2">
-
                   <h1 className="text-xl font-semibold tracking-tight">
                     Revenue General Settings
                   </h1>
@@ -890,19 +1073,16 @@ export default function RevenueGeneralSettingsPage() {
                       ? "Active"
                       : "Inactive"}
                   </Badge>
-
                 </div>
 
                 <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
                   Manage global configuration and operational
                   behavior for the Revenue Management system.
                 </p>
-
               </div>
             </div>
 
             <div className="flex items-center gap-2">
-
               {isDirty && (
                 <Badge
                   variant="secondary"
@@ -954,9 +1134,7 @@ export default function RevenueGeneralSettingsPage() {
                 )}
               </Button>
             </div>
-
           </div>
-
         </div>
       </header>
 
@@ -965,96 +1143,77 @@ export default function RevenueGeneralSettingsPage() {
       =========================================================== */}
 
       <main className="mx-auto max-w-[1500px] px-6 py-6">
-
         {/* ========================================================
             VALIDATION
         ========================================================= */}
 
-        {isDirty &&
-          hasValidationErrors && (
-            <Card className="mb-6 border-destructive/30">
-              <CardContent className="p-4">
-                <div className="flex gap-3">
+        {isDirty && hasValidationErrors && (
+          <Card className="mb-6 border-destructive/30">
+            <CardContent className="p-4">
+              <div className="flex gap-3">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
 
-                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">
+                    Review configuration before saving
+                  </p>
 
-                  <div className="min-w-0">
-
-                    <p className="text-sm font-medium">
-                      Review configuration before saving
-                    </p>
-
-                    <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
-                      {validationErrors.map(
-                        (validationError) => (
-                          <li
-                            key={validationError}
-                            className="list-disc ml-4"
-                          >
-                            {validationError}
-                          </li>
-                        ),
-                      )}
-                    </ul>
-
-                  </div>
+                  <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
+                    {validationErrors.map(
+                      (validationError) => (
+                        <li
+                          key={validationError}
+                          className="ml-4 list-disc"
+                        >
+                          {validationError}
+                        </li>
+                      ),
+                    )}
+                  </ul>
                 </div>
-              </CardContent>
-            </Card>
-          )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* ========================================================
             SUMMARY
         ========================================================= */}
 
         <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-
-          {/* Payment Period */}
+          {/* Annual Payment Due Date */}
 
           <button
             type="button"
             onClick={() =>
-              navigate("payment-period")
+              navigate("payment-due-date")
             }
             className="text-left"
           >
             <Card className="h-full transition-shadow hover:shadow-sm">
               <CardContent className="p-5">
-
                 <div className="flex items-start justify-between">
-
                   <div className="flex h-9 w-9 items-center justify-center rounded-lg border bg-muted/40">
                     <CalendarDays className="h-4 w-4 text-muted-foreground" />
                   </div>
 
                   <ArrowRight className="h-4 w-4 text-muted-foreground" />
-
                 </div>
 
                 <div className="mt-4">
-
                   <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                    Payment Period
+                    Annual Payment Due Date
                   </p>
 
                   <p className="mt-1 text-sm font-semibold">
-                    {formatEthiopianDate(
-                      settings.payment_start_month,
-                      settings.payment_start_day,
-                    )}
-
-                    {" → "}
-
-                    {formatEthiopianDate(
-                      settings.payment_end_month,
-                      settings.payment_end_day,
+                    {formatAnnualPaymentDueDate(
+                      settings.annual_payment_due_date,
                     )}
                   </p>
 
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Ethiopian Calendar
+                    Recurs every Ethiopian year
                   </p>
-
                 </div>
               </CardContent>
             </Card>
@@ -1064,9 +1223,7 @@ export default function RevenueGeneralSettingsPage() {
 
           <Card className="h-full">
             <CardContent className="p-5">
-
               <div className="flex items-start justify-between">
-
                 <div className="flex h-9 w-9 items-center justify-center rounded-lg border bg-muted/40">
                   <ShieldCheck className="h-4 w-4 text-muted-foreground" />
                 </div>
@@ -1083,11 +1240,9 @@ export default function RevenueGeneralSettingsPage() {
                     ? "Enabled"
                     : "Disabled"}
                 </Badge>
-
               </div>
 
               <div className="mt-4">
-
                 <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                   Penalty Engine
                 </p>
@@ -1099,9 +1254,7 @@ export default function RevenueGeneralSettingsPage() {
                 <p className="mt-1 text-xs text-muted-foreground">
                   Managed separately
                 </p>
-
               </div>
-
             </CardContent>
           </Card>
 
@@ -1109,9 +1262,7 @@ export default function RevenueGeneralSettingsPage() {
 
           <Card className="h-full">
             <CardContent className="p-5">
-
               <div className="flex items-start justify-between">
-
                 <div className="flex h-9 w-9 items-center justify-center rounded-lg border bg-muted/40">
                   <Landmark className="h-4 w-4 text-muted-foreground" />
                 </div>
@@ -1128,11 +1279,9 @@ export default function RevenueGeneralSettingsPage() {
                     ? "Enabled"
                     : "Disabled"}
                 </Badge>
-
               </div>
 
               <div className="mt-4">
-
                 <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                   Interest Engine
                 </p>
@@ -1144,9 +1293,7 @@ export default function RevenueGeneralSettingsPage() {
                 <p className="mt-1 text-xs text-muted-foreground">
                   Managed separately
                 </p>
-
               </div>
-
             </CardContent>
           </Card>
 
@@ -1154,26 +1301,20 @@ export default function RevenueGeneralSettingsPage() {
 
           <button
             type="button"
-            onClick={() =>
-              navigate("payment")
-            }
+            onClick={() => navigate("payment")}
             className="text-left"
           >
             <Card className="h-full transition-shadow hover:shadow-sm">
               <CardContent className="p-5">
-
                 <div className="flex items-start justify-between">
-
                   <div className="flex h-9 w-9 items-center justify-center rounded-lg border bg-muted/40">
                     <WalletCards className="h-4 w-4 text-muted-foreground" />
                   </div>
 
                   <ArrowRight className="h-4 w-4 text-muted-foreground" />
-
                 </div>
 
                 <div className="mt-4">
-
                   <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                     Payment Methods
                   </p>
@@ -1186,13 +1327,10 @@ export default function RevenueGeneralSettingsPage() {
                   <p className="mt-1 text-xs text-muted-foreground">
                     Available payment channels
                   </p>
-
                 </div>
-
               </CardContent>
             </Card>
           </button>
-
         </div>
 
         {/* ========================================================
@@ -1200,16 +1338,13 @@ export default function RevenueGeneralSettingsPage() {
         ========================================================= */}
 
         <div className="grid gap-6 lg:grid-cols-[250px_minmax(0,1fr)]">
-
           {/* ======================================================
               SIDEBAR
           ======================================================= */}
 
           <aside className="h-fit lg:sticky lg:top-6">
-
             <Card>
               <CardContent className="p-2">
-
                 <div className="px-3 pb-3 pt-2">
                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                     Configuration
@@ -1218,8 +1353,8 @@ export default function RevenueGeneralSettingsPage() {
 
                 <nav className="space-y-0.5">
                   {NAVIGATION.map((item) => {
-
                     const Icon = item.icon;
+
                     const active =
                       activeSection === item.id;
 
@@ -1237,7 +1372,6 @@ export default function RevenueGeneralSettingsPage() {
                             : "hover:bg-muted/60",
                         ].join(" ")}
                       >
-
                         <div
                           className={[
                             "flex h-8 w-8 shrink-0 items-center justify-center rounded-md border",
@@ -1257,7 +1391,6 @@ export default function RevenueGeneralSettingsPage() {
                         </div>
 
                         <div className="min-w-0 flex-1">
-
                           <p
                             className={[
                               "truncate text-sm",
@@ -1272,13 +1405,11 @@ export default function RevenueGeneralSettingsPage() {
                           <p className="truncate text-[11px] text-muted-foreground">
                             {item.description}
                           </p>
-
                         </div>
 
                         {active && (
                           <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
                         )}
-
                       </button>
                     );
                   })}
@@ -1293,10 +1424,8 @@ export default function RevenueGeneralSettingsPage() {
                     settings.
                   </p>
                 </div>
-
               </CardContent>
             </Card>
-
           </aside>
 
           {/* ======================================================
@@ -1304,14 +1433,12 @@ export default function RevenueGeneralSettingsPage() {
           ======================================================= */}
 
           <section className="min-w-0">
-
             {/* ====================================================
                 OVERVIEW
             ===================================================== */}
 
             {activeSection === "overview" && (
               <div className="space-y-6">
-
                 <Card>
                   <CardHeader>
                     <SectionHeader
@@ -1323,29 +1450,19 @@ export default function RevenueGeneralSettingsPage() {
                   </CardHeader>
 
                   <CardContent>
-
                     <div className="grid gap-4 md:grid-cols-2">
-
                       <div className="rounded-xl border bg-muted/20 p-5">
                         <div className="flex items-center gap-3">
                           <CalendarDays className="h-4 w-4 text-muted-foreground" />
 
                           <div>
                             <p className="text-xs text-muted-foreground">
-                              Payment Period
+                              Annual Payment Due Date
                             </p>
 
                             <p className="mt-1 text-sm font-semibold">
-                              {formatEthiopianDate(
-                                settings.payment_start_month,
-                                settings.payment_start_day,
-                              )}
-
-                              {" → "}
-
-                              {formatEthiopianDate(
-                                settings.payment_end_month,
-                                settings.payment_end_day,
+                              {formatAnnualPaymentDueDate(
+                                settings.annual_payment_due_date,
                               )}
                             </p>
                           </div>
@@ -1398,15 +1515,17 @@ export default function RevenueGeneralSettingsPage() {
                             </p>
 
                             <p className="mt-1 text-sm font-semibold">
-                              {settings.enabled_payment_methods.length}{" "}
+                              {
+                                settings
+                                  .enabled_payment_methods
+                                  .length
+                              }{" "}
                               enabled
                             </p>
                           </div>
                         </div>
                       </div>
-
                     </div>
-
                   </CardContent>
                 </Card>
 
@@ -1424,41 +1543,43 @@ export default function RevenueGeneralSettingsPage() {
                   </CardHeader>
 
                   <CardContent className="space-y-1">
-
                     {[
                       {
-                        label: "Payment period",
+                        label:
+                          "Annual payment due date",
                         status:
-                          isValidEthiopianDate(
-                            settings.payment_start_month,
-                            settings.payment_start_day,
-                          ) &&
-                          isValidEthiopianDate(
-                            settings.payment_end_month,
-                            settings.payment_end_day,
+                          isValidAnnualPaymentDueDate(
+                            settings.annual_payment_due_date,
                           ),
                       },
                       {
-                        label: "Assessment configuration",
+                        label:
+                          "Assessment configuration",
                         status:
                           settings.assessment_auto_calculation,
                       },
                       {
-                        label: "Invoice configuration",
+                        label:
+                          "Invoice configuration",
                         status:
                           settings.invoice_auto_numbering &&
-                          settings.invoice_prefix.trim().length > 0,
+                          settings.invoice_prefix.trim()
+                            .length > 0,
                       },
                       {
-                        label: "Payment configuration",
+                        label:
+                          "Payment configuration",
                         status:
-                          settings.enabled_payment_methods.length > 0,
+                          settings.enabled_payment_methods
+                            .length > 0,
                       },
                       {
-                        label: "Receipt configuration",
+                        label:
+                          "Receipt configuration",
                         status:
                           settings.receipt_auto_numbering &&
-                          settings.receipt_prefix.trim().length > 0,
+                          settings.receipt_prefix.trim()
+                            .length > 0,
                       },
                     ].map((item) => (
                       <div
@@ -1487,7 +1608,6 @@ export default function RevenueGeneralSettingsPage() {
                         )}
                       </div>
                     ))}
-
                   </CardContent>
                 </Card>
 
@@ -1495,7 +1615,6 @@ export default function RevenueGeneralSettingsPage() {
 
                 <div className="rounded-xl border bg-background p-4">
                   <div className="flex gap-3">
-
                     <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
 
                     <div>
@@ -1504,407 +1623,157 @@ export default function RevenueGeneralSettingsPage() {
                       </p>
 
                       <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                        General Settings controls global operational
-                        behavior. Tariff calculation controls are
-                        configured on individual tariff rules. Penalty
-                        and interest rates are managed in their
-                        dedicated policy modules. Invoice due dates
-                        are resolved when invoices are created and
-                        persisted on the invoice.
+                        General Settings controls global
+                        operational behavior. Tariff calculation
+                        controls are configured on individual
+                        tariff rules. Penalty and interest rates
+                        are managed in their dedicated policy
+                        modules. The annual payment due date is
+                        stored as an Ethiopian calendar month/day
+                        and is used to resolve the applicable
+                        legal due date for each assessment service.
+                        The resolved due date is persisted on{" "}
+                        <strong className="font-medium text-foreground">
+                          assessment_services.due_date
+                        </strong>
+                        .
                       </p>
                     </div>
-
                   </div>
                 </div>
-
               </div>
             )}
 
             {/* ====================================================
-                PAYMENT PERIOD
+                PAYMENT DUE DATE
             ===================================================== */}
 
-            {activeSection === "payment-period" && (
+            {activeSection === "payment-due-date" && (
               <div className="space-y-6">
-
                 <Card>
                   <CardHeader>
                     <SectionHeader
                       icon={CalendarDays}
                       eyebrow="Revenue Calendar"
-                      title="Payment Period"
-                      description="Define the global period during which revenue obligations can be paid."
+                      title="Annual Payment Due Date"
+                      description="Configure the recurring annual payment deadline used when an assessment requires a fixed Ethiopian calendar payment date."
                     />
                   </CardHeader>
 
                   <CardContent>
+                    <div className="max-w-md space-y-4">
+                      <div>
+                        <Label>
+                          Annual Payment Due Date
+                        </Label>
 
-                    <div className="grid gap-6 md:grid-cols-2">
-
-                      {/* Start */}
-
-                      <div className="space-y-4">
-
-                        <div>
-                          <Label>
-                            Payment Start
-                          </Label>
-
-                          <p className="mt-1 text-sm text-muted-foreground">
-                            First date of the global collection period.
-                          </p>
-                        </div>
-
-                        <div className="rounded-xl border bg-muted/20 p-4">
-                          <p className="text-xs text-muted-foreground">
-                            Selected date
-                          </p>
-
-                          <p className="mt-1 text-sm font-semibold">
-                            {formatEthiopianDate(
-                              settings.payment_start_month,
-                              settings.payment_start_day,
-                            )}
-                          </p>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-3">
-
-                          <div className="space-y-2">
-                            <Label className="text-xs">
-                              Month
-                            </Label>
-
-                            <select
-                              value={
-                                settings.payment_start_month ??
-                                ""
-                              }
-                              onChange={(event) => {
-                                const month =
-                                  event.target.value
-                                    ? Number(
-                                        event.target.value,
-                                      )
-                                    : null;
-
-                                const currentDay =
-                                  settings.payment_start_day;
-
-                                update(
-                                  "payment_start_month",
-                                  month,
-                                );
-
-                                if (
-                                  currentDay &&
-                                  month &&
-                                  currentDay >
-                                    getMaxDay(month)
-                                ) {
-                                  update(
-                                    "payment_start_day",
-                                    getMaxDay(month),
-                                  );
-                                }
-                              }}
-                              className="h-10 w-full rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
-                            >
-                              <option value="">
-                                Select month
-                              </option>
-
-                              {ETHIOPIAN_MONTHS.map(
-                                (month) => (
-                                  <option
-                                    key={month.value}
-                                    value={month.value}
-                                  >
-                                    {month.label}
-                                  </option>
-                                ),
-                              )}
-                            </select>
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label className="text-xs">
-                              Day
-                            </Label>
-
-                            <Input
-                              type="number"
-                              min={1}
-                              max={getMaxDay(
-                                settings.payment_start_month,
-                              )}
-                              value={
-                                settings.payment_start_day ??
-                                ""
-                              }
-                              onChange={(event) =>
-                                update(
-                                  "payment_start_day",
-                                  event.target.value
-                                    ? Math.min(
-                                        Number(
-                                          event.target.value,
-                                        ),
-                                        getMaxDay(
-                                          settings.payment_start_month,
-                                        ),
-                                      )
-                                    : null,
-                                )
-                              }
-                            />
-                          </div>
-
-                        </div>
-
-                        <p className="text-xs text-muted-foreground">
-                          Maximum day:
-                          {" "}
-                          {getMaxDay(
-                            settings.payment_start_month,
-                          )}
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          Select the Ethiopian calendar month
+                          and day that represents the recurring
+                          annual payment deadline.
                         </p>
-
                       </div>
 
-                      {/* End */}
+                      <EthiopianDatePicker
+                        value={
+                          annualPaymentDueDate
+                        }
+                        onChange={
+                          handleAnnualPaymentDueDateChange
+                        }
+                        placeholder="Select annual payment due date"
+                        yearMode="FULL"
+                        minYear={
+                          annualPaymentDueDate
+                            ? gregorianToEth(
+                                annualPaymentDueDate,
+                              ).year
+                            : gregorianToEth(
+                                new Date(),
+                              ).year
+                        }
+                        maxYear={
+                          annualPaymentDueDate
+                            ? gregorianToEth(
+                                annualPaymentDueDate,
+                              ).year
+                            : gregorianToEth(
+                                new Date(),
+                              ).year
+                        }
+                      />
 
-                      <div className="space-y-4">
+                      <div className="rounded-xl border bg-muted/20 p-4">
+                        <div className="flex items-start gap-3">
+                          <CalendarDays className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
 
-                        <div>
-                          <Label>
-                            Payment End / Due Date
-                          </Label>
+                          <div className="min-w-0">
+                            <p className="text-xs text-muted-foreground">
+                              Configured annual deadline
+                            </p>
 
-                          <p className="mt-1 text-sm text-muted-foreground">
-                            Final date of the global collection period.
-                          </p>
-                        </div>
+                            <p className="mt-1 text-sm font-semibold">
+                              {formatAnnualPaymentDueDate(
+                                settings.annual_payment_due_date,
+                              )}
+                            </p>
 
-                        <div className="rounded-xl border bg-muted/20 p-4">
-                          <p className="text-xs text-muted-foreground">
-                            Selected date
-                          </p>
-
-                          <p className="mt-1 text-sm font-semibold">
-                            {formatEthiopianDate(
-                              settings.payment_end_month,
-                              settings.payment_end_day,
+                            {settings.annual_payment_due_date && (
+                              <p className="mt-1 text-xs text-muted-foreground">
+                                Stored as{" "}
+                                <span className="font-medium text-foreground">
+                                  {
+                                    settings.annual_payment_due_date
+                                  }
+                                </span>
+                                {" "}and repeated every Ethiopian year.
+                              </p>
                             )}
-                          </p>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-3">
-
-                          <div className="space-y-2">
-                            <Label className="text-xs">
-                              Month
-                            </Label>
-
-                            <select
-                              value={
-                                settings.payment_end_month ??
-                                ""
-                              }
-                              onChange={(event) => {
-                                const month =
-                                  event.target.value
-                                    ? Number(
-                                        event.target.value,
-                                      )
-                                    : null;
-
-                                const currentDay =
-                                  settings.payment_end_day;
-
-                                update(
-                                  "payment_end_month",
-                                  month,
-                                );
-
-                                if (
-                                  currentDay &&
-                                  month &&
-                                  currentDay >
-                                    getMaxDay(month)
-                                ) {
-                                  update(
-                                    "payment_end_day",
-                                    getMaxDay(month),
-                                  );
-                                }
-                              }}
-                              className="h-10 w-full rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
-                            >
-                              <option value="">
-                                Select month
-                              </option>
-
-                              {ETHIOPIAN_MONTHS.map(
-                                (month) => (
-                                  <option
-                                    key={month.value}
-                                    value={month.value}
-                                  >
-                                    {month.label}
-                                  </option>
-                                ),
-                              )}
-                            </select>
                           </div>
-
-                          <div className="space-y-2">
-                            <Label className="text-xs">
-                              Day
-                            </Label>
-
-                            <Input
-                              type="number"
-                              min={1}
-                              max={getMaxDay(
-                                settings.payment_end_month,
-                              )}
-                              value={
-                                settings.payment_end_day ??
-                                ""
-                              }
-                              onChange={(event) =>
-                                update(
-                                  "payment_end_day",
-                                  event.target.value
-                                    ? Math.min(
-                                        Number(
-                                          event.target.value,
-                                        ),
-                                        getMaxDay(
-                                          settings.payment_end_month,
-                                        ),
-                                      )
-                                    : null,
-                                )
-                              }
-                            />
-                          </div>
-
                         </div>
-
-                        <p className="text-xs text-muted-foreground">
-                          Maximum day:
-                          {" "}
-                          {getMaxDay(
-                            settings.payment_end_month,
-                          )}
-                        </p>
-
                       </div>
 
+                      {settings.annual_payment_due_date && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={
+                            clearAnnualPaymentDueDate
+                          }
+                        >
+                          <RotateCcw className="mr-2 h-4 w-4" />
+                          Clear Due Date
+                        </Button>
+                      )}
                     </div>
 
                     <Separator className="my-6" />
 
                     <div className="flex gap-3 rounded-lg border bg-muted/30 p-4">
-
                       <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
 
                       <p className="text-sm leading-5 text-muted-foreground">
-                        Dates are stored as Ethiopian calendar
-                        month/day values. The actual invoice due
-                        date should be resolved and persisted when
-                        an invoice is created.
-                      </p>
-
-                    </div>
-
-                  </CardContent>
-                </Card>
-
-                {/* Timeline */}
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-sm">
-                      Payment Timeline
-                    </CardTitle>
-
-                    <CardDescription>
-                      Current global revenue collection window.
-                    </CardDescription>
-                  </CardHeader>
-
-                  <CardContent>
-
-                    <div className="rounded-xl border p-5">
-
-                      <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-
-                        <div className="flex items-center gap-3">
-
-                          <div className="rounded-lg border p-2">
-                            <CalendarDays className="h-4 w-4" />
-                          </div>
-
-                          <div>
-                            <p className="text-xs text-muted-foreground">
-                              Collection opens
-                            </p>
-
-                            <p className="text-sm font-semibold">
-                              {formatEthiopianDate(
-                                settings.payment_start_month,
-                                settings.payment_start_day,
-                              )}
-                            </p>
-                          </div>
-
-                        </div>
-
-                        <div className="hidden h-px flex-1 bg-border sm:block" />
-
-                        <div className="sm:text-right">
-
-                          <p className="text-xs text-muted-foreground">
-                            Final due date
-                          </p>
-
-                          <p className="text-sm font-semibold">
-                            {formatEthiopianDate(
-                              settings.payment_end_month,
-                              settings.payment_end_day,
-                            )}
-                          </p>
-
-                        </div>
-
-                        <div className="flex h-8 w-8 items-center justify-center rounded-lg border">
-                          <CheckCircle2 className="h-4 w-4" />
-                        </div>
-
-                      </div>
-
-                    </div>
-
-                    <div className="mt-4 flex gap-3 rounded-lg border bg-muted/30 p-4">
-
-                      <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-
-                      <p className="text-sm leading-5 text-muted-foreground">
-                        The configured period is used when generating
-                        revenue obligations. The resolved actual
+                        This is a recurring annual Ethiopian
+                        calendar date. Revenue Settings stores only
+                        the{" "}
                         <strong className="font-medium text-foreground">
-                          {" "}due date
+                          MM-DD
+                        </strong>{" "}
+                        value, not a year. When an assessment uses{" "}
+                        <strong className="font-medium text-foreground">
+                          FIXED_PAYMENT_DATE
                         </strong>
-                        {" "}must be persisted on each invoice so
-                        historical invoices remain unchanged if this
-                        configuration is later modified.
+                        , the backend resolves this annual date
+                        against the applicable Ethiopian year,
+                        converts it to the legal due date, and
+                        persists that resolved date on{" "}
+                        <strong className="font-medium text-foreground">
+                          assessment_services.due_date
+                        </strong>
+                        .
                       </p>
-
                     </div>
-
                   </CardContent>
                 </Card>
 
@@ -1921,10 +1790,9 @@ export default function RevenueGeneralSettingsPage() {
                   </CardHeader>
 
                   <CardContent>
-
                     <SettingRow
                       title="Penalty calculation"
-                      description="Allow active penalty policies to be applied to overdue revenue."
+                      description="Allow active penalty policies to be applied to overdue revenue obligations."
                     >
                       <Switch
                         checked={
@@ -1943,7 +1811,7 @@ export default function RevenueGeneralSettingsPage() {
 
                     <SettingRow
                       title="Interest calculation"
-                      description="Allow active interest policies to be applied according to their configured basis."
+                      description="Allow active interest policies to be applied according to their configured calculation basis."
                     >
                       <Switch
                         checked={
@@ -1957,10 +1825,8 @@ export default function RevenueGeneralSettingsPage() {
                         }
                       />
                     </SettingRow>
-
                   </CardContent>
                 </Card>
-
               </div>
             )}
 
@@ -1980,7 +1846,6 @@ export default function RevenueGeneralSettingsPage() {
                 </CardHeader>
 
                 <CardContent>
-
                   <SettingRow
                     title="Automatic calculation"
                     description="Use the backend Decision Provider to calculate assessment amounts."
@@ -2054,7 +1919,6 @@ export default function RevenueGeneralSettingsPage() {
                       }
                     />
                   </SettingRow>
-
                 </CardContent>
               </Card>
             )}
@@ -2075,7 +1939,6 @@ export default function RevenueGeneralSettingsPage() {
                 </CardHeader>
 
                 <CardContent>
-
                   <SettingRow
                     title="Automatic numbering"
                     description="Generate invoice numbers automatically."
@@ -2096,7 +1959,6 @@ export default function RevenueGeneralSettingsPage() {
                   <Separator />
 
                   <div className="py-5">
-
                     <Label>
                       Invoice Prefix
                     </Label>
@@ -2125,7 +1987,6 @@ export default function RevenueGeneralSettingsPage() {
                           automatic numbering is enabled.
                         </p>
                       )}
-
                   </div>
 
                   <Separator />
@@ -2165,7 +2026,6 @@ export default function RevenueGeneralSettingsPage() {
                       }
                     />
                   </SettingRow>
-
                 </CardContent>
               </Card>
             )}
@@ -2176,7 +2036,6 @@ export default function RevenueGeneralSettingsPage() {
 
             {activeSection === "payment" && (
               <div className="space-y-6">
-
                 <Card>
                   <CardHeader>
                     <SectionHeader
@@ -2188,7 +2047,6 @@ export default function RevenueGeneralSettingsPage() {
                   </CardHeader>
 
                   <CardContent>
-
                     <SettingRow
                       title="Payment confirmation required"
                       description="Require confirmation before a payment transaction is finalized."
@@ -2224,7 +2082,6 @@ export default function RevenueGeneralSettingsPage() {
                         }
                       />
                     </SettingRow>
-
                   </CardContent>
                 </Card>
 
@@ -2243,14 +2100,10 @@ export default function RevenueGeneralSettingsPage() {
                   </CardHeader>
 
                   <CardContent>
-
                     <div className="grid gap-3">
-
                       {PAYMENT_METHOD_OPTIONS.map(
                         (method) => {
-
-                          const Icon =
-                            method.icon;
+                          const Icon = method.icon;
 
                           const checked =
                             settings.enabled_payment_methods.includes(
@@ -2259,8 +2112,9 @@ export default function RevenueGeneralSettingsPage() {
 
                           const lastEnabledMethod =
                             checked &&
-                            settings.enabled_payment_methods.length ===
-                              1;
+                            settings
+                              .enabled_payment_methods
+                              .length === 1;
 
                           return (
                             <label
@@ -2272,7 +2126,6 @@ export default function RevenueGeneralSettingsPage() {
                                   : "hover:bg-muted/30",
                               ].join(" ")}
                             >
-
                               <Checkbox
                                 checked={checked}
                                 disabled={
@@ -2290,9 +2143,7 @@ export default function RevenueGeneralSettingsPage() {
                               </div>
 
                               <div className="min-w-0 flex-1">
-
                                 <div className="flex items-center gap-2">
-
                                   <p className="text-sm font-medium">
                                     {method.label}
                                   </p>
@@ -2305,24 +2156,21 @@ export default function RevenueGeneralSettingsPage() {
                                       Required
                                     </Badge>
                                   )}
-
                                 </div>
 
                                 <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                                  {method.description}
+                                  {
+                                    method.description
+                                  }
                                 </p>
-
                               </div>
-
                             </label>
                           );
                         },
                       )}
-
                     </div>
 
                     <div className="mt-4 flex gap-3 rounded-lg border bg-muted/30 p-4">
-
                       <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
 
                       <p className="text-xs leading-5 text-muted-foreground">
@@ -2330,12 +2178,9 @@ export default function RevenueGeneralSettingsPage() {
                         enabled. Payment-method-specific configuration
                         can be managed independently when required.
                       </p>
-
                     </div>
-
                   </CardContent>
                 </Card>
-
               </div>
             )}
 
@@ -2355,7 +2200,6 @@ export default function RevenueGeneralSettingsPage() {
                 </CardHeader>
 
                 <CardContent>
-
                   <SettingRow
                     title="Automatic numbering"
                     description="Generate receipt numbers automatically after successful payment."
@@ -2376,7 +2220,6 @@ export default function RevenueGeneralSettingsPage() {
                   <Separator />
 
                   <div className="py-5">
-
                     <Label>
                       Receipt Prefix
                     </Label>
@@ -2405,7 +2248,6 @@ export default function RevenueGeneralSettingsPage() {
                           automatic numbering is enabled.
                         </p>
                       )}
-
                   </div>
 
                   <Separator />
@@ -2426,11 +2268,9 @@ export default function RevenueGeneralSettingsPage() {
                       }
                     />
                   </SettingRow>
-
                 </CardContent>
               </Card>
             )}
-
           </section>
         </div>
       </main>
@@ -2441,17 +2281,13 @@ export default function RevenueGeneralSettingsPage() {
 
       {isDirty && (
         <div className="sticky bottom-0 z-30 border-t bg-background/95 backdrop-blur">
-
           <div className="mx-auto flex max-w-[1500px] items-center justify-between gap-4 px-6 py-3">
-
             <div className="flex min-w-0 items-center gap-3">
-
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-950">
                 <AlertCircle className="h-4 w-4 text-amber-600" />
               </div>
 
               <div className="hidden min-w-0 sm:block">
-
                 <p className="truncate text-sm font-medium">
                   Unsaved configuration changes
                 </p>
@@ -2459,13 +2295,10 @@ export default function RevenueGeneralSettingsPage() {
                 <p className="text-xs text-muted-foreground">
                   Review and save your changes before leaving.
                 </p>
-
               </div>
-
             </div>
 
             <div className="flex shrink-0 items-center gap-2">
-
               <Button
                 variant="ghost"
                 size="sm"
@@ -2497,14 +2330,10 @@ export default function RevenueGeneralSettingsPage() {
                   </>
                 )}
               </Button>
-
             </div>
-
           </div>
-
         </div>
       )}
-
     </div>
   );
 }

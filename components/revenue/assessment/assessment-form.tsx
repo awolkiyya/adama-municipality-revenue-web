@@ -10,6 +10,8 @@ import {
 } from "react";
 
 import {
+  ChevronLeft,
+  ChevronRight,
   FileText,
   Save,
   Send,
@@ -17,8 +19,6 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 
 import {
   RevenueField,
@@ -102,6 +102,40 @@ type AssessmentFormProps = {
 };
 
 // =====================================================
+// STEP CONFIG
+// =====================================================
+
+const STEPS = [
+  {
+    key: "taxpayer",
+    title: "Taxpayer",
+    description: "Select the taxpayer this assessment is for.",
+  },
+  {
+    key: "services",
+    title: "Revenue Services",
+    description: "Choose the revenue services that apply.",
+  },
+  {
+    key: "details",
+    title: "Service Details",
+    description: "Provide the required information for each service.",
+  },
+  {
+    key: "notes",
+    title: "Notes",
+    description: "Add any supporting information (optional).",
+  },
+  {
+    key: "review",
+    title: "Review & Submit",
+    description: "Confirm everything before submitting.",
+  },
+] as const;
+
+type StepKey = (typeof STEPS)[number]["key"];
+
+// =====================================================
 // HELPERS
 // =====================================================
 
@@ -171,45 +205,7 @@ const getInitialServiceId = (
 };
 
 /**
- * Extract service code from different possible API shapes.
- */
-const getInitialServiceCode = (
-  service: unknown,
-): string => {
-  if (!isRecord(service)) {
-    return "";
-  }
-
-  return getStringValue(
-    service.serviceCode ??
-      service.service_code ??
-      service.code ??
-      "",
-  );
-};
-
-/**
  * Extract dynamic field values from an existing service.
- *
- * Supports:
- *
- * {
- *   fields: {
- *     land_size: 100,
- *     property_type: "COMMERCIAL"
- *   }
- *
- * or
- *
- * {
- *   fieldValues: {...}
- * }
- *
- * or
- *
- * {
- *   field_values: {...}
- * }
  */
 const getInitialServiceFields = (
   service: unknown,
@@ -253,10 +249,6 @@ const buildInitialServiceFieldValues = (
     return {};
   }
 
-  /**
-   * If the API already gives the exact structure,
-   * use it directly.
-   */
   const directValues =
     assessment.serviceFieldValues ??
     assessment.service_field_values;
@@ -279,9 +271,6 @@ const buildInitialServiceFieldValues = (
     return normalized;
   }
 
-  /**
-   * Otherwise derive it from services.
-   */
   if (
     !Array.isArray(
       assessment.services,
@@ -342,19 +331,6 @@ const buildInitialServiceIds = (
 /**
  * Determine whether an existing file value represents
  * an already uploaded file.
- *
- * Existing API values can be:
- *
- * "storage/path/file.pdf"
- *
- * {
- *   id: "...",
- *   url: "..."
- * }
- *
- * {
- *   file_url: "..."
- * }
  */
 const isExistingFileValue = (
   value: unknown,
@@ -386,18 +362,7 @@ const isExistingFileValue = (
 };
 
 /**
- * Existing MULTI_FILE values may be:
- *
- * [
- *   "file-1.pdf",
- *   "file-2.pdf"
- * ]
- *
- * or
- *
- * [
- *   { id: "...", url: "..." }
- * ]
+ * Existing MULTI_FILE values.
  */
 const hasExistingFiles = (
   value: unknown,
@@ -523,6 +488,39 @@ export function AssessmentForm({
     setSubmissionError,
   ] =
     useState<string | null>(null);
+
+  // ===================================================
+  // STEP STATE
+  //
+  // `furthestStep` tracks the deepest step the user has
+  // unlocked, so the step indicator can be clicked to
+  // jump backward (or to any already-unlocked step) but
+  // not skip ahead of unfinished steps.
+  // ===================================================
+
+  const [
+    currentStep,
+    setCurrentStep,
+  ] = useState(0);
+
+  const [
+    furthestStep,
+    setFurthestStep,
+  ] = useState(0);
+
+  // In edit mode, data can already be complete, so unlock
+  // every step immediately once the initial assessment
+  // has loaded.
+  useEffect(() => {
+    if (
+      mode === "edit" &&
+      initialAssessment
+    ) {
+      setFurthestStep(
+        STEPS.length - 1,
+      );
+    }
+  }, [mode, initialAssessment]);
 
   // ===================================================
   // SYNCHRONIZE EDIT DATA
@@ -788,17 +786,11 @@ export function AssessmentForm({
               field.key
             ];
 
-          // =========================================
           // FILE
-          // =========================================
 
           if (
             field.type === "FILE"
           ) {
-            /**
-             * In edit mode an existing uploaded
-             * file is considered complete.
-             */
             if (
               mode === "edit" &&
               isExistingFileValue(
@@ -820,18 +812,12 @@ export function AssessmentForm({
             continue;
           }
 
-          // =========================================
           // MULTI FILE
-          // =========================================
 
           if (
             field.type ===
             "MULTI_FILE"
           ) {
-            /**
-             * Existing files satisfy the requirement
-             * during edit mode.
-             */
             if (
               mode === "edit" &&
               hasExistingFiles(
@@ -856,9 +842,7 @@ export function AssessmentForm({
             continue;
           }
 
-          // =========================================
           // CHECKBOX
-          // =========================================
 
           if (
             field.type ===
@@ -874,9 +858,7 @@ export function AssessmentForm({
             continue;
           }
 
-          // =========================================
           // NORMAL VALUE
-          // =========================================
 
           if (
             isEmptyValue(value)
@@ -889,9 +871,7 @@ export function AssessmentForm({
             continue;
           }
 
-          // =========================================
           // NUMBER / DECIMAL
-          // =========================================
 
           if (
             field.type ===
@@ -998,7 +978,6 @@ export function AssessmentForm({
         service.id,
       )[field.key];
 
-    // FILE
     if (
       field.type === "FILE"
     ) {
@@ -1011,7 +990,6 @@ export function AssessmentForm({
       );
     }
 
-    // MULTI FILE
     if (
       field.type ===
       "MULTI_FILE"
@@ -1026,7 +1004,6 @@ export function AssessmentForm({
       );
     }
 
-    // CHECKBOX
     if (
       field.type ===
       "CHECKBOX"
@@ -1085,6 +1062,112 @@ export function AssessmentForm({
           validationErrors,
         ).length === 0,
     );
+
+  // ===================================================
+  // STEP VALIDITY
+  //
+  // Whether the user is allowed to move past a given
+  // step. Used to gate "Next" and to decide which steps
+  // are clickable in the step indicator.
+  // ===================================================
+
+  const isStepComplete = (
+    stepIndex: number,
+  ): boolean => {
+    const key =
+      STEPS[stepIndex]?.key;
+
+    switch (key as StepKey) {
+      case "taxpayer":
+        return (
+          Boolean(
+            selectedTaxpayer,
+          ) && !taxpayerError
+        );
+
+      case "services":
+        return (
+          selectedServices.length >
+            0 && !revenueServicesError
+        );
+
+      case "details":
+        return (
+          Object.keys(
+            validationErrors,
+          ).length === 0
+        );
+
+      case "notes":
+        return true;
+
+      case "review":
+        return canSubmit;
+
+      default:
+        return true;
+    }
+  };
+
+  const goToStep = (
+    stepIndex: number,
+  ) => {
+    if (
+      stepIndex < 0 ||
+      stepIndex >=
+        STEPS.length
+    ) {
+      return;
+    }
+
+    // Allow free navigation to any step already unlocked.
+    if (
+      stepIndex <= furthestStep
+    ) {
+      setCurrentStep(
+        stepIndex,
+      );
+    }
+  };
+
+  const goNext = () => {
+    if (
+      !isStepComplete(
+        currentStep,
+      )
+    ) {
+      return;
+    }
+
+    const next = Math.min(
+      currentStep + 1,
+      STEPS.length - 1,
+    );
+
+    setCurrentStep(next);
+
+    setFurthestStep(
+      (previous) =>
+        Math.max(
+          previous,
+          next,
+        ),
+    );
+  };
+
+  const goBack = () => {
+    setCurrentStep(
+      (previous) =>
+        Math.max(
+          0,
+          previous - 1,
+        ),
+    );
+  };
+
+  const isLastStep =
+    currentStep ===
+    STEPS.length - 1;
 
   // ===================================================
   // FILE CHANGE
@@ -1156,10 +1239,6 @@ export function AssessmentForm({
     const formData =
       new FormData();
 
-    // ================================================
-    // ASSESSMENT ID
-    // ================================================
-
     if (
       mode === "edit" &&
       initialAssessment?.id
@@ -1170,45 +1249,25 @@ export function AssessmentForm({
       );
     }
 
-    // ================================================
-    // MODE
-    // ================================================
-
     formData.append(
       "mode",
       mode,
     );
-
-    // ================================================
-    // TAXPAYER
-    // ================================================
 
     formData.append(
       "taxpayerId",
       taxpayerId,
     );
 
-    // ================================================
-    // NOTES
-    // ================================================
-
     formData.append(
       "notes",
       notes.trim(),
     );
 
-    // ================================================
-    // STATUS
-    // ================================================
-
     formData.append(
       "status",
       status,
     );
-
-    // ================================================
-    // SERVICES
-    // ================================================
 
     const servicesMeta =
       selectedServices.map(
@@ -1231,9 +1290,7 @@ export function AssessmentForm({
                 field.key
               ];
 
-            // ========================================
             // SINGLE FILE
-            // ========================================
 
             if (
               field.type ===
@@ -1262,11 +1319,6 @@ export function AssessmentForm({
                   value,
                 )
               ) {
-                /**
-                 * Preserve the existing file reference.
-                 * The backend can keep the existing file
-                 * when no replacement is uploaded.
-                 */
                 fieldsMeta[
                   field.key
                 ] = {
@@ -1282,9 +1334,7 @@ export function AssessmentForm({
               continue;
             }
 
-            // ========================================
             // MULTIPLE FILES
-            // ========================================
 
             if (
               field.type ===
@@ -1306,7 +1356,6 @@ export function AssessmentForm({
                     file,
                     index,
                   ) => {
-                    // New file
                     if (
                       file instanceof
                       File
@@ -1326,7 +1375,6 @@ export function AssessmentForm({
                       return;
                     }
 
-                    // Existing file
                     if (
                       mode === "edit" &&
                       isExistingFileValue(
@@ -1358,9 +1406,7 @@ export function AssessmentForm({
               continue;
             }
 
-            // ========================================
             // NORMAL FIELD
-            // ========================================
 
             fieldsMeta[
               field.key
@@ -1491,15 +1537,6 @@ export function AssessmentForm({
   const isEdit =
     mode === "edit";
 
-  const pageTitle = isEdit
-    ? "Edit Assessment"
-    : "Assessment Summary";
-
-  const pageDescription =
-    isEdit
-      ? "Review and update taxpayer and revenue-service information."
-      : "Review before submitting.";
-
   const submitLabel = isEdit
     ? "Update & Submit"
     : "Submit for Approval";
@@ -1508,356 +1545,263 @@ export function AssessmentForm({
     ? "Save Changes"
     : "Save as Draft";
 
+  const activeStepConfig =
+    STEPS[currentStep];
+
   // ===================================================
   // RENDER
   // ===================================================
 
+  const progressPercent = Math.round(
+    ((currentStep + 1) /
+      STEPS.length) *
+      100,
+  );
+
   return (
-    <div className="grid gap-6 lg:grid-cols-3">
+    <div className="mx-auto w-full max-w-7xl space-y-6 p-5">
 
       {/* =================================================
-          MAIN FORM
+          TOP PROGRESS BAR
       ================================================= */}
 
-      <div className="space-y-6 lg:col-span-2">
+      <div>
 
-        {/* TAXPAYER */}
+        <div className="mb-2 flex items-center justify-between text-sm">
 
-        <TaxpayerSelector
-          value={taxpayerId}
-          onChange={
-            handleTaxpayerChange
-          }
-          taxpayers={taxpayers}
-        />
+          <span className="font-medium">
+            Step {currentStep + 1} of{" "}
+            {STEPS.length} ·{" "}
+            {activeStepConfig.title}
+          </span>
 
-        {/* =================================================
-            REVENUE SERVICES
-        ================================================= */}
+          <span className="text-muted-foreground">
+            {progressPercent}%
+          </span>
 
-        <div className="space-y-3">
+        </div>
 
-          {revenueServicesError && (
-            <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3">
-              <div className="flex items-center justify-between gap-3">
+        <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
 
-                <p className="text-xs text-destructive">
-                  Failed to load revenue
-                  services.
-                </p>
-
-                {onRetryRevenueServices && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={
-                      onRetryRevenueServices
-                    }
-                  >
-                    Retry
-                  </Button>
-                )}
-
-              </div>
-            </div>
-          )}
-
-          <RevenueServiceSelector
-            services={
-              revenueServices
-            }
-            selectedServiceIds={
-              selectedServiceIds
-            }
-            onChange={
-              handleServiceSelectionChange
-            }
-            onRemoveService={
-              removeService
-            }
-            onClearServices={
-              handleClearServices
-            }
+          <div
+            className="h-full rounded-full bg-primary transition-all"
+            style={{
+              width: `${progressPercent}%`,
+            }}
           />
 
-          {revenueServicesLoading && (
-            <p className="text-xs text-muted-foreground">
-              Loading revenue services...
-            </p>
-          )}
-
         </div>
 
-        {/* =================================================
-            SERVICE FIELDS
-        ================================================= */}
-
-        {selectedServices.map(
-          (
-            service,
-            index,
-          ) => (
-            <RevenueServiceFields
-              key={service.id}
-              service={service}
-              index={index}
-              values={
-                serviceFieldValues[
-                  service.id
-                ] ?? {}
-              }
-              errors={
-                validationErrors[
-                  service.id
-                ] ?? {}
-              }
-              onChange={
-                setServiceFieldValue
-              }
-              onFileChange={
-                handleFileChange
-              }
-              onRemoveFile={
-                removeFile
-              }
-              onRemove={
-                removeService
-              }
-            />
-          ),
-        )}
-
-        {/* =================================================
-            NOTES
-        ================================================= */}
-
-        <div className="rounded-xl border bg-card shadow-sm">
-
-          <div className="flex items-center gap-3 border-b p-5 sm:p-6">
-
-            <div className="rounded-lg bg-primary/10 p-2">
-              <FileText className="h-4 w-4 text-primary" />
-            </div>
-
-            <div>
-              <h2 className="text-base font-semibold">
-                Assessment Notes
-              </h2>
-
-              <p className="text-sm text-muted-foreground">
-                Add supporting information
-                for the reviewing officer.
-              </p>
-            </div>
-
-          </div>
-
-          <div className="p-5 sm:p-6">
-
-            <Textarea
-              placeholder="Add site visit notes, measurements, references, or other supporting information..."
-              value={notes}
-              onChange={(event) =>
-                setNotes(
-                  event.target.value,
-                )
-              }
-              className="min-h-[120px] resize-none"
-            />
-
-          </div>
-        </div>
       </div>
 
       {/* =================================================
-          SUMMARY
+          STEP CONTENT
       ================================================= */}
 
-      <div className="lg:col-span-1">
+      <div className="rounded-xl border bg-card shadow-sm">
 
-        <div className="sticky top-6 rounded-xl border bg-card shadow-sm">
+          <div className="border-b p-5 sm:p-6">
 
-          {/* HEADER */}
+            <h2 className="text-base font-semibold">
+              {
+                activeStepConfig.title
+              }
+            </h2>
 
-          <div className="flex items-center justify-between p-5">
-
-            <div>
-              <h3 className="text-sm font-semibold">
-                {pageTitle}
-              </h3>
-
-              <p className="mt-1 text-xs text-muted-foreground">
-                {pageDescription}
-              </p>
-            </div>
-
-            <Badge variant="secondary">
-              {isEdit
-                ? "Edit"
-                : "Draft"}
-            </Badge>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {
+                activeStepConfig.description
+              }
+            </p>
 
           </div>
 
-          <Separator />
+          <div className="space-y-6 p-5 sm:p-6">
 
-          <div className="space-y-5 p-5">
+            {/* ============================================
+                STEP 1 — TAXPAYER
+            ============================================ */}
 
-            {/* =================================================
-                TAXPAYER
-            ================================================= */}
+            {activeStepConfig.key ===
+              "taxpayer" && (
+              <TaxpayerSelector
+                value={
+                  taxpayerId
+                }
+                onChange={
+                  handleTaxpayerChange
+                }
+                taxpayers={
+                  taxpayers
+                }
+              />
+            )}
 
-            <div>
+            {/* ============================================
+                STEP 2 — REVENUE SERVICES
+            ============================================ */}
 
-              <p className="text-xs text-muted-foreground">
-                Taxpayer
-              </p>
+            {activeStepConfig.key ===
+              "services" && (
+              <div className="space-y-3">
 
-              {taxpayerLoading ? (
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Loading taxpayers...
-                </p>
-              ) : taxpayerError ? (
-                <p className="mt-1 text-sm text-destructive">
-                  Failed to load taxpayers.
-                </p>
-              ) : (
-                <>
-                  <p className="mt-1 truncate text-sm font-semibold">
-                    {selectedTaxpayer?.full_name ??
-                      "Not selected"}
-                  </p>
+                {revenueServicesError && (
+                  <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3">
+                    <div className="flex items-center justify-between gap-3">
 
-                  {selectedTaxpayer && (
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      National ID{" "}
-                      {
-                        selectedTaxpayer.national_id
-                      }
-                    </p>
-                  )}
-                </>
-              )}
+                      <p className="text-xs text-destructive">
+                        Failed to load
+                        revenue services.
+                      </p>
 
-            </div>
+                      {onRetryRevenueServices && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={
+                            onRetryRevenueServices
+                          }
+                        >
+                          Retry
+                        </Button>
+                      )}
 
-            {/* =================================================
-                SERVICES
-            ================================================= */}
+                    </div>
+                  </div>
+                )}
 
-            <div>
-
-              <div className="mb-2 flex items-center justify-between">
-
-                <p className="text-xs text-muted-foreground">
-                  Revenue services
-                </p>
-
-                <span className="text-xs font-medium">
-                  {
-                    selectedServices.length
+                <RevenueServiceSelector
+                  services={
+                    revenueServices
                   }
-                </span>
+                  selectedServiceIds={
+                    selectedServiceIds
+                  }
+                  onChange={
+                    handleServiceSelectionChange
+                  }
+                  onRemoveService={
+                    removeService
+                  }
+                  onClearServices={
+                    handleClearServices
+                  }
+                />
+
+                {revenueServicesLoading && (
+                  <p className="text-xs text-muted-foreground">
+                    Loading revenue
+                    services...
+                  </p>
+                )}
 
               </div>
+            )}
 
-              {selectedServices.length ===
-              0 ? (
-                <p className="text-sm font-medium">
-                  None selected
-                </p>
-              ) : (
-                <div className="space-y-2">
+            {/* ============================================
+                STEP 3 — SERVICE DETAILS
+            ============================================ */}
 
-                  {selectedServices.map(
+            {activeStepConfig.key ===
+              "details" && (
+              <div className="space-y-6">
+
+                {selectedServices.length ===
+                0 ? (
+                  <div className="rounded-lg border border-dashed p-6 text-center">
+
+                    <p className="text-sm text-muted-foreground">
+                      No revenue services
+                      selected yet.
+                    </p>
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="mt-3"
+                      onClick={() =>
+                        goToStep(1)
+                      }
+                    >
+                      Go select services
+                    </Button>
+
+                  </div>
+                ) : (
+                  selectedServices.map(
                     (
                       service,
+                      index,
                     ) => (
-                      <div
+                      <RevenueServiceFields
                         key={
                           service.id
                         }
-                        className="rounded-lg border p-3"
-                      >
-
-                        <p className="truncate text-sm font-medium">
-                          {
-                            service.name
-                          }
-                        </p>
-
-                        <p className="mt-0.5 text-xs text-muted-foreground">
-                          {
-                            service.code
-                          }
-                          {" · "}
-                          {
-                            service.category
-                          }
-                        </p>
-
-                        {service.collectionMode && (
-                          <p className="mt-1 text-[11px] text-muted-foreground">
-                            Collection:{" "}
-                            {
-                              service.collectionMode
-                            }
-                          </p>
-                        )}
-
-                      </div>
+                        service={
+                          service
+                        }
+                        index={
+                          index
+                        }
+                        values={
+                          serviceFieldValues[
+                            service.id
+                          ] ?? {}
+                        }
+                        errors={
+                          validationErrors[
+                            service.id
+                          ] ?? {}
+                        }
+                        onChange={
+                          setServiceFieldValue
+                        }
+                        onFileChange={
+                          handleFileChange
+                        }
+                        onRemoveFile={
+                          removeFile
+                        }
+                        onRemove={
+                          removeService
+                        }
+                      />
                     ),
-                  )}
+                  )
+                )}
 
-                </div>
-              )}
+              </div>
+            )}
 
-            </div>
+            {/* ============================================
+                STEP 4 — NOTES
+            ============================================ */}
 
-            {/* =================================================
-                REQUIRED FIELDS
-            ================================================= */}
+            {activeStepConfig.key ===
+              "notes" && (
+              <div className="flex items-start gap-3">
 
-            {selectedServices.length >
-              0 && (
-              <div>
-
-                <div className="mb-2 flex items-center justify-between">
-
-                  <p className="text-xs text-muted-foreground">
-                    Required information
-                  </p>
-
-                  <span className="text-xs font-medium">
-                    {
-                      completedRequiredFields
-                    }
-                    /
-                    {
-                      totalRequiredFields
-                    }
-                  </span>
-
+                <div className="rounded-lg bg-primary/10 p-2">
+                  <FileText className="h-4 w-4 text-primary" />
                 </div>
 
-                <div className="h-2 overflow-hidden rounded-full bg-muted">
+                <div className="flex-1">
 
-                  <div
-                    className="h-full rounded-full bg-primary transition-all"
-                    style={{
-                      width: `${
-                        totalRequiredFields ===
-                        0
-                          ? 100
-                          : Math.min(
-                              100,
-                              (completedRequiredFields /
-                                totalRequiredFields) *
-                                100,
-                            )
-                      }%`,
-                    }}
+                  <Textarea
+                    placeholder="Add site visit notes, measurements, references, or other supporting information..."
+                    value={notes}
+                    onChange={(
+                      event,
+                    ) =>
+                      setNotes(
+                        event
+                          .target
+                          .value,
+                      )
+                    }
+                    className="min-h-[160px] resize-none"
                   />
 
                 </div>
@@ -1865,230 +1809,379 @@ export function AssessmentForm({
               </div>
             )}
 
-            <Separator />
+            {/* ============================================
+                STEP 5 — REVIEW & SUBMIT
+            ============================================ */}
 
-            {/* =================================================
-                PRICING NOTICE
-            ================================================= */}
+            {activeStepConfig.key ===
+              "review" && (
+              <div className="space-y-5">
 
-            <div className="rounded-lg border border-dashed p-3 text-xs text-muted-foreground">
-              No amount is calculated on this page.
-              The Decision Provider is responsible
-              for tariff resolution and assessment
-              calculation.
-            </div>
+                {/* TAXPAYER SUMMARY */}
 
-            {/* =================================================
-                VALIDATION
-            ================================================= */}
+                <div className="rounded-lg border p-4">
 
-            {!canSubmit && (
-              <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3">
+                  <div className="flex items-center justify-between">
 
-                <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
-                  Complete the required
-                  information before
-                  submitting.
-                </p>
+                    <p className="text-xs font-medium text-muted-foreground">
+                      Taxpayer
+                    </p>
 
-                {selectedServices.length ===
-                  0 && (
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    • Select at least one
-                    revenue service.
-                  </p>
-                )}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        goToStep(0)
+                      }
+                      className="text-xs font-medium text-primary hover:underline"
+                    >
+                      Edit
+                    </button>
 
-                {!selectedTaxpayer && (
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    • Select a taxpayer.
-                  </p>
-                )}
+                  </div>
 
-                {taxpayerError && (
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    • Taxpayer data could
-                    not be loaded.
-                  </p>
-                )}
-
-                {revenueServicesError && (
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    • Revenue service data
-                    could not be loaded.
-                  </p>
-                )}
-
-                {Object.entries(
-                  validationErrors,
-                )
-                  .flatMap(
-                    ([
-                      serviceId,
-                      errors,
-                    ]) =>
-                      Object.values(
-                        errors,
-                      ).map(
-                        (
-                          error,
-                        ) => ({
-                          serviceId,
-                          error,
-                        }),
-                      ),
-                  )
-                  .slice(0, 3)
-                  .map(
-                    (
-                      item,
-                      index,
-                    ) => (
-                      <p
-                        key={`${item.serviceId}-${index}`}
-                        className="mt-1 text-xs text-muted-foreground"
-                      >
-                        •{" "}
-                        {
-                          item.error
-                        }
+                  {taxpayerError ? (
+                    <p className="mt-1 text-sm text-destructive">
+                      Failed to load
+                      taxpayers.
+                    </p>
+                  ) : (
+                    <>
+                      <p className="mt-1 text-sm font-semibold">
+                        {selectedTaxpayer?.full_name ??
+                          "Not selected"}
                       </p>
-                    ),
+
+                      {selectedTaxpayer && (
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          National ID{" "}
+                          {
+                            selectedTaxpayer.national_id
+                          }
+                        </p>
+                      )}
+                    </>
                   )}
 
+                </div>
+
+                {/* SERVICES SUMMARY */}
+
+                <div className="rounded-lg border p-4">
+
+                  <div className="flex items-center justify-between">
+
+                    <p className="text-xs font-medium text-muted-foreground">
+                      Revenue services (
+                      {
+                        selectedServices.length
+                      }
+                      )
+                    </p>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        goToStep(1)
+                      }
+                      className="text-xs font-medium text-primary hover:underline"
+                    >
+                      Edit
+                    </button>
+
+                  </div>
+
+                  {selectedServices.length ===
+                  0 ? (
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      None selected
+                    </p>
+                  ) : (
+                    <div className="mt-2 space-y-2">
+
+                      {selectedServices.map(
+                        (
+                          service,
+                        ) => (
+                          <div
+                            key={
+                              service.id
+                            }
+                            className="rounded-md bg-muted/50 p-2.5"
+                          >
+
+                            <p className="truncate text-sm font-medium">
+                              {
+                                service.name
+                              }
+                            </p>
+
+                            <p className="mt-0.5 text-xs text-muted-foreground">
+                              {
+                                service.code
+                              }
+                              {" · "}
+                              {
+                                service.category
+                              }
+                            </p>
+
+                          </div>
+                        ),
+                      )}
+
+                    </div>
+                  )}
+
+                </div>
+
+                {/* DETAILS / VALIDATION SUMMARY */}
+
+                {Object.keys(
+                  validationErrors,
+                ).length > 0 && (
+                  <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-4">
+
+                    <div className="flex items-center justify-between">
+
+                      <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
+                        Missing required
+                        information
+                      </p>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          goToStep(2)
+                        }
+                        className="text-xs font-medium text-primary hover:underline"
+                      >
+                        Fix
+                      </button>
+
+                    </div>
+
+                    <div className="mt-1.5 space-y-1">
+
+                      {Object.values(
+                        validationErrors,
+                      )
+                        .flatMap(
+                          (
+                            errors,
+                          ) =>
+                            Object.values(
+                              errors,
+                            ),
+                        )
+                        .slice(
+                          0,
+                          5,
+                        )
+                        .map(
+                          (
+                            error,
+                            index,
+                          ) => (
+                            <p
+                              key={
+                                index
+                              }
+                              className="text-xs text-muted-foreground"
+                            >
+                              •{" "}
+                              {
+                                error
+                              }
+                            </p>
+                          ),
+                        )}
+
+                    </div>
+
+                  </div>
+                )}
+
+                {/* NOTES SUMMARY */}
+
+                <div className="rounded-lg border p-4">
+
+                  <div className="flex items-center justify-between">
+
+                    <p className="text-xs font-medium text-muted-foreground">
+                      Notes
+                    </p>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        goToStep(3)
+                      }
+                      className="text-xs font-medium text-primary hover:underline"
+                    >
+                      Edit
+                    </button>
+
+                  </div>
+
+                  <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">
+                    {notes.trim() ||
+                      "No notes added."}
+                  </p>
+
+                </div>
+
+                {/* PRICING NOTICE */}
+
+                <div className="rounded-lg border border-dashed p-3 text-xs text-muted-foreground">
+                  No amount is calculated
+                  on this page. The Decision
+                  Provider is responsible for
+                  tariff resolution and
+                  assessment calculation.
+                </div>
+
+                {/* SUBMISSION FEEDBACK */}
+
+                {submissionError && (
+                  <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3">
+                    <p className="text-xs font-medium text-destructive">
+                      {
+                        submissionError
+                      }
+                    </p>
+                  </div>
+                )}
+
+                {submissionResult && (
+                  <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3">
+
+                    <p className="text-xs font-medium text-emerald-700 dark:text-emerald-400">
+                      {
+                        submissionResult.message
+                      }
+                    </p>
+
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Reference:{" "}
+                      {
+                        submissionResult.assessmentNumber
+                      }
+                    </p>
+
+                  </div>
+                )}
+
+                {/* ACTIONS */}
+
+                <div className="space-y-2 pt-1">
+
+                  <Button
+                    type="button"
+                    className="w-full"
+                    disabled={
+                      !canSubmit ||
+                      isSaving !==
+                        null ||
+                      revenueServicesLoading ||
+                      taxpayerLoading
+                    }
+                    onClick={
+                      handleSubmit
+                    }
+                  >
+                    <Send className="mr-2 h-4 w-4" />
+
+                    {isSaving ===
+                    "submit"
+                      ? isEdit
+                        ? "Updating..."
+                        : "Submitting..."
+                      : submitLabel}
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    disabled={
+                      !selectedTaxpayer ||
+                      selectedServices.length ===
+                        0 ||
+                      isSaving !==
+                        null ||
+                      taxpayerError ||
+                      revenueServicesError
+                    }
+                    onClick={
+                      handleSaveDraft
+                    }
+                  >
+                    <Save className="mr-2 h-4 w-4" />
+
+                    {isSaving ===
+                    "draft"
+                      ? "Saving..."
+                      : draftLabel}
+                  </Button>
+
+                </div>
+
               </div>
             )}
-
-            {/* =================================================
-                ERROR
-            ================================================= */}
-
-            {submissionError && (
-              <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3">
-
-                <p className="text-xs font-medium text-destructive">
-                  {
-                    submissionError
-                  }
-                </p>
-
-              </div>
-            )}
-
-            {/* =================================================
-                SUCCESS
-            ================================================= */}
-
-            {submissionResult && (
-              <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3">
-
-                <p className="text-xs font-medium text-emerald-700 dark:text-emerald-400">
-                  {
-                    submissionResult.message
-                  }
-                </p>
-
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Reference:{" "}
-                  {
-                    submissionResult.assessmentNumber
-                  }
-                </p>
-
-              </div>
-            )}
-
-            {/* =================================================
-                ACTIONS
-            ================================================= */}
-
-            <div className="space-y-2">
-
-              <Button
-                type="button"
-                className="w-full"
-                disabled={
-                  !canSubmit ||
-                  isSaving !==
-                    null ||
-                  revenueServicesLoading ||
-                  taxpayerLoading
-                }
-                onClick={
-                  handleSubmit
-                }
-              >
-                <Send className="mr-2 h-4 w-4" />
-
-                {isSaving ===
-                "submit"
-                  ? isEdit
-                    ? "Updating..."
-                    : "Submitting..."
-                  : submitLabel}
-              </Button>
-
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full"
-                disabled={
-                  !selectedTaxpayer ||
-                  selectedServices.length ===
-                    0 ||
-                  isSaving !==
-                    null ||
-                  taxpayerError ||
-                  revenueServicesError
-                }
-                onClick={
-                  handleSaveDraft
-                }
-              >
-                <Save className="mr-2 h-4 w-4" />
-
-                {isSaving ===
-                "draft"
-                  ? isEdit
-                    ? "Saving..."
-                    : "Saving..."
-                  : draftLabel}
-              </Button>
-
-              {onBack && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="w-full"
-                  disabled={
-                    isSaving !==
-                    null
-                  }
-                  onClick={
-                    onBack
-                  }
-                >
-                  Cancel
-                </Button>
-              )}
-
-            </div>
-
-            {/* =================================================
-                FOOTER NOTICE
-            ================================================= */}
-
-            <p className="text-center text-[11px] leading-relaxed text-muted-foreground">
-              Raw assessment data is submitted
-              to the backend. The Decision
-              Provider resolves the applicable
-              tariff and produces the
-              authoritative assessment result.
-            </p>
 
           </div>
+
+          {/* =================================================
+              STEP NAVIGATION
+          ================================================= */}
+
+          <div className="flex items-center justify-between border-t p-5 sm:p-6">
+
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={
+                currentStep ===
+                  0 ||
+                isSaving !==
+                  null
+              }
+              onClick={
+                currentStep === 0
+                  ? onBack
+                  : goBack
+              }
+            >
+              <ChevronLeft className="mr-1 h-4 w-4" />
+              {currentStep ===
+              0
+                ? "Cancel"
+                : "Back"}
+            </Button>
+
+            {!isLastStep && (
+              <Button
+                type="button"
+                disabled={
+                  !isStepComplete(
+                    currentStep,
+                  ) ||
+                  isSaving !==
+                    null
+                }
+                onClick={
+                  goNext
+                }
+              >
+                Next
+                <ChevronRight className="ml-1 h-4 w-4" />
+              </Button>
+            )}
+
+          </div>
+
         </div>
-      </div>
+
     </div>
   );
 }

@@ -607,6 +607,47 @@ export const APP_PERMISSIONS = {
   },
 
   /*
+|--------------------------------------------------------------------------
+| Penalty Discount Requests
+|--------------------------------------------------------------------------
+*/
+
+PENALTY_DISCOUNT_REQUESTS_VIEW: {
+  resource: "penalty_discount_requests",
+  action: "view",
+},
+
+PENALTY_DISCOUNT_REQUESTS_READ: {
+  resource: "penalty_discount_requests",
+  action: "read",
+},
+
+PENALTY_DISCOUNT_REQUESTS_CREATE: {
+  resource: "penalty_discount_requests",
+  action: "create",
+},
+
+PENALTY_DISCOUNT_REQUESTS_SUBMIT: {
+  resource: "penalty_discount_requests",
+  action: "submit",
+},
+
+PENALTY_DISCOUNT_REQUESTS_DECIDE: {
+  resource: "penalty_discount_requests",
+  action: "decide",
+},
+
+PENALTY_DISCOUNT_REQUESTS_CANCEL: {
+  resource: "penalty_discount_requests",
+  action: "cancel",
+},
+
+PENALTY_DISCOUNT_REQUESTS_VIEW_HISTORY: {
+  resource: "penalty_discount_requests",
+  action: "view_history",
+},
+
+  /*
   |--------------------------------------------------------------------------
   | Payment
   |--------------------------------------------------------------------------

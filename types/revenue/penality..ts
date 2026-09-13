@@ -1,5 +1,5 @@
 export type StartType =
-  | "FIXED_FISCAL_MONTH"
+  | "FIXED_PAYMENT_DATE"
   | "AGREEMENT_DATE";
 
 export type CalculationBasis =
@@ -147,7 +147,7 @@ export const EMPTY_PENALTY_FORM: PenaltyFormValues = {
 
   maximum_rate: "25",
 
-  start_type: "FIXED_FISCAL_MONTH",
+  start_type: "FIXED_PAYMENT_DATE",
 
 
   increment_period: "MONTH",

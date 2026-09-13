@@ -149,12 +149,6 @@ export const NAV_ITEMS: NavItem[] = [
         url: "/office/dashboard/access-managements",
         permission: APP_PERMISSIONS.ROLES_VIEW,
       },
-
-      // {
-      //   title: "permissions",
-      //   url: "/office/dashboard/access-managements/permissions",
-      //   permission: APP_PERMISSIONS.PERMISSIONS_VIEW,
-      // },
     ],
   },
 
@@ -305,6 +299,30 @@ export const NAV_ITEMS: NavItem[] = [
     icon: ShieldCheck,
     permission: APP_PERMISSIONS.AUDIT_VIEW,
   },
+
+  // =========================================================
+  // ASSESSMENT DECISIONS
+  // =========================================================
+
+  {
+    title: "assessment_decisions",
+    url: "#",
+    icon: CheckCircle2,
+
+    items: [
+      {
+        title: "pending_assessments",
+        url: "/office/dashboard/assessments/pendings",
+        permission: APP_PERMISSIONS.ASSESSMENT_VIEW,
+      },
+
+      {
+        title: "decision_history",
+        url: "/office/dashboard/assessments/history",
+        permission: APP_PERMISSIONS.ASSESSMENT_VIEW_HISTORY,
+      },
+    ]
+  }
 
 
 

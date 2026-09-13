@@ -27,7 +27,7 @@ import { EthiopianDatePicker } from "../input/EthiopianDatePicker";
 ================================================================ */
 
 export type StartType =
-  | "FIXED_FISCAL_MONTH"
+  | "FIXED_PAYMENT_DATE"
   | "AGREEMENT_DATE";
 
 export type CalculationBasis =
@@ -120,7 +120,7 @@ const DEFAULT_INCREMENT_RATE = "2";
 const DEFAULT_MAXIMUM_RATE = "25";
 
 const DEFAULT_START_TYPE: StartType =
-  "FIXED_FISCAL_MONTH";
+  "FIXED_PAYMENT_DATE";
 
 /* ================================================================
    FORM NORMALIZATION
@@ -752,7 +752,7 @@ export function PenaltyForm({
     | There is intentionally NO start_fiscal_month
     | validation here.
     |
-    | When start_type is FIXED_FISCAL_MONTH,
+    | When start_type is FIXED_PAYMENT_DATE,
     | the actual Ethiopian fiscal payment-period
     | start is resolved by the backend from:
     |
@@ -763,7 +763,7 @@ export function PenaltyForm({
 
     if (
       form.start_type !==
-        "FIXED_FISCAL_MONTH" &&
+        "FIXED_PAYMENT_DATE" &&
       form.start_type !==
         "AGREEMENT_DATE"
     ) {
@@ -1069,13 +1069,13 @@ export function PenaltyForm({
             onClick={() =>
               updateField(
                 "start_type",
-                "FIXED_FISCAL_MONTH"
+                "FIXED_PAYMENT_DATE"
               )
             }
             disabled={isSubmitting}
             className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
               form.start_type ===
-              "FIXED_FISCAL_MONTH"
+              "FIXED_PAYMENT_DATE"
                 ? "bg-foreground text-background"
                 : "text-muted-foreground hover:text-foreground"
             }`}
@@ -1108,7 +1108,7 @@ export function PenaltyForm({
         ========================================================== */}
 
         {form.start_type ===
-          "FIXED_FISCAL_MONTH" && (
+          "FIXED_PAYMENT_DATE" && (
           <div className="rounded-lg border bg-muted/30 p-4">
             <p className="text-sm font-medium">
               Global fiscal payment period

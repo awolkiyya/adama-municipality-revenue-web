@@ -43,9 +43,7 @@ type ServiceFieldValues = Record<
   Record<string, FieldValue>
 >;
 
-type AssessmentMode =
-  | "create"
-  | "edit";
+type AssessmentMode = "create" | "edit";
 
 /**
  * Existing assessment data accepted by the form.
@@ -81,11 +79,9 @@ type AssessmentFormProps = {
   revenueServices: RevenueService[];
 
   taxpayerLoading?: boolean;
-
   taxpayerError?: boolean;
 
   revenueServicesLoading?: boolean;
-
   revenueServicesError?: boolean;
 
   onRetryRevenueServices?: () => void;
@@ -109,27 +105,32 @@ const STEPS = [
   {
     key: "taxpayer",
     title: "Taxpayer",
-    description: "Select the taxpayer this assessment is for.",
+    description:
+      "Select the taxpayer this assessment is for.",
   },
   {
     key: "services",
     title: "Revenue Services",
-    description: "Choose the revenue services that apply.",
+    description:
+      "Choose the revenue services that apply.",
   },
   {
     key: "details",
     title: "Service Details",
-    description: "Provide the required information for each service.",
+    description:
+      "Provide the required information for each service.",
   },
   {
     key: "notes",
     title: "Notes",
-    description: "Add any supporting information (optional).",
+    description:
+      "Add any supporting information (optional).",
   },
   {
     key: "review",
     title: "Review & Submit",
-    description: "Confirm everything before submitting.",
+    description:
+      "Confirm everything before submitting.",
   },
 ] as const;
 
@@ -222,9 +223,7 @@ const getInitialServiceFields = (
     service.data,
   ];
 
-  for (
-    const candidate of candidates
-  ) {
+  for (const candidate of candidates) {
     if (isRecord(candidate)) {
       return candidate;
     }
@@ -234,11 +233,13 @@ const getInitialServiceFields = (
 };
 
 /**
- * Normalize initial services into:
+ * Normalize initial service field values.
+ *
+ * Expected shape:
  *
  * {
  *   serviceId: {
- *      fieldKey: value
+ *     fieldKey: value
  *   }
  * }
  */
@@ -260,9 +261,7 @@ const buildInitialServiceFieldValues = (
     for (const [
       serviceId,
       values,
-    ] of Object.entries(
-      directValues,
-    )) {
+    ] of Object.entries(directValues)) {
       if (isRecord(values)) {
         normalized[serviceId] = values;
       }
@@ -271,31 +270,22 @@ const buildInitialServiceFieldValues = (
     return normalized;
   }
 
-  if (
-    !Array.isArray(
-      assessment.services,
-    )
-  ) {
+  if (!Array.isArray(assessment.services)) {
     return {};
   }
 
-  const result: ServiceFieldValues =
-    {};
+  const result: ServiceFieldValues = {};
 
   for (const service of assessment.services) {
     const serviceId =
-      getInitialServiceId(
-        service,
-      );
+      getInitialServiceId(service);
 
     if (!serviceId) {
       continue;
     }
 
     result[serviceId] =
-      getInitialServiceFields(
-        service,
-      );
+      getInitialServiceFields(service);
   }
 
   return result;
@@ -309,17 +299,13 @@ const buildInitialServiceIds = (
 ): string[] => {
   if (
     !assessment ||
-    !Array.isArray(
-      assessment.services,
-    )
+    !Array.isArray(assessment.services)
   ) {
     return [];
   }
 
   return assessment.services
-    .map(
-      getInitialServiceId,
-    )
+    .map(getInitialServiceId)
     .filter(
       (
         id,
@@ -329,15 +315,13 @@ const buildInitialServiceIds = (
 };
 
 /**
- * Determine whether an existing file value represents
- * an already uploaded file.
+ * Determine whether a value represents an
+ * existing uploaded file.
  */
 const isExistingFileValue = (
   value: unknown,
 ): boolean => {
-  if (
-    value instanceof File
-  ) {
+  if (value instanceof File) {
     return true;
   }
 
@@ -374,6 +358,32 @@ const hasExistingFiles = (
   return value.some(
     isExistingFileValue,
   );
+};
+
+const getFieldOptions = (field: RevenueField) => {
+  return [...(field.options ?? [])].sort(
+    (a, b) =>
+      (a.sortOrder ?? 0) -
+      (b.sortOrder ?? 0),
+  );
+};
+
+/**
+ * Validate SELECT value against configured options.
+ */
+const isValidSelectValue = (
+  field: RevenueField,
+  value: unknown,
+): boolean => {
+  if (isEmptyValue(value)) {
+    return false;
+  }
+
+  const validValues = getFieldOptions(field).map(
+    (option) => String(option.value),
+  );
+
+  return validValues.includes(String(value));
 };
 
 // =====================================================
@@ -491,11 +501,6 @@ export function AssessmentForm({
 
   // ===================================================
   // STEP STATE
-  //
-  // `furthestStep` tracks the deepest step the user has
-  // unlocked, so the step indicator can be clicked to
-  // jump backward (or to any already-unlocked step) but
-  // not skip ahead of unfinished steps.
   // ===================================================
 
   const [
@@ -508,9 +513,10 @@ export function AssessmentForm({
     setFurthestStep,
   ] = useState(0);
 
-  // In edit mode, data can already be complete, so unlock
-  // every step immediately once the initial assessment
-  // has loaded.
+  /**
+   * In edit mode, existing assessment data can already
+   * contain completed information.
+   */
   useEffect(() => {
     if (
       mode === "edit" &&
@@ -524,9 +530,6 @@ export function AssessmentForm({
 
   // ===================================================
   // SYNCHRONIZE EDIT DATA
-  //
-  // Important when the assessment is loaded
-  // asynchronously after the component mounts.
   // ===================================================
 
   useEffect(() => {
@@ -786,7 +789,9 @@ export function AssessmentForm({
               field.key
             ];
 
+          // -------------------------------------------
           // FILE
+          // -------------------------------------------
 
           if (
             field.type === "FILE"
@@ -812,7 +817,9 @@ export function AssessmentForm({
             continue;
           }
 
+          // -------------------------------------------
           // MULTI FILE
+          // -------------------------------------------
 
           if (
             field.type ===
@@ -842,7 +849,9 @@ export function AssessmentForm({
             continue;
           }
 
+          // -------------------------------------------
           // CHECKBOX
+          // -------------------------------------------
 
           if (
             field.type ===
@@ -858,7 +867,58 @@ export function AssessmentForm({
             continue;
           }
 
+          // -------------------------------------------
+          // SELECT
+          // -------------------------------------------
+
+          if (
+            field.type === "SELECT"
+          ) {
+            if (
+              isEmptyValue(value)
+            ) {
+              serviceErrors[
+                field.key
+              ] =
+                `${field.label} is required.`;
+
+              continue;
+            }
+
+            const options =
+              getFieldOptions(
+                field,
+              );
+
+            if (
+              options.length === 0
+            ) {
+              serviceErrors[
+                field.key
+              ] =
+                `${field.label} has no active options configured.`;
+
+              continue;
+            }
+
+            if (
+              !isValidSelectValue(
+                field,
+                value,
+              )
+            ) {
+              serviceErrors[
+                field.key
+              ] =
+                `${field.label} has an invalid selection.`;
+            }
+
+            continue;
+          }
+
+          // -------------------------------------------
           // NORMAL VALUE
+          // -------------------------------------------
 
           if (
             isEmptyValue(value)
@@ -871,7 +931,9 @@ export function AssessmentForm({
             continue;
           }
 
+          // -------------------------------------------
           // NUMBER / DECIMAL
+          // -------------------------------------------
 
           if (
             field.type ===
@@ -978,6 +1040,10 @@ export function AssessmentForm({
         service.id,
       )[field.key];
 
+    // -----------------------------------------------
+    // FILE
+    // -----------------------------------------------
+
     if (
       field.type === "FILE"
     ) {
@@ -989,6 +1055,10 @@ export function AssessmentForm({
           ))
       );
     }
+
+    // -----------------------------------------------
+    // MULTI FILE
+    // -----------------------------------------------
 
     if (
       field.type ===
@@ -1004,12 +1074,33 @@ export function AssessmentForm({
       );
     }
 
+    // -----------------------------------------------
+    // CHECKBOX
+    // -----------------------------------------------
+
     if (
       field.type ===
       "CHECKBOX"
     ) {
       return value === true;
     }
+
+    // -----------------------------------------------
+    // SELECT
+    // -----------------------------------------------
+
+    if (
+      field.type === "SELECT"
+    ) {
+      return isValidSelectValue(
+        field,
+        value,
+      );
+    }
+
+    // -----------------------------------------------
+    // NORMAL VALUE
+    // -----------------------------------------------
 
     return !isEmptyValue(value);
   };
@@ -1065,10 +1156,6 @@ export function AssessmentForm({
 
   // ===================================================
   // STEP VALIDITY
-  //
-  // Whether the user is allowed to move past a given
-  // step. Used to gate "Next" and to decide which steps
-  // are clickable in the step indicator.
   // ===================================================
 
   const isStepComplete = (
@@ -1088,11 +1175,14 @@ export function AssessmentForm({
       case "services":
         return (
           selectedServices.length >
-            0 && !revenueServicesError
+            0 &&
+          !revenueServicesError
         );
 
       case "details":
         return (
+          selectedServices.length >
+            0 &&
           Object.keys(
             validationErrors,
           ).length === 0
@@ -1109,6 +1199,10 @@ export function AssessmentForm({
     }
   };
 
+  // ===================================================
+  // STEP NAVIGATION
+  // ===================================================
+
   const goToStep = (
     stepIndex: number,
   ) => {
@@ -1120,7 +1214,6 @@ export function AssessmentForm({
       return;
     }
 
-    // Allow free navigation to any step already unlocked.
     if (
       stepIndex <= furthestStep
     ) {
@@ -1224,10 +1317,11 @@ export function AssessmentForm({
   //
   // RAW DATA ONLY.
   //
-  // The backend remains authoritative for:
+  // Backend remains authoritative for:
   //
   // - tariff resolution
-  // - calculation
+  // - tariff lookup
+  // - assessment calculation
   // - assessment amount
   // ===================================================
 
@@ -1239,6 +1333,10 @@ export function AssessmentForm({
     const formData =
       new FormData();
 
+    // -----------------------------------------------
+    // ASSESSMENT ID
+    // -----------------------------------------------
+
     if (
       mode === "edit" &&
       initialAssessment?.id
@@ -1248,6 +1346,10 @@ export function AssessmentForm({
         initialAssessment.id,
       );
     }
+
+    // -----------------------------------------------
+    // BASIC DATA
+    // -----------------------------------------------
 
     formData.append(
       "mode",
@@ -1268,6 +1370,10 @@ export function AssessmentForm({
       "status",
       status,
     );
+
+    // -----------------------------------------------
+    // SERVICES
+    // -----------------------------------------------
 
     const servicesMeta =
       selectedServices.map(
@@ -1290,11 +1396,13 @@ export function AssessmentForm({
                 field.key
               ];
 
+            // -----------------------------------------
             // SINGLE FILE
+            // -----------------------------------------
 
             if (
               field.type ===
-                "FILE"
+              "FILE"
             ) {
               if (
                 value instanceof File
@@ -1334,11 +1442,13 @@ export function AssessmentForm({
               continue;
             }
 
+            // -----------------------------------------
             // MULTIPLE FILES
+            // -----------------------------------------
 
             if (
               field.type ===
-                "MULTI_FILE"
+              "MULTI_FILE"
             ) {
               if (
                 Array.isArray(
@@ -1406,7 +1516,20 @@ export function AssessmentForm({
               continue;
             }
 
+            // -----------------------------------------
             // NORMAL FIELD
+            //
+            // SELECT values are submitted as the
+            // option value, not the display label.
+            //
+            // Example:
+            //
+            // UI:
+            // Commercial
+            //
+            // submitted:
+            // COMMERCIAL
+            // -----------------------------------------
 
             fieldsMeta[
               field.key
@@ -1549,7 +1672,7 @@ export function AssessmentForm({
     STEPS[currentStep];
 
   // ===================================================
-  // RENDER
+  // PROGRESS
   // ===================================================
 
   const progressPercent = Math.round(
@@ -1557,6 +1680,19 @@ export function AssessmentForm({
       STEPS.length) *
       100,
   );
+
+  const detailsProgressPercent =
+    totalRequiredFields > 0
+      ? Math.round(
+          (completedRequiredFields /
+            totalRequiredFields) *
+            100,
+        )
+      : 100;
+
+  // ===================================================
+  // RENDER
+  // ===================================================
 
   return (
     <div className="mx-auto w-full max-w-7xl space-y-6 p-5">
@@ -1566,9 +1702,7 @@ export function AssessmentForm({
       ================================================= */}
 
       <div>
-
         <div className="mb-2 flex items-center justify-between text-sm">
-
           <span className="font-medium">
             Step {currentStep + 1} of{" "}
             {STEPS.length} ·{" "}
@@ -1578,20 +1712,16 @@ export function AssessmentForm({
           <span className="text-muted-foreground">
             {progressPercent}%
           </span>
-
         </div>
 
         <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-
           <div
             className="h-full rounded-full bg-primary transition-all"
             style={{
               width: `${progressPercent}%`,
             }}
           />
-
         </div>
-
       </div>
 
       {/* =================================================
@@ -1600,30 +1730,59 @@ export function AssessmentForm({
 
       <div className="rounded-xl border bg-card shadow-sm">
 
-          <div className="border-b p-5 sm:p-6">
+        <div className="border-b p-5 sm:p-6">
+          <h2 className="text-base font-semibold">
+            {activeStepConfig.title}
+          </h2>
 
-            <h2 className="text-base font-semibold">
-              {
-                activeStepConfig.title
-              }
-            </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {activeStepConfig.description}
+          </p>
 
-            <p className="mt-1 text-sm text-muted-foreground">
-              {
-                activeStepConfig.description
-              }
-            </p>
+          {/* DETAILS PROGRESS */}
 
-          </div>
+          {activeStepConfig.key ===
+            "details" &&
+            totalRequiredFields >
+              0 && (
+              <div className="mt-4 space-y-1.5">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground">
+                    Required fields
+                  </span>
 
-          <div className="space-y-6 p-5 sm:p-6">
+                  <span className="font-medium">
+                    {
+                      completedRequiredFields
+                    }{" "}
+                    /{" "}
+                    {
+                      totalRequiredFields
+                    }
+                  </span>
+                </div>
 
-            {/* ============================================
-                STEP 1 — TAXPAYER
-            ============================================ */}
+                <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-primary transition-all"
+                    style={{
+                      width: `${detailsProgressPercent}%`,
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+        </div>
 
-            {activeStepConfig.key ===
-              "taxpayer" && (
+        <div className="space-y-6 p-5 sm:p-6">
+
+          {/* ============================================
+              STEP 1 — TAXPAYER
+          ============================================ */}
+
+          {activeStepConfig.key ===
+            "taxpayer" && (
+            <div className="space-y-3">
               <TaxpayerSelector
                 value={
                   taxpayerId
@@ -1635,553 +1794,614 @@ export function AssessmentForm({
                   taxpayers
                 }
               />
-            )}
 
-            {/* ============================================
-                STEP 2 — REVENUE SERVICES
-            ============================================ */}
+              {taxpayerLoading && (
+                <p className="text-xs text-muted-foreground">
+                  Loading taxpayers...
+                </p>
+              )}
 
-            {activeStepConfig.key ===
-              "services" && (
-              <div className="space-y-3">
+              {taxpayerError && (
+                <p className="text-xs text-destructive">
+                  Failed to load
+                  taxpayers.
+                </p>
+              )}
+            </div>
+          )}
 
-                {revenueServicesError && (
-                  <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3">
-                    <div className="flex items-center justify-between gap-3">
+          {/* ============================================
+              STEP 2 — REVENUE SERVICES
+          ============================================ */}
 
-                      <p className="text-xs text-destructive">
-                        Failed to load
-                        revenue services.
-                      </p>
+          {activeStepConfig.key ===
+            "services" && (
+            <div className="space-y-3">
 
-                      {onRetryRevenueServices && (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={
-                            onRetryRevenueServices
-                          }
-                        >
-                          Retry
-                        </Button>
-                      )}
+              {revenueServicesError && (
+                <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3">
+                  <div className="flex items-center justify-between gap-3">
 
-                    </div>
-                  </div>
-                )}
-
-                <RevenueServiceSelector
-                  services={
-                    revenueServices
-                  }
-                  selectedServiceIds={
-                    selectedServiceIds
-                  }
-                  onChange={
-                    handleServiceSelectionChange
-                  }
-                  onRemoveService={
-                    removeService
-                  }
-                  onClearServices={
-                    handleClearServices
-                  }
-                />
-
-                {revenueServicesLoading && (
-                  <p className="text-xs text-muted-foreground">
-                    Loading revenue
-                    services...
-                  </p>
-                )}
-
-              </div>
-            )}
-
-            {/* ============================================
-                STEP 3 — SERVICE DETAILS
-            ============================================ */}
-
-            {activeStepConfig.key ===
-              "details" && (
-              <div className="space-y-6">
-
-                {selectedServices.length ===
-                0 ? (
-                  <div className="rounded-lg border border-dashed p-6 text-center">
-
-                    <p className="text-sm text-muted-foreground">
-                      No revenue services
-                      selected yet.
-                    </p>
-
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="mt-3"
-                      onClick={() =>
-                        goToStep(1)
-                      }
-                    >
-                      Go select services
-                    </Button>
-
-                  </div>
-                ) : (
-                  selectedServices.map(
-                    (
-                      service,
-                      index,
-                    ) => (
-                      <RevenueServiceFields
-                        key={
-                          service.id
-                        }
-                        service={
-                          service
-                        }
-                        index={
-                          index
-                        }
-                        values={
-                          serviceFieldValues[
-                            service.id
-                          ] ?? {}
-                        }
-                        errors={
-                          validationErrors[
-                            service.id
-                          ] ?? {}
-                        }
-                        onChange={
-                          setServiceFieldValue
-                        }
-                        onFileChange={
-                          handleFileChange
-                        }
-                        onRemoveFile={
-                          removeFile
-                        }
-                        onRemove={
-                          removeService
-                        }
-                      />
-                    ),
-                  )
-                )}
-
-              </div>
-            )}
-
-            {/* ============================================
-                STEP 4 — NOTES
-            ============================================ */}
-
-            {activeStepConfig.key ===
-              "notes" && (
-              <div className="flex items-start gap-3">
-
-                <div className="rounded-lg bg-primary/10 p-2">
-                  <FileText className="h-4 w-4 text-primary" />
-                </div>
-
-                <div className="flex-1">
-
-                  <Textarea
-                    placeholder="Add site visit notes, measurements, references, or other supporting information..."
-                    value={notes}
-                    onChange={(
-                      event,
-                    ) =>
-                      setNotes(
-                        event
-                          .target
-                          .value,
-                      )
-                    }
-                    className="min-h-[160px] resize-none"
-                  />
-
-                </div>
-
-              </div>
-            )}
-
-            {/* ============================================
-                STEP 5 — REVIEW & SUBMIT
-            ============================================ */}
-
-            {activeStepConfig.key ===
-              "review" && (
-              <div className="space-y-5">
-
-                {/* TAXPAYER SUMMARY */}
-
-                <div className="rounded-lg border p-4">
-
-                  <div className="flex items-center justify-between">
-
-                    <p className="text-xs font-medium text-muted-foreground">
-                      Taxpayer
-                    </p>
-
-                    <button
-                      type="button"
-                      onClick={() =>
-                        goToStep(0)
-                      }
-                      className="text-xs font-medium text-primary hover:underline"
-                    >
-                      Edit
-                    </button>
-
-                  </div>
-
-                  {taxpayerError ? (
-                    <p className="mt-1 text-sm text-destructive">
+                    <p className="text-xs text-destructive">
                       Failed to load
-                      taxpayers.
-                    </p>
-                  ) : (
-                    <>
-                      <p className="mt-1 text-sm font-semibold">
-                        {selectedTaxpayer?.full_name ??
-                          "Not selected"}
-                      </p>
-
-                      {selectedTaxpayer && (
-                        <p className="mt-0.5 text-xs text-muted-foreground">
-                          National ID{" "}
-                          {
-                            selectedTaxpayer.national_id
-                          }
-                        </p>
-                      )}
-                    </>
-                  )}
-
-                </div>
-
-                {/* SERVICES SUMMARY */}
-
-                <div className="rounded-lg border p-4">
-
-                  <div className="flex items-center justify-between">
-
-                    <p className="text-xs font-medium text-muted-foreground">
-                      Revenue services (
-                      {
-                        selectedServices.length
-                      }
-                      )
+                      revenue services.
                     </p>
 
-                    <button
-                      type="button"
-                      onClick={() =>
-                        goToStep(1)
-                      }
-                      className="text-xs font-medium text-primary hover:underline"
-                    >
-                      Edit
-                    </button>
-
-                  </div>
-
-                  {selectedServices.length ===
-                  0 ? (
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      None selected
-                    </p>
-                  ) : (
-                    <div className="mt-2 space-y-2">
-
-                      {selectedServices.map(
-                        (
-                          service,
-                        ) => (
-                          <div
-                            key={
-                              service.id
-                            }
-                            className="rounded-md bg-muted/50 p-2.5"
-                          >
-
-                            <p className="truncate text-sm font-medium">
-                              {
-                                service.name
-                              }
-                            </p>
-
-                            <p className="mt-0.5 text-xs text-muted-foreground">
-                              {
-                                service.code
-                              }
-                              {" · "}
-                              {
-                                service.category
-                              }
-                            </p>
-
-                          </div>
-                        ),
-                      )}
-
-                    </div>
-                  )}
-
-                </div>
-
-                {/* DETAILS / VALIDATION SUMMARY */}
-
-                {Object.keys(
-                  validationErrors,
-                ).length > 0 && (
-                  <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-4">
-
-                    <div className="flex items-center justify-between">
-
-                      <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
-                        Missing required
-                        information
-                      </p>
-
-                      <button
+                    {onRetryRevenueServices && (
+                      <Button
                         type="button"
-                        onClick={() =>
-                          goToStep(2)
+                        variant="outline"
+                        size="sm"
+                        onClick={
+                          onRetryRevenueServices
                         }
-                        className="text-xs font-medium text-primary hover:underline"
                       >
-                        Fix
-                      </button>
-
-                    </div>
-
-                    <div className="mt-1.5 space-y-1">
-
-                      {Object.values(
-                        validationErrors,
-                      )
-                        .flatMap(
-                          (
-                            errors,
-                          ) =>
-                            Object.values(
-                              errors,
-                            ),
-                        )
-                        .slice(
-                          0,
-                          5,
-                        )
-                        .map(
-                          (
-                            error,
-                            index,
-                          ) => (
-                            <p
-                              key={
-                                index
-                              }
-                              className="text-xs text-muted-foreground"
-                            >
-                              •{" "}
-                              {
-                                error
-                              }
-                            </p>
-                          ),
-                        )}
-
-                    </div>
+                        Retry
+                      </Button>
+                    )}
 
                   </div>
-                )}
+                </div>
+              )}
 
-                {/* NOTES SUMMARY */}
+              <RevenueServiceSelector
+                services={
+                  revenueServices
+                }
+                selectedServiceIds={
+                  selectedServiceIds
+                }
+                onChange={
+                  handleServiceSelectionChange
+                }
+                onRemoveService={
+                  removeService
+                }
+                onClearServices={
+                  handleClearServices
+                }
+              />
 
-                <div className="rounded-lg border p-4">
+              {revenueServicesLoading && (
+                <p className="text-xs text-muted-foreground">
+                  Loading revenue
+                  services...
+                </p>
+              )}
 
-                  <div className="flex items-center justify-between">
+            </div>
+          )}
 
-                    <p className="text-xs font-medium text-muted-foreground">
-                      Notes
-                    </p>
+          {/* ============================================
+              STEP 3 — SERVICE DETAILS
+          ============================================ */}
 
-                    <button
-                      type="button"
-                      onClick={() =>
-                        goToStep(3)
-                      }
-                      className="text-xs font-medium text-primary hover:underline"
-                    >
-                      Edit
-                    </button>
+          {activeStepConfig.key ===
+            "details" && (
+            <div className="space-y-6">
 
-                  </div>
+              {selectedServices.length ===
+              0 ? (
+                <div className="rounded-lg border border-dashed p-6 text-center">
 
-                  <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">
-                    {notes.trim() ||
-                      "No notes added."}
+                  <p className="text-sm text-muted-foreground">
+                    No revenue services
+                    selected yet.
                   </p>
-
-                </div>
-
-                {/* PRICING NOTICE */}
-
-                <div className="rounded-lg border border-dashed p-3 text-xs text-muted-foreground">
-                  No amount is calculated
-                  on this page. The Decision
-                  Provider is responsible for
-                  tariff resolution and
-                  assessment calculation.
-                </div>
-
-                {/* SUBMISSION FEEDBACK */}
-
-                {submissionError && (
-                  <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3">
-                    <p className="text-xs font-medium text-destructive">
-                      {
-                        submissionError
-                      }
-                    </p>
-                  </div>
-                )}
-
-                {submissionResult && (
-                  <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3">
-
-                    <p className="text-xs font-medium text-emerald-700 dark:text-emerald-400">
-                      {
-                        submissionResult.message
-                      }
-                    </p>
-
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Reference:{" "}
-                      {
-                        submissionResult.assessmentNumber
-                      }
-                    </p>
-
-                  </div>
-                )}
-
-                {/* ACTIONS */}
-
-                <div className="space-y-2 pt-1">
-
-                  <Button
-                    type="button"
-                    className="w-full"
-                    disabled={
-                      !canSubmit ||
-                      isSaving !==
-                        null ||
-                      revenueServicesLoading ||
-                      taxpayerLoading
-                    }
-                    onClick={
-                      handleSubmit
-                    }
-                  >
-                    <Send className="mr-2 h-4 w-4" />
-
-                    {isSaving ===
-                    "submit"
-                      ? isEdit
-                        ? "Updating..."
-                        : "Submitting..."
-                      : submitLabel}
-                  </Button>
 
                   <Button
                     type="button"
                     variant="outline"
-                    className="w-full"
-                    disabled={
-                      !selectedTaxpayer ||
-                      selectedServices.length ===
-                        0 ||
-                      isSaving !==
-                        null ||
-                      taxpayerError ||
-                      revenueServicesError
-                    }
-                    onClick={
-                      handleSaveDraft
+                    size="sm"
+                    className="mt-3"
+                    onClick={() =>
+                      goToStep(1)
                     }
                   >
-                    <Save className="mr-2 h-4 w-4" />
-
-                    {isSaving ===
-                    "draft"
-                      ? "Saving..."
-                      : draftLabel}
+                    Go select services
                   </Button>
 
                 </div>
+              ) : (
+                selectedServices.map(
+                  (
+                    service,
+                    index,
+                  ) => (
+                    <RevenueServiceFields
+                      key={
+                        service.id
+                      }
+                      service={
+                        service
+                      }
+                      index={
+                        index
+                      }
+                      values={
+                        serviceFieldValues[
+                          service.id
+                        ] ?? {}
+                      }
+                      errors={
+                        validationErrors[
+                          service.id
+                        ] ?? {}
+                      }
+                      onChange={
+                        setServiceFieldValue
+                      }
+                      onFileChange={
+                        handleFileChange
+                      }
+                      onRemoveFile={
+                        removeFile
+                      }
+                      onRemove={
+                        removeService
+                      }
+                    />
+                  ),
+                )
+              )}
+
+            </div>
+          )}
+
+          {/* ============================================
+              STEP 4 — NOTES
+          ============================================ */}
+
+          {activeStepConfig.key ===
+            "notes" && (
+            <div className="flex items-start gap-3">
+
+              <div className="rounded-lg bg-primary/10 p-2">
+                <FileText className="h-4 w-4 text-primary" />
+              </div>
+
+              <div className="flex-1">
+                <Textarea
+                  placeholder="Add site visit notes, measurements, references, or other supporting information..."
+                  value={notes}
+                  onChange={(
+                    event,
+                  ) =>
+                    setNotes(
+                      event.target.value,
+                    )
+                  }
+                  className="min-h-[160px] resize-none"
+                />
+              </div>
+
+            </div>
+          )}
+
+          {/* ============================================
+              STEP 5 — REVIEW & SUBMIT
+          ============================================ */}
+
+          {activeStepConfig.key ===
+            "review" && (
+            <div className="space-y-5">
+
+              {/* TAXPAYER SUMMARY */}
+
+              <div className="rounded-lg border p-4">
+
+                <div className="flex items-center justify-between">
+
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Taxpayer
+                  </p>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      goToStep(0)
+                    }
+                    className="text-xs font-medium text-primary hover:underline"
+                  >
+                    Edit
+                  </button>
+
+                </div>
+
+                {taxpayerError ? (
+                  <p className="mt-1 text-sm text-destructive">
+                    Failed to load
+                    taxpayers.
+                  </p>
+                ) : (
+                  <>
+                    <p className="mt-1 text-sm font-semibold">
+                      {selectedTaxpayer?.full_name ??
+                        "Not selected"}
+                    </p>
+
+                    {selectedTaxpayer && (
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        National ID{" "}
+                        {
+                          selectedTaxpayer.national_id
+                        }
+                      </p>
+                    )}
+                  </>
+                )}
 
               </div>
-            )}
 
-          </div>
+              {/* SERVICES SUMMARY */}
 
-          {/* =================================================
-              STEP NAVIGATION
-          ================================================= */}
+              <div className="rounded-lg border p-4">
 
-          <div className="flex items-center justify-between border-t p-5 sm:p-6">
+                <div className="flex items-center justify-between">
 
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Revenue services (
+                    {
+                      selectedServices.length
+                    }
+                    )
+                  </p>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      goToStep(1)
+                    }
+                    className="text-xs font-medium text-primary hover:underline"
+                  >
+                    Edit
+                  </button>
+
+                </div>
+
+                {selectedServices.length ===
+                0 ? (
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    None selected
+                  </p>
+                ) : (
+                  <div className="mt-2 space-y-2">
+
+                    {selectedServices.map(
+                      (
+                        service,
+                      ) => (
+                        <div
+                          key={
+                            service.id
+                          }
+                          className="rounded-md bg-muted/50 p-2.5"
+                        >
+
+                          <p className="truncate text-sm font-medium">
+                            {
+                              service.name
+                            }
+                          </p>
+
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            {
+                              service.code
+                            }
+                            {" · "}
+                            {
+                              service.category
+                            }
+                          </p>
+
+                        </div>
+                      ),
+                    )}
+
+                  </div>
+                )}
+
+              </div>
+
+              {/* DETAILS SUMMARY */}
+
+              <div className="rounded-lg border p-4">
+
+                <div className="flex items-center justify-between">
+
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Service details
+                  </p>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      goToStep(2)
+                    }
+                    className="text-xs font-medium text-primary hover:underline"
+                  >
+                    Edit
+                  </button>
+
+                </div>
+
+                <div className="mt-2 flex items-center justify-between">
+
+                  <p className="text-sm text-muted-foreground">
+                    Required fields
+                  </p>
+
+                  <p className="text-sm font-medium">
+                    {
+                      completedRequiredFields
+                    }{" "}
+                    /{" "}
+                    {
+                      totalRequiredFields
+                    }
+                  </p>
+
+                </div>
+
+                {totalRequiredFields >
+                  0 &&
+                  completedRequiredFields <
+                    totalRequiredFields && (
+                    <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
+                      Some required
+                      information is
+                      still missing.
+                    </p>
+                  )}
+
+              </div>
+
+              {/* VALIDATION SUMMARY */}
+
+              {Object.keys(
+                validationErrors,
+              ).length > 0 && (
+                <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-4">
+
+                  <div className="flex items-center justify-between">
+
+                    <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
+                      Missing or invalid
+                      information
+                    </p>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        goToStep(2)
+                      }
+                      className="text-xs font-medium text-primary hover:underline"
+                    >
+                      Fix
+                    </button>
+
+                  </div>
+
+                  <div className="mt-1.5 space-y-1">
+
+                    {Object.values(
+                      validationErrors,
+                    )
+                      .flatMap(
+                        (
+                          errors,
+                        ) =>
+                          Object.values(
+                            errors,
+                          ),
+                      )
+                      .slice(0, 5)
+                      .map(
+                        (
+                          error,
+                          index,
+                        ) => (
+                          <p
+                            key={
+                              index
+                            }
+                            className="text-xs text-muted-foreground"
+                          >
+                            •{" "}
+                            {
+                              error
+                            }
+                          </p>
+                        ),
+                      )}
+
+                  </div>
+
+                </div>
+              )}
+
+              {/* NOTES SUMMARY */}
+
+              <div className="rounded-lg border p-4">
+
+                <div className="flex items-center justify-between">
+
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Notes
+                  </p>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      goToStep(3)
+                    }
+                    className="text-xs font-medium text-primary hover:underline"
+                  >
+                    Edit
+                  </button>
+
+                </div>
+
+                <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">
+                  {notes.trim() ||
+                    "No notes added."}
+                </p>
+
+              </div>
+
+              {/* PRICING NOTICE */}
+
+              <div className="rounded-lg border border-dashed p-3 text-xs text-muted-foreground">
+                No amount is calculated
+                on this page. The Decision
+                Provider is responsible for
+                tariff resolution and
+                assessment calculation.
+              </div>
+
+              {/* SUBMISSION FEEDBACK */}
+
+              {submissionError && (
+                <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3">
+                  <p className="text-xs font-medium text-destructive">
+                    {
+                      submissionError
+                    }
+                  </p>
+                </div>
+              )}
+
+              {submissionResult && (
+                <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3">
+
+                  <p className="text-xs font-medium text-emerald-700 dark:text-emerald-400">
+                    {
+                      submissionResult.message
+                    }
+                  </p>
+
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Reference:{" "}
+                    {
+                      submissionResult.assessmentNumber
+                    }
+                  </p>
+
+                </div>
+              )}
+
+              {/* ACTIONS */}
+
+              <div className="space-y-2 pt-1">
+
+                <Button
+                  type="button"
+                  className="w-full"
+                  disabled={
+                    !canSubmit ||
+                    isSaving !==
+                      null ||
+                    revenueServicesLoading ||
+                    taxpayerLoading
+                  }
+                  onClick={
+                    handleSubmit
+                  }
+                >
+                  <Send className="mr-2 h-4 w-4" />
+
+                  {isSaving ===
+                  "submit"
+                    ? isEdit
+                      ? "Updating..."
+                      : "Submitting..."
+                    : submitLabel}
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  disabled={
+                    !selectedTaxpayer ||
+                    selectedServices.length ===
+                      0 ||
+                    isSaving !==
+                      null ||
+                    taxpayerError ||
+                    revenueServicesError
+                  }
+                  onClick={
+                    handleSaveDraft
+                  }
+                >
+                  <Save className="mr-2 h-4 w-4" />
+
+                  {isSaving ===
+                  "draft"
+                    ? "Saving..."
+                    : draftLabel}
+                </Button>
+
+              </div>
+
+            </div>
+          )}
+
+        </div>
+
+        {/* =================================================
+            STEP NAVIGATION
+        ================================================= */}
+
+        <div className="flex items-center justify-between border-t p-5 sm:p-6">
+
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={
+              currentStep ===
+                0 ||
+              isSaving !==
+                null
+            }
+            onClick={
+              currentStep === 0
+                ? onBack
+                : goBack
+            }
+          >
+            <ChevronLeft className="mr-1 h-4 w-4" />
+
+            {currentStep ===
+            0
+              ? "Cancel"
+              : "Back"}
+          </Button>
+
+          {!isLastStep && (
             <Button
               type="button"
-              variant="ghost"
               disabled={
-                currentStep ===
-                  0 ||
+                !isStepComplete(
+                  currentStep,
+                ) ||
                 isSaving !==
                   null
               }
               onClick={
-                currentStep === 0
-                  ? onBack
-                  : goBack
+                goNext
               }
             >
-              <ChevronLeft className="mr-1 h-4 w-4" />
-              {currentStep ===
-              0
-                ? "Cancel"
-                : "Back"}
+              Next
+
+              <ChevronRight className="ml-1 h-4 w-4" />
             </Button>
-
-            {!isLastStep && (
-              <Button
-                type="button"
-                disabled={
-                  !isStepComplete(
-                    currentStep,
-                  ) ||
-                  isSaving !==
-                    null
-                }
-                onClick={
-                  goNext
-                }
-              >
-                Next
-                <ChevronRight className="ml-1 h-4 w-4" />
-              </Button>
-            )}
-
-          </div>
+          )}
 
         </div>
 
+      </div>
     </div>
   );
 }

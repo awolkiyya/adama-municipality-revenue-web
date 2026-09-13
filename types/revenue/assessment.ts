@@ -60,10 +60,12 @@ export type FieldDataType =
 // =====================================================
 
 export type FieldOption = {
-  label: string;
+  id?: string;
   value: string;
+  label: string;
+  sortOrder?: number;
+  isDefault?: boolean;
 };
-
 
 // =====================================================
 // REVENUE FIELD

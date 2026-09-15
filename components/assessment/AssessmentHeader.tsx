@@ -23,6 +23,7 @@ import {
 import type {
   AssessmentConfig,
 } from "./assessment.config";
+import { Icon } from "lucide-react";
 
 
 // =====================================================
@@ -113,165 +114,100 @@ export function AssessmentHeader({
 
       actions={
 
-        config.headerActions.length > 0 && (
+        <div
+          className="
+            flex
+            flex-wrap
+            items-center
+            gap-3
+          "
+        >
 
-          <div
+          {/* ==========================================
+              CREATE ASSESSMENT
+              ========================================== */}
+
+        
+                <Button
+
+                  type="button"
+                  onClick={
+                    onCreate
+                  }
+                  className="
+                    bg-white
+                    text-primary
+                    shadow-sm
+                    hover:bg-white/90
+                  "
+                >
+
+                  {/* <Icon
+                    className="
+                      mr-2
+                      h-4
+                      w-4
+                    "
+                  /> */}
+
+                 New Assissment
+
+                </Button>
+     
+
+
+          {/* ==========================================
+              REGISTER EXISTING AGREEMENT
+              ALWAYS DISPLAYED
+              ========================================== */}
+
+          <Button
+            type="button"
+            variant="outline"
+            onClick={
+              onRegisterExistingAgreement
+            }
             className="
-              flex
-              flex-wrap
-              items-center
-              gap-3
+              border-white/30
+              bg-white/10
+              text-white
+              backdrop-blur-sm
+              hover:bg-white
+              hover:text-primary
             "
           >
 
-            {config.headerActions.map(
-              (
-                action,
-              ) => {
+            Register Existing Agreement
 
-                const Icon =
-                  action.icon;
+          </Button>
 
 
-                // =====================================
-                // CREATE ASSESSMENT
-                // =====================================
+          {/* ==========================================
+              REGISTER TAXPAYER
+              ALWAYS DISPLAYED
+              ========================================== */}
 
-                if (
-                  action.action ===
-                  "CREATE"
-                ) {
+          <Button
+            type="button"
+            variant="outline"
+            onClick={
+              onRegisterTaxpayer
+            }
+            className="
+              border-white/30
+              bg-white/10
+              text-white
+              backdrop-blur-sm
+              hover:bg-white
+              hover:text-primary
+            "
+          >
 
-                  return (
-                    <Button
-                      key={
-                        action.key
-                      }
-                      type="button"
-                      onClick={
-                        onCreate
-                      }
-                      className="
-                        bg-white
-                        text-primary
-                        shadow-sm
-                        hover:bg-white/90
-                      "
-                    >
+            Register Taxpayer
 
-                      <Icon
-                        className="
-                          mr-2
-                          h-4
-                          w-4
-                        "
-                      />
+          </Button>
 
-                      {action.label}
-
-                    </Button>
-                  );
-                }
-
-
-                // =====================================
-                // REGISTER EXISTING AGREEMENT
-                // =====================================
-
-                if (
-                  action.action ===
-                  "REGISTER_EXISTING_AGREEMENT"
-                ) {
-
-                  return (
-                    <Button
-                      key={
-                        action.key
-                      }
-                      type="button"
-                      variant="outline"
-                      onClick={
-                        onRegisterExistingAgreement
-                      }
-                      className="
-                        border-white/30
-                        bg-white/10
-                        text-white
-                        backdrop-blur-sm
-                        hover:bg-white
-                        hover:text-primary
-                      "
-                    >
-
-                      <Icon
-                        className="
-                          mr-2
-                          h-4
-                          w-4
-                        "
-                      />
-
-                      {action.label}
-
-                    </Button>
-                  );
-                }
-
-
-                // =====================================
-                // REGISTER TAXPAYER
-                // =====================================
-
-                if (
-                  action.action ===
-                  "REGISTER_TAXPAYER"
-                ) {
-
-                  return (
-                    <Button
-                      key={
-                        action.key
-                      }
-                      type="button"
-                      variant="outline"
-                      onClick={
-                        onRegisterTaxpayer
-                      }
-                      className="
-                        border-white/30
-                        bg-white/10
-                        text-white
-                        backdrop-blur-sm
-                        hover:bg-white
-                        hover:text-primary
-                      "
-                    >
-
-                      <Icon
-                        className="
-                          mr-2
-                          h-4
-                          w-4
-                        "
-                      />
-
-                      {action.label}
-
-                    </Button>
-                  );
-                }
-
-
-                // =====================================
-                // UNKNOWN ACTION
-                // =====================================
-
-                return null;
-              },
-            )}
-
-          </div>
-        )
+        </div>
       }
     />
   );

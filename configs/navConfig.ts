@@ -13,6 +13,7 @@ import {
   CheckCircle2,
   Calculator,
   Wallet,
+  CreditCard,
 } from "lucide-react";
 
 import { NavItem } from "@/types/commen";
@@ -222,7 +223,7 @@ export const NAV_ITEMS: NavItem[] = [
   },
 
 
-  // =========================================================
+ // =========================================================
 // REVENUE OPERATIONS
 // =========================================================
 
@@ -242,6 +243,13 @@ export const NAV_ITEMS: NavItem[] = [
       title: "invoices",
       url: "/office/dashboard/invoices",
       permission: APP_PERMISSIONS.INVOICE_VIEW,
+    },
+
+    {
+      title: "payments",
+      url: "/office/dashboard/payments",
+      icon: CreditCard,
+      permission: APP_PERMISSIONS.PAYMENTS_VIEW,
     },
 
     {

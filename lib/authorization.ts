@@ -442,6 +442,43 @@ export const APP_PERMISSIONS = {
     action: "view_history",
   },
 
+
+  /*
+  |--------------------------------------------------------------------------
+  | Payments
+  |--------------------------------------------------------------------------
+  */
+
+  PAYMENTS_VIEW: {
+    resource: "payments",
+    action: "view",
+  },
+
+  PAYMENTS_READ: {
+    resource: "payments",
+    action: "read",
+  },
+
+  PAYMENTS_COLLECT: {
+    resource: "payments",
+    action: "collect",
+  },
+
+  PAYMENTS_CANCEL: {
+    resource: "payments",
+    action: "cancel",
+  },
+
+  PAYMENTS_REVERSE: {
+    resource: "payments",
+    action: "reverse",
+  },
+
+  PAYMENTS_VIEW_HISTORY: {
+    resource: "payments",
+    action: "view_history",
+  },
+
   /*
   |--------------------------------------------------------------------------
   | Penalty

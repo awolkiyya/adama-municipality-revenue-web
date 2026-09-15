@@ -412,15 +412,15 @@ export const CommentTableRegistry: Record<
       view: {
         enabled: true,
         permission: {
-          resource: "revenue_categories",
-          action: "read",
+          resource: "revenue_categorys",
+          action: "view",
         },
       },
 
       edit: {
         enabled: true,
         permission: {
-          resource: "revenue_categories",
+          resource: "revenue_categorys",
           action: "update",
         },
       },
@@ -656,15 +656,15 @@ export const CommentTableRegistry: Record<
       view: {
         enabled: true,
         permission: {
-          resource: "tariff_rules",
-          action: "read",
+          resource: "tariff",
+          action: "view",
         },
       },
 
       edit: {
         enabled: true,
         permission: {
-          resource: "tariff_rules",
+          resource: "tariff",
           action: "update",
         },
       },
@@ -672,7 +672,7 @@ export const CommentTableRegistry: Record<
       delete: {
         enabled: true,
         permission: {
-          resource: "tariff_rules",
+          resource: "tariff",
           action: "delete",
         },
       },
@@ -700,7 +700,7 @@ export const CommentTableRegistry: Record<
       manageFormulaVariables: {
         enabled: true,
         permission: {
-          resource: "tariff_rules",
+          resource: "tariff",
           action: "manage",
         },
       },
@@ -794,13 +794,6 @@ assessment: {
     |--------------------------------------------------------------------------
     */
 
-    submit: {
-      enabled: true,
-      permission: {
-        resource: "assessment",
-        action: "submit",
-      },
-    },
 
     return: {
       enabled: true,
@@ -924,13 +917,7 @@ assessment: {
       |--------------------------------------------------------------------------
       */
       
-      issue: {
-        enabled: true,
-        permission: {
-          resource: "invoices",
-          action: "issue",
-        },
-      },
+      
       
       applyDiscount: {
         enabled: true,

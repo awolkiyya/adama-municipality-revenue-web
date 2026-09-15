@@ -66,6 +66,7 @@ import type {
 import type { InvoiceSummary } from "@/types/invoice/invoice-summary";
 
 import { useInvoices } from "@/hooks/invoice/useOffice.hook";
+import { useRouter } from "next/navigation";
 
 
 // =====================================================
@@ -373,6 +374,8 @@ export function SearchInput({
 
 function InvoicesPage() {
 
+  const router = useRouter();
+
   const user =
     useSelector(
       (
@@ -413,6 +416,14 @@ function InvoicesPage() {
     pageSize,
     setPageSize,
   ] = useState(10);
+
+  const handleRecordPayment = (
+    invoice: Invoice,
+  ) => {
+    router.push(
+      `/office/dashboard/payments/create?invoice_id=${invoice.id}`,
+    );
+  };
 
 
   // ===================================================
@@ -1778,6 +1789,14 @@ function InvoicesPage() {
               id,
             );
 
+          }}
+
+          onPay={(
+            row,
+          ) => {
+            handleRecordPayment(
+              row as Invoice,
+            );
           }}
 
 

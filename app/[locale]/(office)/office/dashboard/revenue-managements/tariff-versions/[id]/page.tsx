@@ -849,15 +849,36 @@ export default function TariffVersionDetailPage() {
     );
   }
 
-  /* -----------------------------------------------------------------------
-     Actions
-  ----------------------------------------------------------------------- */
+/* -----------------------------------------------------------------------
+ * Actions
+ * ----------------------------------------------------------------------- */
 
-  const actions =
-    resolveActions(
-      CommentTableRegistry.tariffRule,
-      user.permissions,
-    );
+console.log("======================================================");
+console.log("TARIFF RULE ACTIONS DEBUG");
+console.log("======================================================");
+
+console.log(
+  "TARIFF RULE REGISTRY:",
+  CommentTableRegistry.tariffRule
+);
+
+console.log(
+  "USER PERMISSIONS:",
+  user.permissions
+);
+
+const actions = resolveActions(
+  CommentTableRegistry.tariffRule,
+  user.permissions,
+);
+
+console.log(
+  "RESOLVED TARIFF RULE ACTIONS:",
+  actions
+);
+
+console.log("======================================================");
+
 
   /* =========================================================================
      RENDER

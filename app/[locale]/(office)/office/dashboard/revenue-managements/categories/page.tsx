@@ -164,6 +164,9 @@ function RevenueCategoriesPage() {
     user.permissions
   );
 
+
+  
+
   return (
     <TooltipProvider delayDuration={200}>
       <div className="flex flex-col gap-6 pb-10 max-w-7xl m-auto">

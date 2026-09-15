@@ -1,4 +1,3 @@
-
 "use client";
 
 import {
@@ -63,9 +62,7 @@ import {
   gregorianToEth,
 } from "@/utils/ethiopianCalendar";
 
-import {
-  generateEthCalendar,
-} from "@/utils/generateEthCalendar";
+import { generateEthCalendar } from "@/utils/generateEthCalendar";
 
 import { EthiopianDatePicker } from "@/components/input/EthiopianDatePicker";
 
@@ -79,6 +76,7 @@ type SettingsSection =
   | "overview"
   | "payment-due-date"
   | "assessment"
+  | "lizz"
   | "invoice"
   | "payment"
   | "receipt";
@@ -150,6 +148,12 @@ const NAVIGATION: {
     label: "Assessment",
     description: "Assessment behavior",
     icon: FileCheck2,
+  },
+  {
+    id: "lizz",
+    label: "Lizz",
+    description: "Lizz installment policy",
+    icon: Landmark,
   },
   {
     id: "invoice",
@@ -395,18 +399,14 @@ function SettingRow({
   return (
     <div className="flex items-center justify-between gap-8 py-5">
       <div className="min-w-0">
-        <div className="text-sm font-medium">
-          {title}
-        </div>
+        <div className="text-sm font-medium">{title}</div>
 
         <div className="mt-1 max-w-2xl text-sm leading-5 text-muted-foreground">
           {description}
         </div>
       </div>
 
-      <div className="shrink-0">
-        {children}
-      </div>
+      <div className="shrink-0">{children}</div>
     </div>
   );
 }
@@ -481,8 +481,7 @@ export default function RevenueGeneralSettingsPage() {
   |--------------------------------------------------------------------------
   */
 
-  const serverSettings =
-    data?.data ?? null;
+  const serverSettings = data?.data ?? null;
 
   /*
   |--------------------------------------------------------------------------
@@ -491,9 +490,7 @@ export default function RevenueGeneralSettingsPage() {
   */
 
   const [settings, setSettings] =
-    useState<RevenueSettingResource | null>(
-      null,
-    );
+    useState<RevenueSettingResource | null>(null);
 
   /*
   |--------------------------------------------------------------------------
@@ -502,9 +499,7 @@ export default function RevenueGeneralSettingsPage() {
   */
 
   const [savedSettings, setSavedSettings] =
-    useState<RevenueSettingResource | null>(
-      null,
-    );
+    useState<RevenueSettingResource | null>(null);
 
   /*
   |--------------------------------------------------------------------------
@@ -513,9 +508,7 @@ export default function RevenueGeneralSettingsPage() {
   */
 
   const [activeSection, setActiveSection] =
-    useState<SettingsSection>(
-      "overview",
-    );
+    useState<SettingsSection>("overview");
 
   /*
   |--------------------------------------------------------------------------
@@ -530,21 +523,30 @@ export default function RevenueGeneralSettingsPage() {
 
     const normalized: RevenueSettingResource = {
       ...serverSettings,
+
       enabled_payment_methods:
         Array.isArray(
           serverSettings.enabled_payment_methods,
         )
           ? serverSettings.enabled_payment_methods
           : [],
+
+      /*
+      |--------------------------------------------------------------------------
+      | Lizz
+      |--------------------------------------------------------------------------
+      |
+      | The API may return the decimal value as a string depending
+      | on the Laravel resource/cast configuration.
+      |
+      */
+      lizz_first_installment_percentage:
+        serverSettings.lizz_first_installment_percentage ?? null,
     };
 
-    setSettings(
-      cloneSettings(normalized),
-    );
+    setSettings(cloneSettings(normalized));
 
-    setSavedSettings(
-      cloneSettings(normalized),
-    );
+    setSavedSettings(cloneSettings(normalized));
   }, [serverSettings]);
 
   /*
@@ -562,10 +564,7 @@ export default function RevenueGeneralSettingsPage() {
       JSON.stringify(settings) !==
       JSON.stringify(savedSettings)
     );
-  }, [
-    settings,
-    savedSettings,
-  ]);
+  }, [settings, savedSettings]);
 
   /*
   |--------------------------------------------------------------------------
@@ -573,16 +572,22 @@ export default function RevenueGeneralSettingsPage() {
   |--------------------------------------------------------------------------
   */
 
-  const annualPaymentDueDate =
-    useMemo(
-      () =>
-        annualPaymentDueDateToGregorian(
-          settings?.annual_payment_due_date,
-        ),
-      [
+  const annualPaymentDueDate = useMemo(
+    () =>
+      annualPaymentDueDateToGregorian(
         settings?.annual_payment_due_date,
-      ],
-    );
+      ),
+    [settings?.annual_payment_due_date],
+  );
+
+  /*
+  |--------------------------------------------------------------------------
+  | Lizz First Installment Percentage
+  |--------------------------------------------------------------------------
+  */
+
+  const lizzFirstInstallmentPercentage =
+    settings?.lizz_first_installment_percentage;
 
   /*
   |--------------------------------------------------------------------------
@@ -590,77 +595,103 @@ export default function RevenueGeneralSettingsPage() {
   |--------------------------------------------------------------------------
   */
 
-  const validationErrors =
-    useMemo(() => {
-      if (!settings) {
-        return [];
-      }
+  const validationErrors = useMemo(() => {
+    if (!settings) {
+      return [];
+    }
 
-      const errors: string[] = [];
+    const errors: string[] = [];
 
-      /*
-      |--------------------------------------------------------------------------
-      | Annual Payment Due Date
-      |--------------------------------------------------------------------------
-      */
+    /*
+    |--------------------------------------------------------------------------
+    | Annual Payment Due Date
+    |--------------------------------------------------------------------------
+    */
 
-      if (
-        !isValidAnnualPaymentDueDate(
-          settings.annual_payment_due_date,
-        )
-      ) {
-        errors.push(
-          "Annual payment due date is invalid. Use a valid Ethiopian calendar MM-DD date.",
-        );
-      }
+    if (
+      !isValidAnnualPaymentDueDate(
+        settings.annual_payment_due_date,
+      )
+    ) {
+      errors.push(
+        "Annual payment due date is invalid. Use a valid Ethiopian calendar MM-DD date.",
+      );
+    }
 
-      /*
-      |--------------------------------------------------------------------------
-      | Invoice Prefix
-      |--------------------------------------------------------------------------
-      */
+    /*
+    |--------------------------------------------------------------------------
+    | Lizz First Installment Percentage
+    |--------------------------------------------------------------------------
+    */
 
-      if (
-        settings.invoice_auto_numbering &&
-        !settings.invoice_prefix.trim()
-      ) {
-        errors.push(
-          "Invoice prefix is required when automatic invoice numbering is enabled.",
-        );
-      }
+    const lizzPercentage =
+      settings.lizz_first_installment_percentage;
 
-      /*
-      |--------------------------------------------------------------------------
-      | Receipt Prefix
-      |--------------------------------------------------------------------------
-      */
+    if (
+      lizzPercentage !== null &&
+      lizzPercentage !== undefined
+    ) {
+      const numericPercentage =
+        Number(lizzPercentage);
 
       if (
-        settings.receipt_auto_numbering &&
-        !settings.receipt_prefix.trim()
+        !Number.isFinite(numericPercentage) ||
+        numericPercentage <= 0 ||
+        numericPercentage > 100
       ) {
         errors.push(
-          "Receipt prefix is required when automatic receipt numbering is enabled.",
+          "Lizz first installment percentage must be greater than 0 and not greater than 100.",
         );
       }
+    }
 
-      /*
-      |--------------------------------------------------------------------------
-      | Payment Methods
-      |--------------------------------------------------------------------------
-      */
+    /*
+    |--------------------------------------------------------------------------
+    | Invoice Prefix
+    |--------------------------------------------------------------------------
+    */
 
-      if (
-        !settings.enabled_payment_methods ||
-        settings.enabled_payment_methods.length === 0
-      ) {
-        errors.push(
-          "At least one payment method must remain enabled.",
-        );
-      }
+    if (
+      settings.invoice_auto_numbering &&
+      !settings.invoice_prefix.trim()
+    ) {
+      errors.push(
+        "Invoice prefix is required when automatic invoice numbering is enabled.",
+      );
+    }
 
-      return errors;
-    }, [settings]);
+    /*
+    |--------------------------------------------------------------------------
+    | Receipt Prefix
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+      settings.receipt_auto_numbering &&
+      !settings.receipt_prefix.trim()
+    ) {
+      errors.push(
+        "Receipt prefix is required when automatic receipt numbering is enabled.",
+      );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Payment Methods
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+      !settings.enabled_payment_methods ||
+      settings.enabled_payment_methods.length === 0
+    ) {
+      errors.push(
+        "At least one payment method must remain enabled.",
+      );
+    }
+
+    return errors;
+  }, [settings]);
 
   const hasValidationErrors =
     validationErrors.length > 0;
@@ -742,9 +773,7 @@ export default function RevenueGeneralSettingsPage() {
       return;
     }
 
-    setSettings(
-      cloneSettings(savedSettings),
-    );
+    setSettings(cloneSettings(savedSettings));
   }
 
   /*
@@ -777,6 +806,15 @@ export default function RevenueGeneralSettingsPage() {
 
       interest_enabled:
         current.interest_enabled,
+
+      /*
+      |--------------------------------------------------------------------------
+      | Lizz
+      |--------------------------------------------------------------------------
+      */
+
+      lizz_first_installment_percentage:
+        current.lizz_first_installment_percentage,
 
       /*
       |--------------------------------------------------------------------------
@@ -1180,7 +1218,7 @@ export default function RevenueGeneralSettingsPage() {
             SUMMARY
         ========================================================= */}
 
-        <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
           {/* Annual Payment Due Date */}
 
           <button
@@ -1297,6 +1335,45 @@ export default function RevenueGeneralSettingsPage() {
             </CardContent>
           </Card>
 
+          {/* Lizz */}
+
+          <button
+            type="button"
+            onClick={() => navigate("lizz")}
+            className="text-left"
+          >
+            <Card className="h-full transition-shadow hover:shadow-sm">
+              <CardContent className="p-5">
+                <div className="flex items-start justify-between">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg border bg-muted/40">
+                    <Landmark className="h-4 w-4 text-muted-foreground" />
+                  </div>
+
+                  <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                </div>
+
+                <div className="mt-4">
+                  <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    Lizz Policy
+                  </p>
+
+                  <p className="mt-1 text-sm font-semibold">
+                    {lizzFirstInstallmentPercentage !==
+                    null &&
+                    lizzFirstInstallmentPercentage !==
+                      undefined
+                      ? `${lizzFirstInstallmentPercentage}%`
+                      : "Not configured"}
+                  </p>
+
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    First installment percentage
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </button>
+
           {/* Payment Methods */}
 
           <button
@@ -1320,7 +1397,11 @@ export default function RevenueGeneralSettingsPage() {
                   </p>
 
                   <p className="mt-1 text-sm font-semibold">
-                    {settings.enabled_payment_methods.length}{" "}
+                    {
+                      settings
+                        .enabled_payment_methods
+                        .length
+                    }{" "}
                     enabled
                   </p>
 
@@ -1507,6 +1588,27 @@ export default function RevenueGeneralSettingsPage() {
 
                       <div className="rounded-xl border bg-muted/20 p-5">
                         <div className="flex items-center gap-3">
+                          <Landmark className="h-4 w-4 text-muted-foreground" />
+
+                          <div>
+                            <p className="text-xs text-muted-foreground">
+                              Lizz First Installment
+                            </p>
+
+                            <p className="mt-1 text-sm font-semibold">
+                              {lizzFirstInstallmentPercentage !==
+                                null &&
+                              lizzFirstInstallmentPercentage !==
+                                undefined
+                                ? `${lizzFirstInstallmentPercentage}%`
+                                : "Not configured"}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="rounded-xl border bg-muted/20 p-5">
+                        <div className="flex items-center gap-3">
                           <WalletCards className="h-4 w-4 text-muted-foreground" />
 
                           <div>
@@ -1557,6 +1659,21 @@ export default function RevenueGeneralSettingsPage() {
                           "Assessment configuration",
                         status:
                           settings.assessment_auto_calculation,
+                      },
+                      {
+                        label:
+                          "Lizz first installment policy",
+                        status:
+                          lizzFirstInstallmentPercentage !==
+                            null &&
+                          lizzFirstInstallmentPercentage !==
+                            undefined &&
+                          Number(
+                            lizzFirstInstallmentPercentage,
+                          ) > 0 &&
+                          Number(
+                            lizzFirstInstallmentPercentage,
+                          ) <= 100,
                       },
                       {
                         label:
@@ -1628,11 +1745,15 @@ export default function RevenueGeneralSettingsPage() {
                         controls are configured on individual
                         tariff rules. Penalty and interest rates
                         are managed in their dedicated policy
-                        modules. The annual payment due date is
-                        stored as an Ethiopian calendar month/day
-                        and is used to resolve the applicable
-                        legal due date for each assessment service.
-                        The resolved due date is persisted on{" "}
+                        modules. The Lizz first installment
+                        percentage is a global Lizz policy used
+                        when an assessment explicitly requires a
+                        first installment. The annual payment due
+                        date is stored as an Ethiopian calendar
+                        month/day and is used to resolve the
+                        applicable legal due date for each
+                        assessment service. The resolved due date
+                        is persisted on{" "}
                         <strong className="font-medium text-foreground">
                           assessment_services.due_date
                         </strong>
@@ -1675,9 +1796,7 @@ export default function RevenueGeneralSettingsPage() {
                       </div>
 
                       <EthiopianDatePicker
-                        value={
-                          annualPaymentDueDate
-                        }
+                        value={annualPaymentDueDate}
                         onChange={
                           handleAnnualPaymentDueDateChange
                         }
@@ -1725,8 +1844,8 @@ export default function RevenueGeneralSettingsPage() {
                                   {
                                     settings.annual_payment_due_date
                                   }
-                                </span>
-                                {" "}and repeated every Ethiopian year.
+                                </span>{" "}
+                                and repeated every Ethiopian year.
                               </p>
                             )}
                           </div>
@@ -1921,6 +2040,232 @@ export default function RevenueGeneralSettingsPage() {
                   </SettingRow>
                 </CardContent>
               </Card>
+            )}
+
+            {/* ====================================================
+                LIZZ
+            ===================================================== */}
+
+            {activeSection === "lizz" && (
+              <div className="space-y-6">
+                <Card>
+                  <CardHeader>
+                    <SectionHeader
+                      icon={Landmark}
+                      eyebrow="Lizz Policy"
+                      title="Lizz First Installment"
+                      description="Configure the global percentage used to calculate the first installment for Lizz assessments."
+                    />
+                  </CardHeader>
+
+                  <CardContent>
+                    <div className="max-w-xl">
+                      <div className="rounded-xl border bg-muted/20 p-5">
+                        <div className="flex items-start gap-4">
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border bg-background">
+                            <Landmark className="h-4 w-4 text-muted-foreground" />
+                          </div>
+
+                          <div className="min-w-0 flex-1">
+                            <Label htmlFor="lizz-first-installment-percentage">
+                              First Installment Percentage
+                            </Label>
+
+                            <p className="mt-1 text-sm leading-5 text-muted-foreground">
+                              Percentage of the total Lizz amount
+                              required as the first installment
+                              when the assessment has{" "}
+                              <strong className="font-medium text-foreground">
+                                first_installment_required
+                              </strong>{" "}
+                              enabled.
+                            </p>
+
+                            <div className="relative mt-4 max-w-xs">
+                              <Input
+                                id="lizz-first-installment-percentage"
+                                type="number"
+                                min="0.01"
+                                max="100"
+                                step="0.01"
+                                inputMode="decimal"
+                                value={
+                                  lizzFirstInstallmentPercentage ??
+                                  ""
+                                }
+                                onChange={(event) => {
+                                  const value =
+                                    event.target.value;
+
+                                  update(
+                                    "lizz_first_installment_percentage",
+                                    value === ""
+                                      ? null
+                                      : Number(value),
+                                  );
+                                }}
+                                placeholder="e.g. 10"
+                                className="pr-10"
+                              />
+
+                              <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-muted-foreground">
+                                %
+                              </span>
+                            </div>
+
+                            {lizzFirstInstallmentPercentage !==
+                              null &&
+                              lizzFirstInstallmentPercentage !==
+                                undefined &&
+                              (Number(
+                                lizzFirstInstallmentPercentage,
+                              ) <= 0 ||
+                                Number(
+                                  lizzFirstInstallmentPercentage,
+                                ) > 100 ||
+                                !Number.isFinite(
+                                  Number(
+                                    lizzFirstInstallmentPercentage,
+                                  ),
+                                )) && (
+                                <p className="mt-2 text-xs text-destructive">
+                                  Enter a value greater than 0
+                                  and not greater than 100.
+                                </p>
+                              )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 flex gap-3 rounded-lg border bg-muted/30 p-4">
+                        <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+
+                        <div className="text-sm leading-5 text-muted-foreground">
+                          <p>
+                            This setting is a global Lizz policy.
+                            It does not determine whether an
+                            individual assessment requires a first
+                            installment.
+                          </p>
+
+                          <p className="mt-2">
+                            The assessment-level field{" "}
+                            <strong className="font-medium text-foreground">
+                              first_installment_required
+                            </strong>{" "}
+                            determines whether the first installment
+                            applies to that assessment.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <Separator className="my-6" />
+
+                    <div className="rounded-xl border bg-background p-5">
+                      <div className="flex items-start gap-3">
+                        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+
+                        <div>
+                          <p className="text-sm font-medium">
+                            Calculation model
+                          </p>
+
+                          <div className="mt-2 space-y-1 text-sm leading-6 text-muted-foreground">
+                            <p>
+                              Total Lizz amount:
+                            </p>
+
+                            <p className="font-mono text-xs text-foreground">
+                              LAND_AREA × 3.70 × LIZZ_PERIOD
+                            </p>
+
+                            <p className="pt-2">
+                              First installment:
+                            </p>
+
+                            <p className="font-mono text-xs text-foreground">
+                              TOTAL_LIZZ_AMOUNT × FIRST_INSTALLMENT_PERCENTAGE
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 rounded-xl border bg-muted/20 p-5">
+                      <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                        Example
+                      </p>
+
+                      <div className="mt-3 space-y-2 text-sm">
+                        <div className="flex items-center justify-between gap-4">
+                          <span className="text-muted-foreground">
+                            Land area
+                          </span>
+
+                          <span className="font-medium">
+                            1,000 m²
+                          </span>
+                        </div>
+
+                        <div className="flex items-center justify-between gap-4">
+                          <span className="text-muted-foreground">
+                            Rate
+                          </span>
+
+                          <span className="font-medium">
+                            3.70 ETB
+                          </span>
+                        </div>
+
+                        <div className="flex items-center justify-between gap-4">
+                          <span className="text-muted-foreground">
+                            Lizz period
+                          </span>
+
+                          <span className="font-medium">
+                            12 years
+                          </span>
+                        </div>
+
+                        <Separator />
+
+                        <div className="flex items-center justify-between gap-4">
+                          <span className="text-muted-foreground">
+                            Total Lizz amount
+                          </span>
+
+                          <span className="font-semibold">
+                            44,400.00 ETB
+                          </span>
+                        </div>
+
+                        <div className="flex items-center justify-between gap-4">
+                          <span className="text-muted-foreground">
+                            First installment at 10%
+                          </span>
+
+                          <span className="font-semibold">
+                            4,440.00 ETB
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <div className="flex gap-3 rounded-xl border bg-background p-4">
+                  <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+
+                  <p className="text-sm leading-6 text-muted-foreground">
+                    Changing this global percentage affects new
+                    Lizz assessments that resolve the current
+                    policy. For historical consistency, the
+                    resolved percentage should be snapshotted on
+                    the assessment when it is created.
+                  </p>
+                </div>
+              </div>
             )}
 
             {/* ====================================================

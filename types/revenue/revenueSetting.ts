@@ -16,7 +16,6 @@ export const PAYMENT_METHODS = [
 export type PaymentMethod =
   (typeof PAYMENT_METHODS)[number];
 
-
 /*
 |--------------------------------------------------------------------------
 | Revenue Settings
@@ -34,6 +33,9 @@ export type PaymentMethod =
 |   and persisted on assessment_services.due_date.
 | - Financial precision/rounding belongs to Tariff Rules.
 | - Penalty/interest rates belong to their own rule modules.
+| - Lizz first-installment percentage is a global Lizz policy.
+| - first_installment_required itself belongs to the assessment/form
+|   level and is NOT stored in Revenue Settings.
 | - No calendar_type is stored here.
 | - No payment start/end period is stored here.
 | - No global partial-payment setting is stored here.
@@ -55,8 +57,8 @@ export interface RevenueSetting {
   | Examples:
   |
   |     "01-15"
-  | |   "10-30"
-  | |   "13-06"
+  |     "10-30"
+  |     "13-06"
   |
   | Month 13 represents Pagume.
   |
@@ -64,16 +66,42 @@ export interface RevenueSetting {
 
   annual_payment_due_date: string | null;
 
-
   /*
   |--------------------------------------------------------------------------
-  | Penalty / Interest
+  | Penalty / Interest / Lizz
   |--------------------------------------------------------------------------
   */
 
   penalty_enabled: boolean;
   interest_enabled: boolean;
 
+  /*
+  |--------------------------------------------------------------------------
+  | Lizz First Installment
+  |--------------------------------------------------------------------------
+  |
+  | Global Lizz policy.
+  |
+  | Example:
+  |
+  |     10.00
+  |
+  | means the first installment is 10% of the calculated
+  | total Lizz amount when first_installment_required = true.
+  |
+  | IMPORTANT:
+  |
+  | This setting does NOT determine whether a first installment
+  | is required. That decision belongs to the assessment:
+  |
+  |     first_installment_required
+  |
+  | The percentage is only the global policy used when that
+  | assessment-level flag is enabled.
+  |
+  */
+
+  lizz_first_installment_percentage: number | null;
 
   /*
   |--------------------------------------------------------------------------
@@ -85,7 +113,6 @@ export interface RevenueSetting {
   assessment_allow_manual_adjustment: boolean;
   assessment_requires_approval: boolean;
   assessment_reassessment_allowed: boolean;
-
 
   /*
   |--------------------------------------------------------------------------
@@ -99,7 +126,6 @@ export interface RevenueSetting {
   invoice_allow_overpayment: boolean;
   invoice_allow_overdue_payment: boolean;
 
-
   /*
   |--------------------------------------------------------------------------
   | Payment
@@ -111,7 +137,6 @@ export interface RevenueSetting {
 
   enabled_payment_methods: PaymentMethod[];
 
-
   /*
   |--------------------------------------------------------------------------
   | Receipt
@@ -122,7 +147,6 @@ export interface RevenueSetting {
   receipt_prefix: string;
 
   receipt_allow_reprint: boolean;
-
 
   /*
   |--------------------------------------------------------------------------
@@ -142,7 +166,6 @@ export interface RevenueSetting {
   updated_at: string;
 }
 
-
 /*
 |--------------------------------------------------------------------------
 | Resource Response
@@ -150,14 +173,13 @@ export interface RevenueSetting {
 |
 | The API resource represents the same persisted configuration.
 |
-| No payment_period object is required because the backend now stores
+| No payment_period object is required because the backend stores
 | one recurring annual payment due date instead of a start/end period.
 |
 */
 
 export interface RevenueSettingResource
   extends RevenueSetting {}
-
 
 /*
 |--------------------------------------------------------------------------
@@ -184,7 +206,6 @@ export interface UpdateRevenueSettingPayload {
 
   annual_payment_due_date: string | null;
 
-
   /*
   |--------------------------------------------------------------------------
   | Penalty / Interest
@@ -194,6 +215,25 @@ export interface UpdateRevenueSettingPayload {
   penalty_enabled: boolean;
   interest_enabled: boolean;
 
+  /*
+  |--------------------------------------------------------------------------
+  | Lizz First Installment
+  |--------------------------------------------------------------------------
+  |
+  | Global Lizz policy percentage.
+  |
+  | Example:
+  |
+  |     10.00
+  |
+  | means:
+  |
+  |     first_installment_amount =
+  |         total_lizz_amount * 10%
+  |
+  */
+
+  lizz_first_installment_percentage: number | null;
 
   /*
   |--------------------------------------------------------------------------
@@ -205,7 +245,6 @@ export interface UpdateRevenueSettingPayload {
   assessment_allow_manual_adjustment: boolean;
   assessment_requires_approval: boolean;
   assessment_reassessment_allowed: boolean;
-
 
   /*
   |--------------------------------------------------------------------------
@@ -219,7 +258,6 @@ export interface UpdateRevenueSettingPayload {
   invoice_allow_overpayment: boolean;
   invoice_allow_overdue_payment: boolean;
 
-
   /*
   |--------------------------------------------------------------------------
   | Payment
@@ -230,7 +268,6 @@ export interface UpdateRevenueSettingPayload {
   payment_auto_receipt: boolean;
 
   enabled_payment_methods: PaymentMethod[];
-
 
   /*
   |--------------------------------------------------------------------------
@@ -243,7 +280,6 @@ export interface UpdateRevenueSettingPayload {
 
   receipt_allow_reprint: boolean;
 
-
   /*
   |--------------------------------------------------------------------------
   | Optional Metadata
@@ -253,7 +289,6 @@ export interface UpdateRevenueSettingPayload {
   legal_reference?: string | null;
   description?: string | null;
 }
-
 
 /*
 |--------------------------------------------------------------------------

@@ -434,7 +434,7 @@ export default function MeasurementUnitsPage() {
   const actions =
     resolveActions(
       CommentTableRegistry.measurementUnit,
-      user.role.name,
+      user.permissions,
     );
 
 

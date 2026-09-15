@@ -172,7 +172,7 @@ function AdministrativeUnitContent() {
 
   const actions = resolveActions(
     CommentTableRegistry.administrativeUnit,
-    user.role.name,
+    user.permissions,
   );
 
   /* ===================================================

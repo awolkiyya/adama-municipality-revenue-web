@@ -303,112 +303,77 @@ const mapRevenueServiceField = (
     baseField?.options;
 
 
-  const options =
-    Array.isArray(
-      rawOptions,
-    )
+    const options =
+    Array.isArray(rawOptions)
       ? rawOptions
-
           .filter(
             (
               option,
-            ) => {
-
-              if (
-                typeof option !==
-                  "object" ||
-                option === null
-              ) {
-                return false;
-              }
-
-              const item =
-                option as Record<
-                  string,
-                  unknown
-                >;
-
-              return (
-                item.isActive !==
-                  false &&
-                item.is_active !==
-                  false
-              );
-            },
+            ): option is Record<string, unknown> =>
+              typeof option === "object" &&
+              option !== null,
           )
-
           .sort(
             (
               a,
               b,
-            ) => {
-
-              const first =
-                a as Record<
-                  string,
-                  unknown
-                >;
-
-              const second =
-                b as Record<
-                  string,
-                  unknown
-                >;
-
-              return (
-                Number(
-                  first.sortOrder ??
-                    first.sort_order ??
-                    0,
-                ) -
-                Number(
-                  second.sortOrder ??
-                    second.sort_order ??
-                    0,
-                )
-              );
-            },
+            ) =>
+              Number(
+                a.sortOrder ??
+                  a.sort_order ??
+                  0,
+              ) -
+              Number(
+                b.sortOrder ??
+                  b.sort_order ??
+                  0,
+              ),
           )
-
           .map(
             (
               option,
-            ) => {
-
-              const item =
-                option as Record<
-                  string,
-                  unknown
-                >;
-
-              return {
-                value: asString(
-                  item.value ??
-                    item.id ??
-                    "",
+            ) => ({
+              id: asString(
+                option.id ??
+                  option.value ??
+                  "",
+              ),
+  
+              value: asString(
+                option.value ??
+                  option.id ??
+                  "",
+              ),
+  
+              label: asString(
+                option.label ??
+                  option.name ??
+                  option.value ??
+                  option.id ??
+                  "",
+              ),
+  
+              sortOrder: Number(
+                option.sortOrder ??
+                  option.sort_order ??
+                  0,
+              ),
+  
+              isDefault:
+                Boolean(
+                  option.isDefault ??
+                    option.is_default ??
+                    false,
                 ),
-
-                label: asString(
-                  item.label ??
-                    item.name ??
-                    item.value ??
-                    item.id ??
-                    "",
-                ),
-              };
-            },
+            }),
           )
-
           .filter(
             (
               option,
             ) =>
-              option.value !==
-              "",
+              option.value !== "",
           )
-
       : undefined;
-
 
   // ===================================================
   // RESULT

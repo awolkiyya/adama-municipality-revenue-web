@@ -248,7 +248,7 @@ function RevenueServicesPage() {
     );
   }
 
-  const actions = resolveActions(CommentTableRegistry.revenueService, user.role.name);
+  const actions = resolveActions(CommentTableRegistry.revenueService, user.permissions);
 
   /*
   |--------------------------------------------------------------------------

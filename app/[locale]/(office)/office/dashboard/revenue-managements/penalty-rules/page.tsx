@@ -122,7 +122,7 @@ function getStartLabel(
      * Penalty starts from the fiscal month
      * configured in the penalty rule.
      */
-    case "FIXED_FISCAL_MONTH":
+    case "FIXED_PAYMENT_DATE":
       return "From Fiscal Month Set by Penalty Rule";
 
     default:
@@ -222,7 +222,7 @@ function RevenuePenalties() {
   
     start_type:
       serviceFilter === "DEFAULT"
-        ? "FIXED_FISCAL_MONTH"
+        ? "FIXED_PAYMENT_DATE"
         : serviceFilter === "LIZZ"
           ? "AGREEMENT_DATE"
           : undefined,
@@ -329,7 +329,7 @@ function RevenuePenalties() {
     rules.filter(
       (rule) =>
         rule.start_type ===
-        "FIXED_FISCAL_MONTH",
+        "FIXED_PAYMENT_DATE",
     ).length;
 
   const overrideCount =

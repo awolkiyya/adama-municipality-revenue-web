@@ -260,7 +260,7 @@ function SectorPageContent() {
 
   const actions = resolveActions(
     CommentTableRegistry.sector,
-    user.role.name,
+    user.permissions,
   );
 
   /* ===================================================

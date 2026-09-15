@@ -10,49 +10,40 @@ import {
   UserPlus,
 } from "lucide-react";
 
-import type {
-  LucideIcon,
-} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 import type {
-  UserRole,
+  PermissionAction,
+  UserPermission,
 } from "@/types/user";
 
-import {
-  AssessmentFilters,
-} from "./AssessmentToolbar";
-
+import { AssessmentFilters } from "./AssessmentToolbar";
 
 // =====================================================
-// ROLE
+// PERMISSION
 // =====================================================
 
-export type AssessmentRole =
-  | "SECTOR_OFFICER"
-  | "REVENUE_DECISION_OFFICER";
-
+export interface AssessmentPermission {
+  resource: string;
+  action: PermissionAction;
+}
 
 // =====================================================
 // HEADER ACTION
 // =====================================================
 
-export type AssessmentHeaderAction = {
+export type AssessmentHeaderActionType =
+  | "CREATE"
+  | "REGISTER_TAXPAYER"
+  | "REGISTER_EXISTING_AGREEMENT";
 
-  key:
-    string;
-
-  label:
-    string;
-
-  icon:
-    LucideIcon;
-
-  action:
-    | "CREATE"
-    | "REGISTER_TAXPAYER"
-    | "REGISTER_EXISTING_AGREEMENT";
-};
-
+export interface AssessmentHeaderAction {
+  key: string;
+  label: string;
+  icon: LucideIcon;
+  action: AssessmentHeaderActionType;
+  permission: AssessmentPermission;
+}
 
 // =====================================================
 // STATUS
@@ -66,379 +57,317 @@ export type AssessmentStatus =
   | "RETURNED"
   | "CANCELLED";
 
-
 // =====================================================
 // CONFIG
 // =====================================================
 
-export type AssessmentConfig = {
-
-  role:
-    AssessmentRole;
-
-  title:
-    string;
-
-  description:
-    string;
-
-  badge:
-    string;
-
-  icon:
-    LucideIcon;
-
-  headerActions:
-    AssessmentHeaderAction[];
-
-  allowedStatuses:
-    AssessmentStatus[];
-
-  defaultStatus:
-    AssessmentStatus;
-
-  canCreate:
-    boolean;
-
-  canRegisterTaxpayer:
-    boolean;
-
-  canRegisterExistingAgreement:
-    boolean;
-
-  canEdit:
-    boolean;
-
-  canDelete:
-    boolean;
-
-  canExport:
-    boolean;
-
-  canApprove:
-    boolean;
-
-  canReject:
-    boolean;
-
-  canReturn:
-    boolean;
-
-  canSubmit:
-    boolean;
-
-  canView:
-    boolean;
-
-  tableDescription:
-    string;
-
-  emptyDescription:
-    string;
-};
-
+export interface AssessmentConfig {
+  title: string;
+  description: string;
+  badge: string;
+  icon: LucideIcon;
+  headerActions: AssessmentHeaderAction[];
+  allowedStatuses: AssessmentStatus[];
+  defaultStatus: AssessmentStatus;
+  tableDescription: string;
+  emptyDescription: string;
+}
 
 // =====================================================
-// SECTOR OFFICER
+// BASE HEADER ACTIONS
 // =====================================================
 
-const SECTOR_OFFICER_CONFIG: AssessmentConfig = {
+const ASSESSMENT_HEADER_ACTIONS: AssessmentHeaderAction[] = [
+  {
+    key: "register-taxpayer",
+    label: "Register Taxpayer",
+    icon: UserPlus,
+    action: "REGISTER_TAXPAYER",
+    permission: {
+      resource: "citizens",
+      action: "create",
+    },
+  },
 
-  role:
-    "SECTOR_OFFICER",
+  {
+    key: "register-existing-agreement",
+    label: "Register Existing Agreement",
+    icon: FilePlus2,
+    action: "REGISTER_EXISTING_AGREEMENT",
+    permission: {
+      resource: "assessment",
+      action: "create",
+    },
+  },
 
-  title:
-    "Revenue Assessments",
+  {
+    key: "create-assessment",
+    label: "New Assessment",
+    icon: ClipboardCheck,
+    action: "CREATE",
+    permission: {
+      resource: "assessment",
+      action: "create",
+    },
+  },
+];
+
+// =====================================================
+// ASSESSMENT CONFIG
+// =====================================================
+
+export const ASSESSMENT_CONFIG: AssessmentConfig = {
+  title: "Revenue Assessments",
 
   description:
-    "Create, manage, and submit revenue assessments for your assigned sector. Tariff resolution and assessment calculation are handled by the backend Decision Provider.",
+    "Create, manage, and submit revenue assessments. Tariff resolution and assessment calculation are handled by the backend Decision Provider.",
 
-  badge:
-    "Revenue Assessment",
+  badge: "Revenue Assessment",
 
-  icon:
-    Calculator,
+  icon: Calculator,
 
-  // ===================================================
-  // HEADER ACTIONS
-  // ===================================================
-
-  headerActions: [
-
-    {
-      key:
-        "register-taxpayer",
-
-      label:
-        "Register Taxpayer",
-
-      icon:
-        UserPlus,
-
-      action:
-        "REGISTER_TAXPAYER",
-    },
-
-    {
-      key:
-        "register-existing-agreement",
-
-      label:
-        "Register Existing Agreement",
-
-      icon:
-        FilePlus2,
-
-      action:
-        "REGISTER_EXISTING_AGREEMENT",
-    },
-
-    {
-      key:
-        "create-assessment",
-
-      label:
-        "New Assessment",
-
-      icon:
-        ClipboardCheck,
-
-      action:
-        "CREATE",
-    },
-
-  ],
+  headerActions: ASSESSMENT_HEADER_ACTIONS,
 
   allowedStatuses: [
-
     "ALL",
-
     "DRAFT",
-
     "PENDING_APPROVAL",
-
     "APPROVED",
-
     "RETURNED",
-
     "CANCELLED",
-
   ],
 
-  defaultStatus:
-    "ALL",
-
-  canCreate:
-    true,
-
-  canRegisterTaxpayer:
-    true,
-
-  canRegisterExistingAgreement:
-    true,
-
-  canEdit:
-    true,
-
-  canDelete:
-    true,
-
-  canExport:
-    true,
-
-  canApprove:
-    false,
-
-  canReject:
-    false,
-
-  canReturn:
-    false,
-
-  canSubmit:
-    true,
-
-  canView:
-    true,
+  defaultStatus: "ALL",
 
   tableDescription:
-    "Manage assessments created within your assigned sector.",
+    "Manage revenue assessments within your permitted scope.",
 
   emptyDescription:
     "No revenue assessments have been created yet.",
 };
 
-
 // =====================================================
-// REVENUE DECISION OFFICER
+// DECISION CONFIG
 // =====================================================
 
-const REVENUE_DECISION_OFFICER_CONFIG: AssessmentConfig = {
-
-  role:
-    "REVENUE_DECISION_OFFICER",
-
-  title:
-    "Assessment Decisions",
+export const ASSESSMENT_DECISION_CONFIG: AssessmentConfig = {
+  title: "Assessment Decisions",
 
   description:
     "Review submitted revenue assessments, verify the assessment details, and make the appropriate revenue decision.",
 
-  badge:
-    "Revenue Decision",
+  badge: "Revenue Decision",
 
-  icon:
-    CheckCircle2,
+  icon: CheckCircle2,
 
-  // Decision officers only review assessments.
-  // They do not create or register existing agreements.
-  headerActions:
-    [],
+  headerActions: [],
 
   allowedStatuses: [
-
     "ALL",
-
     "PENDING_APPROVAL",
-
     "APPROVED",
-
     "RETURNED",
-
     "CANCELLED",
-
   ],
 
-  defaultStatus:
-    "PENDING_APPROVAL",
-
-  canCreate:
-    false,
-
-  canRegisterTaxpayer:
-    false,
-
-  canRegisterExistingAgreement:
-    false,
-
-  canEdit:
-    false,
-
-  canDelete:
-    false,
-
-  canExport:
-    true,
-
-  canApprove:
-    true,
-
-  canReject:
-    true,
-
-  canReturn:
-    true,
-
-  canSubmit:
-    false,
-
-  canView:
-    true,
+  defaultStatus: "PENDING_APPROVAL",
 
   tableDescription:
-    "Review assessments submitted by sector officers and make revenue decisions.",
+    "Review submitted assessments and make revenue decisions.",
 
   emptyDescription:
     "There are no assessments awaiting your decision.",
 };
 
-
 // =====================================================
-// CONFIG MAP
-// =====================================================
-
-export const ASSESSMENT_CONFIG: Record<
-  AssessmentRole,
-  AssessmentConfig
-> = {
-
-  SECTOR_OFFICER:
-    SECTOR_OFFICER_CONFIG,
-
-  REVENUE_DECISION_OFFICER:
-    REVENUE_DECISION_OFFICER_CONFIG,
-
-};
-
-
-// =====================================================
-// ROLE RESOLUTION
+// PERMISSION CHECK
 // =====================================================
 
-export function resolveAssessmentRole(
-  role:
-    UserRole |
-    string |
-    undefined,
-): AssessmentRole | null {
-
-  switch (role) {
-
-    case "SECTOR_OFFICER":
-
-      return "SECTOR_OFFICER";
-
-
-    case "REVENUE_DECISION_OFFICER":
-
-      return "REVENUE_DECISION_OFFICER";
-
-
-    default:
-
-      return "SECTOR_OFFICER";
+export function hasAssessmentPermission(
+  permissions: UserPermission[] = [],
+  requiredPermission?: AssessmentPermission,
+): boolean {
+  if (!requiredPermission) {
+    return false;
   }
+
+  return permissions.some(
+    (permission) =>
+      permission.resource === requiredPermission.resource &&
+      permission.actions.includes(requiredPermission.action),
+  );
 }
 
+// =====================================================
+// HEADER ACTION RESOLUTION
+// =====================================================
+
+export function resolveAssessmentHeaderActions(
+  config: AssessmentConfig,
+  permissions: UserPermission[] = [],
+): AssessmentHeaderAction[] {
+  return config.headerActions.filter((action) =>
+    hasAssessmentPermission(
+      permissions,
+      action.permission,
+    ),
+  );
+}
 
 // =====================================================
-// CONFIG RESOLUTION
+// ASSESSMENT UI CAPABILITIES
+// =====================================================
+
+export interface AssessmentCapabilities {
+  canView: boolean;
+  canCreate: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
+  canSubmit: boolean;
+  canVerify: boolean;
+  canApprove: boolean;
+  canReject: boolean;
+  canReturn: boolean;
+  canExport: boolean;
+}
+
+// =====================================================
+// CAPABILITY RESOLUTION
+// =====================================================
+
+export function resolveAssessmentCapabilities(
+  permissions: UserPermission[] = [],
+): AssessmentCapabilities {
+  const has = (
+    resource: string,
+    action: PermissionAction,
+  ): boolean => {
+    return hasAssessmentPermission(
+      permissions,
+      {
+        resource,
+        action,
+      },
+    );
+  };
+
+  return {
+    /*
+    |--------------------------------------------------------------------------
+    | VIEW
+    |--------------------------------------------------------------------------
+    |
+    | `view` controls UI access to the assessment record.
+    | `read` is kept separate for data/read permissions.
+    |
+    */
+    canView:
+      has("assessment", "view"),
+
+    /*
+    |--------------------------------------------------------------------------
+    | CREATE
+    |--------------------------------------------------------------------------
+    */
+    canCreate:
+      has("assessment", "create"),
+
+    /*
+    |--------------------------------------------------------------------------
+    | UPDATE
+    |--------------------------------------------------------------------------
+    */
+    canEdit:
+      has("assessment", "update"),
+
+    /*
+    |--------------------------------------------------------------------------
+    | DELETE
+    |--------------------------------------------------------------------------
+    */
+    canDelete:
+      has("assessment", "delete"),
+
+    /*
+    |--------------------------------------------------------------------------
+    | WORKFLOW
+    |--------------------------------------------------------------------------
+    */
+    canSubmit:
+      has("assessment", "submit"),
+
+    canVerify:
+      has("assessment", "verify"),
+
+    canApprove:
+      has("assessment", "approve"),
+
+    canReject:
+      has("assessment", "reject"),
+
+    canReturn:
+      has("assessment", "return"),
+
+    /*
+    |--------------------------------------------------------------------------
+    | EXPORT
+    |--------------------------------------------------------------------------
+    */
+    canExport:
+      has("assessment", "export"),
+  };
+}
+
+// =====================================================
+// CONFIGURATION RESOLUTION
 // =====================================================
 
 export function getAssessmentConfig(
-  role:
-    UserRole |
-    string |
-    undefined,
-): AssessmentConfig | null {
-
-  const resolvedRole =
-    resolveAssessmentRole(
-      role,
+  permissions: UserPermission[] = [],
+): AssessmentConfig {
+  const canMakeDecision =
+    hasAssessmentPermission(
+      permissions,
+      {
+        resource: "assessment",
+        action: "approve",
+      },
+    ) ||
+    hasAssessmentPermission(
+      permissions,
+      {
+        resource: "assessment",
+        action: "reject",
+      },
+    ) ||
+    hasAssessmentPermission(
+      permissions,
+      {
+        resource: "assessment",
+        action: "return",
+      },
+    ) ||
+    hasAssessmentPermission(
+      permissions,
+      {
+        resource: "assessment",
+        action: "verify",
+      },
     );
 
-  if (!resolvedRole) {
-
-    return null;
+  if (canMakeDecision) {
+    return ASSESSMENT_DECISION_CONFIG;
   }
 
-  return ASSESSMENT_CONFIG[
-    resolvedRole
-  ];
+  return ASSESSMENT_CONFIG;
 }
-
 
 // =====================================================
 // INITIAL FILTERS
 // =====================================================
 
-export const INITIAL_ASSESSMENT_FILTERS:
-  AssessmentFilters = {
+export const INITIAL_ASSESSMENT_FILTERS: AssessmentFilters = {
+  status: "ALL",
 
-    status:
-      "ALL",
-
-    date:
-      null,
-
-  };
+  date: null,
+};

@@ -56,6 +56,8 @@ import ProtectedRoute from "@/components/access/ProtectedRoute";
 import { RoleDropdown } from "@/components/input/RoleDropDown";
 import { Role } from "@/types/access-management";
 import { Label } from "@/components/ui/label";
+import { useSelector } from "react-redux";
+import { RootState } from "@/lib/store/store";
 
 /* =====================================================
    FILTERS
@@ -184,6 +186,9 @@ function useDebounce(
 
 function UsersPageContent() {
   const router = useRouter();
+  const user = useSelector(
+    (state: RootState) => state.auth.user,
+  );
 
   /* ===================================================
      APPLIED FILTERS
@@ -332,7 +337,7 @@ function UsersPageContent() {
 
   const actions = resolveActions(
     CommentTableRegistry.user,
-    "SYSTEM_ADMIN",
+    user?.permissions
   );
 
   /* ===================================================

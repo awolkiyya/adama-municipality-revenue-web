@@ -302,7 +302,7 @@ function AccessManagementPageContent() {
   const actions =
     resolveActions(
       CommentTableRegistry.role,
-      user.role.name
+      user.permissions
     );
 
   /* ==========================================================

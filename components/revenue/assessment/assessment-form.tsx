@@ -54,8 +54,14 @@ type AssessmentMode = "create" | "edit";
 export type InitialAssessment = {
   id?: string;
 
-  taxpayerId?: string | number | null;
-  taxpayer_id?: string | number | null;
+  citizenId?: string | null;
+
+  taxpayer?: {
+    id?: string | null;
+    citizenUid?: string | null;
+    fullName?: string | null;
+    nationalId?: string | null;
+  } | null;
 
   notes?: string | null;
 
@@ -181,8 +187,8 @@ const getInitialTaxpayerId = (
   }
 
   return getStringValue(
-    assessment.taxpayerId ??
-      assessment.taxpayer_id ??
+    assessment.citizenId ??
+      assessment.taxpayer?.id ??
       "",
   );
 };
@@ -207,6 +213,26 @@ const getInitialServiceId = (
 
 /**
  * Extract dynamic field values from an existing service.
+ *
+ * API format:
+ *
+ * values: [
+ *   {
+ *     fieldCode: "PRICE",
+ *     value: 10000
+ *   },
+ *   {
+ *     fieldCode: "PROPERTY_TYPE",
+ *     value: "COMMERCIAL"
+ *   }
+ * ]
+ *
+ * Form format:
+ *
+ * {
+ *   PRICE: 10000,
+ *   PROPERTY_TYPE: "COMMERCIAL"
+ * }
  */
 const getInitialServiceFields = (
   service: unknown,
@@ -215,11 +241,47 @@ const getInitialServiceFields = (
     return {};
   }
 
+  // =================================================
+  // API ASSESSMENT FORMAT
+  // =================================================
+
+  if (Array.isArray(service.values)) {
+    const result: Record<
+      string,
+      FieldValue
+    > = {};
+
+    for (const item of service.values) {
+      if (!isRecord(item)) {
+        continue;
+      }
+
+      const fieldCode = getStringValue(
+        item.fieldCode ??
+          item.field_code ??
+          item.code ??
+          "",
+      ).trim();
+
+      if (!fieldCode) {
+        continue;
+      }
+
+      result[fieldCode] =
+        item.value ?? null;
+    }
+
+    return result;
+  }
+
+  // =================================================
+  // OTHER / LEGACY FORMATS
+  // =================================================
+
   const candidates = [
     service.fields,
     service.fieldValues,
     service.field_values,
-    service.values,
     service.data,
   ];
 
@@ -255,8 +317,7 @@ const buildInitialServiceFieldValues = (
     assessment.service_field_values;
 
   if (isRecord(directValues)) {
-    const normalized: ServiceFieldValues =
-      {};
+    const normalized: ServiceFieldValues = {};
 
     for (const [
       serviceId,
@@ -411,6 +472,10 @@ export function AssessmentForm({
 
   onBack,
 }: AssessmentFormProps) {
+
+  console.log("incomming services",revenueServices);
+
+
   // ===================================================
   // INITIAL DATA
   // ===================================================
@@ -744,6 +809,9 @@ export function AssessmentForm({
     setServiceFieldValues({});
     clearFeedback();
   };
+  
+  console.log("sellected service",selectedServices);
+
 
   // ===================================================
   // VALIDATION

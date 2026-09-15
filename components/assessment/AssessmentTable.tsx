@@ -4,29 +4,22 @@
 
 "use client";
 
-import {
-  Button,
-} from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 
-import {
-  CommenTable,
-} from "@/components/table/CommenTable";
+import { CommenTable } from "@/components/table/CommenTable";
 
-import {
-  CommentTableRegistry,
-} from "@/components/table/registry";
+import { CommentTableRegistry } from "@/components/table/registry";
 
-import {
-  resolveActions,
-} from "@/components/table/permissions/ResolveActions";
+import { resolveActions } from "@/components/table/permissions/ResolveActions";
 
-import type {
-  CommentType,
-} from "@/types/commen";
+import type { UserPermission } from "@/types/user";
 
-import type {
-  AssessmentConfig,
-} from "./assessment.config";
+import type { CommentType } from "@/types/commen";
+
+import type { AssessmentConfig } from "./assessment.config";
+
+import { resolveAssessmentCapabilities } from "./assessment.config";
+
 import { DataTablePagination } from "../table/data-pagination";
 
 
@@ -35,70 +28,39 @@ import { DataTablePagination } from "../table/data-pagination";
 // =====================================================
 
 type AssessmentTableProps = {
+  config: AssessmentConfig;
 
-  config:
-    AssessmentConfig;
+  permissions: UserPermission[];
 
-  data:
-    any[];
+  data: any[];
 
-  page:
-    number;
+  page: number;
 
-  pageSize:
-    number;
+  pageSize: number;
 
-  total:
-    number;
+  total: number;
 
-  isLoading:
-    boolean;
+  isLoading: boolean;
 
-  error:
-    boolean;
+  error: boolean;
 
-  onView:
-    (
-      row: any,
-    ) => void;
+  onView: (row: any) => void;
 
-  onEdit:
-    (
-      row: any,
-    ) => void;
+  onEdit: (row: any) => void;
 
-  onDelete:
-    (
-      id: string,
-    ) => void;
+  onDelete: (id: string) => void;
 
-  onApprove:
-    (
-      row: any,
-    ) => void;
+  onApprove: (row: any) => void;
 
-  onReject:
-    (
-      row: any,
-    ) => void;
+  onReject: (row: any) => void;
 
-  onReturn:
-    (
-      row: any,
-    ) => void;
+  onReturn: (row: any) => void;
 
-  onRetry:
-    () => void;
+  onRetry: () => void;
 
-  onPageChange:
-    (
-      page: number,
-    ) => void;
+  onPageChange: (page: number) => void;
 
-  onPageSizeChange:
-    (
-      size: number,
-    ) => void;
+  onPageSizeChange: (size: number) => void;
 };
 
 
@@ -108,49 +70,121 @@ type AssessmentTableProps = {
 
 export function AssessmentTable({
   config,
-
+  permissions,
   data,
-
   page,
-
   pageSize,
-
   total,
-
   isLoading,
-
   error,
-
   onView,
-
   onEdit,
-
   onDelete,
-
   onApprove,
-
   onReject,
-
   onReturn,
-
   onRetry,
-
   onPageChange,
-
   onPageSizeChange,
-
 }: AssessmentTableProps) {
 
+  // ===================================================
+  // ASSESSMENT CAPABILITIES
+  // ===================================================
+
+  const capabilities = resolveAssessmentCapabilities(
+    permissions,
+  );
+
 
   // ===================================================
-  // BASE ACTIONS
+  // TABLE ACTION PERMISSIONS
   // ===================================================
 
-  const actions =
-    resolveActions(
-      CommentTableRegistry.sector,
-      config.role,
-    );
+  const actions = resolveActions(
+    CommentTableRegistry.assessment,
+    permissions,
+  );
+
+
+  // ===================================================
+  // FINAL ACTION VISIBILITY
+  // ===================================================
+
+  /**
+   * An action is available only when:
+   *
+   * 1. The assessment capability allows it.
+   * 2. The table registry allows it.
+   * 3. The required permission exists.
+   *
+   * `resolveActions()` already evaluates the registry
+   * permission, so these checks combine both layers.
+   */
+
+  const canView =
+    capabilities.canView &&
+    actions.view &&
+    !!onView;
+
+  const canEdit =
+    capabilities.canEdit &&
+    actions.edit &&
+    !!onEdit;
+
+  const canDelete =
+    capabilities.canDelete &&
+    actions.delete &&
+    !!onDelete;
+
+  const canApprove =
+    capabilities.canApprove &&
+    actions.approve &&
+    !!onApprove;
+
+  const canReturn =
+    capabilities.canReturn &&
+    actions.return &&
+    !!onReturn;
+
+
+  // ===================================================
+  // DEBUG
+  // ===================================================
+
+  console.log(
+    "========== ASSESSMENT TABLE DEBUG ==========",
+  );
+
+  console.log(
+    "Permissions:",
+    permissions,
+  );
+
+  console.log(
+    "Assessment capabilities:",
+    capabilities,
+  );
+
+  console.log(
+    "Resolved table actions:",
+    actions,
+  );
+
+  console.log(
+    "Final action visibility:",
+    {
+      view: canView,
+      edit: canEdit,
+      delete: canDelete,
+      approve: canApprove,
+      return: canReturn,
+    },
+  );
+
+  console.log(
+    "============================================",
+  );
 
 
   // ===================================================
@@ -168,7 +202,7 @@ export function AssessmentTable({
     >
 
       {/* =============================================
-          HEADER
+          TABLE HEADER
       ============================================= */}
 
       <div
@@ -209,56 +243,77 @@ export function AssessmentTable({
       ============================================= */}
 
       <CommenTable
+        type={"assessment" as CommentType}
 
-        type={
-          "assessment" as CommentType
-        }
+        data={data}
 
-        data={
-          data
-        }
+        page={page}
 
-        page={
-          page
-        }
+        pageSize={pageSize}
 
-        pageSize={
-          pageSize
-        }
+        isLoading={isLoading}
 
-        isLoading={
-          isLoading
-        }
+        // -------------------------------------------
+        // VIEW
+        // -------------------------------------------
 
         onView={
-          onView
+          canView
+            ? onView
+            : undefined
         }
 
+        // -------------------------------------------
+        // EDIT
+        // -------------------------------------------
+
         onEdit={
-          config.canEdit
+          canEdit
             ? onEdit
             : undefined
         }
 
+        // -------------------------------------------
+        // DELETE
+        // -------------------------------------------
+
         onDelete={
-          config.canDelete
+          canDelete
             ? onDelete
             : undefined
         }
 
-        actions={
-          actions
+        // -------------------------------------------
+        // APPROVE
+        // -------------------------------------------
+
+        onApprove={
+          canApprove
+            ? onApprove
+            : undefined
         }
 
+        // -------------------------------------------
+        // RETURN
+        // -------------------------------------------
+
+        onReturn={
+          canReturn
+            ? onReturn
+            : undefined
+        }
+
+        // -------------------------------------------
+        // GENERIC ACTIONS
+        // -------------------------------------------
+
+        actions={actions}
       />
 
 
-      {/* =============================================
-          ERROR
-      ============================================= */}
+
 
       {error && (
-
         <div
           className="
             flex
@@ -283,9 +338,7 @@ export function AssessmentTable({
           <Button
             variant="outline"
             size="sm"
-            onClick={
-              onRetry
-            }
+            onClick={onRetry}
           >
             Retry
           </Button>
@@ -294,9 +347,6 @@ export function AssessmentTable({
       )}
 
 
-      {/* =============================================
-          PAGINATION
-      ============================================= */}
 
       <div
         className="
@@ -307,25 +357,15 @@ export function AssessmentTable({
       >
 
         <DataTablePagination
-          page={
-            page
-          }
+          page={page}
 
-          pageSize={
-            pageSize
-          }
+          pageSize={pageSize}
 
-          total={
-            total
-          }
+          total={total}
 
-          onPageChange={
-            onPageChange
-          }
+          onPageChange={onPageChange}
 
-          onPageSizeChange={
-            onPageSizeChange
-          }
+          onPageSizeChange={onPageSizeChange}
         />
 
       </div>

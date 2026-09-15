@@ -161,7 +161,7 @@ function RevenueCategoriesPage() {
 
   const actions = resolveActions(
     CommentTableRegistry.revenueCategory,
-    user.role.name
+    user.permissions
   );
 
   return (

@@ -408,37 +408,37 @@ export const APP_PERMISSIONS = {
   */
 
   INVOICE_VIEW: {
-    resource: "invoice",
+    resource: "invoices",
     action: "view",
   },
 
   INVOICE_CREATE: {
-    resource: "invoice",
+    resource: "invoices",
     action: "create",
   },
 
   INVOICE_UPDATE: {
-    resource: "invoice",
+    resource: "invoices",
     action: "update",
   },
 
   INVOICE_ISSUE: {
-    resource: "invoice",
+    resource: "invoices",
     action: "issue",
   },
 
   INVOICE_CANCEL: {
-    resource: "invoice",
+    resource: "invoices",
     action: "cancel",
   },
 
   INVOICE_RECALCULATE: {
-    resource: "invoice",
+    resource: "invoices",
     action: "recalculate",
   },
 
   INVOICE_VIEW_HISTORY: {
-    resource: "invoice",
+    resource: "invoices",
     action: "view_history",
   },
 

@@ -13,10 +13,12 @@ import {
   CircleDot,
   Clock3,
   FileText,
+  Filter,
   Loader2,
   Receipt,
   Search,
   Wallet,
+  X,
 } from "lucide-react";
 
 import { Banner } from "@/components/banner/topBanner";
@@ -24,6 +26,17 @@ import { FloatingParticles } from "@/components/design/FloatingParticles";
 import { IconBadge } from "@/components/commen/icon-badge";
 
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 
 import { Filters } from "@/components/commen/Filters";
 import { Toolbar } from "@/components/commen/Toolbar";
@@ -403,6 +416,56 @@ function InvoicesPage() {
 
 
   // ===================================================
+  // FILTER HELPERS
+  // ===================================================
+
+  const hasActiveFilters =
+    filters.status !== "ALL" ||
+    Boolean(filters.date?.from) ||
+    Boolean(filters.date?.to);
+
+
+  const activeFilterCount =
+    Number(
+      filters.status !== "ALL",
+    ) +
+    Number(
+      Boolean(filters.date?.from) ||
+      Boolean(filters.date?.to),
+    );
+
+
+  // ===================================================
+  // RESET FILTERS
+  // ===================================================
+
+  const resetFilters = () => {
+
+    setFilters({
+      ...INITIAL_FILTERS,
+    });
+
+    setPage(1);
+  };
+
+
+  // ===================================================
+  // CLEAR ALL
+  // ===================================================
+
+  const clearAll = () => {
+
+    setSearch("");
+
+    setFilters({
+      ...INITIAL_FILTERS,
+    });
+
+    setPage(1);
+  };
+
+
+  // ===================================================
   // API FILTERS
   // ===================================================
   //
@@ -479,15 +542,6 @@ function InvoicesPage() {
 
   // ===================================================
   // BACKEND SUMMARY
-  // ===================================================
-  //
-  // Summary comes directly from:
-  //
-  // meta.summary
-  //
-  // We do NOT calculate financial values
-  // from the current page.
-  //
   // ===================================================
 
   const summary =
@@ -729,11 +783,6 @@ function InvoicesPage() {
   // ===================================================
   // TABLE DATA
   // ===================================================
-  //
-  // Convert backend Invoice objects into the shape
-  // consumed by CommenTable.
-  //
-  // ===================================================
 
   const tableData =
     useMemo(
@@ -832,25 +881,33 @@ function InvoicesPage() {
 
               subtotal:
                 formatCurrency(
-                  Number(invoice.financial.subtotal),
+                  Number(
+                    invoice.financial.subtotal,
+                  ),
                   invoice.currency,
                 ),
 
               total_amount:
                 formatCurrency(
-                  Number(invoice.financial.total_amount),
+                  Number(
+                    invoice.financial.total_amount,
+                  ),
                   invoice.currency,
                 ),
 
               paid_amount:
                 formatCurrency(
-                  Number(invoice.financial.paid_amount),
+                  Number(
+                    invoice.financial.paid_amount,
+                  ),
                   invoice.currency,
                 ),
 
               balance_due:
                 formatCurrency(
-                  Number(invoice.financial.balance_due),
+                  Number(
+                    invoice.financial.balance_due,
+                  ),
                   invoice.currency,
                 ),
 
@@ -891,7 +948,8 @@ function InvoicesPage() {
       ],
     );
 
-     // ===================================================
+
+  // ===================================================
   // PERMISSION LOADING
   // ===================================================
 
@@ -956,22 +1014,12 @@ function InvoicesPage() {
   // ===================================================
   // ACTIONS
   // ===================================================
-  //
-  // IMPORTANT:
-  //
-  // CommenTable expects:
-  //
-  // Record<TableActionKey, boolean>
-  //
-  // Do NOT use [] as fallback.
-  //
-  // ===================================================
 
-  const actions = resolveActions(
+  const actions =
+    resolveActions(
       CommentTableRegistry.invoice,
-      user.role.name,
+      user.permissions,
     );
- 
 
 
   // ===================================================
@@ -1303,57 +1351,185 @@ function InvoicesPage() {
                 className="
                   flex
                   w-full
-                  flex-col
-                  gap-3
-                  lg:flex-row
-                  lg:items-center
-                  lg:justify-end
+                  items-center
+                  justify-end
+                  gap-2
                 "
               >
 
-                <div
-                  className="
-                    flex-1
-                  "
-                >
+                {/* ======================================
+                    FILTER SHEET
+                ====================================== */}
 
-                  <Filters
+                <Sheet>
 
-                    schema={
-                      invoiceFilters
-                    }
+                  <SheetTrigger asChild>
 
-                    value={
-                      filters
-                    }
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="
+                        shrink-0
+                        gap-2
+                      "
+                    >
 
-                    onChange={(
-                      value,
-                    ) => {
+                      <Filter
+                        className="h-4 w-4"
+                      />
 
-                      setFilters(
-                        value,
-                      );
+                      <span>
+                        Filters
+                      </span>
 
-                      setPage(1);
+                      {activeFilterCount > 0 && (
 
-                    }}
+                        <span
+                          className="
+                            flex
+                            h-5
+                            min-w-5
+                            items-center
+                            justify-center
+                            rounded-full
+                            bg-primary
+                            px-1.5
+                            text-[10px]
+                            font-semibold
+                            text-primary-foreground
+                          "
+                        >
+                          {activeFilterCount}
+                        </span>
 
-                    onReset={() => {
+                      )}
 
-                      setFilters(
-                        INITIAL_FILTERS,
-                      );
+                    </Button>
 
-                      setSearch("");
+                  </SheetTrigger>
 
-                      setPage(1);
 
-                    }}
+                  <SheetContent
+                    side="right"
+                    className="
+                      flex
+                      w-full
+                      flex-col
+                      sm:max-w-md
+                      p-5
+                    "
+                  >
 
-                  />
+                    {/* ==================================
+                        SHEET HEADER
+                    ================================== */}
 
-                </div>
+                    <SheetHeader>
+
+                      <SheetTitle>
+                        Invoice Filters
+                      </SheetTitle>
+
+                      <SheetDescription>
+                        Filter invoices by status and
+                        issue date.
+                      </SheetDescription>
+
+                    </SheetHeader>
+
+
+                    {/* ==================================
+                        SHEET CONTENT
+                    ================================== */}
+
+                    <div
+                      className="
+                        flex-1
+                        overflow-y-auto
+                        px-1
+                        py-6
+                      "
+                    >
+
+                      <Filters
+
+                        schema={
+                          invoiceFilters
+                        }
+
+                        value={
+                          filters
+                        }
+
+                        onChange={(
+                          value,
+                        ) => {
+
+                          setFilters(
+                            value,
+                          );
+
+                        }}
+
+                       
+
+                        layout="column"
+                        resetPosition="end"
+
+                      />
+
+                    </div>
+
+
+                    {/* ==================================
+                        SHEET FOOTER
+                    ================================== */}
+
+                    <SheetFooter
+                      className="
+                        border-t
+                        pt-4
+                      "
+                    >
+
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+
+                          resetFilters();
+
+                        }}
+                      >
+                        Reset
+                      </Button>
+
+
+                      <SheetTrigger asChild>
+
+                        <Button
+                          type="button"
+                          onClick={() => {
+
+                            setPage(1);
+
+                          }}
+                        >
+                          Apply Filters
+                        </Button>
+
+                      </SheetTrigger>
+
+                    </SheetFooter>
+
+                  </SheetContent>
+
+                </Sheet>
+
+
+                {/* ======================================
+                    EXPORT
+                ====================================== */}
 
               </div>
 
@@ -1362,6 +1538,183 @@ function InvoicesPage() {
           />
 
         </div>
+
+
+        {/* =================================================
+            ACTIVE FILTERS
+        ================================================= */}
+
+        {hasActiveFilters && (
+
+          <div
+            className="
+              flex
+              flex-wrap
+              items-center
+              gap-2
+              border-b
+              bg-muted/10
+              px-4
+              py-3
+              sm:px-5
+            "
+          >
+
+            <span
+              className="
+                mr-1
+                text-xs
+                font-medium
+                text-muted-foreground
+              "
+            >
+              Filters:
+            </span>
+
+
+            {/* -------------------------------------------
+                STATUS CHIP
+            ------------------------------------------- */}
+
+            {filters.status !== "ALL" && (
+
+              <button
+                type="button"
+                onClick={() => {
+
+                  setFilters(
+                    (
+                      current,
+                    ) => ({
+                      ...current,
+                      status:
+                        "ALL",
+                    }),
+                  );
+
+                  setPage(1);
+
+                }}
+                className="
+                  inline-flex
+                  items-center
+                  gap-1.5
+                  rounded-full
+                  border
+                  bg-background
+                  px-3
+                  py-1
+                  text-xs
+                  font-medium
+                  transition-colors
+                  hover:bg-muted
+                "
+              >
+
+                <span>
+                  Status:
+                </span>
+
+                <span>
+                  {filters.status}
+                </span>
+
+                <X
+                  className="
+                    h-3
+                    w-3
+                    text-muted-foreground
+                  "
+                />
+
+              </button>
+
+            )}
+
+
+            {/* -------------------------------------------
+                DATE CHIP
+            ------------------------------------------- */}
+
+            {(filters.date?.from ||
+              filters.date?.to) && (
+
+              <button
+                type="button"
+                onClick={() => {
+
+                  setFilters(
+                    (
+                      current,
+                    ) => ({
+                      ...current,
+                      date: null,
+                    }),
+                  );
+
+                  setPage(1);
+
+                }}
+                className="
+                  inline-flex
+                  items-center
+                  gap-1.5
+                  rounded-full
+                  border
+                  bg-background
+                  px-3
+                  py-1
+                  text-xs
+                  font-medium
+                  transition-colors
+                  hover:bg-muted
+                "
+              >
+
+                <span>
+                  Issue Date
+                </span>
+
+                <X
+                  className="
+                    h-3
+                    w-3
+                    text-muted-foreground
+                  "
+                />
+
+              </button>
+
+            )}
+
+
+            {/* -------------------------------------------
+                CLEAR ALL
+            ------------------------------------------- */}
+
+            <button
+              type="button"
+              onClick={() => {
+
+                clearAll();
+
+              }}
+              className="
+                ml-auto
+                text-xs
+                font-medium
+                text-muted-foreground
+                underline-offset-4
+                hover:text-foreground
+                hover:underline
+              "
+            >
+              Clear all
+            </button>
+
+          </div>
+
+        )}
 
 
         {/* ===============================================

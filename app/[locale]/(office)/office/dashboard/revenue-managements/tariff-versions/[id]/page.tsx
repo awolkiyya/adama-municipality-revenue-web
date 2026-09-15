@@ -856,7 +856,7 @@ export default function TariffVersionDetailPage() {
   const actions =
     resolveActions(
       CommentTableRegistry.tariffRule,
-      user.role.name,
+      user.permissions,
     );
 
   /* =========================================================================

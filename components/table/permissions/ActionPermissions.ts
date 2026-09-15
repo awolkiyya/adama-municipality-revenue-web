@@ -1,114 +1,141 @@
-import { UserRole } from "@/types/user";
 import { TableActionKey } from "../registry";
+import type { PermissionAction } from "@/types/user";
 
-export const ActionPermissions: Record<TableActionKey, UserRole[]> = {
-    view: [
-      "SYSTEM_ADMIN",
-      "REVENUE_DECISION_OFFICER",
-      "SECTOR_OFFICER",
-      "REGISTRATION_OFFICER",
-      "REVENUE_COLLECTOR",
-      "DATA_MANAGER",
-    ],
-  
-    create: [
-      "SYSTEM_ADMIN",
-      "SECTOR_OFFICER",
-      "REGISTRATION_OFFICER",
-      "REVENUE_COLLECTOR",
-      "DATA_MANAGER",
-    ],
-  
-    edit: [
-      "SYSTEM_ADMIN",
-      "DATA_MANAGER",
-      "SECTOR_OFFICER",
+export interface RequiredPermission {
+  resource: string;
+  action: PermissionAction;
+}
 
-    ],
-  
-    delete: [
-      "SYSTEM_ADMIN",
-      "DATA_MANAGER",
-    ],
-  
-    toggleStatus: [
-      "SYSTEM_ADMIN",
-      "DATA_MANAGER",
-    ],
-  
-    updatePassword: [
-      "SYSTEM_ADMIN",
-    ],
-  
-    updateRole: [
-      "SYSTEM_ADMIN",
-    ],
-  
-    updateHierarchy: [],
-  
-    manageAccess: [
-      "SYSTEM_ADMIN",
-      "DATA_MANAGER",
-    ],
-  
-    manageFormulaVariables: [
-      "SYSTEM_ADMIN",
-      "DATA_MANAGER",
-    ],
-  
-    submit: [],
-  
-    return: [],
-  
-    approve: [],
-  
-    /*
-    |--------------------------------------------------------------------------
-    | INVOICE ACTIONS
-    |--------------------------------------------------------------------------
-    */
-  
-    issue: [
-      "SYSTEM_ADMIN",
-      "REVENUE_COLLECTOR",
-    ],
-  
-    applyDiscount: [
-      "SYSTEM_ADMIN",
-      "REVENUE_DECISION_OFFICER",
-      "REVENUE_COLLECTOR",
-      "SECTOR_OFFICER"
-    ],
-  
+export const ActionPermissions: Partial<
+  Record<TableActionKey, RequiredPermission>
+> = {
+  /*
+  |--------------------------------------------------------------------------
+  | Common Actions
+  |--------------------------------------------------------------------------
+  */
 
-  
-    cancel: [
-      "SYSTEM_ADMIN",
-      "REVENUE_DECISION_OFFICER",
-      "SECTOR_OFFICER"
+  view: {
+    resource: "RESOURCE",
+    action: "view",
+  },
 
-    ],
-  
-    void: [
-      "SYSTEM_ADMIN",
-    ],
-  
-    pay: [
-      "SYSTEM_ADMIN",
-      "REVENUE_COLLECTOR",
-    ],
-  
-    print: [
-      "SYSTEM_ADMIN",
-      "REVENUE_COLLECTOR",
-      "REVENUE_DECISION_OFFICER",
-      "SECTOR_OFFICER",
-    ],
-  
-    download: [
-      "SYSTEM_ADMIN",
-      "REVENUE_COLLECTOR",
-      "REVENUE_DECISION_OFFICER",
-      "SECTOR_OFFICER",
-    ],
-  };
+  create: {
+    resource: "RESOURCE",
+    action: "create",
+  },
+
+  edit: {
+    resource: "RESOURCE",
+    action: "update",
+  },
+
+  delete: {
+    resource: "RESOURCE",
+    action: "delete",
+  },
+
+  toggleStatus: {
+    resource: "RESOURCE",
+    action: "update",
+  },
+
+  /*
+  |--------------------------------------------------------------------------
+  | User / Access Actions
+  |--------------------------------------------------------------------------
+  */
+
+  updatePassword: {
+    resource: "users",
+    action: "update_password",
+  },
+
+  updateRole: {
+    resource: "users",
+    action: "assign_roles",
+  },
+
+  updateHierarchy: {
+    resource: "users",
+    action: "update",
+  },
+
+  manageAccess: {
+    resource: "access_management",
+    action: "update",
+  },
+
+  /*
+  |--------------------------------------------------------------------------
+  | Tariff / Formula Actions
+  |--------------------------------------------------------------------------
+  */
+
+  manageFormulaVariables: {
+    resource: "formula_variables",
+    action: "update",
+  },
+
+  /*
+  |--------------------------------------------------------------------------
+  | Assessment Actions
+  |--------------------------------------------------------------------------
+  */
+
+  submit: {
+    resource: "assessment",
+    action: "submit",
+  },
+
+  return: {
+    resource: "assessment",
+    action: "return",
+  },
+
+  approve: {
+    resource: "assessment",
+    action: "approve",
+  },
+
+  /*
+  |--------------------------------------------------------------------------
+  | Invoice Actions
+  |--------------------------------------------------------------------------
+  */
+
+  issue: {
+    resource: "invoices",
+    action: "issue",
+  },
+
+  applyDiscount: {
+    resource: "penalty_discount_requests",
+    action: "create",
+  },
+
+  cancel: {
+    resource: "invoices",
+    action: "cancel",
+  },
+
+  void: {
+    resource: "invoices",
+    action: "void",
+  },
+
+  pay: {
+    resource: "payments",
+    action: "create",
+  },
+
+  print: {
+    resource: "invoices",
+    action: "read",
+  },
+
+  download: {
+    resource: "invoices",
+    action: "read",
+  },
+};

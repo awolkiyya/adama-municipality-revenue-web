@@ -48,6 +48,7 @@ import {
 
 import {
   getAssessmentConfig,
+  hasAssessmentPermission,
   INITIAL_ASSESSMENT_FILTERS,
 } from "./assessment.config";
 
@@ -106,11 +107,17 @@ export default function AssessmentWorkspace() {
 
 
   // ===================================================
-  // ROLE
+  // PERMISSIONS
   // ===================================================
 
-  const role =
-    user?.role?.name;
+  /**
+   * Permissions come from the authenticated user.
+   *
+   * The fallback to [] is only for the initial state
+   * before the authenticated user has been loaded.
+   */
+  const permissions =
+    user?.permissions ?? [];
 
 
   // ===================================================
@@ -119,7 +126,7 @@ export default function AssessmentWorkspace() {
 
   const config =
     getAssessmentConfig(
-      role ?? "",
+      permissions,
     );
 
 
@@ -141,8 +148,27 @@ export default function AssessmentWorkspace() {
   // ===================================================
 
   const isPendingQueue =
-    config?.role ===
-    "REVENUE_DECISION_OFFICER";
+    hasAssessmentPermission(
+      permissions,
+      {
+        resource: "assessment",
+        action: "approve",
+      },
+    ) ||
+    hasAssessmentPermission(
+      permissions,
+      {
+        resource: "assessment",
+        action: "reject",
+      },
+    ) ||
+    hasAssessmentPermission(
+      permissions,
+      {
+        resource: "assessment",
+        action: "return",
+      },
+    );
 
 
   // ===================================================
@@ -236,14 +262,11 @@ export default function AssessmentWorkspace() {
       params:
         assessmentQuery,
 
-      pending:
-        isPendingQueue,
-
     });
 
 
   // ===================================================
-  // ASSESSMENTS
+  // ASSESSMENT DATA
   // ===================================================
 
   const assessments =
@@ -554,14 +577,6 @@ export default function AssessmentWorkspace() {
           SUMMARY
           ================================================= */}
 
-      {/*
-        The normal assessment workspace shows the
-        complete assessment summary.
-
-        The decision officer pending queue does not
-        show general assessment status cards.
-      */}
-
       {!isPendingQueue && (
         <AssessmentSummary
           total={
@@ -635,8 +650,6 @@ export default function AssessmentWorkspace() {
           );
 
         }}
-
-        
       />
 
 
@@ -648,6 +661,10 @@ export default function AssessmentWorkspace() {
 
         config={
           config
+        }
+
+        permissions={
+          permissions
         }
 
         data={
@@ -709,45 +726,38 @@ export default function AssessmentWorkspace() {
 
         }}
 
-        onApprove={
-          (
+        onApprove={(
+          row,
+        ) => {
+
+          console.log(
+            "approve assessment",
             row,
-          ) => {
+          );
 
-            console.log(
-              "approve assessment",
-              row,
-            );
+        }}
 
-          }
-        }
+        onReject={(
+          row,
+        ) => {
 
-        onReject={
-          (
+          console.log(
+            "reject assessment",
             row,
-          ) => {
+          );
 
-            console.log(
-              "reject assessment",
-              row,
-            );
+        }}
 
-          }
-        }
+        onReturn={(
+          row,
+        ) => {
 
-        onReturn={
-          (
+          console.log(
+            "return assessment",
             row,
-          ) => {
+          );
 
-            console.log(
-              "return assessment",
-              row,
-            );
-
-          }
-        }
-
+        }}
       />
 
     </div>

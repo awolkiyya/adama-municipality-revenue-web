@@ -197,15 +197,18 @@ import { CreateTariffRulePayload, TariffRuleRecord, UpdateTariffRulePayload } fr
     return useMutation({
   
       mutationFn:({
+        tariffVersionId,
         id,
         data,
       }:{
+        tariffVersionId:string;
         id:string;
         data:UpdateTariffRulePayload;
       }) =>
   
   
         tariffRuleService.updateTariffRule(
+          tariffVersionId,
           id,
           data
         ),

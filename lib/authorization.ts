@@ -1087,4 +1087,38 @@ PENALTY_RULES_VIEW_HISTORY: {
   action: "view_history",
 },
 
+// =========================================================
+// PAYMENT SCHEDULE RULES
+// =========================================================
+
+PAYMENT_SCHEDULE_RULES_VIEW: {
+  resource: "payment_schedule_rules",
+  action: "view",
+},
+
+PAYMENT_SCHEDULE_RULES_CREATE: {
+  resource: "payment_schedule_rules",
+  action: "create",
+},
+
+PAYMENT_SCHEDULE_RULES_UPDATE: {
+  resource: "payment_schedule_rules",
+  action: "update",
+},
+
+PAYMENT_SCHEDULE_RULES_ACTIVATE: {
+  resource: "payment_schedule_rules",
+  action: "activate",
+},
+
+PAYMENT_SCHEDULE_RULES_DEACTIVATE: {
+  resource: "payment_schedule_rules",
+  action: "deactivate",
+},
+
+PAYMENT_SCHEDULE_RULES_VIEW_HISTORY: {
+  resource: "payment_schedule_rules",
+  action: "view_history",
+},
+
 } satisfies Record<string, AppPermission>;

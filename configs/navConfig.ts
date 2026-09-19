@@ -14,6 +14,7 @@ import {
   Calculator,
   Wallet,
   CreditCard,
+  CalendarClock,
 } from "lucide-react";
 
 import { NavItem } from "@/types/commen";
@@ -179,48 +180,55 @@ export const NAV_ITEMS: NavItem[] = [
   },
 
   // =========================================================
-  // REVENUE CONFIGURATION
-  // =========================================================
+// REVENUE CONFIGURATION
+// =========================================================
 
-  {
-    title: "revenue_configuration",
-    url: "#",
-    icon: ClipboardList,
+{
+  title: "revenue_configuration",
+  url: "#",
+  icon: ClipboardList,
 
-    items: [
-      {
-        title: "revenue_categories",
-        url: "/office/dashboard/revenue-managements/categories",
-        permission: APP_PERMISSIONS.REVENUE_CATEGORY_VIEW,
-      },
+  items: [
+    {
+      title: "revenue_categories",
+      url: "/office/dashboard/revenue-managements/categories",
+      permission: APP_PERMISSIONS.REVENUE_CATEGORY_VIEW,
+    },
 
-      {
-        title: "revenue_services",
-        url: "/office/dashboard/revenue-managements/services",
-        permission: APP_PERMISSIONS.REVENUE_SERVICES_VIEW,
-      },
+    {
+      title: "revenue_services",
+      url: "/office/dashboard/revenue-managements/services",
+      permission: APP_PERMISSIONS.REVENUE_SERVICES_VIEW,
+    },
 
-      {
-        title: "tariff_management",
-        url: "/office/dashboard/revenue-managements/tariff-versions",
-        permission: APP_PERMISSIONS.TARIFF_VIEW,
-      },
+    {
+      title: "tariff_management",
+      url: "/office/dashboard/revenue-managements/tariff-versions",
+      permission: APP_PERMISSIONS.TARIFF_VIEW,
+    },
 
-      {
-        title: "penalty_rules",
-        url: "/office/dashboard/revenue-managements/penalty-rules",
-        icon: ShieldCheck,
-        permission: APP_PERMISSIONS.PENALTY_RULES_VIEW,
-      },
+    {
+      title: "penalty_rules",
+      url: "/office/dashboard/revenue-managements/penalty-rules",
+      icon: ShieldCheck,
+      permission: APP_PERMISSIONS.PENALTY_RULES_VIEW,
+    },
 
-      {
-        title: "interest_rates",
-        url: "/office/dashboard/revenue-managements/interest-rules",
-        icon: Landmark,
-        permission: APP_PERMISSIONS.INTEREST_RULES_VIEW,
-      },
-    ],
-  },
+    {
+      title: "interest_rates",
+      url: "/office/dashboard/revenue-managements/interest-rules",
+      icon: Landmark,
+      permission: APP_PERMISSIONS.INTEREST_RULES_VIEW,
+    },
+
+    {
+      title: "payment_schedule_rules",
+      url: "/office/dashboard/revenue-managements/payment-schedule-rules",
+      icon: CalendarClock,
+      permission: APP_PERMISSIONS.PAYMENT_SCHEDULE_RULES_VIEW,
+    },
+  ],
+},
 
 
  // =========================================================

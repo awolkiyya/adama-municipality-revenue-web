@@ -103,6 +103,7 @@ export const tariffRuleService = {
    * UPDATE TARIFF RULE
    */
   updateTariffRule: async (
+    tariffVersionId:string,
     id:string,
     data:UpdateTariffRulePayload
   ):Promise<ApiResponse<TariffRuleRecord>> => {
@@ -112,7 +113,7 @@ export const tariffRuleService = {
 
       const res =
         await api.patch<ApiResponse<TariffRuleRecord>>(
-          `/revenue/tariff-rules/${id}`,
+          `/revenue/tariff-versions//${tariffVersionId}/tariff-rules/${id}`,
           data
         );
 

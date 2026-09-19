@@ -151,6 +151,7 @@ export default function EditTariffRulePage() {
       */
 
       await updateMutation.mutateAsync({
+        tariffVersionId:tariffVersionId,
         id: ruleId,
 
         data: payload,

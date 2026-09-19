@@ -700,8 +700,8 @@ export const CommentTableRegistry: Record<
       manageFormulaVariables: {
         enabled: true,
         permission: {
-          resource: "tariff",
-          action: "manage",
+          resource: "tariff_formula",
+          action: "view",
         },
       },
     },

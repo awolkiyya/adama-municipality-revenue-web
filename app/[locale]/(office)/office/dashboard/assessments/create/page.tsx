@@ -425,7 +425,7 @@ const options =
  * Converts the real API RevenueService into the
  * RevenueService structure used by AssessmentForm.
  */
-const mapRevenueService = (
+export const mapRevenueService = (
   service: ApiRevenueService,
 ): RevenueService => {
 

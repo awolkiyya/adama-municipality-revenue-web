@@ -262,7 +262,7 @@ export const NAV_ITEMS: NavItem[] = [
 
     {
       title: "field_collection",
-      url: "/office/dashboard/field-collection",
+      url: "/office/dashboard/field-collections",
       icon: Wallet,
       permission: APP_PERMISSIONS.FIELD_COLLECTION_VIEW,
     },

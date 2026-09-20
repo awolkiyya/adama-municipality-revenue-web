@@ -1796,51 +1796,9 @@ export function AssessmentForm({
           STEP CONTENT
       ================================================= */}
 
-      <div className="rounded-xl border bg-card shadow-sm">
+      <div className="rounded-xl border-none bg-card shadow-none">
 
-        <div className="border-b p-5 sm:p-6">
-          <h2 className="text-base font-semibold">
-            {activeStepConfig.title}
-          </h2>
-
-          <p className="mt-1 text-sm text-muted-foreground">
-            {activeStepConfig.description}
-          </p>
-
-          {/* DETAILS PROGRESS */}
-
-          {activeStepConfig.key ===
-            "details" &&
-            totalRequiredFields >
-              0 && (
-              <div className="mt-4 space-y-1.5">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-muted-foreground">
-                    Required fields
-                  </span>
-
-                  <span className="font-medium">
-                    {
-                      completedRequiredFields
-                    }{" "}
-                    /{" "}
-                    {
-                      totalRequiredFields
-                    }
-                  </span>
-                </div>
-
-                <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-                  <div
-                    className="h-full rounded-full bg-primary transition-all"
-                    style={{
-                      width: `${detailsProgressPercent}%`,
-                    }}
-                  />
-                </div>
-              </div>
-            )}
-        </div>
+      
 
         <div className="space-y-6 p-5 sm:p-6">
 

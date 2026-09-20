@@ -1,83 +1,96 @@
-"use client";
+"use client"
 
-import type { ChangeEvent } from "react";
-import { useEffect, useMemo, useState } from "react";
+import type {
+  ChangeEvent,
+  ReactNode,
+} from "react"
 
-import { AlertCircle, ChevronDown, X } from "lucide-react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react"
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import {
+  AlertCircle,
+  ChevronDown,
+  X,
+} from "lucide-react"
 
-import type { RevenueField, RevenueService } from "@/types/revenue/assessment";
+import {
+  Badge,
+} from "@/components/ui/badge"
 
-import { RevenueDynamicField } from "@/components/revenue/fields/RevenueDynamicField";
+import {
+  Button,
+} from "@/components/ui/button"
 
-// Reuse the single source of truth for collection-mode
-// labels instead of maintaining a second, conflicting
-// dictionary here. Collection mode is NOT pricing — it
-// only describes how the service is collected. Actual
-// tariff selection and amount calculation are handled
-// by the backend Decision Provider.
-import { formatCollectionMode } from "@/components/revenue/assessment/revenue-service-selector";
+import type {
+  RevenueField,
+  RevenueService,
+} from "@/types/revenue/assessment"
 
-// =====================================================
-// TYPES
-// =====================================================
+import {
+  RevenueDynamicField,
+} from "@/components/revenue/fields/RevenueDynamicField"
+
+import {
+  formatCollectionMode,
+} from "@/components/revenue/assessment/revenue-service-selector"
+
+/*
+ * ==============================================================
+ * PROPS
+ * ==============================================================
+ *
+ * This component already receives the complete RevenueService.
+ * Therefore callbacks only need the field key/value.
+ */
 
 type RevenueServiceFieldsProps = {
-  /**
-   * Revenue service being captured.
-   */
-  service: RevenueService;
+  service: RevenueService
 
-  /**
-   * Fixed position of this service in the assessment.
-   */
-  index: number;
+  index: number
 
-  /**
-   * Raw field values belonging ONLY to this service.
-   */
-  values: Record<string, unknown>;
+  values: Record<
+    string,
+    unknown
+  >
 
-  /**
-   * Validation errors belonging ONLY to this service.
-   */
-  errors?: Record<string, string>;
+  errors?: Record<
+    string,
+    string
+  >
 
-  /**
-   * Update a normal field value.
-   */
-  onChange: (serviceId: string, key: string, value: unknown) => void;
+  onChange: (
+    key: string,
+    value: unknown,
+  ) => void
 
-  /**
-   * Handle FILE / MULTI_FILE selection.
-   */
   onFileChange: (
     event: ChangeEvent<HTMLInputElement>,
-    serviceId: string,
     field: RevenueField,
-  ) => void;
+  ) => void
 
-  /**
-   * Remove a selected file.
-   */
-  onRemoveFile: (serviceId: string, field: RevenueField) => void;
+  onRemoveFile: (
+    field: RevenueField,
+  ) => void
 
-  /**
-   * Remove this entire revenue service.
-   */
-  onRemove: (serviceId: string) => void;
+  onRemove: (
+    serviceId: string,
+  ) => void
 
-  /**
-   * Disable the entire service form.
-   */
-  disabled?: boolean;
-};
+  disabled?: boolean
+}
 
-// =====================================================
-// COMPONENT
-// =====================================================
+/*
+ * Fields that should occupy the complete row.
+ */
+const FULL_WIDTH_TYPES = new Set([
+  "TEXTAREA",
+  "FILE",
+  "MULTI_FILE",
+])
 
 export function RevenueServiceFields({
   service,
@@ -90,286 +103,619 @@ export function RevenueServiceFields({
   onRemove,
   disabled = false,
 }: RevenueServiceFieldsProps) {
-  // ===================================================
-  // EXPANSION STATE
-  // ===================================================
+  const [
+    expanded,
+    setExpanded,
+  ] = useState(true)
 
-  const [expanded, setExpanded] = useState(true);
+  /*
+   * ============================================================
+   * REQUIRED FIELDS
+   * ============================================================
+   *
+   * CHECKBOX fields are intentionally excluded.
+   */
 
-  // ===================================================
-  // REQUIRED FIELD PROGRESS
-  // ===================================================
+  const requiredFields =
+    useMemo(
+      () =>
+        service.fields.filter(
+          (field) =>
+            field.required &&
+            field.type !== "CHECKBOX",
+        ),
+      [
+        service.fields,
+      ],
+    )
 
-  const requiredFields = useMemo(
-    () => service.fields.filter((field) => field.required),
-    [service.fields],
-  );
+  /*
+   * ============================================================
+   * COMPLETION
+   * ============================================================
+   */
 
-  const requiredCount = requiredFields.length;
+  const completedCount =
+    useMemo(
+      () =>
+        requiredFields.filter(
+          (field) =>
+            isFieldComplete(
+              values[field.key],
+              field,
+            ),
+        ).length,
+      [
+        requiredFields,
+        values,
+      ],
+    )
 
-  const completedCount = useMemo(
-    () =>
-      requiredFields.filter((field) => isFieldComplete(values[field.key], field))
-        .length,
-    [requiredFields, values],
-  );
+  const requiredCount =
+    requiredFields.length
+
+  const isComplete =
+    requiredCount === 0 ||
+    completedCount ===
+      requiredCount
 
   const completionPercentage =
     requiredCount === 0
       ? 100
-      : Math.round((completedCount / requiredCount) * 100);
+      : Math.round(
+          (completedCount /
+            requiredCount) *
+            100,
+        )
 
-  // ===================================================
-  // VALIDATION STATE
-  // ===================================================
+  const hasErrors =
+    Object.keys(errors).length >
+    0
 
-  const hasErrors = Object.keys(errors).length > 0;
-
-  // ===================================================
-  // AUTO-EXPAND ON VALIDATION ERROR
-  // ===================================================
+  /*
+   * Automatically expand when
+   * validation errors exist.
+   */
 
   useEffect(() => {
     if (hasErrors) {
-      setExpanded(true);
+      setExpanded(true)
     }
-  }, [hasErrors]);
+  }, [hasErrors])
 
-  // ===================================================
-  // COLLECTION MODE
-  // ===================================================
+  function toggleExpanded() {
+    if (!disabled) {
+      setExpanded(
+        (current) => !current,
+      )
+    }
+  }
 
-  const collectionModeLabel = service.collectionMode
-    ? formatCollectionMode(service.collectionMode)
-    : null;
-
-  // ===================================================
-  // TOGGLE
-  // ===================================================
-
-  const toggleExpanded = () => {
-    if (disabled) return;
-    setExpanded((current) => !current);
-  };
-
-  // ===================================================
-  // RENDER
-  // ===================================================
+  /*
+   * ============================================================
+   * RENDER
+   * ============================================================
+   */
 
   return (
-    <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
-      {/* SERVICE HEADER */}
-      <div className={`p-4 sm:p-5 ${expanded ? "border-b" : ""}`}>
-        <div className="flex min-w-0 items-start gap-3">
-          {/* SERVICE ORDER */}
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-sm font-semibold text-primary">
-            {index + 1}
-          </div>
+    <div
+      className={`overflow-hidden rounded-xl border bg-card shadow-sm transition-colors ${
+        hasErrors
+          ? "border-destructive/40"
+          : ""
+      }`}
+    >
 
-          {/* SERVICE CONTENT */}
+      {/* ========================================================
+          HEADER
+      ======================================================== */}
+
+      <div
+        className={`p-4 sm:p-5 ${
+          expanded
+            ? "border-b"
+            : ""
+        }`}
+      >
+
+        <div className="flex items-start gap-3">
+
+          <CircularProgress
+            value={
+              completionPercentage
+            }
+            isComplete={
+              isComplete
+            }
+            size={36}
+            label={`${service.name} required information completion`}
+            valueNow={
+              completedCount
+            }
+            valueMax={
+              requiredCount
+            }
+          >
+            <span
+              className={
+                isComplete
+                  ? "text-primary"
+                  : "text-muted-foreground"
+              }
+            >
+              {index + 1}
+            </span>
+          </CircularProgress>
+
+          {/* ====================================================
+              SERVICE INFORMATION
+          ==================================================== */}
+
           <button
             type="button"
-            onClick={toggleExpanded}
-            disabled={disabled}
-            aria-expanded={expanded}
+            onClick={
+              toggleExpanded
+            }
+            disabled={
+              disabled
+            }
+            aria-expanded={
+              expanded
+            }
             aria-controls={`service-fields-${service.id}`}
             className="min-w-0 flex-1 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
-            {/* SERVICE NAME + BADGES */}
-            <div className="flex min-w-0 flex-wrap items-center gap-2">
+
+            <div className="flex flex-wrap items-center gap-2">
+
               <h2 className="min-w-0 break-words text-sm font-semibold sm:text-base">
-                {service.name}
+                {
+                  service.name
+                }
               </h2>
 
-              {/* SERVICE CODE */}
-              <Badge variant="outline" className="shrink-0">
-                {service.code}
+              <Badge
+                variant="outline"
+                className="shrink-0"
+              >
+                {
+                  service.code
+                }
               </Badge>
 
-              {/* CATEGORY */}
               {service.category && (
-                <Badge variant="outline" className="shrink-0 text-muted-foreground">
-                  {service.category}
+                <Badge
+                  variant="outline"
+                  className="shrink-0 text-muted-foreground"
+                >
+                  {
+                    service.category
+                  }
                 </Badge>
               )}
 
-              {/* COLLECTION MODE */}
-              {collectionModeLabel && (
-                <Badge variant="secondary" className="shrink-0">
-                  {collectionModeLabel}
+              {service.collectionMode && (
+                <Badge
+                  variant="secondary"
+                  className="shrink-0"
+                >
+                  {formatCollectionMode(
+                    service.collectionMode,
+                  )}
                 </Badge>
               )}
 
-              {/* VALIDATION ERROR */}
               {hasErrors && (
-                <Badge variant="destructive" className="shrink-0 gap-1">
+                <Badge
+                  variant="destructive"
+                  className="shrink-0 gap-1"
+                >
                   <AlertCircle className="h-3 w-3" />
+
                   Error
                 </Badge>
               )}
+
             </div>
 
-            {/* DESCRIPTION */}
             {service.description && (
               <p className="mt-1 max-w-3xl text-xs leading-5 text-muted-foreground sm:text-sm">
-                {service.description}
+                {
+                  service.description
+                }
               </p>
             )}
 
-            {/* DATA CAPTURE NOTICE */}
-            <p className="mt-2 text-[11px] leading-4 text-muted-foreground">
-              Enter the information required for this service. Tariff selection
-              and assessment calculation are handled by the decision provider.
-            </p>
+            {requiredCount >
+              0 && (
+              <p className="mt-1.5 text-xs text-muted-foreground">
+                {isComplete
+                  ? "Required information complete"
+                  : `${completedCount}/${requiredCount} required fields completed`}
+              </p>
+            )}
+
           </button>
 
-          {/* HEADER ACTIONS */}
+          {/* ====================================================
+              ACTIONS
+          ==================================================== */}
+
           <div className="flex shrink-0 items-center gap-1">
-            {/* REMOVE SERVICE */}
+
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              disabled={disabled}
+              disabled={
+                disabled
+              }
               aria-label={`Remove ${service.name}`}
-              onClick={() => onRemove(service.id)}
+              onClick={() =>
+                onRemove(
+                  service.id,
+                )
+              }
             >
               <X className="h-4 w-4" />
             </Button>
 
-            {/* EXPAND / COLLAPSE */}
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              disabled={disabled}
-              aria-label={expanded ? `Collapse ${service.name}` : `Expand ${service.name}`}
-              aria-expanded={expanded}
-              onClick={toggleExpanded}
+              disabled={
+                disabled
+              }
+              aria-label={
+                expanded
+                  ? `Collapse ${service.name}`
+                  : `Expand ${service.name}`
+              }
+              aria-expanded={
+                expanded
+              }
+              onClick={
+                toggleExpanded
+              }
             >
               <ChevronDown
                 className={`h-5 w-5 transition-transform duration-200 ${
-                  expanded ? "rotate-180" : "rotate-0"
+                  expanded
+                    ? "rotate-180"
+                    : ""
                 }`}
               />
             </Button>
+
           </div>
+
         </div>
 
-        {/* REQUIRED FIELD PROGRESS */}
-        {requiredCount > 0 && (
-          <div className="mt-4">
-            <div className="mb-2 flex items-center justify-between gap-3">
-              <div className="flex min-w-0 items-center gap-2">
-                <span className="text-xs text-muted-foreground">
-                  Required information
-                </span>
-
-                {completionPercentage === 100 && (
-                  <span className="text-xs font-medium text-primary">
-                    Complete
-                  </span>
-                )}
-              </div>
-
-              <span className="shrink-0 text-xs font-medium">
-                {completedCount}/{requiredCount}
-              </span>
-            </div>
-
-            <div
-              className="h-1.5 overflow-hidden rounded-full bg-muted"
-              role="progressbar"
-              aria-valuemin={0}
-              aria-valuemax={requiredCount}
-              aria-valuenow={completedCount}
-              aria-label={`${service.name} required information completion`}
-            >
-              <div
-                className="h-full rounded-full bg-primary transition-all duration-300"
-                style={{ width: `${completionPercentage}%` }}
-              />
-            </div>
-          </div>
-        )}
       </div>
 
-      {/* =================================================
-       * COLLAPSIBLE SERVICE DATA
-       *
-       * DATA CAPTURE ONLY.
-       *
-       * This component NEVER:
-       * - calculates tariffs
-       * - calculates amounts
-       * - calculates totals
-       * - generates invoices
-       * - processes payments
-       * - resolves pricing rules
-       * ================================================= */}
-      <div id={`service-fields-${service.id}`} hidden={!expanded}>
+      {/* ========================================================
+          SERVICE FIELDS
+      ======================================================== */}
+
+      <div
+        id={`service-fields-${service.id}`}
+        hidden={!expanded}
+      >
+
         <div className="grid gap-x-6 gap-y-6 p-4 sm:grid-cols-2 sm:p-6">
-          {service.fields.map((field) => (
-            <RevenueDynamicField
-              key={field.id ?? field.key}
-              service={service}
-              field={field}
-              value={values[field.key]}
-              error={errors[field.key]}
-              disabled={disabled}
-              onChange={(value) => onChange(service.id, field.key, value)}
-              onFileChange={(event) => onFileChange(event, service.id, field)}
-              onRemoveFile={() => onRemoveFile(service.id, field)}
-            />
-          ))}
+
+          {service.fields.map(
+            (field) => (
+
+              <div
+                key={
+                  field.id ??
+                  field.key
+                }
+                className={
+                  FULL_WIDTH_TYPES.has(
+                    field.type,
+                  )
+                    ? "sm:col-span-2"
+                    : ""
+                }
+              >
+
+                <RevenueDynamicField
+                  service={
+                    service
+                  }
+
+                  field={
+                    field
+                  }
+
+                  /*
+                   * IMPORTANT:
+                   *
+                   * The value is controlled by the
+                   * parent state.
+                   *
+                   * When the user types, onChange
+                   * updates this exact key.
+                   */
+                  value={
+                    values[
+                      field.key
+                    ]
+                  }
+
+                  error={
+                    errors[
+                      field.key
+                    ]
+                  }
+
+                  disabled={
+                    disabled
+                  }
+
+                  /*
+                   * IMPORTANT:
+                   *
+                   * Only field.key and value are
+                   * passed here.
+                   *
+                   * RevenueServiceFields already
+                   * knows service.id.
+                   */
+                  onChange={(
+                    value,
+                  ) =>
+                    onChange(
+                      field.key,
+                      value,
+                    )
+                  }
+
+                  onFileChange={(
+                    event,
+                  ) =>
+                    onFileChange(
+                      event,
+                      field,
+                    )
+                  }
+
+                  onRemoveFile={() =>
+                    onRemoveFile(
+                      field,
+                    )
+                  }
+                />
+
+              </div>
+
+            ),
+          )}
+
         </div>
 
-        {/* VALIDATION MESSAGE */}
+        {/* ======================================================
+            VALIDATION ERROR SUMMARY
+        ====================================================== */}
+
         {hasErrors && (
           <div className="border-t p-4 sm:p-6">
+
             <div className="flex items-start gap-3 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3">
+
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
 
               <div className="min-w-0">
+
                 <p className="text-xs font-medium leading-5 text-amber-700 dark:text-amber-400">
                   Complete the required information for this service.
                 </p>
 
-                {Object.values(errors)
+                {Object.values(
+                  errors,
+                )
                   .slice(0, 3)
-                  .map((error, errorIndex) => (
-                    <p
-                      key={`${service.id}-error-${errorIndex}`}
-                      className="mt-1 text-xs leading-5 text-muted-foreground"
-                    >
-                      • {error}
-                    </p>
-                  ))}
+                  .map(
+                    (
+                      error,
+                      i,
+                    ) => (
+                      <p
+                        key={i}
+                        className="mt-1 text-xs leading-5 text-muted-foreground"
+                      >
+                        • {error}
+                      </p>
+                    ),
+                  )}
+
               </div>
+
             </div>
+
           </div>
         )}
+
       </div>
+
     </div>
-  );
+  )
 }
 
-// =====================================================
+// =============================================================
+// CIRCULAR PROGRESS
+// =============================================================
+
+type CircularProgressProps = {
+  value: number
+
+  isComplete: boolean
+
+  size?: number
+
+  strokeWidth?: number
+
+  label: string
+
+  valueNow?: number
+
+  valueMax?: number
+
+  children?: ReactNode
+}
+
+function CircularProgress({
+  value,
+  isComplete,
+  size = 36,
+  strokeWidth = 3,
+  label,
+  valueNow,
+  valueMax,
+  children,
+}: CircularProgressProps) {
+  const radius =
+    (size -
+      strokeWidth) /
+    2
+
+  const circumference =
+    2 *
+    Math.PI *
+    radius
+
+  const clampedValue =
+    Math.min(
+      100,
+      Math.max(
+        0,
+        value,
+      ),
+    )
+
+  const offset =
+    circumference -
+    (clampedValue /
+      100) *
+      circumference
+
+  return (
+    <div
+      role="progressbar"
+      aria-valuemin={0}
+      aria-valuemax={
+        valueMax ?? 100
+      }
+      aria-valuenow={
+        valueNow ??
+        clampedValue
+      }
+      aria-label={
+        label
+      }
+      className="relative shrink-0"
+      style={{
+        width: size,
+        height: size,
+      }}
+    >
+
+      <svg
+        width={size}
+        height={size}
+        className="-rotate-90"
+      >
+
+        <circle
+          cx={
+            size / 2
+          }
+          cy={
+            size / 2
+          }
+          r={radius}
+          fill="none"
+          strokeWidth={
+            strokeWidth
+          }
+          className="stroke-muted"
+        />
+
+        <circle
+          cx={
+            size / 2
+          }
+          cy={
+            size / 2
+          }
+          r={radius}
+          fill="none"
+          strokeWidth={
+            strokeWidth
+          }
+          strokeLinecap="round"
+          strokeDasharray={
+            circumference
+          }
+          strokeDashoffset={
+            offset
+          }
+          className={`transition-all duration-300 ${
+            isComplete
+              ? "stroke-primary"
+              : "stroke-primary/60"
+          }`}
+        />
+
+      </svg>
+
+      <div className="absolute inset-0 flex items-center justify-center text-xs font-semibold">
+        {
+          children
+        }
+      </div>
+
+    </div>
+  )
+}
+
+// =============================================================
 // FIELD COMPLETION
-// =====================================================
+// =============================================================
 
-function isFieldComplete(value: unknown, field: RevenueField): boolean {
-  if (field.type === "FILE") {
-    return value instanceof File;
+function isFieldComplete(
+  value: unknown,
+  field: RevenueField,
+): boolean {
+  if (
+    field.type ===
+    "FILE"
+  ) {
+    return (
+      value instanceof File
+    )
   }
 
-  if (field.type === "MULTI_FILE") {
-    return Array.isArray(value) && value.length > 0;
+  if (
+    field.type ===
+    "MULTI_FILE"
+  ) {
+    return (
+      Array.isArray(
+        value,
+      ) &&
+      value.length > 0
+    )
   }
 
-  if (field.type === "CHECKBOX") {
-    return value === true;
-  }
-
-  return value !== undefined && value !== null && String(value).trim() !== "";
+  return (
+    value !==
+      undefined &&
+    value !== null &&
+    String(value).trim() !==
+      ""
+  )
 }

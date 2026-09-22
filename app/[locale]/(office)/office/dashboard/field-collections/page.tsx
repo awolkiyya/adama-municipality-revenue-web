@@ -1,48 +1,52 @@
-"use client";
+"use client"
 
-import React, { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import React, {
+  useMemo,
+  useState,
+} from "react"
+
+import { useRouter } from "next/navigation"
+
+import { useQueryClient } from "@tanstack/react-query"
 
 import {
+  Download,
   FileText,
   MoreHorizontal,
   Pencil,
+  Printer,
   Search,
-  Tag,
-  User,
   Wallet,
-} from "lucide-react";
+} from "lucide-react"
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@/components/ui/button"
+
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+} from "@/components/ui/card"
+
+import { Input } from "@/components/ui/input"
+
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Badge } from "@/components/ui/badge";
+} from "@/components/ui/select"
+
+import { Badge } from "@/components/ui/badge"
+
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@/components/ui/dropdown-menu"
+
 import {
   Table,
   TableBody,
@@ -50,7 +54,16 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@/components/ui/table"
+
+import {
+  directCollectionKeys,
+  useDirectCollections,
+} from "@/hooks/revenue/use-direct-collection"
+
+import type {
+  DirectCollectionInvoice,
+} from "@/types/revenue/direct-collection"
 
 // =========================================================
 // TYPES
@@ -60,224 +73,603 @@ type CollectionStatus =
   | "PENDING"
   | "PARTIALLY_PAID"
   | "COLLECTED"
-  | "CANCELLED";
+  | "CANCELLED"
 
 type CollectionRecord = {
-  id: string;
-  invoiceNumber: string;
+  id: string
 
-  taxpayerId: string;
-  taxpayerName: string;
-  taxpayerPhone: string;
+  invoiceId: string
+  invoiceNumber: string
 
-  serviceId: string;
-  serviceName: string;
-  revenueDomain: string;
+  taxpayerId: string
+  taxpayerName: string
+  taxpayerPhone: string
 
-  tariffCode: string;
-  tariffName: string;
-  tariffUnit: string;
-  tariffRate: number;
-  quantity: number;
+  serviceId: string
+  serviceName: string
+  revenueDomain: string
 
-  amount: number;
-  paidAmount: number;
-  balance: number;
+  tariffCode: string
+  tariffName: string
+  tariffUnit: string
+  tariffRate: number
+  quantity: number
 
-  dueDate: string;
-  status: CollectionStatus;
-  createdAt: string;
-};
+  amount: number
+  paidAmount: number
+  balance: number
+
+  dueDate: string | null
+
+  status: CollectionStatus
+
+  createdAt: string | null
+}
 
 // =========================================================
-// MOCK COLLECTION QUEUE
+// SAFE API EXTENSIONS
 // =========================================================
 
-const MOCK_COLLECTIONS: CollectionRecord[] = [
-  {
-    id: "fc-001",
-    invoiceNumber: "INV-2026-000124",
+type OptionalInvoiceFields = {
+  id?: string | null
 
-    taxpayerId: "taxpayer-001",
-    taxpayerName: "Abebe Kebede",
-    taxpayerPhone: "09********",
+  invoice_number?: string | null
+  status?: string | null
 
-    serviceId: "service-cleanliness",
-    serviceName: "Cleanliness Service Fee",
-    revenueDomain: "SERVICE",
+  total_amount?: string | number | null
+  amount?: string | number | null
 
-    tariffCode: "19.2",
-    tariffName: "Commercial Houses",
-    tariffUnit: "Unit",
-    tariffRate: 60,
-    quantity: 5,
+  paid_amount?: string | number | null
+  amount_paid?: string | number | null
 
-    amount: 300,
-    paidAmount: 0,
-    balance: 300,
+  balance_due?: string | number | null
+  balance?: string | number | null
 
-    dueDate: "2026-09-12",
-    status: "PENDING",
-    createdAt: "2026-09-11",
-  },
+  due_date?: string | null
+  created_at?: string | null
+}
 
-  {
-    id: "fc-002",
-    invoiceNumber: "INV-2026-000125",
+type OptionalItemFields = {
+  service?: {
+    id?: string | null
+    name?: string | null
+    revenue_domain?: string | null
+    domain?: string | null
+    unit?: string | null
+  } | null
 
-    taxpayerId: "taxpayer-002",
-    taxpayerName: "Hawa Mohammed",
-    taxpayerPhone: "09********",
+  service_name?: string | null
 
-    serviceId: "service-cleanliness",
-    serviceName: "Cleanliness Service Fee",
-    revenueDomain: "SERVICE",
+  tariff_code?: string | null
+  tariff_name?: string | null
 
-    tariffCode: "19.1",
-    tariffName: "Residential House",
-    tariffUnit: "Unit",
-    tariffRate: 50,
-    quantity: 10,
+  tariff_rule_id?: string | null
 
-    amount: 500,
-    paidAmount: 200,
-    balance: 300,
+  unit?: string | null
 
-    dueDate: "2026-09-12",
-    status: "PARTIALLY_PAID",
-    createdAt: "2026-09-10",
-  },
+  unit_price?: string | number | null
 
-  {
-    id: "fc-003",
-    invoiceNumber: "INV-2026-000126",
+  quantity?: string | number | null
 
-    taxpayerId: "taxpayer-003",
-    taxpayerName: "Tadesse Trading",
-    taxpayerPhone: "09********",
-
-    serviceId: "service-cleanliness",
-    serviceName: "Cleanliness Service Fee",
-    revenueDomain: "SERVICE",
-
-    tariffCode: "19.2",
-    tariffName: "Commercial Houses",
-    tariffUnit: "Unit",
-    tariffRate: 60,
-    quantity: 15,
-
-    amount: 900,
-    paidAmount: 900,
-    balance: 0,
-
-    dueDate: "2026-09-11",
-    status: "COLLECTED",
-    createdAt: "2026-09-09",
-  },
-
-  {
-    id: "fc-004",
-    invoiceNumber: "INV-2026-000127",
-
-    taxpayerId: "taxpayer-004",
-    taxpayerName: "Fatuma Ali",
-    taxpayerPhone: "09********",
-
-    serviceId: "service-cleanliness",
-    serviceName: "Cleanliness Service Fee",
-    revenueDomain: "SERVICE",
-
-    tariffCode: "19.1",
-    tariffName: "Residential House",
-    tariffUnit: "Unit",
-    tariffRate: 50,
-    quantity: 13,
-
-    amount: 650,
-    paidAmount: 0,
-    balance: 650,
-
-    dueDate: "2026-09-10",
-    status: "PENDING",
-    createdAt: "2026-09-09",
-  },
-
-  {
-    id: "fc-005",
-    invoiceNumber: "INV-2026-000128",
-
-    taxpayerId: "taxpayer-005",
-    taxpayerName: "Biftu Hotel",
-    taxpayerPhone: "09********",
-
-    serviceId: "service-hospitality",
-    serviceName: "Hospitality Service Fee",
-    revenueDomain: "SERVICE",
-
-    tariffCode: "22.4",
-    tariffName: "Hotel",
-    tariffUnit: "Room",
-    tariffRate: 60,
-    quantity: 20,
-
-    amount: 1200,
-    paidAmount: 500,
-    balance: 700,
-
-    dueDate: "2026-09-08",
-    status: "PARTIALLY_PAID",
-    createdAt: "2026-09-07",
-  },
-];
+  amount?: string | number | null
+}
 
 // =========================================================
 // HELPERS
 // =========================================================
 
-function formatCurrency(amount: number) {
-  return new Intl.NumberFormat("en-ET", {
-    style: "currency",
-    currency: "ETB",
-    minimumFractionDigits: 2,
-  }).format(amount);
+function toNumber(
+  value: unknown,
+): number {
+  if (
+    typeof value === "number"
+  ) {
+    return Number.isFinite(value)
+      ? value
+      : 0
+  }
+
+  if (
+    typeof value === "string" &&
+    value.trim() !== ""
+  ) {
+    const parsed =
+      Number(value)
+
+    return Number.isFinite(parsed)
+      ? parsed
+      : 0
+  }
+
+  return 0
 }
 
-function getStatusLabel(status: CollectionStatus) {
+function formatCurrency(
+  amount: number,
+): string {
+  return new Intl.NumberFormat(
+    "en-ET",
+    {
+      style: "currency",
+      currency: "ETB",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    },
+  ).format(amount)
+}
+
+function formatDate(
+  value:
+    | string
+    | null
+    | undefined,
+): string {
+  if (!value) {
+    return "—"
+  }
+
+  const date =
+    new Date(value)
+
+  if (
+    Number.isNaN(
+      date.getTime(),
+    )
+  ) {
+    return value
+  }
+
+  return new Intl.DateTimeFormat(
+    "en-ET",
+    {
+      year: "numeric",
+      month: "short",
+      day: "2-digit",
+    },
+  ).format(date)
+}
+
+// =========================================================
+// STATUS
+// =========================================================
+
+function resolveCollectionStatus(
+  collection: DirectCollectionInvoice,
+): CollectionStatus {
+  const invoice =
+    collection.invoice
+
+  const status =
+    String(
+      invoice?.status ?? "",
+    ).toUpperCase()
+
   switch (status) {
-    case "PENDING":
-      return "Pending";
+    case "PAID":
+    case "COLLECTED":
+      return "COLLECTED"
 
     case "PARTIALLY_PAID":
-      return "Partially Paid";
-
-    case "COLLECTED":
-      return "Collected";
+      return "PARTIALLY_PAID"
 
     case "CANCELLED":
-      return "Cancelled";
+    case "CANCELED":
+      return "CANCELLED"
 
+    case "ISSUED":
+    case "PENDING":
+    case "DRAFT":
     default:
-      return status;
+      return "PENDING"
   }
 }
 
-function getStatusClassName(status: CollectionStatus) {
+// =========================================================
+// API STATUS FILTER
+// =========================================================
+
+function resolveApiStatus(
+  status: string,
+): string | undefined {
   switch (status) {
     case "PENDING":
-      return "bg-amber-500/10 text-amber-700 border-amber-500/20";
+      return "ISSUED"
 
     case "PARTIALLY_PAID":
-      return "bg-blue-500/10 text-blue-700 border-blue-500/20";
+      return "PARTIALLY_PAID"
 
     case "COLLECTED":
-      return "bg-emerald-500/10 text-emerald-700 border-emerald-500/20";
+      return "PAID"
 
     case "CANCELLED":
-      return "bg-red-500/10 text-red-700 border-red-500/20";
+      return "CANCELLED"
 
     default:
-      return "";
+      return undefined
   }
+}
+
+// =========================================================
+// RECORD HELPERS
+// =========================================================
+
+function getInvoiceFields(
+  collection: DirectCollectionInvoice,
+): OptionalInvoiceFields {
+  return (
+    collection.invoice as
+      | OptionalInvoiceFields
+      | null
+      | undefined
+  ) ?? {}
+}
+
+function getFirstItem(
+  collection: DirectCollectionInvoice,
+): OptionalItemFields & {
+  id?: string
+  service_id?: string | null
+  tariff_version_id?: string | null
+  penalty_rule_id?: string | null
+  interest_rule_id?: string | null
+} {
+  const item =
+    collection.items?.[0]
+
+  if (!item) {
+    return {}
+  }
+
+  return item as typeof item &
+    OptionalItemFields & {
+      id?: string
+      service_id?: string | null
+      tariff_version_id?: string | null
+      penalty_rule_id?: string | null
+      interest_rule_id?: string | null
+    }
+}
+
+// =========================================================
+// API → UI MAPPER
+// =========================================================
+
+function mapDirectCollection(
+  collection: DirectCollectionInvoice,
+): CollectionRecord {
+  const invoice =
+    getInvoiceFields(
+      collection,
+    )
+
+  const item =
+    getFirstItem(
+      collection,
+    )
+
+  const service =
+    item.service ?? null
+
+  // -------------------------------------------------------
+  // INVOICE ID
+  // -------------------------------------------------------
+
+  const invoiceId =
+    invoice.id ??
+    collection.id
+
+  // -------------------------------------------------------
+  // TOTAL AMOUNT
+  // -------------------------------------------------------
+
+  const amount =
+    toNumber(
+      invoice.total_amount ??
+        invoice.amount ??
+        item.amount ??
+        0,
+    )
+
+  // -------------------------------------------------------
+  // STATUS
+  // -------------------------------------------------------
+
+  const status =
+    resolveCollectionStatus(
+      collection,
+    )
+
+  // -------------------------------------------------------
+  // PAID AMOUNT
+  // -------------------------------------------------------
+
+  let paidAmount =
+    toNumber(
+      invoice.paid_amount ??
+        invoice.amount_paid ??
+        0,
+    )
+
+  /*
+   * Defensive fallback:
+   *
+   * If the invoice status is PAID but the API does not
+   * expose paid_amount, consider the full invoice amount paid.
+   */
+  if (
+    (
+      invoice.status ??
+      ""
+    ).toUpperCase() ===
+      "PAID" &&
+    paidAmount === 0
+  ) {
+    paidAmount =
+      amount
+  }
+
+  // -------------------------------------------------------
+  // BALANCE
+  // -------------------------------------------------------
+
+  const explicitBalance =
+    invoice.balance_due ??
+    invoice.balance ??
+    null
+
+  /*
+   * Always calculate the balance from:
+   *
+   * total amount - paid amount
+   *
+   * when the API reports zero/missing balance incorrectly.
+   */
+  const calculatedBalance =
+    Math.max(
+      amount -
+        paidAmount,
+      0,
+    )
+
+  const reportedBalance =
+    explicitBalance !==
+      null &&
+    explicitBalance !==
+      undefined
+      ? Math.max(
+          toNumber(
+            explicitBalance,
+          ),
+          0,
+        )
+      : 0
+
+  const balance =
+    calculatedBalance === 0
+      ? 0
+      : reportedBalance > 0
+        ? Math.min(
+            reportedBalance,
+            calculatedBalance,
+          )
+        : calculatedBalance
+
+  // -------------------------------------------------------
+  // SERVICE
+  // -------------------------------------------------------
+
+  const serviceId =
+    item.service_id ??
+    collection.revenue_service_id ??
+    ""
+
+  const serviceName =
+    item.service_name ??
+    service?.name ??
+    "—"
+
+  // -------------------------------------------------------
+  // TARIFF
+  // -------------------------------------------------------
+
+  const tariffCode =
+    item.tariff_code ??
+    item.tariff_rule_id ??
+    "—"
+
+  const tariffName =
+    item.tariff_name ??
+    "—"
+
+  // -------------------------------------------------------
+  // TAXPAYER
+  // -------------------------------------------------------
+
+  const taxpayerId =
+    collection.taxpayer_id ??
+    collection.taxpayer?.id ??
+    ""
+
+  const taxpayerName =
+    collection.taxpayer?.name ??
+    "Unknown taxpayer"
+
+  const taxpayerPhone =
+    collection.taxpayer?.phone ??
+    "—"
+
+  // -------------------------------------------------------
+  // RETURN
+  // -------------------------------------------------------
+
+  return {
+    id:
+      collection.id,
+
+    invoiceId,
+
+    invoiceNumber:
+      invoice.invoice_number ??
+      "—",
+
+    taxpayerId,
+
+    taxpayerName,
+
+    taxpayerPhone,
+
+    serviceId,
+
+    serviceName,
+
+    revenueDomain:
+      service?.revenue_domain ??
+      service?.domain ??
+      "—",
+
+    tariffCode,
+
+    tariffName,
+
+    tariffUnit:
+      item.unit ??
+      service?.unit ??
+      "—",
+
+    tariffRate:
+      toNumber(
+        item.unit_price,
+      ),
+
+    quantity:
+      toNumber(
+        item.quantity ??
+          1,
+      ),
+
+    amount,
+
+    paidAmount,
+
+    balance,
+
+    dueDate:
+      invoice.due_date ??
+      null,
+
+    status,
+
+    createdAt:
+      invoice.created_at ??
+      null,
+  }
+}
+
+// =========================================================
+// STATUS LABEL
+// =========================================================
+
+function getStatusLabel(
+  status: CollectionStatus,
+): string {
+  switch (status) {
+    case "PENDING":
+      return "Pending"
+
+    case "PARTIALLY_PAID":
+      return "Partially Paid"
+
+    case "COLLECTED":
+      return "Collected"
+
+    case "CANCELLED":
+      return "Cancelled"
+
+    default:
+      return status
+  }
+}
+
+// =========================================================
+// STATUS CLASS
+// =========================================================
+
+function getStatusClassName(
+  status: CollectionStatus,
+): string {
+  switch (status) {
+    case "PENDING":
+      return "bg-amber-500/10 text-amber-700 border-amber-500/20"
+
+    case "PARTIALLY_PAID":
+      return "bg-blue-500/10 text-blue-700 border-blue-500/20"
+
+    case "COLLECTED":
+      return "bg-emerald-500/10 text-emerald-700 border-emerald-500/20"
+
+    case "CANCELLED":
+      return "bg-red-500/10 text-red-700 border-red-500/20"
+
+    default:
+      return ""
+  }
+}
+
+// =========================================================
+// ERROR MESSAGE
+// =========================================================
+
+function getErrorMessage(
+  error: unknown,
+): string {
+  if (
+    error instanceof Error &&
+    error.message
+  ) {
+    return error.message
+  }
+
+  const responseError =
+    error as {
+      response?: {
+        data?: {
+          message?: string
+          errors?: Record<
+            string,
+            string[]
+          >
+        }
+      }
+    }
+
+  const message =
+    responseError
+      ?.response
+      ?.data
+      ?.message
+
+  if (message) {
+    return message
+  }
+
+  const errors =
+    responseError
+      ?.response
+      ?.data
+      ?.errors
+
+  if (errors) {
+    const firstError =
+      Object.values(
+        errors,
+      )[0]?.[0]
+
+    if (firstError) {
+      return firstError
+    }
+  }
+
+  return "Unable to load field collections."
 }
 
 // =========================================================
@@ -285,276 +677,403 @@ function getStatusClassName(status: CollectionStatus) {
 // =========================================================
 
 export default function FieldCollectionPage() {
-  const router = useRouter();
+  const router =
+    useRouter()
+
+  const queryClient =
+    useQueryClient()
 
   // =======================================================
-  // QUEUE FILTERS
+  // FILTERS
   // =======================================================
-
-  const [search, setSearch] = useState("");
-
-  const [statusFilter, setStatusFilter] =
-    useState("ALL");
-
-  // =======================================================
-  // VIEW DETAILS DIALOG
-  // =======================================================
-
-  const [detailsDialogOpen, setDetailsDialogOpen] =
-    useState(false);
 
   const [
-    selectedDetailsCollection,
-    setSelectedDetailsCollection,
-  ] = useState<CollectionRecord | null>(null);
-
-  // =======================================================
-  // CASH COLLECTION DIALOG
-  // =======================================================
-
-  const [cashDialogOpen, setCashDialogOpen] =
-    useState(false);
+    search,
+    setSearch,
+  ] = useState("")
 
   const [
-    selectedCashCollection,
-    setSelectedCashCollection,
-  ] = useState<CollectionRecord | null>(null);
+    statusFilter,
+    setStatusFilter,
+  ] = useState("ALL")
 
-  const [cashAmount, setCashAmount] = useState("");
+  const [
+    page,
+    setPage,
+  ] = useState(1)
 
-  const [cashSubmitting, setCashSubmitting] =
-    useState(false);
+  const perPage = 20
 
   // =======================================================
-  // QUEUE FILTERING
+  // API FILTERS
   // =======================================================
 
-  const filteredCollections = useMemo(() => {
-    const normalizedSearch =
-      search.trim().toLowerCase();
+  const listParams =
+    useMemo(
+      () => {
+        const apiStatus =
+          resolveApiStatus(
+            statusFilter,
+          )
 
-    return MOCK_COLLECTIONS.filter((item) => {
-      const matchesSearch =
-        normalizedSearch === "" ||
-        item.invoiceNumber
-          .toLowerCase()
-          .includes(normalizedSearch) ||
-        item.taxpayerName
-          .toLowerCase()
-          .includes(normalizedSearch) ||
-        item.serviceName
-          .toLowerCase()
-          .includes(normalizedSearch) ||
-        item.tariffCode
-          .toLowerCase()
-          .includes(normalizedSearch) ||
-        item.tariffName
-          .toLowerCase()
-          .includes(normalizedSearch);
+        return {
+          page,
 
-      const matchesStatus =
-        statusFilter === "ALL" ||
-        item.status === statusFilter;
+          per_page:
+            perPage,
 
+          ...(search.trim()
+            ? {
+                search:
+                  search.trim(),
+              }
+            : {}),
+
+          ...(apiStatus
+            ? {
+                status:
+                  apiStatus,
+              }
+            : {}),
+        }
+      },
+      [
+        page,
+        perPage,
+        search,
+        statusFilter,
+      ],
+    )
+
+  // =======================================================
+  // COLLECTION LIST
+  // =======================================================
+
+  const {
+    data:
+      collectionResponse,
+    isLoading,
+    isFetching,
+    isError,
+    error,
+  } =
+    useDirectCollections(
+      listParams,
+    )
+
+  // =======================================================
+  // MAP LIST
+  // =======================================================
+
+  const collections =
+    useMemo(() => {
       return (
-        matchesSearch &&
-        matchesStatus
-      );
-    });
-  }, [search, statusFilter]);
+        collectionResponse?.data ??
+        []
+      ).map(
+        mapDirectCollection,
+      )
+    }, [
+      collectionResponse,
+    ])
+
+  // =======================================================
+  // PAGINATION
+  // =======================================================
+
+  const pagination =
+    collectionResponse?.meta
 
   // =======================================================
   // SUMMARY
   // =======================================================
 
-  const summary = useMemo(() => {
-    const pending =
-      MOCK_COLLECTIONS.filter(
-        (item) =>
-          item.status === "PENDING"
-      ).length;
+  const summary =
+    useMemo(() => {
+      const pending =
+        collections.filter(
+          (item) =>
+            item.status ===
+            "PENDING",
+        ).length
 
-    const partial =
-      MOCK_COLLECTIONS.filter(
-        (item) =>
-          item.status === "PARTIALLY_PAID"
-      ).length;
+      const partial =
+        collections.filter(
+          (item) =>
+            item.status ===
+            "PARTIALLY_PAID",
+        ).length
 
-    const collected =
-      MOCK_COLLECTIONS.filter(
-        (item) =>
-          item.status === "COLLECTED"
-      ).length;
+      const collected =
+        collections.filter(
+          (item) =>
+            item.status ===
+            "COLLECTED",
+        ).length
 
-    const outstanding =
-      MOCK_COLLECTIONS.reduce(
-        (total, item) =>
-          total + item.balance,
-        0
-      );
+      const outstanding =
+        collections.reduce(
+          (
+            total,
+            item,
+          ) =>
+            total +
+            item.balance,
+          0,
+        )
 
-    return {
-      pending,
-      partial,
-      collected,
-      outstanding,
-    };
-  }, []);
+      return {
+        pending,
+        partial,
+        collected,
+        outstanding,
+      }
+    }, [
+      collections,
+    ])
 
   // =======================================================
-  // NAVIGATION
+  // START COLLECTION
   // =======================================================
 
   function handleStartCollection() {
-    router.push("/office/dashboard/field-collections/create");
+    router.push(
+      "/office/dashboard/field-collections/create",
+    )
   }
+
+  // =======================================================
+  // UPDATE
+  // =======================================================
 
   function handleUpdate(
-    collection: CollectionRecord
+    collection: CollectionRecord,
+  ) {
+    /*
+     * Update is only available for pending/unpaid
+     * direct collections.
+     *
+     * Backend also enforces this rule.
+     */
+    if (
+      collection.status !==
+        "PENDING" ||
+      collection.paidAmount >
+        0 ||
+      collection.balance <=
+        0
+    ) {
+      return
+    }
+
+    router.push(
+      `/office/dashboard/field-collections/${encodeURIComponent(
+        collection.id,
+      )}/edit`,
+    )
+  }
+
+  // =======================================================
+  // VIEW DETAILS
+  // =======================================================
+
+  function handleViewDetails(
+    collection: CollectionRecord,
   ) {
     router.push(
-      `/office/dashboard/field-collections/${collection.id}/edit`
-    );
+      `/office/dashboard/field-collections/${encodeURIComponent(
+        collection.id,
+      )}`,
+    )
   }
 
   // =======================================================
-  // OPEN VIEW DETAILS
+  // PRINT INVOICE
   // =======================================================
 
-  function openViewDetails(
-    collection: CollectionRecord
+  function handlePrintInvoice(
+    collection: CollectionRecord,
   ) {
-    setSelectedDetailsCollection(
-      collection
-    );
-
-    setDetailsDialogOpen(true);
-  }
-
-  // =======================================================
-  // OPEN COLLECT CASH
-  // =======================================================
-
-  function openCollectCash(
-    collection: CollectionRecord
-  ) {
-    if (collection.balance <= 0) {
-      return;
+    if (
+      !collection.invoiceId
+    ) {
+      return
     }
 
-    setSelectedCashCollection(
-      collection
-    );
+    /*
+     * Draft invoices are not official invoices.
+     * Field Collection records mapped as PENDING normally
+     * represent ISSUED invoices in the backend.
+     */
+    if (
+      collection.status ===
+      "PENDING" &&
+      collection.balance <=
+        0
+    ) {
+      return
+    }
 
-    setCashAmount("");
-
-    setCashDialogOpen(true);
+    router.push(
+      `/office/dashboard/invoices/${encodeURIComponent(
+        collection.invoiceId,
+      )}/print`,
+    )
   }
 
   // =======================================================
-  // COLLECT CASH
+  // DOWNLOAD INVOICE
   // =======================================================
 
-  async function collectCash() {
-    if (!selectedCashCollection) {
-      return;
+  function handleDownloadInvoice(
+    collection: CollectionRecord,
+  ) {
+    if (
+      !collection.invoiceId
+    ) {
+      return
     }
 
-    const amount = Number(cashAmount);
+    /*
+     * This opens the printable invoice route with the
+     * download flag.
+     *
+     * The print page should handle ?download=1.
+     */
+    window.open(
+      `/office/dashboard/invoices/${encodeURIComponent(
+        collection.invoiceId,
+      )}/print?download=1`,
+      "_blank",
+      "noopener,noreferrer",
+    )
+  }
+
+  // =======================================================
+  // COLLECT PAYMENT
+  // =======================================================
+
+  function handleCollectPayment(
+    collection: CollectionRecord,
+  ) {
+    if (
+      collection.balance <=
+      0
+    ) {
+      return
+    }
 
     if (
-      !Number.isFinite(amount) ||
-      amount <= 0
+      collection.status ===
+      "CANCELLED"
     ) {
-      return;
+      return
     }
 
     if (
-      amount >
-      selectedCashCollection.balance
+      !collection.invoiceId
     ) {
-      return;
+      return
     }
 
-    setCashSubmitting(true);
-
-    try {
-      /*
-       * Production:
-       *
-       * POST
-       * /api/v1/invoices/{invoice}/payments
-       *
-       * {
-       *   amount,
-       *   payment_method: "CASH"
-       * }
-       *
-       * Backend responsibilities:
-       *
-       * 1. Authenticate collector.
-       * 2. Authorize collection.
-       * 3. Lock invoice.
-       * 4. Re-read balance_due.
-       * 5. Validate amount.
-       * 6. Create payment.
-       * 7. Update paid_amount.
-       * 8. Update balance_due.
-       * 9. Update invoice status.
-       * 10. Generate receipt.
-       * 11. Commit transaction.
-       */
-
-      await new Promise((resolve) =>
-        setTimeout(resolve, 600)
-      );
-
-      const remaining =
-        selectedCashCollection.balance -
-        amount;
-
-      const updatedStatus: CollectionStatus =
-        remaining <= 0
-          ? "COLLECTED"
-          : "PARTIALLY_PAID";
-
-      setSelectedCashCollection({
-        ...selectedCashCollection,
-        paidAmount:
-          selectedCashCollection.paidAmount +
-          amount,
-        balance: remaining,
-        status: updatedStatus,
-      });
-
-      setCashDialogOpen(false);
-      setCashAmount("");
-    } finally {
-      setCashSubmitting(false);
-    }
+    /*
+     * All invoice types use the same payment page.
+     *
+     * The payment method (cash, bank transfer,
+     * mobile banking, etc.) is selected inside PaymentForm.
+     */
+    router.push(
+      `/office/dashboard/payments/create?invoice_id=${encodeURIComponent(
+        collection.invoiceId,
+      )}`,
+    )
   }
 
   // =======================================================
-  // CLOSE DETAILS DIALOG
+  // FILTER HANDLERS
   // =======================================================
 
-  function closeDetailsDialog() {
-    setDetailsDialogOpen(false);
-    setSelectedDetailsCollection(null);
+  function handleSearchChange(
+    value: string,
+  ) {
+    setSearch(value)
+    setPage(1)
+  }
+
+  function handleStatusChange(
+    value: string,
+  ) {
+    setStatusFilter(value)
+    setPage(1)
   }
 
   // =======================================================
-  // CLOSE CASH DIALOG
+  // ERROR
   // =======================================================
 
-  function closeCashDialog() {
-    if (cashSubmitting) {
-      return;
-    }
+  if (isError) {
+    return (
+      <div className="space-y-6 p-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10">
+                <Wallet className="size-5 text-primary" />
+              </div>
 
-    setCashDialogOpen(false);
-    setSelectedCashCollection(null);
-    setCashAmount("");
+              <h1 className="text-2xl font-semibold tracking-tight">
+                Field Collection
+              </h1>
+            </div>
+
+            <p className="mt-1 text-sm text-muted-foreground">
+              Manage direct collections
+              and their invoices.
+            </p>
+          </div>
+
+          <Button
+            className="gap-2"
+            onClick={
+              handleStartCollection
+            }
+          >
+            <Wallet className="size-4" />
+            Start Collection
+          </Button>
+        </div>
+
+        <Card>
+          <CardContent className="flex min-h-64 flex-col items-center justify-center gap-3">
+            <FileText className="size-8 text-muted-foreground" />
+
+            <p className="font-medium">
+              Unable to load collections
+            </p>
+
+            <p className="max-w-md text-center text-sm text-muted-foreground">
+              {getErrorMessage(
+                error,
+              )}
+            </p>
+
+            <Button
+              variant="outline"
+              onClick={() =>
+                queryClient.invalidateQueries(
+                  {
+                    queryKey:
+                      directCollectionKeys.all,
+                  },
+                )
+              }
+            >
+              Try Again
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   // =======================================================
@@ -580,21 +1099,18 @@ export default function FieldCollectionPage() {
           </div>
 
           <p className="mt-1 text-sm text-muted-foreground">
-            Manage field collections and collect
-            outstanding invoice balances.
+            Manage direct collections
+            and their invoices.
           </p>
         </div>
 
-        {/* =================================================
-            CREATE PAGE NAVIGATION
-        ================================================= */}
-
         <Button
           className="gap-2"
-          onClick={handleStartCollection}
+          onClick={
+            handleStartCollection
+          }
         >
           <Wallet className="size-4" />
-
           Start Collection
         </Button>
       </div>
@@ -619,7 +1135,7 @@ export default function FieldCollectionPage() {
                 </p>
 
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Requires collection
+                  On this page
                 </p>
               </div>
 
@@ -630,7 +1146,7 @@ export default function FieldCollectionPage() {
           </CardContent>
         </Card>
 
-        {/* PARTIAL */}
+        {/* PARTIALLY PAID */}
 
         <Card>
           <CardContent className="p-5">
@@ -645,7 +1161,7 @@ export default function FieldCollectionPage() {
                 </p>
 
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Remaining balances
+                  On this page
                 </p>
               </div>
 
@@ -671,7 +1187,7 @@ export default function FieldCollectionPage() {
                 </p>
 
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Completed collections
+                  On this page
                 </p>
               </div>
 
@@ -694,12 +1210,12 @@ export default function FieldCollectionPage() {
 
                 <p className="mt-2 text-2xl font-semibold">
                   {formatCurrency(
-                    summary.outstanding
+                    summary.outstanding,
                   )}
                 </p>
 
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Remaining to collect
+                  Current page
                 </p>
               </div>
 
@@ -724,14 +1240,25 @@ export default function FieldCollectionPage() {
               </CardTitle>
 
               <p className="mt-1 text-sm text-muted-foreground">
-                Existing invoices with collection
-                information.
+                Direct collection invoices
+                available for payment.
               </p>
             </div>
 
-            <span className="text-sm text-muted-foreground">
-              {filteredCollections.length} records
-            </span>
+            <div className="flex items-center gap-3">
+              {isFetching &&
+                !isLoading && (
+                  <span className="text-xs text-muted-foreground">
+                    Updating...
+                  </span>
+                )}
+
+              <span className="text-sm text-muted-foreground">
+                {pagination?.total ??
+                  0}{" "}
+                records
+              </span>
+            </div>
           </div>
         </CardHeader>
 
@@ -745,21 +1272,28 @@ export default function FieldCollectionPage() {
               <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
 
               <Input
-                value={search}
-                onChange={(event) =>
-                  setSearch(
-                    event.target.value
+                value={
+                  search
+                }
+                onChange={(
+                  event,
+                ) =>
+                  handleSearchChange(
+                    event.target
+                      .value,
                   )
                 }
-                placeholder="Search taxpayer, invoice or tariff..."
+                placeholder="Search taxpayer, invoice or service..."
                 className="pl-9"
               />
             </div>
 
             <Select
-              value={statusFilter}
+              value={
+                statusFilter
+              }
               onValueChange={
-                setStatusFilter
+                handleStatusChange
               }
             >
               <SelectTrigger className="w-full lg:w-[180px]">
@@ -827,8 +1361,27 @@ export default function FieldCollectionPage() {
               </TableHeader>
 
               <TableBody>
-                {filteredCollections.length ===
-                0 ? (
+                {isLoading ? (
+                  Array.from({
+                    length: 5,
+                  }).map(
+                    (
+                      _,
+                      index,
+                    ) => (
+                      <TableRow
+                        key={
+                          index
+                        }
+                      >
+                        <TableCell colSpan={7}>
+                          <div className="h-12 animate-pulse rounded-md bg-muted" />
+                        </TableCell>
+                      </TableRow>
+                    ),
+                  )
+                ) : collections.length ===
+                  0 ? (
                   <TableRow>
                     <TableCell
                       colSpan={7}
@@ -838,18 +1391,22 @@ export default function FieldCollectionPage() {
                         <Search className="size-5 text-muted-foreground" />
 
                         <p className="text-sm font-medium">
-                          No collections found
+                          No collections
+                          found
                         </p>
 
                         <p className="text-xs text-muted-foreground">
-                          Try changing your filters.
+                          Try changing
+                          your filters.
                         </p>
                       </div>
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredCollections.map(
-                    (collection) => (
+                  collections.map(
+                    (
+                      collection,
+                    ) => (
                       <TableRow
                         key={
                           collection.id
@@ -871,9 +1428,9 @@ export default function FieldCollectionPage() {
                               </p>
 
                               <p className="text-xs text-muted-foreground">
-                                {
-                                  collection.createdAt
-                                }
+                                {formatDate(
+                                  collection.createdAt,
+                                )}
                               </p>
                             </div>
                           </div>
@@ -931,7 +1488,7 @@ export default function FieldCollectionPage() {
                         <TableCell className="text-right">
                           <span className="font-medium">
                             {formatCurrency(
-                              collection.amount
+                              collection.amount,
                             )}
                           </span>
                         </TableCell>
@@ -948,7 +1505,7 @@ export default function FieldCollectionPage() {
                             }
                           >
                             {formatCurrency(
-                              collection.balance
+                              collection.balance,
                             )}
                           </span>
                         </TableCell>
@@ -959,11 +1516,11 @@ export default function FieldCollectionPage() {
                           <Badge
                             variant="outline"
                             className={getStatusClassName(
-                              collection.status
+                              collection.status,
                             )}
                           >
                             {getStatusLabel(
-                              collection.status
+                              collection.status,
                             )}
                           </Badge>
                         </TableCell>
@@ -987,621 +1544,199 @@ export default function FieldCollectionPage() {
 
                             <DropdownMenuContent
                               align="end"
-                              className="w-44"
+                              className="w-52"
                             >
-                              {/* =================================
-                                  UPDATE PAGE
-                              ================================= */}
+                              {/* VIEW DETAILS */}
 
                               <DropdownMenuItem
                                 onClick={() =>
-                                  handleUpdate(
-                                    collection
-                                  )
-                                }
-                              >
-                                <Pencil className="mr-2 size-4" />
-
-                                Update
-                              </DropdownMenuItem>
-
-                              {/* =================================
-                                  DETAILS
-                              ================================= */}
-
-                              <DropdownMenuItem
-                                onClick={() =>
-                                  openViewDetails(
-                                    collection
+                                  handleViewDetails(
+                                    collection,
                                   )
                                 }
                               >
                                 <FileText className="mr-2 size-4" />
-
                                 View Details
                               </DropdownMenuItem>
 
-                              {/* =================================
-                                  CASH COLLECTION
-                              ================================= */}
+                              {/* PRINT INVOICE */}
 
-                              {collection.balance >
-                                0 && (
+                              {(collection.status !==
+                                "PENDING" ||
+                                collection.balance >
+                                  0) && (
                                 <DropdownMenuItem
                                   onClick={() =>
-                                    openCollectCash(
-                                      collection
+                                    handlePrintInvoice(
+                                      collection,
                                     )
                                   }
                                 >
-                                  <Wallet className="mr-2 size-4" />
-
-                                  Collect Cash
+                                  <Printer className="mr-2 size-4" />
+                                  Print Invoice
                                 </DropdownMenuItem>
                               )}
+
+                              {/* DOWNLOAD INVOICE */}
+
+                              {(collection.status !==
+                                "PENDING" ||
+                                collection.balance >
+                                  0) && (
+                                <DropdownMenuItem
+                                  onClick={() =>
+                                    handleDownloadInvoice(
+                                      collection,
+                                    )
+                                  }
+                                >
+                                  <Download className="mr-2 size-4" />
+                                  Download Invoice
+                                </DropdownMenuItem>
+                              )}
+
+                              {/* UPDATE */}
+
+                              {collection.status ===
+                                "PENDING" &&
+                                collection.paidAmount <=
+                                  0 &&
+                                collection.balance >
+                                  0 && (
+                                  <DropdownMenuItem
+                                    onClick={() =>
+                                      handleUpdate(
+                                        collection,
+                                      )
+                                    }
+                                  >
+                                    <Pencil className="mr-2 size-4" />
+                                    Update
+                                  </DropdownMenuItem>
+                                )}
+
+                              {/* COLLECT PAYMENT */}
+
+                              {collection.balance >
+                                0 &&
+                                collection.status !==
+                                  "CANCELLED" && (
+                                  <DropdownMenuItem
+                                    onClick={() =>
+                                      handleCollectPayment(
+                                        collection,
+                                      )
+                                    }
+                                  >
+                                    <Wallet className="mr-2 size-4" />
+                                    Collect Payment
+                                  </DropdownMenuItem>
+                                )}
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </TableCell>
                       </TableRow>
-                    )
+                    ),
                   )
                 )}
               </TableBody>
             </Table>
           </div>
-        </CardContent>
-      </Card>
 
-      {/* ===================================================
-          VIEW DETAILS DIALOG
-      =================================================== */}
-
-      <Dialog
-        open={detailsDialogOpen}
-        onOpenChange={(open) => {
-          if (!open) {
-            closeDetailsDialog();
-          }
-        }}
-      >
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>
-              Collection Details
-            </DialogTitle>
-
-            <DialogDescription>
-              Read-only information about the invoice,
-              taxpayer, service and financial obligation.
-            </DialogDescription>
-          </DialogHeader>
-
-          {selectedDetailsCollection && (
-            <div className="space-y-5">
-              {/* =================================================
-                  INVOICE
-              ================================================= */}
-
-              <div className="rounded-lg border">
-                <div className="border-b px-4 py-3">
-                  <div className="flex items-center gap-2">
-                    <FileText className="size-4 text-primary" />
-
-                    <p className="text-sm font-semibold">
-                      Invoice
-                    </p>
-                  </div>
-                </div>
-
-                <div className="grid gap-3 p-4 sm:grid-cols-2">
-                  <div>
-                    <p className="text-xs text-muted-foreground">
-                      Invoice Number
-                    </p>
-
-                    <p className="mt-1 font-mono text-sm font-semibold">
-                      {
-                        selectedDetailsCollection.invoiceNumber
-                      }
-                    </p>
-                  </div>
-
-                  <div>
-                    <p className="text-xs text-muted-foreground">
-                      Status
-                    </p>
-
-                    <div className="mt-1">
-                      <Badge
-                        variant="outline"
-                        className={getStatusClassName(
-                          selectedDetailsCollection.status
-                        )}
-                      >
-                        {getStatusLabel(
-                          selectedDetailsCollection.status
-                        )}
-                      </Badge>
-                    </div>
-                  </div>
-
-                  <div>
-                    <p className="text-xs text-muted-foreground">
-                      Invoice Amount
-                    </p>
-
-                    <p className="mt-1 font-semibold">
-                      {formatCurrency(
-                        selectedDetailsCollection.amount
-                      )}
-                    </p>
-                  </div>
-
-                  <div>
-                    <p className="text-xs text-muted-foreground">
-                      Paid Amount
-                    </p>
-
-                    <p className="mt-1 font-semibold">
-                      {formatCurrency(
-                        selectedDetailsCollection.paidAmount
-                      )}
-                    </p>
-                  </div>
-
-                  <div>
-                    <p className="text-xs text-muted-foreground">
-                      Balance
-                    </p>
-
-                    <p className="mt-1 font-semibold">
-                      {formatCurrency(
-                        selectedDetailsCollection.balance
-                      )}
-                    </p>
-                  </div>
-
-                  <div>
-                    <p className="text-xs text-muted-foreground">
-                      Due Date
-                    </p>
-
-                    <p className="mt-1 font-semibold">
-                      {
-                        selectedDetailsCollection.dueDate
-                      }
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* =================================================
-                  TAXPAYER
-              ================================================= */}
-
-              <div className="rounded-lg border">
-                <div className="border-b px-4 py-3">
-                  <div className="flex items-center gap-2">
-                    <User className="size-4 text-primary" />
-
-                    <p className="text-sm font-semibold">
-                      Taxpayer
-                    </p>
-                  </div>
-                </div>
-
-                <div className="grid gap-3 p-4 sm:grid-cols-2">
-                  <div>
-                    <p className="text-xs text-muted-foreground">
-                      Name
-                    </p>
-
-                    <p className="mt-1 font-medium">
-                      {
-                        selectedDetailsCollection.taxpayerName
-                      }
-                    </p>
-                  </div>
-
-                  <div>
-                    <p className="text-xs text-muted-foreground">
-                      Phone
-                    </p>
-
-                    <p className="mt-1 font-medium">
-                      {
-                        selectedDetailsCollection.taxpayerPhone
-                      }
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* =================================================
-                  SERVICE
-              ================================================= */}
-
-              <div className="rounded-lg border">
-                <div className="border-b px-4 py-3">
-                  <div className="flex items-center gap-2">
-                    <Tag className="size-4 text-primary" />
-
-                    <p className="text-sm font-semibold">
-                      Service
-                    </p>
-                  </div>
-                </div>
-
-                <div className="grid gap-3 p-4 sm:grid-cols-2">
-                  <div>
-                    <p className="text-xs text-muted-foreground">
-                      Revenue Service
-                    </p>
-
-                    <p className="mt-1 font-medium">
-                      {
-                        selectedDetailsCollection.serviceName
-                      }
-                    </p>
-                  </div>
-
-                  <div>
-                    <p className="text-xs text-muted-foreground">
-                      Revenue Domain
-                    </p>
-
-                    <p className="mt-1 font-medium">
-                      {
-                        selectedDetailsCollection.revenueDomain
-                      }
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* =================================================
-                  TARIFF
-              ================================================= */}
-
-              <div className="rounded-lg border">
-                <div className="border-b px-4 py-3">
-                  <p className="text-sm font-semibold">
-                    Tariff
-                  </p>
-                </div>
-
-                <div className="grid gap-3 p-4 sm:grid-cols-2">
-                  <div>
-                    <p className="text-xs text-muted-foreground">
-                      Code
-                    </p>
-
-                    <p className="mt-1 font-mono text-sm font-semibold">
-                      {
-                        selectedDetailsCollection.tariffCode
-                      }
-                    </p>
-                  </div>
-
-                  <div>
-                    <p className="text-xs text-muted-foreground">
-                      Name
-                    </p>
-
-                    <p className="mt-1 font-medium">
-                      {
-                        selectedDetailsCollection.tariffName
-                      }
-                    </p>
-                  </div>
-
-                  <div>
-                    <p className="text-xs text-muted-foreground">
-                      Rate
-                    </p>
-
-                    <p className="mt-1 font-semibold">
-                      {formatCurrency(
-                        selectedDetailsCollection.tariffRate
-                      )}
-                    </p>
-                  </div>
-
-                  <div>
-                    <p className="text-xs text-muted-foreground">
-                      Unit
-                    </p>
-
-                    <p className="mt-1 font-medium">
-                      {
-                        selectedDetailsCollection.tariffUnit
-                      }
-                    </p>
-                  </div>
-
-                  <div>
-                    <p className="text-xs text-muted-foreground">
-                      Quantity
-                    </p>
-
-                    <p className="mt-1 font-semibold">
-                      {
-                        selectedDetailsCollection.quantity
-                      }
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={
-                closeDetailsDialog
-              }
-            >
-              Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ===================================================
-          COLLECT CASH DIALOG
-      =================================================== */}
-
-      <Dialog
-        open={cashDialogOpen}
-        onOpenChange={(open) => {
-          if (!open) {
-            closeCashDialog();
-          }
-        }}
-      >
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>
-              Collect Cash
-            </DialogTitle>
-
-            <DialogDescription>
-              Record a cash payment against the existing
-              invoice. The server will validate the current
-              outstanding balance before recording payment.
-            </DialogDescription>
-          </DialogHeader>
-
-          {selectedCashCollection && (
-            <div className="space-y-5">
-              {/* =================================================
-                  INVOICE
-              ================================================= */}
-
-              <div className="rounded-lg border">
-                <div className="border-b px-4 py-3">
-                  <div className="flex items-center gap-2">
-                    <FileText className="size-4 text-primary" />
-
-                    <div>
-                      <p className="text-sm font-semibold">
-                        Invoice
-                      </p>
-
-                      <p className="text-xs text-muted-foreground">
-                        {
-                          selectedCashCollection.invoiceNumber
-                        }
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid gap-3 p-4 sm:grid-cols-3">
-                  <div>
-                    <p className="text-xs text-muted-foreground">
-                      Invoice Amount
-                    </p>
-
-                    <p className="mt-1 font-semibold">
-                      {formatCurrency(
-                        selectedCashCollection.amount
-                      )}
-                    </p>
-                  </div>
-
-                  <div>
-                    <p className="text-xs text-muted-foreground">
-                      Paid
-                    </p>
-
-                    <p className="mt-1 font-semibold">
-                      {formatCurrency(
-                        selectedCashCollection.paidAmount
-                      )}
-                    </p>
-                  </div>
-
-                  <div>
-                    <p className="text-xs text-muted-foreground">
-                      Outstanding
-                    </p>
-
-                    <p className="mt-1 font-semibold text-primary">
-                      {formatCurrency(
-                        selectedCashCollection.balance
-                      )}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* =================================================
-                  TAXPAYER
-              ================================================= */}
-
-              <div className="rounded-lg border bg-muted/30 p-4">
-                <div className="flex items-start gap-3">
-                  <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10">
-                    <User className="size-4 text-primary" />
-                  </div>
-
-                  <div>
-                    <p className="font-semibold">
-                      {
-                        selectedCashCollection.taxpayerName
-                      }
-                    </p>
-
-                    <p className="text-sm text-muted-foreground">
-                      {
-                        selectedCashCollection.taxpayerPhone
-                      }
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* =================================================
-                  SERVICE
-              ================================================= */}
-
-              <div className="rounded-lg border p-4">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <p className="text-xs text-muted-foreground">
-                      Revenue Service
-                    </p>
-
-                    <p className="mt-1 text-sm font-semibold">
-                      {
-                        selectedCashCollection.serviceName
-                      }
-                    </p>
-                  </div>
-
-                  <Badge
-                    variant="outline"
-                    className="font-mono"
-                  >
+          {/* =================================================
+              PAGINATION
+          ================================================= */}
+
+          {pagination &&
+            pagination.last_page >
+              1 && (
+              <div className="flex items-center justify-between border-t p-4">
+                <p className="text-sm text-muted-foreground">
+                  Showing{" "}
+                  <span className="font-medium">
+                    {pagination.from ??
+                      0}
+                  </span>{" "}
+                  to{" "}
+                  <span className="font-medium">
+                    {pagination.to ??
+                      0}
+                  </span>{" "}
+                  of{" "}
+                  <span className="font-medium">
                     {
-                      selectedCashCollection.tariffCode
+                      pagination.total
                     }
-                  </Badge>
-                </div>
-              </div>
+                  </span>
+                </p>
 
-              {/* =================================================
-                  CASH AMOUNT
-              ================================================= */}
-
-              <div className="space-y-2">
-                <label
-                  htmlFor="cash-amount"
-                  className="text-sm font-medium"
-                >
-                  Cash Amount
-                </label>
-
-                <div className="relative">
-                  <Input
-                    id="cash-amount"
-                    type="number"
-                    min="0.01"
-                    max={
-                      selectedCashCollection.balance
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={
+                      page <= 1 ||
+                      isFetching
                     }
-                    step="0.01"
-                    value={cashAmount}
-                    onChange={(event) =>
-                      setCashAmount(
-                        event.target.value
+                    onClick={() =>
+                      setPage(
+                        (
+                          current,
+                        ) =>
+                          Math.max(
+                            1,
+                            current -
+                              1,
+                          ),
                       )
                     }
-                    placeholder="Enter cash amount"
-                    className="pr-16 text-lg"
-                    disabled={
-                      cashSubmitting
-                    }
-                  />
+                  >
+                    Previous
+                  </Button>
 
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-medium text-muted-foreground">
-                    ETB
+                  <span className="px-2 text-sm">
+                    Page{" "}
+                    <span className="font-medium">
+                      {
+                        pagination.current_page
+                      }
+                    </span>{" "}
+                    of{" "}
+                    <span className="font-medium">
+                      {
+                        pagination.last_page
+                      }
+                    </span>
                   </span>
-                </div>
 
-                <p className="text-xs text-muted-foreground">
-                  Maximum collectible amount:{" "}
-                  {formatCurrency(
-                    selectedCashCollection.balance
-                  )}
-                </p>
-              </div>
-
-              {/* =================================================
-                  SERVER VALIDATION NOTICE
-              ================================================= */}
-
-              <div className="rounded-lg border border-primary/20 bg-primary/[0.03] p-4">
-                <div className="flex items-start gap-3">
-                  <div className="mt-0.5">
-                    <Wallet className="size-4 text-primary" />
-                  </div>
-
-                  <div>
-                    <p className="text-sm font-medium">
-                      Server-controlled payment
-                    </p>
-
-                    <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                      The displayed balance is
-                      informational. The backend will
-                      lock the invoice, re-check the
-                      current balance, validate the cash
-                      amount, record the payment and
-                      update the invoice status.
-                    </p>
-                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={
+                      page >=
+                        pagination.last_page ||
+                      isFetching
+                    }
+                    onClick={() =>
+                      setPage(
+                        (
+                          current,
+                        ) =>
+                          Math.min(
+                            pagination.last_page,
+                            current +
+                              1,
+                          ),
+                      )
+                    }
+                  >
+                    Next
+                  </Button>
                 </div>
               </div>
-            </div>
-          )}
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={
-                closeCashDialog
-              }
-              disabled={cashSubmitting}
-            >
-              Cancel
-            </Button>
-
-            <Button
-              onClick={
-                collectCash
-              }
-              disabled={
-                cashSubmitting ||
-                !selectedCashCollection ||
-                !cashAmount ||
-                Number(cashAmount) <= 0 ||
-                Number(cashAmount) >
-                  (selectedCashCollection?.balance ??
-                    0)
-              }
-            >
-              <Wallet className="mr-2 size-4" />
-
-              {cashSubmitting
-                ? "Collecting..."
-                : "Collect Cash"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            )}
+        </CardContent>
+      </Card>
     </div>
-  );
+  )
 }

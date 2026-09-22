@@ -1,20 +1,19 @@
-"use client";
+"use client"
 
-import {
-  CollectionForm,
-  CollectionResult,
-} from "@/components/forms/CollectionForm";
-import { useRevenueServices } from "@/hooks/revenue/revenueService.hook";
-import { useCitizens } from "@/hooks/useCitizen.hook";
-import { RevenueService } from "@/types/revenue/assessment";
-import { useRouter } from "next/navigation";
-import { useMemo } from "react";
+import { useMemo } from "react"
+import { useRouter } from "next/navigation"
+import { toast } from "sonner"
 
-import { mapRevenueService } from "../../assessments/create/page";
-import { toast } from "sonner";
+import { useRevenueServices } from "@/hooks/revenue/revenueService.hook"
+import { useCitizens } from "@/hooks/useCitizen.hook"
+
+import type { RevenueService } from "@/types/revenue/assessment"
+
+import { mapRevenueService } from "../../assessments/create/page"
+import { CollectionForm, DirectCollectionResult } from "@/components/forms/CollectionForm"
 
 export default function CreateFieldCollectionPage() {
-  const router = useRouter();
+  const router = useRouter()
 
   // =========================================================
   // TAXPAYERS
@@ -24,7 +23,7 @@ export default function CreateFieldCollectionPage() {
     data: taxpayers,
     isLoading: taxpayersLoading,
     isError: taxpayersError,
-  } = useCitizens();
+  } = useCitizens()
 
   // =========================================================
   // REVENUE SERVICES
@@ -38,39 +37,50 @@ export default function CreateFieldCollectionPage() {
     is_active: true,
     per_page: 100,
     page: 1,
-  });
+  })
 
   /*
    * Only revenue services configured for
    * FIELD_COLLECTION are available to this workflow.
    *
-   * The API revenue-service model is then normalized
+   * The API revenue-service model is normalized
    * into the assessment/workflow RevenueService model.
    */
-  const revenueServices = useMemo<RevenueService[]>(
-    () =>
-      (revenueServicesData?.data ?? [])
-        .filter(
-          (service) =>
-            service.collectionMode === "FIELD_COLLECTION",
-        )
-        .map(mapRevenueService),
-    [revenueServicesData],
-  );
-
-  console.log("service",revenueServicesData);
+  const revenueServices =
+    useMemo<RevenueService[]>(
+      () =>
+        (revenueServicesData?.data ?? [])
+          .filter(
+            (service) =>
+              service.collectionMode ===
+              "FIELD_COLLECTION",
+          )
+          .map(mapRevenueService),
+      [revenueServicesData],
+    )
 
   // =========================================================
   // SUCCESS
   // =========================================================
 
   function handleSuccess(
-    collection: CollectionResult,
+    collection: DirectCollectionResult,
   ) {
-    toast.success("i'm here")
-    // router.push(
-    //   `/field-collection/${collection.id}`,
-    // );
+    toast.success(
+      collection.invoiceNumber
+        ? `Invoice ${collection.invoiceNumber} created successfully.`
+        : "Direct collection created successfully.",
+    )
+
+    /*
+     * Navigate to the invoice/direct collection
+     * details page when that page is ready.
+     */
+    if (collection.invoiceId) {
+      router.push(
+        `/field-collection/${collection.invoiceId}`,
+      )
+    }
   }
 
   // =========================================================
@@ -78,7 +88,7 @@ export default function CreateFieldCollectionPage() {
   // =========================================================
 
   function handleCancel() {
-    router.push("/field-collection");
+    router.push("/field-collection")
   }
 
   // =========================================================
@@ -101,7 +111,7 @@ export default function CreateFieldCollectionPage() {
           </p>
         </div>
       </div>
-    );
+    )
   }
 
   // =========================================================
@@ -133,7 +143,7 @@ export default function CreateFieldCollectionPage() {
           </button>
         </div>
       </div>
-    );
+    )
   }
 
   // =========================================================
@@ -150,5 +160,5 @@ export default function CreateFieldCollectionPage() {
         onCancel={handleCancel}
       />
     </div>
-  );
+  )
 }

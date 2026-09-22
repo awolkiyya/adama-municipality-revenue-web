@@ -66,3 +66,88 @@
 .font-serif {
   font-family: var(--font-serif, Georgia, "Times New Roman", serif);
 }
+
+
+/* =========================================================
+   INVOICE PRINT
+   ========================================================= */
+
+   .invoice-print-root {
+    min-height: 100vh;
+    background: #f1f5f9;
+  }
+  
+  @media screen {
+    .invoice-paper {
+      min-height: 297mm;
+    }
+  }
+  
+  @media print {
+    @page {
+      size: A4 portrait;
+      margin: 0;
+    }
+  
+    html,
+    body {
+      width: 210mm;
+      min-height: 297mm;
+      margin: 0 !important;
+      padding: 0 !important;
+      background: white !important;
+    }
+  
+    body {
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+  
+    .print-hidden {
+      display: none !important;
+    }
+  
+    .invoice-print-root {
+      width: 210mm !important;
+      min-height: 297mm !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      background: white !important;
+    }
+  
+    .invoice-wrapper {
+      width: 210mm !important;
+      min-height: 297mm !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      background: white !important;
+    }
+  
+    .invoice-paper {
+      width: 210mm !important;
+      min-height: 297mm !important;
+      margin: 0 !important;
+      padding: 16mm !important;
+      border: none !important;
+      border-radius: 0 !important;
+      box-shadow: none !important;
+    }
+  
+    .avoid-break {
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+  
+    table {
+      break-inside: auto;
+    }
+  
+    thead {
+      display: table-header-group;
+    }
+  
+    tr {
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+  }

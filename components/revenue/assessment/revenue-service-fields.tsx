@@ -39,13 +39,25 @@ import {
 } from "@/components/revenue/assessment/revenue-service-selector"
 
 /*
- * ==============================================================
- * PROPS
- * ==============================================================
- *
- * This component already receives the complete RevenueService.
- * Therefore callbacks only need the field key/value.
- */
+|--------------------------------------------------------------------------
+| PROPS
+|--------------------------------------------------------------------------
+|
+| IMPORTANT:
+|
+| The field ID is the canonical key used by the parent form.
+|
+| field.id:
+|   - identifies the configured RevenueServiceField
+|   - is used as the values key
+|   - is used as the errors key
+|   - is sent to the backend
+|
+| field.key:
+|   - is only a business/display key
+|
+|--------------------------------------------------------------------------
+*/
 
 type RevenueServiceFieldsProps = {
   service: RevenueService
@@ -63,7 +75,7 @@ type RevenueServiceFieldsProps = {
   >
 
   onChange: (
-    key: string,
+    fieldId: string,
     value: unknown,
   ) => void
 
@@ -84,8 +96,11 @@ type RevenueServiceFieldsProps = {
 }
 
 /*
- * Fields that should occupy the complete row.
- */
+|--------------------------------------------------------------------------
+| Fields that should occupy the complete row.
+|--------------------------------------------------------------------------
+*/
+
 const FULL_WIDTH_TYPES = new Set([
   "TEXTAREA",
   "FILE",
@@ -109,18 +124,22 @@ export function RevenueServiceFields({
   ] = useState(true)
 
   /*
-   * ============================================================
-   * REQUIRED FIELDS
-   * ============================================================
-   *
-   * CHECKBOX fields are intentionally excluded.
-   */
+  |--------------------------------------------------------------------------
+  | REQUIRED FIELDS
+  |--------------------------------------------------------------------------
+  |
+  | CHECKBOX fields are intentionally excluded from required completion
+  | because checkbox handling may have different semantics.
+  |
+  |--------------------------------------------------------------------------
+  */
 
   const requiredFields =
     useMemo(
       () =>
         service.fields.filter(
           (field) =>
+            Boolean(field.id) &&
             field.required &&
             field.type !== "CHECKBOX",
         ),
@@ -130,10 +149,22 @@ export function RevenueServiceFields({
     )
 
   /*
-   * ============================================================
-   * COMPLETION
-   * ============================================================
-   */
+  |--------------------------------------------------------------------------
+  | COMPLETION
+  |--------------------------------------------------------------------------
+  |
+  | IMPORTANT:
+  |
+  | Always read values using field.id.
+  |
+  | Do NOT use:
+  |
+  | values[field.key]
+  |
+  | because the parent form stores values using the RevenueField.id.
+  |
+  |--------------------------------------------------------------------------
+  */
 
   const completedCount =
     useMemo(
@@ -141,7 +172,7 @@ export function RevenueServiceFields({
         requiredFields.filter(
           (field) =>
             isFieldComplete(
-              values[field.key],
+              values[field.id],
               field,
             ),
         ).length,
@@ -168,20 +199,33 @@ export function RevenueServiceFields({
             100,
         )
 
+  /*
+  |--------------------------------------------------------------------------
+  | ERROR STATE
+  |--------------------------------------------------------------------------
+  */
+
   const hasErrors =
     Object.keys(errors).length >
     0
 
   /*
-   * Automatically expand when
-   * validation errors exist.
-   */
+  |--------------------------------------------------------------------------
+  | AUTOMATICALLY EXPAND ON ERROR
+  |--------------------------------------------------------------------------
+  */
 
   useEffect(() => {
     if (hasErrors) {
       setExpanded(true)
     }
   }, [hasErrors])
+
+  /*
+  |--------------------------------------------------------------------------
+  | TOGGLE
+  |--------------------------------------------------------------------------
+  */
 
   function toggleExpanded() {
     if (!disabled) {
@@ -192,20 +236,19 @@ export function RevenueServiceFields({
   }
 
   /*
-   * ============================================================
-   * RENDER
-   * ============================================================
-   */
+  |--------------------------------------------------------------------------
+  | RENDER
+  |--------------------------------------------------------------------------
+  */
 
   return (
     <div
-      className={`overflow-hidden rounded-xl border  shadow-none transition-colors ${
+      className={`overflow-hidden rounded-xl border shadow-none transition-colors ${
         hasErrors
           ? "border-destructive/40"
           : ""
       }`}
     >
-
       {/* ========================================================
           HEADER
       ======================================================== */}
@@ -217,8 +260,11 @@ export function RevenueServiceFields({
             : ""
         }`}
       >
-
         <div className="flex items-start gap-3">
+
+          {/* ====================================================
+              PROGRESS
+          ==================================================== */}
 
           <CircularProgress
             value={
@@ -265,7 +311,6 @@ export function RevenueServiceFields({
             aria-controls={`service-fields-${service.id}`}
             className="min-w-0 flex-1 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
-
             <div className="flex flex-wrap items-center gap-2">
 
               <h2 className="min-w-0 break-words text-sm font-semibold sm:text-base">
@@ -274,14 +319,16 @@ export function RevenueServiceFields({
                 }
               </h2>
 
-              <Badge
-                variant="outline"
-                className="shrink-0"
-              >
-                {
-                  service.code
-                }
-              </Badge>
+              {service.code && (
+                <Badge
+                  variant="outline"
+                  className="shrink-0"
+                >
+                  {
+                    service.code
+                  }
+                </Badge>
+              )}
 
               {service.category && (
                 <Badge
@@ -311,7 +358,6 @@ export function RevenueServiceFields({
                   className="shrink-0 gap-1"
                 >
                   <AlertCircle className="h-3 w-3" />
-
                   Error
                 </Badge>
               )}
@@ -334,7 +380,6 @@ export function RevenueServiceFields({
                   : `${completedCount}/${requiredCount} required fields completed`}
               </p>
             )}
-
           </button>
 
           {/* ====================================================
@@ -389,9 +434,7 @@ export function RevenueServiceFields({
             </Button>
 
           </div>
-
         </div>
-
       </div>
 
       {/* ========================================================
@@ -402,97 +445,109 @@ export function RevenueServiceFields({
         id={`service-fields-${service.id}`}
         hidden={!expanded}
       >
-
         <div className="grid gap-x-6 gap-y-6 p-4 sm:grid-cols-2 sm:p-6">
 
           {service.fields.map(
-            (field) => (
+            (field) => {
+              /*
+               * RevenueField.id is the canonical identifier.
+               *
+               * We cannot safely use field.key here because the
+               * backend validates fields using RevenueServiceField.id.
+               */
+              const fieldId =
+                field.id
 
-              <div
-                key={
-                  field.id ??
-                  field.key
-                }
-                className={
-                  FULL_WIDTH_TYPES.has(
-                    field.type,
-                  )
-                    ? "sm:col-span-2"
-                    : ""
-                }
-              >
+              /*
+               * A configured revenue field should always have an ID.
+               * If it doesn't, don't render a broken controlled field.
+               */
+              if (!fieldId) {
+                return null
+              }
 
-                <RevenueDynamicField
-                  service={
-                    service
+              return (
+                <div
+                  key={fieldId}
+                  className={
+                    FULL_WIDTH_TYPES.has(
+                      field.type,
+                    )
+                      ? "sm:col-span-2"
+                      : ""
                   }
+                >
+                  <RevenueDynamicField
+                    service={
+                      service
+                    }
 
-                  field={
-                    field
-                  }
+                    field={
+                      field
+                    }
 
-                  /*
-                   * IMPORTANT:
-                   *
-                   * The value is controlled by the
-                   * parent state.
-                   *
-                   * When the user types, onChange
-                   * updates this exact key.
-                   */
-                  value={
-                    values[
-                      field.key
-                    ]
-                  }
+                    /*
+                     * IMPORTANT:
+                     *
+                     * Values are stored using the field UUID.
+                     */
+                    value={
+                      values[
+                        fieldId
+                      ]
+                    }
 
-                  error={
-                    errors[
-                      field.key
-                    ]
-                  }
+                    /*
+                     * IMPORTANT:
+                     *
+                     * Validation errors are also keyed by UUID.
+                     */
+                    error={
+                      errors[
+                        fieldId
+                      ]
+                    }
 
-                  disabled={
-                    disabled
-                  }
+                    disabled={
+                      disabled
+                    }
 
-                  /*
-                   * IMPORTANT:
-                   *
-                   * Only field.key and value are
-                   * passed here.
-                   *
-                   * RevenueServiceFields already
-                   * knows service.id.
-                   */
-                  onChange={(
-                    value,
-                  ) =>
-                    onChange(
-                      field.key,
+                    /*
+                     * IMPORTANT:
+                     *
+                     * Pass field.id to the parent.
+                     *
+                     * Do NOT pass field.key.
+                     *
+                     * Do NOT pass field.code.
+                     */
+                    onChange={(
                       value,
-                    )
-                  }
+                    ) =>
+                      onChange(
+                        fieldId,
+                        value,
+                      )
+                    }
 
-                  onFileChange={(
-                    event,
-                  ) =>
-                    onFileChange(
+                    onFileChange={(
                       event,
-                      field,
-                    )
-                  }
+                    ) =>
+                      onFileChange(
+                        event,
+                        field,
+                      )
+                    }
 
-                  onRemoveFile={() =>
-                    onRemoveFile(
-                      field,
-                    )
-                  }
-                />
-
-              </div>
-
-            ),
+                    onRemoveFile={() =>
+                      onRemoveFile(
+                        field,
+                      )
+                    }
+                  />
+                </div>
+              )
+            },
           )}
 
         </div>
@@ -517,6 +572,9 @@ export function RevenueServiceFields({
                 {Object.values(
                   errors,
                 )
+                  .filter(
+                    Boolean,
+                  )
                   .slice(0, 3)
                   .map(
                     (
@@ -533,14 +591,10 @@ export function RevenueServiceFields({
                   )}
 
               </div>
-
             </div>
-
           </div>
         )}
-
       </div>
-
     </div>
   )
 }
@@ -622,13 +676,11 @@ function CircularProgress({
         height: size,
       }}
     >
-
       <svg
         width={size}
         height={size}
         className="-rotate-90"
       >
-
         <circle
           cx={
             size / 2
@@ -669,7 +721,6 @@ function CircularProgress({
               : "stroke-primary/60"
           }`}
         />
-
       </svg>
 
       <div className="absolute inset-0 flex items-center justify-center text-xs font-semibold">
@@ -677,7 +728,6 @@ function CircularProgress({
           children
         }
       </div>
-
     </div>
   )
 }
@@ -690,6 +740,9 @@ function isFieldComplete(
   value: unknown,
   field: RevenueField,
 ): boolean {
+  /*
+   * FILE
+   */
   if (
     field.type ===
     "FILE"
@@ -699,6 +752,9 @@ function isFieldComplete(
     )
   }
 
+  /*
+   * MULTI FILE
+   */
   if (
     field.type ===
     "MULTI_FILE"
@@ -711,6 +767,24 @@ function isFieldComplete(
     )
   }
 
+  /*
+   * CHECKBOX
+   *
+   * CHECKBOX fields are currently excluded from requiredFields,
+   * but this makes the helper safe if called independently.
+   */
+  if (
+    field.type ===
+    "CHECKBOX"
+  ) {
+    return (
+      value === true
+    )
+  }
+
+  /*
+   * Standard scalar fields.
+   */
   return (
     value !==
       undefined &&

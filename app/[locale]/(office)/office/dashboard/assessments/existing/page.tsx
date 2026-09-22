@@ -62,15 +62,14 @@ export default function ExistingAgreementPage() {
    * API revenue-service model is normalized into
    * the assessment/workflow revenue-service model.
    */
-  const revenueServices = useMemo<
-    RevenueService[]
-  >(
+  const revenueServices = useMemo<RevenueService[]>(
     () =>
-      (
-        revenueServicesData?.data ?? []
-      ).map(
-        mapRevenueService,
-      ),
+      (revenueServicesData?.data ?? [])
+        .filter(
+          (service) =>
+            service.revenueCode?.code === "1731" ,
+        )
+        .map(mapRevenueService),
     [revenueServicesData],
   )
 

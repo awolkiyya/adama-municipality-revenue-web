@@ -3,17 +3,18 @@
 import {
   ArrowLeft,
   ArrowRight,
-  Calculator,
   Check,
-  CheckCircle2,
-  FileText,
   Loader2,
   Save,
-  ShieldCheck,
-  User,
-  Wallet,
 } from "lucide-react"
-import { useCallback, useEffect, useMemo, useState } from "react"
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react"
+
+import type { ChangeEvent } from "react"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -23,49 +24,49 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 
-import { TaxpayerSelector } from "@/components/revenue/assessment/taxpayer-selector"
-import { RevenueServiceSelector } from "@/components/revenue/assessment/revenue-service-selector"
 import { RevenueServiceFields } from "@/components/revenue/assessment/revenue-service-fields"
+import { RevenueServiceSelector } from "@/components/revenue/assessment/revenue-service-selector"
+import { TaxpayerSelector } from "@/components/revenue/assessment/taxpayer-selector"
 
-import { Citizen } from "@/types/citizen"
-import { RevenueService } from "@/types/revenue/assessment"
+import type { Citizen } from "@/types/citizen"
+import type { RevenueService } from "@/types/revenue/assessment"
 
 type CollectionFormMode = "create" | "edit"
 
 type Step = 1 | 2 | 3
 
+/*
+|--------------------------------------------------------------------------
+| Form Types
+|--------------------------------------------------------------------------
+*/
+
+export interface CollectionServiceData {
+  revenueServiceId: string
+  serviceFieldValues: Record<string, unknown>
+}
+
 export interface CollectionFormData {
   id?: string
+
   taxpayerId: string
-  revenueServiceId: string
-  serviceFieldValues: Record<string, string>
+
+  services: CollectionServiceData[]
+
   collectionDate?: string
+
   notes?: string
 }
 
 export interface CollectionResult {
   id: string
+
   invoiceId?: string
+
   status?: string
-}
-
-interface Taxpayer {
-  id: string
-  name: string
-  tin: string
-  type: string
-}
-
-interface AssessmentPreview {
-  subtotal: number
-  penalty: number
-  discount: number
-  total: number
-  currency: string
 }
 
 interface CollectionFormProps {
@@ -78,53 +79,150 @@ interface CollectionFormProps {
   revenueServices: RevenueService[]
 
   onSuccess: (
-    collection: CollectionResult
+    collection: CollectionResult,
   ) => void
 
   onCancel?: () => void
-
-  /*
-   * Optional endpoint overrides.
-   *
-   * Defaults:
-   *   POST /api/v1/field-collections/resolve
-   *   POST /api/v1/field-collections
-   *   PUT  /api/v1/field-collections/{id}
-   */
-  resolveEndpoint?: string
 
   createEndpoint?: string
 
   updateEndpoint?: string
 }
 
+/*
+|--------------------------------------------------------------------------
+| Steps
+|--------------------------------------------------------------------------
+*/
+
 const STEPS = [
   {
     number: 1 as Step,
-    title: "Collection Information",
-    description: "Taxpayer and revenue service",
+    title: "Collection Info",
   },
   {
     number: 2 as Step,
     title: "Service Details",
-    description: "Required collection information",
   },
   {
     number: 3 as Step,
     title: "Review & Confirm",
-    description: "Verify and save",
   },
 ]
 
-function formatMoney(
-  amount: number,
-  currency = "ETB"
-) {
-  return `${amount.toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })} ${currency}`
+/*
+|--------------------------------------------------------------------------
+| Helpers
+|--------------------------------------------------------------------------
+*/
+
+function getToday(): string {
+  const date = new Date()
+
+  const year = date.getFullYear()
+
+  const month = String(
+    date.getMonth() + 1,
+  ).padStart(2, "0")
+
+  const day = String(
+    date.getDate(),
+  ).padStart(2, "0")
+
+  return `${year}-${month}-${day}`
 }
+
+function formatFieldValue(
+  value: unknown,
+): string {
+  if (
+    value === null ||
+    value === undefined ||
+    value === ""
+  ) {
+    return "—"
+  }
+
+  if (typeof value === "boolean") {
+    return value ? "Yes" : "No"
+  }
+
+  if (Array.isArray(value)) {
+    return value.length > 0
+      ? value.join(", ")
+      : "—"
+  }
+
+  if (typeof value === "object") {
+    try {
+      return JSON.stringify(value)
+    } catch {
+      return String(value)
+    }
+  }
+
+  return String(value)
+}
+
+function getApiErrorMessage(
+  payload: unknown,
+  fallback: string,
+): string {
+  if (
+    !payload ||
+    typeof payload !== "object"
+  ) {
+    return fallback
+  }
+
+  const record =
+    payload as Record<string, unknown>
+
+  if (
+    typeof record.message === "string" &&
+    record.message.trim()
+  ) {
+    return record.message
+  }
+
+  if (
+    record.errors &&
+    typeof record.errors === "object"
+  ) {
+    const validationErrors =
+      record.errors as Record<
+        string,
+        unknown
+      >
+
+    const messages = Object.values(
+      validationErrors,
+    ).flatMap((value) =>
+      Array.isArray(value)
+        ? value
+        : [value],
+    )
+
+    const stringMessages =
+      messages.filter(
+        (message): message is string =>
+          typeof message === "string" &&
+          message.trim().length > 0,
+      )
+
+    if (stringMessages.length > 0) {
+      return stringMessages.join(" ")
+    }
+  }
+
+  return fallback
+}
+
+/*
+|--------------------------------------------------------------------------
+| Component
+|--------------------------------------------------------------------------
+*/
 
 export function CollectionForm({
   mode,
@@ -133,269 +231,336 @@ export function CollectionForm({
   revenueServices,
   onSuccess,
   onCancel,
-  resolveEndpoint = "/api/v1/field-collections/resolve",
   createEndpoint = "/api/v1/field-collections",
   updateEndpoint,
 }: CollectionFormProps) {
-  const [step, setStep] = useState<Step>(1)
+  // =========================================================
+  // FORM STATE
+  // =========================================================
 
-  const [isResolving, setIsResolving] =
-    useState(false)
+  const [step, setStep] =
+    useState<Step>(1)
+
+  const [
+    furthestStep,
+    setFurthestStep,
+  ] = useState<Step>(1)
 
   const [isSubmitting, setIsSubmitting] =
     useState(false)
 
   const [taxpayerId, setTaxpayerId] =
     useState(
-      initialData?.taxpayerId ?? ""
+      initialData?.taxpayerId ?? "",
     )
 
-  const [selectedServiceIds, setSelectedServiceIds] =
-    useState<string[]>(
-      initialData?.revenueServiceId
-        ? [initialData.revenueServiceId]
-        : []
-    )
+  /*
+   * Multiple revenue services can
+   * belong to the same field
+   * collection.
+   */
+  const [
+    selectedServiceIds,
+    setSelectedServiceIds,
+  ] = useState<string[]>(
+    initialData?.services?.map(
+      (service) =>
+        service.revenueServiceId,
+    ) ?? [],
+  )
 
-  const [serviceFieldValues, setServiceFieldValues] =
-    useState<
-      Record<
+  /*
+   * Each service owns an independent
+   * field-value object.
+   *
+   * {
+   *   "service-1": { "quantity": 10, "location": "Adama" },
+   *   "service-2": { "area": 500 }
+   * }
+   */
+  const [
+    serviceFieldValues,
+    setServiceFieldValues,
+  ] = useState<
+    Record<
+      string,
+      Record<string, unknown>
+    >
+  >(() => {
+    if (!initialData?.services) {
+      return {}
+    }
+
+    return initialData.services.reduce(
+      (accumulator, service) => {
+        accumulator[
+          service.revenueServiceId
+        ] =
+          service.serviceFieldValues ??
+          {}
+
+        return accumulator
+      },
+      {} as Record<
         string,
-        Record<string, string>
-      >
-    >(
-      initialData?.revenueServiceId
-        ? {
-            [initialData.revenueServiceId]:
-              initialData.serviceFieldValues ??
-              {},
-          }
-        : {}
+        Record<string, unknown>
+      >,
     )
+  })
 
-  const [validationErrors, setValidationErrors] =
-    useState<
-      Record<
-        string,
-        Record<string, string>
-      >
-    >({})
+  /*
+   * Validation errors are also
+   * stored per service.
+   */
+  const [
+    validationErrors,
+    setValidationErrors,
+  ] = useState<
+    Record<
+      string,
+      Record<string, string>
+    >
+  >({})
 
-  const [collectionDate, setCollectionDate] =
-    useState(
-      initialData?.collectionDate ??
-        new Date()
-          .toISOString()
-          .slice(0, 10)
-    )
+  /*
+   * There is no separate "collection
+   * date" input in the UI — collectors
+   * always submit live, on-site, so
+   * this is set automatically and sent
+   * along with the request without
+   * requiring the user to touch it.
+   */
+  const [
+    collectionDate,
+    setCollectionDate,
+  ] = useState(
+    initialData?.collectionDate ??
+      getToday(),
+  )
 
   const [notes, setNotes] =
     useState(
-      initialData?.notes ?? ""
-    )
-
-  const [assessmentPreview, setAssessmentPreview] =
-    useState<AssessmentPreview | null>(
-      null
+      initialData?.notes ?? "",
     )
 
   const [errors, setErrors] =
     useState<string[]>([])
 
-  /*
-   * ----------------------------------------------------
-   * Derived state
-   * ----------------------------------------------------
-   */
+  const [
+    isConfirmed,
+    setIsConfirmed,
+  ] = useState(false)
 
-  // const selectedTaxpayer = useMemo(
-  //   () =>
-  //     taxpayers.find(
-  //       (taxpayer) =>
-  //         taxpayer.id === taxpayerId
-  //     ) ?? null,
-  //   [taxpayerId, taxpayers]
-  // )
+  // =========================================================
+  // DERIVED STATE
+  // =========================================================
 
-  /*
-   * Field collection is intentionally single-service.
-   *
-   * The shared RevenueServiceSelector supports multiple
-   * services, but this workflow accepts only one service.
-   */
-  const selectedService = useMemo(
+  const selectedServices = useMemo(
     () =>
-      revenueServices.find(
+      revenueServices.filter(
         (service) =>
-          service.id ===
-          selectedServiceIds[0]
-      ) ?? null,
+          selectedServiceIds.includes(
+            service.id,
+          ),
+      ),
     [
       revenueServices,
       selectedServiceIds,
-    ]
+    ],
   )
 
-  const revenueCode =
-    selectedService?.code ??
-    ""
+  const selectedTaxpayer = useMemo(
+    () =>
+      taxpayers.find(
+        (taxpayer) =>
+          taxpayer.id === taxpayerId,
+      ) ?? null,
+    [
+      taxpayers,
+      taxpayerId,
+    ],
+  )
 
-  const selectedServiceValues =
-    selectedService
-      ? serviceFieldValues[
-          selectedService.id
-        ] ?? {}
-      : {}
+  const progressPercent = useMemo(
+    () =>
+      ((step - 1) /
+        (STEPS.length - 1)) *
+      100,
+    [step],
+  )
 
-  /*
-   * ----------------------------------------------------
-   * Synchronize initial data when edit data changes
-   * ----------------------------------------------------
-   */
+  // =========================================================
+  // SYNCHRONIZE INITIAL DATA
+  // =========================================================
 
   useEffect(() => {
+    setStep(1)
+
+    setFurthestStep(1)
+
+    setValidationErrors({})
+
+    setErrors([])
+
+    setIsConfirmed(false)
+
     if (!initialData) {
+      setTaxpayerId("")
+
+      setSelectedServiceIds([])
+
+      setServiceFieldValues({})
+
+      setCollectionDate(getToday())
+
+      setNotes("")
+
       return
     }
 
     setTaxpayerId(
-      initialData.taxpayerId ?? ""
+      initialData.taxpayerId ?? "",
     )
+
+    const services =
+      initialData.services ?? []
 
     setSelectedServiceIds(
-      initialData.revenueServiceId
-        ? [initialData.revenueServiceId]
-        : []
+      services.map(
+        (service) =>
+          service.revenueServiceId,
+      ),
     )
 
-    if (initialData.revenueServiceId) {
-      setServiceFieldValues({
-        [initialData.revenueServiceId]:
-          initialData.serviceFieldValues ??
-          {},
-      })
-    } else {
-      setServiceFieldValues({})
-    }
+    const fieldValues = services.reduce(
+      (accumulator, service) => {
+        accumulator[
+          service.revenueServiceId
+        ] =
+          service.serviceFieldValues ??
+          {}
+
+        return accumulator
+      },
+      {} as Record<
+        string,
+        Record<string, unknown>
+      >,
+    )
+
+    setServiceFieldValues(fieldValues)
 
     setCollectionDate(
       initialData.collectionDate ??
-        new Date()
-          .toISOString()
-          .slice(0, 10)
+        getToday(),
     )
 
     setNotes(
-      initialData.notes ?? ""
+      initialData.notes ?? "",
     )
   }, [initialData])
 
-  /*
-   * ----------------------------------------------------
-   * Taxpayer
-   * ----------------------------------------------------
-   */
+  // =========================================================
+  // TAXPAYER
+  // =========================================================
 
   const handleTaxpayerChange =
-    useCallback(
-      (value: string) => {
-        setTaxpayerId(value)
+    useCallback((value: string) => {
+      setTaxpayerId(value)
 
-        setErrors([])
+      setValidationErrors({})
 
-        /*
-         * Assessment depends on taxpayer.
-         * Therefore an old preview is no longer valid.
-         */
-        setAssessmentPreview(null)
-      },
-      []
-    )
+      setIsConfirmed(false)
 
-  /*
-   * ----------------------------------------------------
-   * Revenue service
-   * ----------------------------------------------------
-   */
+      setErrors([])
+    }, [])
+
+  // =========================================================
+  // REVENUE SERVICES
+  // =========================================================
 
   const handleServiceSelection =
     useCallback(
       (serviceIds: string[]) => {
-        const serviceId =
-          serviceIds[0] ?? ""
-
         setSelectedServiceIds(
-          serviceId
-            ? [serviceId]
-            : []
+          serviceIds,
         )
 
-        setValidationErrors({})
-
-        setAssessmentPreview(null)
-
-        setErrors([])
-
         /*
-         * Preserve values for the selected service
-         * but remove values belonging to unrelated
-         * services.
+         * Preserve existing field values
+         * for services that remain
+         * selected; new services get an
+         * empty field-value object.
          */
         setServiceFieldValues(
           (current) => {
-            if (!serviceId) {
-              return {}
+            const next: Record<
+              string,
+              Record<string, unknown>
+            > = {}
+
+            for (const serviceId of serviceIds) {
+              next[serviceId] =
+                current[serviceId] ?? {}
             }
-
-            return {
-              [serviceId]:
-                current[serviceId] ?? {},
-            }
-          }
-        )
-      },
-      []
-    )
-
-  const handleRemoveService =
-    useCallback(
-      (serviceId: string) => {
-        setSelectedServiceIds(
-          (current) =>
-            current.filter(
-              (id) =>
-                id !== serviceId
-            )
-        )
-
-        setServiceFieldValues(
-          (current) => {
-            const next = {
-              ...current,
-            }
-
-            delete next[serviceId]
 
             return next
-          }
+          },
         )
 
         setValidationErrors(
           (current) => {
-            const next = {
-              ...current,
+            const next: Record<
+              string,
+              Record<string, string>
+            > = {}
+
+            for (const serviceId of serviceIds) {
+              if (current[serviceId]) {
+                next[serviceId] =
+                  current[serviceId]
+              }
             }
 
-            delete next[serviceId]
-
             return next
-          }
+          },
         )
 
-        setAssessmentPreview(null)
+        setIsConfirmed(false)
+
+        setErrors([])
       },
-      []
+      [],
     )
+
+  const handleRemoveService =
+    useCallback((serviceId: string) => {
+      setSelectedServiceIds((current) =>
+        current.filter(
+          (id) => id !== serviceId,
+        ),
+      )
+
+      setServiceFieldValues((current) => {
+        const next = { ...current }
+
+        delete next[serviceId]
+
+        return next
+      })
+
+      setValidationErrors((current) => {
+        const next = { ...current }
+
+        delete next[serviceId]
+
+        return next
+      })
+
+      setIsConfirmed(false)
+
+      setErrors([])
+    }, [])
 
   const handleClearServices =
     useCallback(() => {
@@ -405,23 +570,21 @@ export function CollectionForm({
 
       setValidationErrors({})
 
-      setAssessmentPreview(null)
+      setIsConfirmed(false)
 
       setErrors([])
     }, [])
 
-  /*
-   * ----------------------------------------------------
-   * Dynamic service fields
-   * ----------------------------------------------------
-   */
+  // =========================================================
+  // SERVICE FIELD CHANGE
+  // =========================================================
 
-  const setServiceFieldValue =
+  const handleServiceFieldChange =
     useCallback(
       (
         serviceId: string,
         field: string,
-        value: string
+        value: unknown,
       ) => {
         setServiceFieldValues(
           (current) => ({
@@ -432,7 +595,7 @@ export function CollectionForm({
                 {}),
               [field]: value,
             },
-          })
+          }),
         )
 
         setValidationErrors(
@@ -446,10 +609,9 @@ export function CollectionForm({
               return current
             }
 
-            const nextServiceErrors =
-              {
-                ...serviceErrors,
-              }
+            const nextServiceErrors = {
+              ...serviceErrors,
+            }
 
             delete nextServiceErrors[
               field
@@ -457,166 +619,243 @@ export function CollectionForm({
 
             return {
               ...current,
+
               [serviceId]:
                 nextServiceErrors,
             }
-          }
+          },
         )
 
-        /*
-         * Any field modification invalidates
-         * the previous server assessment.
-         */
-        setAssessmentPreview(null)
+        setIsConfirmed(false)
 
         setErrors([])
       },
-      []
+      [],
     )
+
+  // =========================================================
+  // FILE HANDLING
+  // =========================================================
 
   const handleFileChange =
     useCallback(
       (
+        event: ChangeEvent<HTMLInputElement>,
         serviceId: string,
-        field: string,
-        file: File | null
+        field: RevenueService["fields"][number],
       ) => {
-        /*
-         * Keep this callback compatible with
-         * RevenueServiceFields.
-         *
-         * File upload handling should eventually
-         * be connected to your document upload API.
-         */
-        console.debug(
-          "Collection service file changed",
-          {
-            serviceId,
-            field,
-            file,
-          }
+        const file =
+          event.target.files?.[0] ??
+          null
+
+        const fieldKey =
+          field.key ?? field.id
+
+        setServiceFieldValues(
+          (current) => ({
+            ...current,
+
+            [serviceId]: {
+              ...(current[serviceId] ??
+                {}),
+              [fieldKey]:
+                file?.name ?? "",
+            },
+          }),
         )
+
+        setValidationErrors(
+          (current) => {
+            const serviceErrors =
+              current[serviceId]
+
+            if (
+              !serviceErrors?.[
+                fieldKey
+              ]
+            ) {
+              return current
+            }
+
+            const nextServiceErrors = {
+              ...serviceErrors,
+            }
+
+            delete nextServiceErrors[
+              fieldKey
+            ]
+
+            return {
+              ...current,
+
+              [serviceId]:
+                nextServiceErrors,
+            }
+          },
+        )
+
+        setIsConfirmed(false)
+
+        setErrors([])
       },
-      []
+      [],
     )
 
-  const removeFile =
-    useCallback(
-      (
-        serviceId: string,
-        field: string
-      ) => {
-        console.debug(
-          "Collection service file removed",
-          {
-            serviceId,
-            field,
-          }
-        )
-      },
-      []
-    )
+  const removeFile = useCallback(
+    (
+      serviceId: string,
+      field: RevenueService["fields"][number],
+    ) => {
+      const fieldKey =
+        field.key ?? field.id
 
-  /*
-   * ----------------------------------------------------
-   * Validation
-   * ----------------------------------------------------
-   */
+      setServiceFieldValues(
+        (current) => ({
+          ...current,
 
-  const validateStepOne =
-    useCallback(() => {
+          [serviceId]: {
+            ...(current[serviceId] ??
+              {}),
+            [fieldKey]: "",
+          },
+        }),
+      )
+
+      setValidationErrors((current) => {
+        const serviceErrors =
+          current[serviceId]
+
+        if (!serviceErrors?.[fieldKey]) {
+          return current
+        }
+
+        const nextServiceErrors = {
+          ...serviceErrors,
+        }
+
+        delete nextServiceErrors[
+          fieldKey
+        ]
+
+        return {
+          ...current,
+
+          [serviceId]: nextServiceErrors,
+        }
+      })
+
+      setIsConfirmed(false)
+
+      setErrors([])
+    },
+    [],
+  )
+
+  // =========================================================
+  // VALIDATION
+  // =========================================================
+
+  const validateStepOne = useCallback(
+    () => {
       const nextErrors: string[] = []
 
       if (!taxpayerId) {
         nextErrors.push(
-          "Select a taxpayer before continuing."
+          "Select a taxpayer before continuing.",
         )
       }
 
-      if (!selectedService) {
+      if (selectedServiceIds.length === 0) {
         nextErrors.push(
-          "Select a revenue service before continuing."
-        )
-      }
-
-      if (!collectionDate) {
-        nextErrors.push(
-          "Select the collection date."
+          "Select at least one revenue service before continuing.",
         )
       }
 
       setErrors(nextErrors)
 
-      return (
-        nextErrors.length === 0
-      )
-    }, [
-      taxpayerId,
-      selectedService,
-      collectionDate,
-    ])
+      return nextErrors.length === 0
+    },
+    [taxpayerId, selectedServiceIds],
+  )
 
-  const validateStepTwo =
-    useCallback(() => {
-      if (!selectedService) {
+  const validateStepTwo = useCallback(
+    () => {
+      if (selectedServiceIds.length === 0) {
         setErrors([
-          "Select a revenue service before continuing.",
+          "Select at least one revenue service before continuing.",
         ])
 
         return false
       }
 
-      const values =
-        serviceFieldValues[
-          selectedService.id
-        ] ?? {}
-
-      const requiredFields =
-        selectedService.fields.filter(
-          (field) =>
-            field
-        )
-
-      const fieldErrors: Record<
+      const nextValidationErrors: Record<
         string,
-        string
+        Record<string, string>
       > = {}
 
-      for (const field of requiredFields) {
-        /*
-         * Use the canonical base-field code when
-         * available. Fall back to baseFieldId.
-         *
-         * This should match the key produced by
-         * RevenueServiceFields.
-         */
-        const fieldKey =
-          field.key ??
-          field.id
+      /*
+       * Validate every selected
+       * service.
+       */
+      for (const service of selectedServices) {
+        const values =
+          serviceFieldValues[
+            service.id
+          ] ?? {}
 
-        const value =
-          values[fieldKey]
+        const fieldErrors: Record<
+          string,
+          string
+        > = {}
+
+        const fields = service.fields ?? []
+
+        for (const field of fields) {
+          if (!field) {
+            continue
+          }
+
+          const fieldKey =
+            field.key ?? field.id
+
+          const rawValue =
+            values[fieldKey]
+
+          const value =
+            rawValue == null
+              ? ""
+              : String(rawValue).trim()
+
+          if (!value) {
+            fieldErrors[fieldKey] =
+              `${
+                field.label ??
+                "This field"
+              } is required.`
+          }
+        }
 
         if (
-          !value ||
-          !value.trim()
+          Object.keys(fieldErrors)
+            .length > 0
         ) {
-          fieldErrors[fieldKey] =
-            `${field.label ?? "This field"} is required.`
+          nextValidationErrors[
+            service.id
+          ] = fieldErrors
         }
       }
 
       if (
-        Object.keys(fieldErrors)
-          .length > 0
+        Object.keys(
+          nextValidationErrors,
+        ).length > 0
       ) {
-        setValidationErrors({
-          [selectedService.id]:
-            fieldErrors,
-        })
+        setValidationErrors(
+          nextValidationErrors,
+        )
 
         setErrors([
-          "Complete all required service fields before continuing.",
+          "Complete all required fields for every selected revenue service before continuing.",
         ])
 
         return false
@@ -627,571 +866,407 @@ export function CollectionForm({
       setErrors([])
 
       return true
-    }, [
-      selectedService,
+    },
+    [
+      selectedServiceIds,
+      selectedServices,
       serviceFieldValues,
-    ])
+    ],
+  )
 
-  /*
-   * ----------------------------------------------------
-   * Resolve assessment
-   * ----------------------------------------------------
-   *
-   * The backend is authoritative.
-   *
-   * The frontend sends:
-   *   taxpayer
-   *   service
-   *   dynamic fields
-   *
-   * The backend returns:
-   *   subtotal
-   *   penalty
-   *   discount
-   *   total
-   *
-   * The frontend does NOT calculate these values.
-   */
+  // =========================================================
+  // STEP NAVIGATION
+  // =========================================================
 
-  const resolveAssessment =
-    useCallback(async () => {
-      if (
-        !selectedService ||
-        !taxpayerId
-      ) {
-        return false
-      }
-
-      setIsResolving(true)
-
-      setErrors([])
-
-      try {
-        const response =
-          await fetch(
-            resolveEndpoint,
-            {
-              method: "POST",
-
-              headers: {
-                "Content-Type":
-                  "application/json",
-                Accept:
-                  "application/json",
-              },
-
-              credentials:
-                "include",
-
-              body: JSON.stringify({
-                taxpayer_id:
-                  taxpayerId,
-
-                revenue_service_id:
-                  selectedService.id,
-
-                service_fields:
-                  selectedServiceValues,
-
-                collection_date:
-                  collectionDate,
-              }),
-            }
-          )
-
-        const payload =
-          await response
-            .json()
-            .catch(() => null)
-
-        if (!response.ok) {
-          throw new Error(
-            payload?.message ??
-              "Unable to resolve the assessment."
-          )
-        }
-
-        const data =
-          payload?.data ??
-          payload
-
-        setAssessmentPreview({
-          subtotal:
-            Number(
-              data?.subtotal ?? 0
-            ),
-
-          penalty:
-            Number(
-              data?.penalty ?? 0
-            ),
-
-          discount:
-            Number(
-              data?.discount ?? 0
-            ),
-
-          total:
-            Number(
-              data?.total ?? 0
-            ),
-
-          currency:
-            data?.currency ??
-            "ETB",
-        })
-
-        return true
-      } catch (error) {
-        setAssessmentPreview(
-          null
-        )
-
-        setErrors([
-          error instanceof Error
-            ? error.message
-            : "Unable to resolve the assessment.",
-        ])
-
-        return false
-      } finally {
-        setIsResolving(false)
-      }
-    }, [
-      selectedService,
-      taxpayerId,
-      selectedServiceValues,
-      collectionDate,
-      resolveEndpoint,
-    ])
-
-  /*
-   * ----------------------------------------------------
-   * Step navigation
-   * ----------------------------------------------------
-   */
-
-  const handleNext =
-    async () => {
-      if (step === 1) {
-        if (!validateStepOne()) {
-          return
-        }
-
-        setStep(2)
-
-        return
-      }
-
-      if (step === 2) {
-        if (!validateStepTwo()) {
-          return
-        }
-
-        const resolved =
-          await resolveAssessment()
-
-        if (!resolved) {
-          return
-        }
-
-        setStep(3)
-
-        return
-      }
+  const handleNext = () => {
+    if (isSubmitting) {
+      return
     }
 
-  const handleBack =
-    () => {
-      if (step === 1) {
-        onCancel?.()
-
+    if (step === 1) {
+      if (!validateStepOne()) {
         return
       }
 
-      setStep(
-        (current) =>
-          (current - 1) as Step
+      setStep(2)
+
+      setFurthestStep((current) =>
+        Math.max(current, 2) as Step,
       )
 
-      setErrors([])
+      return
     }
 
-  /*
-   * ----------------------------------------------------
-   * Create / Update
-   * ----------------------------------------------------
-   */
-
-  const handleSubmit =
-    async () => {
-      if (
-        !taxpayerId ||
-        !selectedService
-      ) {
-        setErrors([
-          "Taxpayer and revenue service are required.",
-        ])
-
+    if (step === 2) {
+      if (!validateStepTwo()) {
         return
       }
+
+      setStep(3)
+
+      setFurthestStep((current) =>
+        Math.max(current, 3) as Step,
+      )
+    }
+  }
+
+  const handleBack = () => {
+    if (isSubmitting) {
+      return
+    }
+
+    if (step === 1) {
+      onCancel?.()
+
+      return
+    }
+
+    setStep(
+      (current) => (current - 1) as Step,
+    )
+
+    setIsConfirmed(false)
+
+    setErrors([])
+  }
+
+  const canJumpToStep = useCallback(
+    (target: Step) =>
+      target <= furthestStep &&
+      target !== step &&
+      !isSubmitting,
+    [furthestStep, step, isSubmitting],
+  )
+
+  const handleStepClick = useCallback(
+    (target: Step) => {
+      if (!canJumpToStep(target)) {
+        return
+      }
+
+      setStep(target)
+
+      if (target < furthestStep) {
+        setIsConfirmed(false)
+      }
+
+      setErrors([])
+    },
+    [canJumpToStep, furthestStep],
+  )
+
+  // =========================================================
+  // CONFIRMATION
+  // =========================================================
+
+  const handleConfirmationChange =
+    useCallback((checked: boolean) => {
+      setIsConfirmed(checked)
+
+      if (checked) {
+        setErrors([])
+      }
+    }, [])
+
+  // =========================================================
+  // CREATE / UPDATE
+  // =========================================================
+
+  const handleSubmit = async () => {
+    if (isSubmitting) {
+      return
+    }
+
+    if (
+      !taxpayerId ||
+      selectedServiceIds.length === 0
+    ) {
+      setErrors([
+        "Taxpayer and at least one revenue service are required.",
+      ])
+
+      return
+    }
+
+    if (!validateStepTwo()) {
+      setStep(2)
+
+      return
+    }
+
+    if (!isConfirmed) {
+      setErrors([
+        "Confirm that the collection information is correct before saving.",
+      ])
+
+      return
+    }
+
+    setIsSubmitting(true)
+
+    setErrors([])
+
+    try {
+      const endpoint =
+        mode === "edit"
+          ? updateEndpoint ??
+            (initialData?.id
+              ? `/api/v1/field-collections/${initialData.id}`
+              : null)
+          : createEndpoint
+
+      if (!endpoint) {
+        throw new Error(
+          "An update endpoint or collection ID is required.",
+        )
+      }
+
+      const method =
+        mode === "edit" ? "PUT" : "POST"
 
       /*
-       * Always revalidate the final step.
+       * One Field Collection
+       *      ↓
+       * Multiple Services
+       *      ↓
+       * One Invoice
+       *      ↓
+       * Multiple Invoice Items
        */
-      if (!validateStepTwo()) {
-        setStep(2)
+      const services =
+        selectedServiceIds.map(
+          (serviceId) => ({
+            revenue_service_id:
+              serviceId,
 
-        return
+            service_fields:
+              serviceFieldValues[
+                serviceId
+              ] ?? {},
+          }),
+        )
+
+      const response = await fetch(
+        endpoint,
+        {
+          method,
+
+          headers: {
+            "Content-Type":
+              "application/json",
+
+            Accept: "application/json",
+          },
+
+          credentials: "include",
+
+          body: JSON.stringify({
+            taxpayer_id: taxpayerId,
+
+            services,
+
+            collection_date:
+              collectionDate,
+
+            notes: notes.trim() || null,
+          }),
+        },
+      )
+
+      const payload = await response
+        .json()
+        .catch(() => null)
+
+      if (!response.ok) {
+        throw new Error(
+          getApiErrorMessage(
+            payload,
+            `Unable to ${
+              mode === "edit"
+                ? "update"
+                : "create"
+            } the collection.`,
+          ),
+        )
       }
 
-      setIsSubmitting(true)
+      const data = payload?.data ?? payload
 
-      setErrors([])
-
-      try {
-        const endpoint =
-          mode === "edit"
-            ? updateEndpoint ??
-              `/api/v1/field-collections/${initialData?.id}`
-            : createEndpoint
-
-        const method =
-          mode === "edit"
-            ? "PUT"
-            : "POST"
-
-        const response =
-          await fetch(
-            endpoint,
-            {
-              method,
-
-              headers: {
-                "Content-Type":
-                  "application/json",
-
-                Accept:
-                  "application/json",
-              },
-
-              credentials:
-                "include",
-
-              body: JSON.stringify({
-                taxpayer_id:
-                  taxpayerId,
-
-                revenue_service_id:
-                  selectedService.id,
-
-                service_fields:
-                  selectedServiceValues,
-
-                collection_date:
-                  collectionDate,
-
-                notes:
-                  notes.trim() ||
-                  null,
-              }),
-            }
-          )
-
-        const payload =
-          await response
-            .json()
-            .catch(() => null)
-
-        if (!response.ok) {
-          throw new Error(
-            payload?.message ??
-              `Unable to ${
-                mode === "edit"
-                  ? "update"
-                  : "create"
-              } the collection.`
-          )
-        }
-
-        const data =
-          payload?.data ??
-          payload
-
-        onSuccess({
-          id: data.id,
-          invoiceId:
-            data.invoice_id ??
-            data.invoiceId,
-          status:
-            data.status,
-        })
-      } catch (error) {
-        setErrors([
-          error instanceof Error
-            ? error.message
-            : `Unable to ${
-                mode === "edit"
-                  ? "update"
-                  : "create"
-              } the collection.`,
-        ])
-      } finally {
-        setIsSubmitting(false)
+      if (!data?.id) {
+        throw new Error(
+          "The server did not return a collection ID.",
+        )
       }
+
+      onSuccess({
+        id: data.id,
+
+        invoiceId:
+          data.invoice_id ??
+          data.invoiceId,
+
+        status: data.status,
+      })
+    } catch (error) {
+      setErrors([
+        error instanceof Error
+          ? error.message
+          : `Unable to ${
+              mode === "edit"
+                ? "update"
+                : "create"
+            } the collection.`,
+      ])
+    } finally {
+      setIsSubmitting(false)
     }
+  }
 
-  /*
-   * ----------------------------------------------------
-   * Render
-   * ----------------------------------------------------
-   */
+  // =========================================================
+  // RENDER
+  // =========================================================
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex min-w-0 items-start gap-3">
+    <div className="mx-auto w-full max-w-3xl space-y-5">
+      {/* =====================================================
+          HEADER + STEPPER
+          ===================================================== */}
+
+      <div className="space-y-4">
+        <div className="flex items-center gap-3">
           <Button
             type="button"
             variant="ghost"
             size="icon"
-            className="mt-0.5 shrink-0"
+            className="shrink-0"
             onClick={handleBack}
             disabled={isSubmitting}
+            aria-label={
+              step === 1 ? "Cancel" : "Go back"
+            }
           >
             <ArrowLeft className="size-4" />
           </Button>
 
-          <div>
-            <div className="flex items-center gap-2">
-              <Wallet className="size-5 text-muted-foreground" />
-
-              <h1 className="text-xl font-semibold tracking-tight">
-                {mode === "create"
-                  ? "Start Field Collection"
-                  : "Update Field Collection"}
-              </h1>
-            </div>
-
-            <p className="mt-1 text-sm text-muted-foreground">
+          <div className="min-w-0">
+            <h1 className="truncate text-lg font-semibold tracking-tight">
               {mode === "create"
-                ? "Create a new field collection and generate its invoice."
-                : "Update the permitted information for this field collection."}
-            </p>
+                ? "Start Field Collection"
+                : "Update Field Collection"}
+            </h1>
           </div>
         </div>
 
-        <div className="hidden items-center gap-2 rounded-lg border bg-muted/20 px-3 py-2 md:flex">
-          <ShieldCheck className="size-4 text-muted-foreground" />
+        <div className="space-y-2">
+          <div className="flex items-center justify-between text-xs">
+            {STEPS.map((item) => {
+              const active = step === item.number
 
-          <span className="text-xs text-muted-foreground">
-            Server-controlled financials
-          </span>
+              const completed =
+                step > item.number
+
+              const reachable =
+                canJumpToStep(item.number)
+
+              return (
+                <button
+                  key={item.number}
+                  type="button"
+                  onClick={() =>
+                    handleStepClick(item.number)
+                  }
+                  disabled={!reachable}
+                  className={[
+                    "flex items-center gap-1.5 rounded font-medium transition-colors",
+                    active
+                      ? "text-foreground"
+                      : "text-muted-foreground",
+                    reachable
+                      ? "cursor-pointer hover:text-foreground"
+                      : "cursor-default",
+                  ].join(" ")}
+                >
+                  <span
+                    className={[
+                      "flex size-5 items-center justify-center rounded-full border text-[10px] transition-colors",
+                      active
+                        ? "border-foreground bg-foreground text-background"
+                        : completed
+                          ? "border-foreground/40 text-foreground"
+                          : "border-border",
+                    ].join(" ")}
+                  >
+                    {completed ? (
+                      <Check className="size-3" />
+                    ) : (
+                      item.number
+                    )}
+                  </span>
+
+                  <span className="hidden sm:inline">
+                    {item.title}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+
+          <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
+            <div
+              className="h-full rounded-full bg-foreground transition-[width] duration-500 ease-out"
+              style={{
+                width: `${progressPercent}%`,
+              }}
+            />
+          </div>
         </div>
       </div>
 
-      {/* Stepper */}
-      <Card className="shadow-none">
-        <CardContent className="p-4">
-          <div className="grid gap-4 md:grid-cols-3">
-            {STEPS.map(
-              (item, index) => {
-                const active =
-                  step === item.number
+      {/* =====================================================
+          ERRORS
+          ===================================================== */}
 
-                const completed =
-                  step > item.number
-
-                return (
-                  <div
-                    key={item.number}
-                    className="relative"
-                  >
-                    {index <
-                      STEPS.length - 1 && (
-                      <div
-                        className={[
-                          "absolute left-8 right-[-1rem] top-4 hidden h-px md:block",
-                          completed
-                            ? "bg-foreground/30"
-                            : "bg-border",
-                        ].join(" ")}
-                      />
-                    )}
-
-                    <div className="relative flex items-start gap-3">
-                      <div
-                        className={[
-                          "flex size-8 shrink-0 items-center justify-center rounded-full border text-xs font-semibold",
-                          active
-                            ? "border-foreground bg-foreground text-background"
-                            : completed
-                              ? "border-foreground/40 bg-muted"
-                              : "bg-background text-muted-foreground",
-                        ].join(" ")}
-                      >
-                        {completed ? (
-                          <Check className="size-4" />
-                        ) : (
-                          item.number
-                        )}
-                      </div>
-
-                      <div>
-                        <p
-                          className={[
-                            "text-sm font-medium",
-                            active
-                              ? "text-foreground"
-                              : "text-muted-foreground",
-                          ].join(" ")}
-                        >
-                          {item.title}
-                        </p>
-
-                        <p className="mt-0.5 text-xs text-muted-foreground">
-                          {item.description}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                )
-              }
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Errors */}
       {errors.length > 0 && (
-        <Card className="border-destructive/30 bg-destructive/5 shadow-none">
-          <CardContent className="p-4">
-            <div className="space-y-1">
-              {errors.map(
-                (error, index) => (
-                  <p
-                    key={`${error}-${index}`}
-                    className="text-sm text-destructive"
-                  >
-                    {error}
-                  </p>
-                )
-              )}
-            </div>
-          </CardContent>
-        </Card>
+        <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3">
+          <div className="space-y-1">
+            {errors.map((error, index) => (
+              <p
+                key={`${error}-${index}`}
+                className="text-sm text-destructive"
+              >
+                {error}
+              </p>
+            ))}
+          </div>
+        </div>
       )}
 
-      {/* --------------------------------------------- */}
-      {/* STEP 1                                      */}
-      {/* --------------------------------------------- */}
+      {/* =====================================================
+          STEP 1 — COLLECTION INFO
+          ===================================================== */}
 
       {step === 1 && (
         <Card className="shadow-none">
-          <CardHeader>
-            <div className="flex items-start gap-3">
-              <div className="flex size-9 shrink-0 items-center justify-center rounded-lg border bg-muted/30">
-                <User className="size-4 text-muted-foreground" />
-              </div>
-
-              <div>
-                <CardTitle className="text-base">
-                  Collection Information
-                </CardTitle>
-
-                <CardDescription className="mt-1">
-                  Select the taxpayer and
-                  revenue service for this
-                  collection.
-                </CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-
-          <CardContent className="space-y-8">
-            {/* Taxpayer */}
-            <section className="space-y-3">
-              <div>
-                <Label className="text-sm font-medium">
-                  Taxpayer
-                </Label>
-
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Select a taxpayer from the
-                  municipal taxpayer registry.
-                </p>
-              </div>
+          <CardContent className="space-y-6 p-5">
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">
+                Taxpayer
+              </Label>
 
               <TaxpayerSelector
                 value={taxpayerId}
-                onChange={
-                  handleTaxpayerChange
-                }
+                onChange={handleTaxpayerChange}
                 taxpayers={taxpayers}
               />
+            </div>
 
-              {false && (
-                <></>
-                // <div className="rounded-lg border bg-muted/20 p-4">
-                //   <div className="grid gap-4 sm:grid-cols-3">
-                //     <div>
-                //       <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                //         Name
-                //       </p>
-
-                //       <p className="mt-1 text-sm font-medium">
-                //         {/* {
-                //           selectedTaxpayer.full_name
-                //         } */}
-                //       </p>
-                //     </div>
-
-                //     <div>
-                //       <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                //         TIN
-                //       </p>
-
-                //       <p className="mt-1 font-mono text-sm">
-                //         {/* {
-                //           selectedTaxpayer.citizen_uid
-                //         } */}
-                //       </p>
-                //     </div>
-
-                //     <div>
-                //       {/* <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                //         Type
-                //       </p>
-
-                //       <p className="mt-1 text-sm">
-                //         {
-                //           selectedTaxpayer.
-                //         }
-                //       </p> */}
-                //     </div>
-                //   </div>
-                // </div>
-              )}
-            </section>
-
-            <Separator />
-
-            {/* Revenue service */}
-            <section className="space-y-3">
-              <div>
-                <Label className="text-sm font-medium">
-                  Revenue Service
-                </Label>
-
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Select the service that
-                  determines the revenue code
-                  and required collection fields.
-                </p>
-              </div>
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">
+                Revenue Services
+              </Label>
 
               <RevenueServiceSelector
+                mode="multi"
                 services={revenueServices}
                 selectedServiceIds={
                   selectedServiceIds
@@ -1207,106 +1282,105 @@ export function CollectionForm({
                 }
               />
 
-              {selectedService && (
-                <div className="rounded-lg border bg-muted/20 p-3">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <p className="text-xs font-medium">
-                        Selected Service
-                      </p>
 
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {
-                          selectedService.name
-                        }
-                      </p>
-                    </div>
-
-                    <div className="text-right">
-                      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                        Revenue Code
-                      </p>
-
-                      <p className="mt-1 font-mono text-xs font-semibold">
-                        {revenueCode ||
-                          "—"}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </section>
-
-            <Separator />
+            </div>
           </CardContent>
         </Card>
       )}
 
-      {/* --------------------------------------------- */}
-      {/* STEP 2                                      */}
-      {/* --------------------------------------------- */}
+      {/* =====================================================
+          STEP 2 — SERVICE DETAILS
+          ===================================================== */}
 
-      {step === 2 &&
-        selectedService && (
-          <Card className="shadow-none">
-            <CardHeader>
-              <div className="flex items-start gap-3">
-                <div className="flex size-9 shrink-0 items-center justify-center rounded-lg border bg-muted/30">
-                  <FileText className="size-4 text-muted-foreground" />
-                </div>
-
-                <div>
-                  <CardTitle className="text-base">
-                    Service Details
-                  </CardTitle>
-
-                  <CardDescription className="mt-1">
-                    Complete the fields required
-                    for{" "}
-                    <span className="font-medium text-foreground">
-                      {
-                        selectedService.name
-                      }
-                    </span>
-                    .
-                  </CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-
-            <CardContent>
-              <RevenueServiceFields
-                service={selectedService}
-                index={0}
-                values={
+      {step === 2 && (
+        <div className="space-y-5">
+          {selectedServices.length === 0 ? (
+            <Card className="shadow-none">
+              <CardContent className="p-5">
+                <p className="text-sm text-muted-foreground">
+                  No revenue services selected.
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            selectedServices.map(
+              (service, serviceIndex) => {
+                const values =
                   serviceFieldValues[
-                    selectedService.id
+                    service.id
                   ] ?? {}
-                }
-                errors={
+
+                const serviceErrors =
                   validationErrors[
-                    selectedService.id
+                    service.id
                   ] ?? {}
-                }
-                onChange={
-                  ()=>{}
-                }
-                onFileChange={
-                  ()=>{}
 
-                }
-                onRemoveFile={
-                  ()=>{}
+                return (
+                  <Card
+                    key={service.id}
+                    className="shadow-none"
+                  >
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base">
+                        {service.name}
+                      </CardTitle>
 
-                }
-                onRemove={
-                  handleRemoveService
-                }
-              />
+                      <CardDescription>
+                        {service.code
+                          ? `Revenue code: ${service.code}`
+                          : "Complete the required fields for this revenue service."}
+                      </CardDescription>
+                    </CardHeader>
 
-              <Separator className="my-6" />
+                    <CardContent className="space-y-5">
+                      <RevenueServiceFields
+                        key={`${service.id}-${serviceIndex}`}
+                        service={service}
+                        index={serviceIndex}
+                        values={values}
+                        errors={serviceErrors}
+                        onChange={(
+                          field,
+                          value,
+                        ) =>
+                          handleServiceFieldChange(
+                            service.id,
+                            field,
+                            value,
+                          )
+                        }
+                        onFileChange={(
+                          event,
+                          field,
+                        ) =>
+                          handleFileChange(
+                            event,
+                            service.id,
+                            field,
+                          )
+                        }
+                        onRemoveFile={(
+                          field,
+                        ) =>
+                          removeFile(
+                            service.id,
+                            field,
+                          )
+                        }
+                        onRemove={
+                          handleRemoveService
+                        }
+                      />
+                    </CardContent>
+                  </Card>
+                )
+              },
+            )
+          )}
 
-              <div className="space-y-3">
+          <Card className="shadow-none">
+            <CardContent className="p-5">
+              <div className="space-y-2">
                 <Label
                   htmlFor="collection-notes"
                   className="text-sm font-medium"
@@ -1320,324 +1394,281 @@ export function CollectionForm({
                 <textarea
                   id="collection-notes"
                   value={notes}
-                  onChange={(event) => {
-                    setNotes(
-                      event.target.value
-                    )
-                  }}
+                  onChange={(event) =>
+                    setNotes(event.target.value)
+                  }
                   placeholder="Add any relevant collection notes..."
-                  rows={4}
+                  rows={3}
+                  disabled={isSubmitting}
                   className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
                 />
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-      {/* --------------------------------------------- */}
-      {/* STEP 3                                      */}
-      {/* --------------------------------------------- */}
-
-      {step === 3 && (
-        <div className="space-y-6">
-          {/* Review */}
-          <Card className="shadow-none">
-            <CardHeader>
-              <div className="flex items-start gap-3">
-                <div className="flex size-9 shrink-0 items-center justify-center rounded-lg border bg-muted/30">
-                  <CheckCircle2 className="size-4 text-muted-foreground" />
-                </div>
-
-                <div>
-                  <CardTitle className="text-base">
-                    Review Collection
-                  </CardTitle>
-
-                  <CardDescription className="mt-1">
-                    Verify the collection information
-                    before saving.
-                  </CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-
-            <CardContent className="space-y-6">
-              <div className="grid gap-4 sm:grid-cols-2">
-                {/* <div className="rounded-lg border p-4">
-                  <p className="text-xs text-muted-foreground">
-                    Taxpayer
-                  </p>
-
-                  <p className="mt-1 text-sm font-medium">
-                    {selectedTaxpayer?.name ??
-                      "—"}
-                  </p>
-
-                  {selectedTaxpayer?.tin && (
-                    <p className="mt-1 font-mono text-xs text-muted-foreground">
-                      {
-                        selectedTaxpayer.tin
-                      }
-                    </p>
-                  )}
-                </div> */}
-
-                <div className="rounded-lg border p-4">
-                  <p className="text-xs text-muted-foreground">
-                    Revenue Service
-                  </p>
-
-                  <p className="mt-1 text-sm font-medium">
-                    {selectedService?.name ??
-                      "—"}
-                  </p>
-
-                  {revenueCode && (
-                    <p className="mt-1 font-mono text-xs text-muted-foreground">
-                      {revenueCode}
-                    </p>
-                  )}
-                </div>
-
-                <div className="rounded-lg border p-4">
-                  <p className="text-xs text-muted-foreground">
-                    Collection Date
-                  </p>
-
-                  <p className="mt-1 text-sm font-medium">
-                    {collectionDate ||
-                      "—"}
-                  </p>
-                </div>
-
-                <div className="rounded-lg border p-4">
-                  <p className="text-xs text-muted-foreground">
-                    Operation
-                  </p>
-
-                  <p className="mt-1 text-sm font-medium">
-                    {mode === "create"
-                      ? "New Collection"
-                      : "Update Collection"}
-                  </p>
-                </div>
-              </div>
-
-              {notes && (
-                <div className="rounded-lg border bg-muted/20 p-4">
-                  <p className="text-xs text-muted-foreground">
-                    Notes
-                  </p>
-
-                  <p className="mt-1 whitespace-pre-wrap text-sm">
-                    {notes}
-                  </p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Assessment */}
-          <Card className="shadow-none">
-            <CardHeader>
-              <div className="flex items-start gap-3">
-                <div className="flex size-9 shrink-0 items-center justify-center rounded-lg border bg-muted/30">
-                  <Calculator className="size-4 text-muted-foreground" />
-                </div>
-
-                <div>
-                  <CardTitle className="text-base">
-                    Assessment & Invoice
-                  </CardTitle>
-
-                  <CardDescription className="mt-1">
-                    Financial values are resolved by
-                    the backend.
-                  </CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-
-            <CardContent>
-              {assessmentPreview ? (
-                <div className="rounded-xl border">
-                  <div className="space-y-4 p-5">
-                    <div className="flex items-center justify-between gap-4 text-sm">
-                      <span className="text-muted-foreground">
-                        Subtotal
-                      </span>
-
-                      <span className="font-medium">
-                        {formatMoney(
-                          assessmentPreview.subtotal,
-                          assessmentPreview.currency
-                        )}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center justify-between gap-4 text-sm">
-                      <span className="text-muted-foreground">
-                        Penalty
-                      </span>
-
-                      <span className="font-medium">
-                        {formatMoney(
-                          assessmentPreview.penalty,
-                          assessmentPreview.currency
-                        )}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center justify-between gap-4 text-sm">
-                      <span className="text-muted-foreground">
-                        Discount
-                      </span>
-
-                      <span className="font-medium">
-                        {formatMoney(
-                          assessmentPreview.discount,
-                          assessmentPreview.currency
-                        )}
-                      </span>
-                    </div>
-                  </div>
-
-                  <Separator />
-
-                  <div className="flex items-center justify-between gap-4 p-5">
-                    <div>
-                      <p className="text-sm font-semibold">
-                        Invoice Total
-                      </p>
-
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        Authoritative amount returned
-                        by the server
-                      </p>
-                    </div>
-
-                    <p className="text-xl font-semibold tracking-tight">
-                      {formatMoney(
-                        assessmentPreview.total,
-                        assessmentPreview.currency
-                      )}
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <div className="rounded-lg border border-dashed p-8 text-center">
-                  <Calculator className="mx-auto size-5 text-muted-foreground" />
-
-                  <p className="mt-3 text-sm font-medium">
-                    Assessment has not been
-                    resolved
-                  </p>
-
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Go back and complete the service
-                    details.
-                  </p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Security note */}
-          <Card className="border-dashed bg-muted/10 shadow-none">
-            <CardContent className="flex items-start gap-3 p-4">
-              <ShieldCheck className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-
-              <div>
-                <p className="text-sm font-medium">
-                  Financial values are protected
-                </p>
-
-                <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                  Tariff, assessment amount,
-                  penalties, discounts, invoice balance,
-                  and invoice status are calculated and
-                  validated by the server. Values displayed
-                  here are informational only.
-                </p>
               </div>
             </CardContent>
           </Card>
         </div>
       )}
 
-      {/* --------------------------------------------- */}
-      {/* ACTIONS                                      */}
-      {/* --------------------------------------------- */}
+      {/* =====================================================
+          STEP 3 — REVIEW & CONFIRM
+          ===================================================== */}
 
-      <Card className="shadow-none">
-        <CardContent className="flex flex-col-reverse gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+      {step === 3 && (
+        <Card className="shadow-none">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">
+              Review before you{" "}
+              {mode === "create"
+                ? "create this collection"
+                : "save these changes"}
+            </CardTitle>
+
+            <CardDescription>
+              {mode === "create"
+                ? "One field collection can contain multiple revenue services. The server will generate one invoice with one invoice item for each selected service."
+                : "Double-check the details below before saving."}
+            </CardDescription>
+          </CardHeader>
+
+          <CardContent className="space-y-5 p-5 pt-0">
+            {/* =================================================
+                KEY FACTS
+                ================================================= */}
+
+            <dl className="grid grid-cols-3 gap-x-4 gap-y-4 text-sm">
+              <div>
+                <dt className="text-xs text-muted-foreground">
+                  Taxpayer
+                </dt>
+
+                <dd className="mt-0.5 font-medium">
+                  {selectedTaxpayer
+                    ? selectedTaxpayer.full_name
+                    : taxpayerId || "—"}
+                </dd>
+              </div>
+
+              <div>
+                <dt className="text-xs text-muted-foreground">
+                  Services
+                </dt>
+
+                <dd className="mt-0.5 font-medium">
+                  {selectedServices.length}
+                </dd>
+              </div>
+
+              <div>
+                <dt className="text-xs text-muted-foreground">
+                  Operation
+                </dt>
+
+                <dd className="mt-0.5 font-medium">
+                  {mode === "create"
+                    ? "New Collection"
+                    : "Update"}
+                </dd>
+              </div>
+            </dl>
+
+            {/* =================================================
+                SERVICES
+                ================================================= */}
+
+            {selectedServices.length > 0 && (
+              <>
+                <Separator />
+
+                <div className="space-y-5">
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Selected Revenue Services
+                  </p>
+
+                  {selectedServices.map(
+                    (service, serviceIndex) => {
+                      const values =
+                        serviceFieldValues[
+                          service.id
+                        ] ?? {}
+
+                      const fields =
+                        service.fields ?? []
+
+                      return (
+                        <div
+                          key={service.id}
+                          className="rounded-lg border p-4"
+                        >
+                          <div className="flex items-start justify-between gap-4">
+                            <div>
+                              <p className="text-sm font-semibold">
+                                {serviceIndex + 1}.{" "}
+                                {service.name}
+                              </p>
+
+                              {service.code && (
+                                <p className="mt-0.5 text-xs text-muted-foreground">
+                                  Revenue code:{" "}
+                                  <span className="font-mono">
+                                    {service.code}
+                                  </span>
+                                </p>
+                              )}
+                            </div>
+
+                            <span className="rounded-full bg-muted px-2 py-1 text-xs font-medium">
+                              Service
+                            </span>
+                          </div>
+
+                          {fields.length > 0 && (
+                            <div className="mt-4 space-y-2 border-t pt-3 text-sm">
+                              {fields.map(
+                                (field) => {
+                                  const fieldKey =
+                                    field.key ??
+                                    field.id
+
+                                  return (
+                                    <div
+                                      key={fieldKey}
+                                      className="flex items-start justify-between gap-4"
+                                    >
+                                      <span className="text-muted-foreground">
+                                        {field.label ??
+                                          fieldKey}
+                                      </span>
+
+                                      <span className="max-w-[60%] break-words text-right font-medium">
+                                        {formatFieldValue(
+                                          values[
+                                            fieldKey
+                                          ],
+                                        )}
+                                      </span>
+                                    </div>
+                                  )
+                                },
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    },
+                  )}
+                </div>
+              </>
+            )}
+
+            {/* =================================================
+                NOTES
+                ================================================= */}
+
+            {notes.trim() && (
+              <>
+                <Separator />
+
+                <div>
+                  <p className="mb-1 text-xs font-medium text-muted-foreground">
+                    Notes
+                  </p>
+
+                  <p className="whitespace-pre-wrap text-sm">
+                    {notes}
+                  </p>
+                </div>
+              </>
+            )}
+
+            <Separator />
+
+            {/* =================================================
+                CONFIRMATION
+                ================================================= */}
+
+            <label
+              htmlFor="collection-confirmation"
+              className="flex cursor-pointer items-start gap-3 rounded-lg border border-dashed p-3 has-[:checked]:border-foreground/30 has-[:checked]:bg-muted/20"
+            >
+              <input
+                id="collection-confirmation"
+                type="checkbox"
+                checked={isConfirmed}
+                onChange={(event) =>
+                  handleConfirmationChange(
+                    event.target.checked,
+                  )
+                }
+                disabled={isSubmitting}
+                className="mt-0.5 size-4 shrink-0 rounded border-input accent-foreground"
+              />
+
+              <span className="text-sm">
+                This information is correct — go
+                ahead and{" "}
+                {mode === "create"
+                  ? "create the collection and generate its invoice"
+                  : "save these changes"}
+                .
+              </span>
+            </label>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* =====================================================
+          ACTIONS
+          ===================================================== */}
+
+      <div className="flex items-center justify-between gap-3">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={handleBack}
+          disabled={isSubmitting}
+        >
+          <ArrowLeft className="mr-2 size-4" />
+
+          {step === 1 ? "Cancel" : "Back"}
+        </Button>
+
+        {step < 3 ? (
           <Button
             type="button"
-            variant="outline"
-            onClick={handleBack}
+            onClick={handleNext}
             disabled={isSubmitting}
           >
-            <ArrowLeft className="mr-2 size-4" />
+            {step === 1 ? "Continue" : "Review"}
 
-            {step === 1
-              ? "Cancel"
-              : "Back"}
+            <ArrowRight className="ml-2 size-4" />
           </Button>
+        ) : (
+          <Button
+            type="button"
+            onClick={handleSubmit}
+            disabled={
+              isSubmitting || !isConfirmed
+            }
+          >
+            {isSubmitting ? (
+              <>
+                <Loader2 className="mr-2 size-4 animate-spin" />
 
-          <div className="flex items-center gap-2">
-            {step < 3 ? (
-              <Button
-                type="button"
-                onClick={handleNext}
-                disabled={
-                  isResolving ||
-                  isSubmitting
-                }
-              >
-                {isResolving ? (
-                  <>
-                    <Loader2 className="mr-2 size-4 animate-spin" />
-                    Calculating...
-                  </>
-                ) : (
-                  <>
-                    Continue
-                    <ArrowRight className="ml-2 size-4" />
-                  </>
-                )}
-              </Button>
+                {mode === "edit"
+                  ? "Saving..."
+                  : "Creating..."}
+              </>
             ) : (
-              <Button
-                type="button"
-                onClick={handleSubmit}
-                disabled={
-                  isSubmitting ||
-                  isResolving ||
-                  !assessmentPreview
-                }
-              >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="mr-2 size-4 animate-spin" />
+              <>
+                <Save className="mr-2 size-4" />
 
-                    {mode === "edit"
-                      ? "Updating..."
-                      : "Creating..."}
-                  </>
-                ) : (
-                  <>
-                    <Save className="mr-2 size-4" />
-
-                    {mode === "edit"
-                      ? "Update Collection"
-                      : "Create Collection"}
-                  </>
-                )}
-              </Button>
+                {mode === "edit"
+                  ? "Save Changes"
+                  : "Create Collection"}
+              </>
             )}
-          </div>
-        </CardContent>
-      </Card>
+          </Button>
+        )}
+      </div>
     </div>
   )
 }

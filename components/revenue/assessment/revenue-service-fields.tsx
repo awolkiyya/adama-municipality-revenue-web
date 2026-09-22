@@ -199,7 +199,7 @@ export function RevenueServiceFields({
 
   return (
     <div
-      className={`overflow-hidden rounded-xl border bg-card shadow-sm transition-colors ${
+      className={`overflow-hidden rounded-xl border  shadow-none transition-colors ${
         hasErrors
           ? "border-destructive/40"
           : ""

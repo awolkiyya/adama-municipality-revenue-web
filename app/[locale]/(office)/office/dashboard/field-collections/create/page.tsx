@@ -1,10 +1,17 @@
 "use client";
 
-import { CollectionForm, CollectionResult } from "@/components/forms/CollectionForm";
+import {
+  CollectionForm,
+  CollectionResult,
+} from "@/components/forms/CollectionForm";
 import { useRevenueServices } from "@/hooks/revenue/revenueService.hook";
 import { useCitizens } from "@/hooks/useCitizen.hook";
+import { RevenueService } from "@/types/revenue/assessment";
 import { useRouter } from "next/navigation";
+import { useMemo } from "react";
 
+import { mapRevenueService } from "../../assessments/create/page";
+import { toast } from "sonner";
 
 export default function CreateFieldCollectionPage() {
   const router = useRouter();
@@ -24,21 +31,46 @@ export default function CreateFieldCollectionPage() {
   // =========================================================
 
   const {
-    data: revenueServices,
-    isLoading: servicesLoading,
-    isError: servicesError,
-  } = useRevenueServices();
+    data: revenueServicesData,
+    isLoading: revenueServicesLoading,
+    isError: revenueServicesError,
+  } = useRevenueServices({
+    is_active: true,
+    per_page: 100,
+    page: 1,
+  });
+
+  /*
+   * Only revenue services configured for
+   * FIELD_COLLECTION are available to this workflow.
+   *
+   * The API revenue-service model is then normalized
+   * into the assessment/workflow RevenueService model.
+   */
+  const revenueServices = useMemo<RevenueService[]>(
+    () =>
+      (revenueServicesData?.data ?? [])
+        .filter(
+          (service) =>
+            service.collectionMode === "FIELD_COLLECTION",
+        )
+        .map(mapRevenueService),
+    [revenueServicesData],
+  );
+
+  console.log("service",revenueServicesData);
 
   // =========================================================
   // SUCCESS
   // =========================================================
 
   function handleSuccess(
-    collection: CollectionResult
+    collection: CollectionResult,
   ) {
-    router.push(
-      `/field-collection/${collection.id}`
-    );
+    toast.success("i'm here")
+    // router.push(
+    //   `/field-collection/${collection.id}`,
+    // );
   }
 
   // =========================================================
@@ -55,7 +87,7 @@ export default function CreateFieldCollectionPage() {
 
   if (
     taxpayersLoading ||
-    servicesLoading
+    revenueServicesLoading
   ) {
     return (
       <div className="flex min-h-[400px] items-center justify-center px-6">
@@ -78,7 +110,7 @@ export default function CreateFieldCollectionPage() {
 
   if (
     taxpayersError ||
-    servicesError
+    revenueServicesError
   ) {
     return (
       <div className="flex min-h-[400px] items-center justify-center px-6">
@@ -94,9 +126,7 @@ export default function CreateFieldCollectionPage() {
 
           <button
             type="button"
-            onClick={() =>
-              router.refresh()
-            }
+            onClick={() => router.refresh()}
             className="mt-4 text-sm font-medium text-primary hover:underline"
           >
             Try again
@@ -111,11 +141,11 @@ export default function CreateFieldCollectionPage() {
   // =========================================================
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-6 py-8">
+    <div className="mx-auto w-full max-w-4xl px-6 py-8">
       <CollectionForm
         mode="create"
-        taxpayers={taxpayers?.data!}
-        revenueServices={[]}
+        taxpayers={taxpayers?.data ?? []}
+        revenueServices={revenueServices}
         onSuccess={handleSuccess}
         onCancel={handleCancel}
       />

@@ -716,6 +716,7 @@ export const CommentTableRegistry: Record<
 assessment: {
   columns: [
     "assessment_number",
+    "source_type",
     "taxpayer_name",
     "taxpayer_no",
     "status",

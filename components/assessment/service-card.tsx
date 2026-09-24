@@ -3,16 +3,25 @@ import {
   AlertTriangle,
   Briefcase,
   Building2,
+  CalendarClock,
   Car,
   ChevronDown,
   FileText,
   Landmark,
+  MoreVertical,
   Paperclip,
   Wallet,
   type LucideIcon,
 } from "lucide-react";
 
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+
 import { AssessmentService } from "@/types/revenue/assessment";
 import { useOpenFile } from "@/hooks/use-open-file";
 import { formatAmount } from "@/lib/format";
@@ -34,10 +43,20 @@ const SERVICE_ICON_RULES: Array<{ match: RegExp; icon: LucideIcon }> = [
 
 function getServiceIcon(name?: string | null): LucideIcon {
   if (!name) return FileText;
-  return SERVICE_ICON_RULES.find((rule) => rule.match.test(name))?.icon ?? FileText;
+
+  return (
+    SERVICE_ICON_RULES.find((rule) => rule.match.test(name))?.icon ??
+    FileText
+  );
 }
 
-export function AssessmentServiceCard({ service }: { service: AssessmentService }) {
+export function AssessmentServiceCard({
+  service,
+  onManageScheduledPayments,
+}: {
+  service: AssessmentService;
+  onManageScheduledPayments?: (service: AssessmentService) => void;
+}) {
   const { openFile, isOpening } = useOpenFile();
 
   // Errors need eyes on them immediately, so those cards start open;
@@ -46,28 +65,28 @@ export function AssessmentServiceCard({ service }: { service: AssessmentService 
   const [open, setOpen] = useState(hasError);
 
   const computedAmount = service.computedAmount;
-  const files = service.values?.flatMap((value) => value.files ?? []) ?? [];
+
+  const files =
+    service.values?.flatMap((value) => value.files ?? []) ?? [];
+
   const fieldCount = service.values?.length ?? 0;
 
-  const title = service.service?.name ?? service.serviceCode ?? service.serviceId;
-  const Icon = getServiceIcon(service.service?.name ?? service.serviceCode);
+  const title =
+    service.service?.name ??
+    service.serviceCode ??
+    service.serviceId;
+
+  const Icon = getServiceIcon(
+    service.service?.name ?? service.serviceCode,
+  );
 
   return (
     <Card className={hasError ? "border-destructive/40" : undefined}>
-      <CardHeader
-        role="button"
-        tabIndex={0}
-        onClick={() => setOpen((v) => !v)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            setOpen((v) => !v);
-          }
-        }}
-        className="cursor-pointer select-none"
-      >
+      <CardHeader className="select-none">
         <div className="flex items-start gap-3">
+
           {/* ============ SERVICE ICON ============ */}
+
           <div className="relative shrink-0">
             <div
               className={`flex h-10 w-10 items-center justify-center rounded-lg border ${
@@ -77,7 +96,11 @@ export function AssessmentServiceCard({ service }: { service: AssessmentService 
               }`}
             >
               <Icon
-                className={`h-5 w-5 ${hasError ? "text-destructive" : "text-muted-foreground"}`}
+                className={`h-5 w-5 ${
+                  hasError
+                    ? "text-destructive"
+                    : "text-muted-foreground"
+                }`}
               />
             </div>
 
@@ -89,25 +112,52 @@ export function AssessmentServiceCard({ service }: { service: AssessmentService 
           </div>
 
           {/* ============ TITLE + META ============ */}
-          <div className="min-w-0 flex-1">
+
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => setOpen((v) => !v)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                setOpen((v) => !v);
+              }
+            }}
+            className="min-w-0 flex-1 cursor-pointer"
+          >
             <div className="flex flex-wrap items-center gap-2">
-              <h3 className="truncate font-semibold leading-tight">{title}</h3>
+              <h3 className="truncate font-semibold leading-tight">
+                {title}
+              </h3>
+
               <StatusBadge status={service.status} />
             </div>
 
             {service.service?.code && (
-              <p className="mt-0.5 text-xs text-muted-foreground">{service.service.code}</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {service.service.code}
+              </p>
             )}
 
-            {/* ============ SUMMARY STRIP — stays visible when collapsed ============ */}
+            {/* ============ SUMMARY STRIP ============ */}
+
             <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-              {computedAmount !== null && computedAmount !== undefined && (
-                <span className="font-medium text-foreground">
-                  {formatAmount(Number(computedAmount), service.currencyCode ?? "")}
+              {computedAmount !== null &&
+                computedAmount !== undefined && (
+                  <span className="font-medium text-foreground">
+                    {formatAmount(
+                      Number(computedAmount),
+                      service.currencyCode ?? "",
+                    )}
+                  </span>
+                )}
+
+              {fieldCount > 0 && (
+                <span>
+                  {fieldCount} field
+                  {fieldCount === 1 ? "" : "s"}
                 </span>
               )}
-
-              {fieldCount > 0 && <span>{fieldCount} field{fieldCount === 1 ? "" : "s"}</span>}
 
               {files.length > 0 && (
                 <span className="inline-flex items-center gap-1">
@@ -125,65 +175,124 @@ export function AssessmentServiceCard({ service }: { service: AssessmentService 
             </div>
           </div>
 
-          {/* ============ COLLAPSE TOGGLE ============ */}
-          <ChevronDown
-            className={`mt-1 h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 ${
-              open ? "rotate-180" : ""
-            }`}
-          />
+          {/* ============ ACTIONS ============ */}
+
+          <div className="flex shrink-0 items-center gap-1">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  onClick={(e) => e.stopPropagation()}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                  aria-label={`Actions for ${title}`}
+                >
+                  <MoreVertical className="h-4 w-4" />
+                </button>
+              </DropdownMenuTrigger>
+
+              <DropdownMenuContent
+                align="end"
+                className="w-56"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <DropdownMenuItem
+                  onClick={() =>
+                    onManageScheduledPayments?.(service)
+                  }
+                >
+                  <CalendarClock className="mr-2 h-4 w-4" />
+                  Manage Scheduled Payments
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {/* ============ COLLAPSE TOGGLE ============ */}
+
+            <button
+              type="button"
+              onClick={() => setOpen((v) => !v)}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              aria-label={open ? "Collapse service" : "Expand service"}
+            >
+              <ChevronDown
+                className={`h-4 w-4 transition-transform duration-200 ${
+                  open ? "rotate-180" : ""
+                }`}
+              />
+            </button>
+          </div>
         </div>
       </CardHeader>
 
       {open && (
         <CardContent className="pt-0">
-          {computedAmount !== null && computedAmount !== undefined && (
-            <div className="mb-5 rounded-lg border bg-muted/30 p-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Calculated Amount
-                  </p>
-                  <p className="mt-1 text-xl font-bold">
-                    {formatAmount(Number(computedAmount), service.currencyCode ?? "")}
-                  </p>
+          {computedAmount !== null &&
+            computedAmount !== undefined && (
+              <div className="mb-5 rounded-lg border bg-muted/30 p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      Calculated Amount
+                    </p>
+
+                    <p className="mt-1 text-xl font-bold">
+                      {formatAmount(
+                        Number(computedAmount),
+                        service.currencyCode ?? "",
+                      )}
+                    </p>
+                  </div>
+
+                  {service.calculatedAt && (
+                    <p className="text-xs text-muted-foreground">
+                      Calculated{" "}
+                      {formatEthiopianDate(service.calculatedAt)}
+                    </p>
+                  )}
                 </div>
 
-                {service.calculatedAt && (
-                  <p className="text-xs text-muted-foreground">
-                    Calculated {formatEthiopianDate(service.calculatedAt)}
+                {service.calculationError && (
+                  <p className="mt-3 flex items-start gap-2 text-sm text-destructive">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                    {service.calculationError}
                   </p>
                 )}
               </div>
-
-              {service.calculationError && (
-                <p className="mt-3 flex items-start gap-2 text-sm text-destructive">
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                  {service.calculationError}
-                </p>
-              )}
-            </div>
-          )}
+            )}
 
           {service.service?.description && (
-            <p className="mb-4 text-sm text-muted-foreground">{service.service.description}</p>
+            <p className="mb-4 text-sm text-muted-foreground">
+              {service.service.description}
+            </p>
           )}
 
           {service.values?.length ? (
             <div>
-              <h4 className="mb-2 text-sm font-semibold">Captured Information</h4>
+              <h4 className="mb-2 text-sm font-semibold">
+                Captured Information
+              </h4>
+
               {service.values.map((value) => (
-                <FieldRow key={value.id} value={value} />
+                <FieldRow
+                  key={value.id}
+                  value={value}
+                />
               ))}
             </div>
           ) : (
-            <p className="py-4 text-sm text-muted-foreground">No captured values.</p>
+            <p className="py-4 text-sm text-muted-foreground">
+              No captured values.
+            </p>
           )}
 
           {files.length > 0 && (
             <div className="mt-5 border-t pt-5">
               <div className="mb-3 flex items-center justify-between">
                 <div>
-                  <h4 className="text-sm font-semibold">Evidence Files</h4>
+                  <h4 className="text-sm font-semibold">
+                    Evidence Files
+                  </h4>
+
                   <p className="mt-0.5 text-xs text-muted-foreground">
                     Supporting documents submitted with this service.
                   </p>

@@ -85,8 +85,14 @@ function formatDate(
   const stringValue =
     String(value)
 
+  /*
+   * Handle ISO datetime values as well
+   * as plain YYYY-MM-DD values.
+   */
   const date = new Date(
-    `${stringValue}T00:00:00`,
+    stringValue.length === 10
+      ? `${stringValue}T00:00:00`
+      : stringValue,
   )
 
   if (
@@ -171,19 +177,26 @@ function formatServiceFieldValue(
       return "—"
     }
 
-    return value
-      .map(
-        (item) =>
-          formatPrimitiveValue(
-            item,
-          ),
-      )
-      .filter(Boolean)
-      .join(", ")
+    const formattedValues =
+      value
+        .map(
+          (item) =>
+            formatPrimitiveValue(
+              item,
+            ),
+        )
+        .filter(Boolean)
+
+    return formattedValues.length > 0
+      ? formattedValues.join(", ")
+      : "—"
   }
 
   /*
    * Boolean
+   *
+   * IMPORTANT:
+   * false is a valid value.
    */
   if (
     typeof value ===
@@ -227,6 +240,96 @@ function formatServiceFieldValue(
    * Number / text / select
    */
   return String(value)
+}
+
+/* =========================================================
+   FIELD VALUE LOOKUP
+========================================================= */
+
+/**
+ * Returns the value stored for a service field.
+ *
+ * IMPORTANT:
+ *
+ * The form stores dynamic service values using the
+ * field UUID when available.
+ *
+ * Example:
+ *
+ * serviceFieldValues = {
+ *   "service-uuid": {
+ *     "field-uuid-1": 500,
+ *     "field-uuid-2": "A",
+ *     "field-uuid-3": "2026-09-23"
+ *   }
+ * }
+ *
+ * But the field configuration can also have:
+ *
+ * key = "LAND_AREA"
+ *
+ * Therefore we must prefer field.id and only fall
+ * back to field.key/name.
+ */
+function getServiceFieldValue(
+  field: RevenueService["fields"][number],
+  values: Record<string, unknown>,
+): unknown {
+  const fieldId =
+    typeof field.id === "string"
+      ? field.id
+      : undefined
+
+  const fieldKey =
+    typeof field.key === "string"
+      ? field.key
+      : undefined
+
+  const fieldName =
+    typeof field.label === "string"
+      ? field.label
+      : undefined
+
+  /*
+   * 1. UUID
+   */
+  if (
+    fieldId &&
+    Object.prototype.hasOwnProperty.call(
+      values,
+      fieldId,
+    )
+  ) {
+    return values[fieldId]
+  }
+
+  /*
+   * 2. Field key
+   */
+  if (
+    fieldKey &&
+    Object.prototype.hasOwnProperty.call(
+      values,
+      fieldKey,
+    )
+  ) {
+    return values[fieldKey]
+  }
+
+  /*
+   * 3. Field name
+   */
+  if (
+    fieldName &&
+    Object.prototype.hasOwnProperty.call(
+      values,
+      fieldName,
+    )
+  ) {
+    return values[fieldName]
+  }
+
+  return undefined
 }
 
 /* =========================================================
@@ -345,7 +448,8 @@ export function ReviewRegisterStep({
     errors.length > 0
 
   /*
-   * Values entered for the selected revenue service.
+   * Values entered for the selected
+   * revenue service.
    */
   const serviceValues =
     selectedRevenueService
@@ -547,25 +651,55 @@ export function ReviewRegisterStep({
           </div>
         ) : (
           serviceFields.map(
-            (field) => (
-              <ReviewRow
-                key={
-                  field.id ??
-                  field.key
-                }
-                label={
-                  field.label ??
-                  field.description ??
-                  field.key
-                }
-                value={formatServiceFieldValue(
+            (field) => {
+
+              /*
+               * IMPORTANT:
+               *
+               * Do NOT use:
+               *
+               * serviceValues[field.key]
+               *
+               * because the actual stored value may
+               * be indexed by field.id (UUID).
+               */
+              const value =
+                getServiceFieldValue(
                   field,
-                  serviceValues[
-                    field.key
-                  ],
-                )}
-              />
-            ),
+                  serviceValues,
+                )
+
+              const label =
+                field.label ??
+                field.description ??
+                field.key ??
+                "Field"
+
+              const fieldId =
+                typeof field.id === "string"
+                  ? field.id
+                  : undefined
+
+              const fieldKey =
+                typeof field.key === "string"
+                  ? field.key
+                  : undefined
+
+              return (
+                <ReviewRow
+                  key={
+                    fieldId ??
+                    fieldKey ??
+                    label
+                  }
+                  label={label}
+                  value={formatServiceFieldValue(
+                    field,
+                    value,
+                  )}
+                />
+              )
+            },
           )
         )}
 

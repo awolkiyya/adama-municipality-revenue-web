@@ -313,13 +313,44 @@ export default function AssessmentWorkspace() {
 
               ...assessment,
 
+              // ---------------------------------------
+              // ID
+              // ---------------------------------------
+
               id:
                 assessment.id,
+
+
+              // ---------------------------------------
+              // ASSESSMENT NUMBER
+              // ---------------------------------------
 
               assessment_number:
                 assessment.assessmentNumber ??
                 assessment.id ??
                 "-",
+
+
+              // ---------------------------------------
+              // SOURCE TYPE
+              // ---------------------------------------
+              //
+              // new
+              // existing_lizz
+              //
+              // The backend should always provide this
+              // field. "new" is used as a safe fallback
+              // for older records.
+              //
+
+              source_type:
+                assessment.sourceType ??
+                "new",
+
+
+              // ---------------------------------------
+              // TAXPAYER
+              // ---------------------------------------
 
               taxpayer_name:
                 assessment.taxpayer?.fullName ??
@@ -329,8 +360,18 @@ export default function AssessmentWorkspace() {
                 assessment.taxpayer?.citizenUid ??
                 "-",
 
+
+              // ---------------------------------------
+              // STATUS
+              // ---------------------------------------
+
               status:
                 assessment.status,
+
+
+              // ---------------------------------------
+              // CREATED
+              // ---------------------------------------
 
               created_at:
                 assessment.createdAt,
@@ -368,6 +409,10 @@ export default function AssessmentWorkspace() {
 
   /**
    * Create a completely new assessment.
+   *
+   * This workflow creates:
+   *
+   * source_type = "new"
    */
   const handleNewAssessment =
     () => {
@@ -393,11 +438,11 @@ export default function AssessmentWorkspace() {
 
 
   /**
-   * Register an existing agreement.
+   * Register an existing LIZZ agreement.
    *
-   * This is specifically for obligations that existed
-   * before the system and need to continue from their
-   * current financial state.
+   * This workflow creates:
+   *
+   * source_type = "existing_lizz"
    *
    * The existing agreement page should handle:
    *
@@ -412,7 +457,7 @@ export default function AssessmentWorkspace() {
     () => {
 
       router.push(
-        "/office/dashboard/assessments/existing",
+        "/office/dashboard/assessments/existing/create",
       );
 
     };
@@ -577,7 +622,7 @@ export default function AssessmentWorkspace() {
           SUMMARY
           ================================================= */}
 
-      {!isPendingQueue && (
+      {isPendingQueue && (
         <AssessmentSummary
           total={
             total

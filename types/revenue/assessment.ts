@@ -26,6 +26,12 @@
 import { AuthUser } from "../user";
 
 
+export type AssessmentSourceType =
+  | "NEW"
+  | "EXISTING_LIZZ";
+
+
+
 // =====================================================
 // FIELD TYPES
 // =====================================================
@@ -405,6 +411,17 @@ export type Assessment = {
   assessmentNumber: string;
 
   /**
+   * Assessment origin.
+   *
+   * NEW:
+   * Created through the normal assessment workflow.
+   *
+   * EXISTING_LIZZ:
+   * Historical LIZZ agreement registered into the system.
+   */
+  sourceType: AssessmentSourceType;
+
+  /**
    * Citizen / taxpayer UUID.
    */
   citizenId: string;
@@ -451,6 +468,7 @@ export type Assessment = {
 
   updatedAt: string;
 };
+
 
 
 // =====================================================
@@ -660,4 +678,49 @@ export type CancelAssessmentPayload = {
   id: string;
 
   reason?: string;
+};
+
+
+// =====================================================
+// EXISTING LIZZ CREATE PAYLOAD
+// =====================================================
+
+export type CreateExistingLizzPayload = {
+  /**
+   * Citizen / taxpayer UUID.
+   */
+  taxpayerId: string;
+
+  /**
+   * Historical agreement total amount.
+   *
+   * This is the original/computed amount of the
+   * Existing LIZZ agreement.
+   */
+  computedAmount: number;
+
+  /**
+   * Historical amount already paid before the
+   * Existing LIZZ agreement was registered in the system.
+   */
+  paidAmount: number;
+
+  /**
+   * Additional assessment notes.
+   */
+  notes?: string | null;
+
+  /**
+   * Initial workflow status.
+   */
+  status: "DRAFT" | "PENDING_APPROVAL";
+
+  /**
+   * Revenue services included in the agreement.
+   *
+   * Financial amounts are NOT stored inside each
+   * service payload. computedAmount and paidAmount
+   * belong to the assessment-level request.
+   */
+  services: AssessmentServicePayload[];
 };

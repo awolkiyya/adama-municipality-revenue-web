@@ -1,6 +1,7 @@
 "use client"
 
 import {
+  useCallback,
   useEffect,
   useMemo,
   useState,
@@ -21,72 +22,45 @@ import type {
 } from "@/types/revenue/assessment"
 
 /*
- * ============================================================
- * INITIAL AGREEMENT
- * ============================================================
- */
+|--------------------------------------------------------------------------
+| Initial State
+|--------------------------------------------------------------------------
+*/
 
-const initialAgreement: ExistingAgreementForm = {
+const INITIAL_AGREEMENT: ExistingAgreementForm = {
   taxpayerId: "",
   revenueServiceId: "",
   source: "",
   notes: "",
 }
 
-/*
- * ============================================================
- * INITIAL FINANCIAL POSITION
- * ============================================================
- *
- * Historical financial position contains:
- *
- * - Original Obligation
- * - Amount Already Paid
- *
- * Outstanding balance is calculated dynamically.
- *
- * There is intentionally NO balanceAsOfDate.
- *
- * The assessment record already has normal system timestamps
- * such as created_at / updated_at.
- */
-
-const initialFinancial: ExistingFinancialPosition = {
+const INITIAL_FINANCIAL: ExistingFinancialPosition = {
   originalObligation: "",
   amountAlreadyPaid: "",
+  balanceAsOfDate: "",
 }
 
 /*
- * ============================================================
- * DYNAMIC SERVICE FIELD TYPES
- * ============================================================
- *
- * Service fields can contain:
- *
- * - string
- * - number
- * - boolean
- *
- * IMPORTANT:
- *
- * Do not convert boolean false into an empty value.
- */
+|--------------------------------------------------------------------------
+| Service Field Types
+|--------------------------------------------------------------------------
+*/
 
 export type ServiceFieldValue =
   | string
   | number
   | boolean
 
-type ServiceFieldValues = Record<
+export type ServiceFieldValues = Record<
   string,
   Record<string, ServiceFieldValue>
 >
 
 /*
- * ============================================================
- * VALIDATION ERROR TYPES
- * ============================================================
- */
+|--------------------------------------------------------------------------
+| Validation Types
+|--------------------------------------------------------------------------
+*/
 
 export type ValidationErrors = {
   agreement?: Record<string, string>
@@ -100,59 +74,56 @@ export type ValidationErrors = {
 }
 
 /*
- * ============================================================
- * HOOK OPTIONS
- * ============================================================
- */
+|--------------------------------------------------------------------------
+| Hook Options
+|--------------------------------------------------------------------------
+*/
 
-interface UseExistingAgreementOptions {
+export interface UseExistingAgreementOptions {
   taxpayers: Citizen[]
 
   revenueServices: RevenueService[]
 
   /**
-   * Existing assessment ID.
-   *
    * Undefined = CREATE
-   * Defined   = EDIT
+   * Defined   = UPDATE
    */
   assessmentId?: string
 
   /**
-   * Existing assessment data.
+   * Existing assessment returned from API.
    *
-   * Primarily used by EDIT mode.
+   * Used only in UPDATE mode.
    */
   initialData?: unknown
 }
 
 /*
- * ============================================================
- * EMPTY VALUE CHECK
- * ============================================================
- *
- * IMPORTANT:
- *
- * Do NOT use:
- *
- *     if (!value)
- *
- * because:
- *
- *     !false === true
- *     !0 === true
- *
- * Both false and 0 can be valid values.
- *
- * A value is empty only when:
- *
- * - undefined
- * - null
- * - empty string
- * - whitespace-only string
- */
+|--------------------------------------------------------------------------
+| Generic API Types
+|--------------------------------------------------------------------------
+*/
 
-function isEmptyServiceValue(
+type UnknownRecord =
+  Record<string, unknown>
+
+/*
+|--------------------------------------------------------------------------
+| Generic Helpers
+|--------------------------------------------------------------------------
+*/
+
+function isRecord(
+  value: unknown,
+): value is UnknownRecord {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value)
+  )
+}
+
+function isEmptyValue(
   value: unknown,
 ): boolean {
   return (
@@ -165,68 +136,1024 @@ function isEmptyServiceValue(
   )
 }
 
+function toStringValue(
+  value: unknown,
+): string {
+  if (
+    value === undefined ||
+    value === null
+  ) {
+    return ""
+  }
+
+  return String(value)
+}
+
+function firstValue(
+  data: UnknownRecord,
+  keys: readonly string[],
+): unknown {
+  for (
+    const key of keys
+  ) {
+    const value =
+      data[key]
+
+    if (
+      !isEmptyValue(
+        value,
+      )
+    ) {
+      return value
+    }
+  }
+
+  return undefined
+}
+
 /*
- * ============================================================
- * NORMALIZE SERVICE FIELD VALUES
- * ============================================================
- *
- * Keeps:
- *
- * string  -> string
- * number  -> number
- * boolean -> boolean
- *
- * This is important for checkbox fields.
- */
+|--------------------------------------------------------------------------
+| Normalize Service Field Value
+|--------------------------------------------------------------------------
+*/
 
-function normalizeServiceFieldValues(
-  values: Record<string, unknown>,
-): Record<string, ServiceFieldValue> {
-  return Object.fromEntries(
-    Object.entries(values).map(
-      ([key, value]) => {
+function normalizeServiceFieldValue(
+  value: unknown,
+): ServiceFieldValue {
+  if (
+    typeof value === "boolean"
+  ) {
+    return value
+  }
 
-        if (
-          typeof value === "boolean"
-        ) {
-          return [
-            key,
-            value,
-          ]
-        }
+  if (
+    typeof value === "number"
+  ) {
+    return value
+  }
 
-        if (
-          typeof value === "number"
-        ) {
-          return [
-            key,
-            value,
-          ]
-        }
+  if (
+    typeof value === "string"
+  ) {
+    return value
+  }
 
-        if (
-          typeof value === "string"
-        ) {
-          return [
-            key,
-            value,
-          ]
-        }
+  /*
+   * Dynamic service fields are expected
+   * to contain primitive values.
+   *
+   * Keep an unexpected value serializable
+   * rather than breaking hydration.
+   */
+  return String(
+    value ?? "",
+  )
+}
 
-        return [
-          key,
-          String(value ?? ""),
-        ]
-      },
+/*
+|--------------------------------------------------------------------------
+| Assessment Services
+|--------------------------------------------------------------------------
+|
+| Actual API:
+|
+| data.services[]
+|
+*/
+
+function getAssessmentServices(
+  data: UnknownRecord,
+): UnknownRecord[] {
+  if (
+    !Array.isArray(
+      data.services,
+    )
+  ) {
+    return []
+  }
+
+  return data.services.filter(
+    isRecord,
+  )
+}
+
+/*
+|--------------------------------------------------------------------------
+| Revenue Service ID
+|--------------------------------------------------------------------------
+|
+| Actual API:
+|
+| data.services[0].revenueServiceId
+|
+| Fallbacks:
+|
+| serviceId
+| service_id
+| revenue_service_id
+|
+*/
+
+function resolveRevenueServiceId(
+  services: UnknownRecord[],
+): string {
+  const service =
+    services[0]
+
+  if (!service) {
+    return ""
+  }
+
+  const value =
+    firstValue(
+      service,
+      [
+        "revenueServiceId",
+        "revenue_service_id",
+        "serviceId",
+        "service_id",
+      ],
+    )
+
+  return toStringValue(
+    value,
+  )
+}
+
+/*
+|--------------------------------------------------------------------------
+| Find Matching Revenue Service
+|--------------------------------------------------------------------------
+*/
+
+function findRevenueService(
+  revenueServices: RevenueService[],
+  serviceId: string,
+): RevenueService | null {
+  if (!serviceId) {
+    return null
+  }
+
+  return (
+    revenueServices.find(
+      (service) =>
+        String(
+          service.id,
+        ) ===
+        String(
+          serviceId,
+        ),
+    ) ?? null
+  )
+}
+
+/*
+|--------------------------------------------------------------------------
+| Revenue Service Fields
+|--------------------------------------------------------------------------
+*/
+
+function getRevenueServiceFields(
+  service: RevenueService | null,
+): UnknownRecord[] {
+  if (!service) {
+    return []
+  }
+
+  const fields =
+    (
+      service as RevenueService & {
+        fields?: unknown
+      }
+    ).fields
+
+  if (
+    !Array.isArray(
+      fields,
+    )
+  ) {
+    return []
+  }
+
+  return fields.filter(
+    isRecord,
+  )
+}
+
+/*
+|--------------------------------------------------------------------------
+| Normalize Identifier
+|--------------------------------------------------------------------------
+*/
+
+function normalizeIdentifier(
+  value: unknown,
+): string {
+  if (
+    value === undefined ||
+    value === null
+  ) {
+    return ""
+  }
+
+  return String(
+    value,
+  ).trim()
+}
+
+/*
+|--------------------------------------------------------------------------
+| Frontend Field Key
+|--------------------------------------------------------------------------
+|
+| IMPORTANT:
+|
+| The canonical frontend key should be:
+|
+|   key
+|   code
+|   fieldCode
+|   field_code
+|   name
+|
+| before falling back to UUID.
+|
+| This is important because the API sends:
+|
+|   fieldCode: "LAND_AREA"
+|
+| and the form should normally use:
+|
+|   LAND_AREA: 200
+|
+| rather than:
+|
+|   <field UUID>: 200
+|
+*/
+
+function getFrontendFieldKey(
+  field: UnknownRecord,
+): string {
+  const candidates = [
+    field.key,
+    field.code,
+    field.fieldCode,
+    field.field_code,
+    field.name,
+  ]
+
+  for (
+    const candidate of candidates
+  ) {
+    const normalized =
+      normalizeIdentifier(
+        candidate,
+      )
+
+    if (
+      normalized
+    ) {
+      return normalized
+    }
+  }
+
+  /*
+   * UUID is the final fallback only.
+   */
+  return normalizeIdentifier(
+    firstValue(
+      field,
+      [
+        "id",
+        "fieldId",
+        "field_id",
+      ],
     ),
   )
 }
 
 /*
- * ============================================================
- * HOOK
- * ============================================================
- */
+|--------------------------------------------------------------------------
+| Field Identifiers
+|--------------------------------------------------------------------------
+|
+| Used to match API field identifiers
+| against frontend field definitions.
+|
+*/
+
+function getFieldIdentifiers(
+  field: UnknownRecord,
+): string[] {
+  const candidates = [
+    /*
+     * Business identifiers first.
+     */
+    field.key,
+    field.code,
+    field.fieldCode,
+    field.field_code,
+    field.name,
+
+    /*
+     * UUID identifiers afterward.
+     */
+    field.id,
+    field.fieldId,
+    field.field_id,
+  ]
+
+  const identifiers: string[] = []
+
+  for (
+    const candidate of candidates
+  ) {
+    const normalized =
+      normalizeIdentifier(
+        candidate,
+      )
+
+    if (
+      normalized &&
+      !identifiers.includes(
+        normalized,
+      )
+    ) {
+      identifiers.push(
+        normalized,
+      )
+    }
+  }
+
+  return identifiers
+}
+
+/*
+|--------------------------------------------------------------------------
+| Case-Insensitive Identifier Match
+|--------------------------------------------------------------------------
+*/
+
+function identifiersMatch(
+  left: string,
+  right: string,
+): boolean {
+  if (
+    !left ||
+    !right
+  ) {
+    return false
+  }
+
+  return (
+    left.trim().toLowerCase() ===
+    right.trim().toLowerCase()
+  )
+}
+
+/*
+|--------------------------------------------------------------------------
+| Resolve Persisted Field → Frontend Field Key
+|--------------------------------------------------------------------------
+|
+| API value:
+|
+| {
+|   revenueServiceFieldId: "...",
+|   fieldCode: "LAND_AREA",
+|   value: 200
+| }
+|
+| Frontend field:
+|
+| {
+|   id: "...",
+|   key: "LAND_AREA"
+| }
+|
+| Result:
+|
+| LAND_AREA
+|
+*/
+
+function resolveFormFieldKey(
+  persistedFieldId: string,
+  persistedFieldCode: string,
+  fields: UnknownRecord[],
+): string {
+  /*
+   * --------------------------------------------------------------
+   * 1. Match fieldCode against business identifiers first.
+   * --------------------------------------------------------------
+   *
+   * This is the preferred path because the API explicitly
+   * provides fieldCode.
+   */
+
+  if (
+    persistedFieldCode
+  ) {
+    for (
+      const field of fields
+    ) {
+      const businessIdentifiers = [
+        field.key,
+        field.code,
+        field.fieldCode,
+        field.field_code,
+        field.name,
+      ]
+        .map(
+          normalizeIdentifier,
+        )
+        .filter(Boolean)
+
+      const matched =
+        businessIdentifiers.some(
+          (
+            identifier,
+          ) =>
+            identifiersMatch(
+              identifier,
+              persistedFieldCode,
+            ),
+        )
+
+      if (
+        matched
+      ) {
+        return getFrontendFieldKey(
+          field,
+        )
+      }
+    }
+  }
+
+  /*
+   * --------------------------------------------------------------
+   * 2. Match revenueServiceFieldId against UUID identifiers.
+   * --------------------------------------------------------------
+   */
+
+  if (
+    persistedFieldId
+  ) {
+    for (
+      const field of fields
+    ) {
+      const uuidIdentifiers = [
+        field.id,
+        field.fieldId,
+        field.field_id,
+      ]
+        .map(
+          normalizeIdentifier,
+        )
+        .filter(Boolean)
+
+      const matched =
+        uuidIdentifiers.some(
+          (
+            identifier,
+          ) =>
+            identifiersMatch(
+              identifier,
+              persistedFieldId,
+            ),
+        )
+
+      if (
+        matched
+      ) {
+        return getFrontendFieldKey(
+          field,
+        )
+      }
+    }
+  }
+
+  /*
+   * --------------------------------------------------------------
+   * 3. General identifier matching.
+   * --------------------------------------------------------------
+   *
+   * This handles unusual but valid frontend field structures.
+   */
+
+  if (
+    persistedFieldCode
+  ) {
+    for (
+      const field of fields
+    ) {
+      const identifiers =
+        getFieldIdentifiers(
+          field,
+        )
+
+      const matched =
+        identifiers.some(
+          (
+            identifier,
+          ) =>
+            identifiersMatch(
+              identifier,
+              persistedFieldCode,
+            ),
+        )
+
+      if (
+        matched
+      ) {
+        return getFrontendFieldKey(
+          field,
+        )
+      }
+    }
+  }
+
+  /*
+   * --------------------------------------------------------------
+   * 4. Fallback to API fieldCode.
+   * --------------------------------------------------------------
+   *
+   * This is important.
+   *
+   * Even if the frontend field definition cannot be matched,
+   * the value should not disappear.
+   */
+
+  if (
+    persistedFieldCode
+  ) {
+    return persistedFieldCode
+  }
+
+  /*
+   * --------------------------------------------------------------
+   * 5. Final fallback to persisted UUID.
+   * --------------------------------------------------------------
+   */
+
+  return persistedFieldId
+}
+
+/*
+|--------------------------------------------------------------------------
+| Extract Actual API Service Values
+|--------------------------------------------------------------------------
+|
+| ACTUAL API:
+|
+| services: [
+|   {
+|     revenueServiceId: "...",
+|     values: [
+|       {
+|         id: "...",
+|         assessmentServiceId: "...",
+|         revenueServiceFieldId: "...",
+|         fieldCode: "LAND_AREA",
+|         value: 200,
+|         displayValue: "200"
+|       }
+|     ]
+|   }
+| ]
+|
+| IMPORTANT:
+|
+| We use "value".
+|
+| We DO NOT use "displayValue".
+|
+*/
+
+function extractServiceFieldValues(
+  services: UnknownRecord[],
+  revenueServiceId: string,
+  revenueServices: RevenueService[],
+): ServiceFieldValues {
+  const result: ServiceFieldValues = {}
+
+  if (
+    !revenueServiceId
+  ) {
+    return result
+  }
+
+  /*
+   * --------------------------------------------------------------
+   * Find assessment service
+   * --------------------------------------------------------------
+   */
+
+  const assessmentService =
+    services.find(
+      (
+        service,
+      ) => {
+        const serviceId =
+          firstValue(
+            service,
+            [
+              "revenueServiceId",
+              "revenue_service_id",
+              "serviceId",
+              "service_id",
+            ],
+          )
+
+        return identifiersMatch(
+          toStringValue(
+            serviceId,
+          ),
+          revenueServiceId,
+        )
+      },
+    )
+
+  if (
+    !assessmentService
+  ) {
+    return result
+  }
+
+  /*
+   * --------------------------------------------------------------
+   * Actual persisted values
+   * --------------------------------------------------------------
+   */
+
+  const persistedValues =
+    assessmentService.values
+
+  if (
+    !Array.isArray(
+      persistedValues,
+    )
+  ) {
+    return result
+  }
+
+  /*
+   * --------------------------------------------------------------
+   * Selected revenue service
+   * --------------------------------------------------------------
+   */
+
+  const revenueService =
+    findRevenueService(
+      revenueServices,
+      revenueServiceId,
+    )
+
+  const serviceFields =
+    getRevenueServiceFields(
+      revenueService,
+    )
+
+  /*
+   * --------------------------------------------------------------
+   * Build frontend values
+   * --------------------------------------------------------------
+   */
+
+  const values:
+    Record<
+      string,
+      ServiceFieldValue
+    > = {}
+
+  for (
+    const persistedValue
+    of persistedValues
+  ) {
+    if (
+      !isRecord(
+        persistedValue,
+      )
+    ) {
+      continue
+    }
+
+    /*
+     * API field UUID.
+     */
+    const fieldId =
+      toStringValue(
+        firstValue(
+          persistedValue,
+          [
+            "revenueServiceFieldId",
+            "revenue_service_field_id",
+          ],
+        ),
+      )
+
+    /*
+     * API business field code.
+     */
+    const fieldCode =
+      toStringValue(
+        firstValue(
+          persistedValue,
+          [
+            "fieldCode",
+            "field_code",
+          ],
+        ),
+      )
+
+    /*
+     * IMPORTANT:
+     *
+     * Use the actual value.
+     *
+     * Examples:
+     *
+     * 200
+     * "1FFAA"
+     * "2009-09-11"
+     * true
+     * 60
+     * 99
+     * "GIDDUTT_GALA_MAGNALAA_(CKD)"
+     * "boolee , adama , oromia"
+     * 12344
+     */
+    const rawValue =
+      persistedValue.value
+
+    /*
+     * Do not silently convert null into an empty
+     * field because null means no persisted value.
+     */
+    if (
+      rawValue === undefined ||
+      rawValue === null
+    ) {
+      continue
+    }
+
+    /*
+     * --------------------------------------------------------------
+     * Resolve API field → frontend field key
+     * --------------------------------------------------------------
+     */
+
+    const formFieldKey =
+      resolveFormFieldKey(
+        fieldId,
+        fieldCode,
+        serviceFields,
+      )
+
+    if (
+      !formFieldKey
+    ) {
+      continue
+    }
+
+    /*
+     * --------------------------------------------------------------
+     * Store normalized primitive value
+     * --------------------------------------------------------------
+     */
+
+    values[
+      formFieldKey
+    ] =
+      normalizeServiceFieldValue(
+        rawValue,
+      )
+  }
+
+  /*
+   * --------------------------------------------------------------
+   * IMPORTANT:
+   *
+   * Always initialize the service entry when the service exists,
+   * even if there are currently no values.
+   *
+   * This makes create/update state predictable.
+   * --------------------------------------------------------------
+   */
+
+  result[
+    revenueServiceId
+  ] = values
+
+  return result
+}
+
+/*
+|--------------------------------------------------------------------------
+| Resolve Financial Value
+|--------------------------------------------------------------------------
+|
+| Actual API:
+|
+| services[0].originalObligation
+| services[0].paidAmount
+| services[0].remainingAmount
+| services[0].balanceAsOfDate
+|
+*/
+
+function resolveFinancialValue(
+  data: UnknownRecord,
+  services: UnknownRecord[],
+  keys: readonly string[],
+): string {
+  /*
+   * --------------------------------------------------------------
+   * Assessment level
+   * --------------------------------------------------------------
+   */
+
+  const assessmentValue =
+    firstValue(
+      data,
+      keys,
+    )
+
+  if (
+    !isEmptyValue(
+      assessmentValue,
+    )
+  ) {
+    return toStringValue(
+      assessmentValue,
+    )
+  }
+
+  /*
+   * --------------------------------------------------------------
+   * Assessment service
+   * --------------------------------------------------------------
+   */
+
+  const service =
+    services[0]
+
+  if (!service) {
+    return ""
+  }
+
+  const serviceValue =
+    firstValue(
+      service,
+      keys,
+    )
+
+  if (
+    !isEmptyValue(
+      serviceValue,
+    )
+  ) {
+    return toStringValue(
+      serviceValue,
+    )
+  }
+
+  return ""
+}
+
+/*
+|--------------------------------------------------------------------------
+| Build Backend Service Fields
+|--------------------------------------------------------------------------
+|
+| IMPORTANT ARCHITECTURE:
+|
+| Frontend state:
+|
+| {
+|   LAND_AREA: 2000,
+|   SADARKA_LAFAA: "1FFAA",
+|   AGREEMENT_DATE: "2009-09-11"
+| }
+|
+| Backend API expects:
+|
+| {
+|   "<RevenueServiceField UUID>": 2000,
+|   "<RevenueServiceField UUID>": "1FFAA",
+|   "<RevenueServiceField UUID>": "2009-09-11"
+| }
+|
+| Therefore this function performs the boundary translation:
+|
+| field.key → field.id
+|
+| We keep the frontend state readable and only convert it
+| when building the API payload.
+|
+*/
+
+function buildBackendServiceFields(
+  service: RevenueService | null,
+  values: Record<string, ServiceFieldValue>,
+): Record<string, ServiceFieldValue> {
+  if (!service) {
+    return {}
+  }
+
+  const result:
+    Record<
+      string,
+      ServiceFieldValue
+    > = {}
+
+  const fields =
+    getRevenueServiceFields(
+      service,
+    )
+
+  for (
+    const field of fields
+  ) {
+    /*
+     * RevenueServiceField UUID expected by Laravel.
+     *
+     * Example:
+     *
+     * 01a0a71b-d3e1-7012-818e-df7a5d1e10df
+     */
+    const fieldId =
+      normalizeIdentifier(
+        firstValue(
+          field,
+          [
+            "id",
+            "fieldId",
+            "field_id",
+          ],
+        ),
+      )
+
+    /*
+     * Frontend business key.
+     *
+     * Example:
+     *
+     * LAND_AREA
+     */
+    const fieldKey =
+      getFrontendFieldKey(
+        field,
+      )
+
+    /*
+     * Ignore malformed field definitions.
+     */
+    if (
+      !fieldId ||
+      !fieldKey
+    ) {
+      continue
+    }
+
+    /*
+     * Only include fields that actually exist
+     * in the current form state.
+     *
+     * This prevents unrelated/default fields from
+     * being sent accidentally.
+     */
+    if (
+      !Object.prototype.hasOwnProperty.call(
+        values,
+        fieldKey,
+      )
+    ) {
+      continue
+    }
+
+    /*
+     * API key = RevenueServiceField UUID
+     *
+     * API value = existing frontend value
+     */
+    result[
+      fieldId
+    ] =
+      values[
+        fieldKey
+      ]
+  }
+
+  return result
+}
+
+/*
+|--------------------------------------------------------------------------
+| Hook
+|--------------------------------------------------------------------------
+*/
 
 export function useExistingAgreement({
   taxpayers,
@@ -234,158 +1161,202 @@ export function useExistingAgreement({
   assessmentId,
   initialData,
 }: UseExistingAgreementOptions) {
-
   /*
-   * ==========================================================
-   * MODE
-   * ==========================================================
+   *----------------------------------------------------------------------
+   * Mode
+   *----------------------------------------------------------------------
    */
 
   const isEditMode =
-    Boolean(assessmentId)
-
-  /*
-   * ==========================================================
-   * WORKFLOW STATE
-   * ==========================================================
-   */
-
-  const [currentStep, setCurrentStep] =
-    useState<Step>(1)
-
-  /*
-   * ==========================================================
-   * AGREEMENT STATE
-   * ==========================================================
-   */
-
-  const [agreement, setAgreement] =
-    useState<ExistingAgreementForm>(
-      initialAgreement,
+    Boolean(
+      assessmentId,
     )
 
   /*
-   * ==========================================================
-   * FINANCIAL STATE
-   * ==========================================================
+   *----------------------------------------------------------------------
+   * Workflow
+   *----------------------------------------------------------------------
    */
 
-  const [financial, setFinancial] =
-    useState<ExistingFinancialPosition>(
-      initialFinancial,
-    )
+  const [
+    currentStep,
+    setCurrentStep,
+  ] = useState<Step>(1)
 
   /*
-   * ==========================================================
-   * DYNAMIC SERVICE FIELD VALUES
-   * ==========================================================
-   *
-   * Internal structure:
-   *
-   * {
-   *   [serviceId]: {
-   *     [fieldId]: value
-   *   }
-   * }
-   *
-   * Example:
-   *
-   * {
-   *   "service-uuid": {
-   *     "field-uuid": "100",
-   *     "another-field-uuid": false
-   *   }
-   * }
-   *
-   * IMPORTANT:
-   *
-   * The final API payload flattens this to:
-   *
-   * {
-   *   "field-uuid": "100",
-   *   "another-field-uuid": false
-   * }
+   *----------------------------------------------------------------------
+   * Agreement
+   *----------------------------------------------------------------------
+   */
+
+  const [
+    agreement,
+    setAgreement,
+  ] = useState<ExistingAgreementForm>(
+    INITIAL_AGREEMENT,
+  )
+
+  /*
+   *----------------------------------------------------------------------
+   * Financial Position
+   *----------------------------------------------------------------------
+   */
+
+  const [
+    financial,
+    setFinancial,
+  ] = useState<ExistingFinancialPosition>(
+    INITIAL_FINANCIAL,
+  )
+
+  /*
+   *----------------------------------------------------------------------
+   * Dynamic Service Fields
+   *----------------------------------------------------------------------
    */
 
   const [
     serviceFieldValues,
     setServiceFieldValues,
-  ] = useState<ServiceFieldValues>({})
+  ] = useState<ServiceFieldValues>(
+    {},
+  )
 
   /*
-   * ==========================================================
-   * VALIDATION ERRORS
-   * ==========================================================
+   *----------------------------------------------------------------------
+   * Validation
+   *----------------------------------------------------------------------
    */
 
   const [
     validationErrors,
     setValidationErrors,
-  ] = useState<ValidationErrors>({})
+  ] = useState<ValidationErrors>(
+    {},
+  )
 
   /*
-   * ==========================================================
-   * EDIT MODE INITIALIZATION
-   * ==========================================================
+   *----------------------------------------------------------------------
+   * Edit Hydration
+   *----------------------------------------------------------------------
    */
 
   useEffect(() => {
-
     /*
-     * --------------------------------------------------------
      * CREATE MODE
-     * --------------------------------------------------------
+     *
+     * Never hydrate from initialData.
      */
-
-    if (!isEditMode) {
+    if (
+      !isEditMode
+    ) {
       return
     }
 
     /*
-     * --------------------------------------------------------
-     * NO INITIAL DATA
-     * --------------------------------------------------------
+     * UPDATE MODE
+     *
+     * Wait until assessment API data exists.
      */
-
-    if (!initialData) {
+    if (
+      !isRecord(
+        initialData,
+      )
+    ) {
       return
     }
 
     const data =
-      initialData as Record<
-        string,
-        unknown
-      >
+      initialData
 
     /*
-     * --------------------------------------------------------
-     * AGREEMENT
-     * --------------------------------------------------------
+     * --------------------------------------------------------------
+     * Assessment services
+     * --------------------------------------------------------------
+     */
+
+    const services =
+      getAssessmentServices(
+        data,
+      )
+
+    /*
+     * --------------------------------------------------------------
+     * Taxpayer
+     * --------------------------------------------------------------
+     *
+     * Actual API:
+     *
+     * citizenId
      */
 
     const taxpayerId =
-      String(
-        data.taxpayer_id ??
-        data.taxpayerId ??
-        "",
+      toStringValue(
+        firstValue(
+          data,
+          [
+            "citizenId",
+            "citizen_id",
+            "taxpayerId",
+            "taxpayer_id",
+          ],
+        ),
       )
+
+    /*
+     * --------------------------------------------------------------
+     * Revenue service
+     * --------------------------------------------------------------
+     *
+     * Actual API:
+     *
+     * services[0].revenueServiceId
+     */
 
     const revenueServiceId =
-      String(
-        data.revenue_service_id ??
-        data.revenueServiceId ??
-        "",
+      resolveRevenueServiceId(
+        services,
       )
+
+    /*
+     * --------------------------------------------------------------
+     * Source
+     * --------------------------------------------------------------
+     */
 
     const source =
-      String(
-        data.source ?? "",
+      toStringValue(
+        firstValue(
+          data,
+          [
+            "sourceType",
+            "source_type",
+            "source",
+          ],
+        ),
       )
 
+    /*
+     * --------------------------------------------------------------
+     * Notes
+     * --------------------------------------------------------------
+     */
+
     const notes =
-      String(
-        data.notes ?? "",
+      toStringValue(
+        firstValue(
+          data,
+          [
+            "notes",
+          ],
+        ),
       )
+
+    /*
+     * --------------------------------------------------------------
+     * Update agreement state
+     * --------------------------------------------------------------
+     */
 
     setAgreement({
       taxpayerId,
@@ -395,1752 +1366,1710 @@ export function useExistingAgreement({
     })
 
     /*
-     * --------------------------------------------------------
-     * FINANCIAL
-     * --------------------------------------------------------
-     *
-     * Only the two historical totals are loaded.
-     *
-     * balanceAsOfDate has intentionally been removed.
+     * --------------------------------------------------------------
+     * Financial position
+     * --------------------------------------------------------------
      */
 
-    setFinancial({
-      originalObligation:
-        String(
-          data.original_obligation ??
-          data.originalObligation ??
-          "",
-        ),
+    const originalObligation =
+      resolveFinancialValue(
+        data,
+        services,
+        [
+          "originalObligation",
+          "original_obligation",
+          "computedAmount",
+          "computed_amount",
+        ],
+      )
 
-      amountAlreadyPaid:
-        String(
-          data.amount_already_paid ??
-          data.amountAlreadyPaid ??
-          "",
-        ),
+    const amountAlreadyPaid =
+      resolveFinancialValue(
+        data,
+        services,
+        [
+          "paidAmount",
+          "paid_amount",
+          "amountAlreadyPaid",
+          "amount_already_paid",
+        ],
+      )
+
+    const balanceAsOfDate =
+      resolveFinancialValue(
+        data,
+        services,
+        [
+          "balanceAsOfDate",
+          "balance_as_of_date",
+        ],
+      )
+
+    setFinancial({
+      originalObligation,
+      amountAlreadyPaid,
+      balanceAsOfDate,
     })
 
     /*
-     * --------------------------------------------------------
-     * SERVICE FIELDS
-     * --------------------------------------------------------
+     * --------------------------------------------------------------
+     * Dynamic service fields
+     * --------------------------------------------------------------
      *
-     * Supports both:
+     * ACTUAL API:
      *
-     * 1. Flat:
+     * services[0].values[]
+     *
+     * Example:
      *
      * {
-     *   "field-uuid": "100"
+     *   fieldCode: "LAND_AREA",
+     *   value: 200
      * }
      *
-     * 2. Nested:
+     * becomes:
      *
      * {
-     *   "service-uuid": {
-     *     "field-uuid": "100"
+     *   [revenueServiceId]: {
+     *     LAND_AREA: 200
      *   }
      * }
-     *
-     * The final API payload is flat.
+     * --------------------------------------------------------------
      */
 
-    const incomingServiceFields =
-      data.service_fields ??
-      data.serviceFieldValues
-
-    if (
-      !incomingServiceFields ||
-      typeof incomingServiceFields !== "object" ||
-      Array.isArray(incomingServiceFields)
-    ) {
-      return
-    }
-
-    const objectValue =
-      incomingServiceFields as Record<
-        string,
-        unknown
-      >
-
-    /*
-     * --------------------------------------------------------
-     * DETECT NESTED STRUCTURE
-     * --------------------------------------------------------
-     */
-
-    const isNestedServiceStructure =
-      Object.values(
-        objectValue,
-      ).some(
-        (value) =>
-          typeof value === "object" &&
-          value !== null &&
-          !Array.isArray(value),
+    const hydratedServiceFields =
+      extractServiceFieldValues(
+        services,
+        revenueServiceId,
+        revenueServices,
       )
 
-    /*
-     * --------------------------------------------------------
-     * NESTED SERVICE STRUCTURE
-     * --------------------------------------------------------
-     */
-
-    if (
-      isNestedServiceStructure
-    ) {
-
-      const normalized:
-        ServiceFieldValues = {}
-
-      for (
-        const [
-          serviceId,
-          rawFields,
-        ] of Object.entries(
-          objectValue,
-        )
-      ) {
-
-        if (
-          !rawFields ||
-          typeof rawFields !== "object" ||
-          Array.isArray(rawFields)
-        ) {
-          continue
-        }
-
-        normalized[serviceId] =
-          normalizeServiceFieldValues(
-            rawFields as Record<
-              string,
-              unknown
-            >,
-          )
-      }
-
-      setServiceFieldValues(
-        normalized,
-      )
+    setServiceFieldValues(
+      hydratedServiceFields,
+    )
 
     /*
-     * --------------------------------------------------------
-     * FLAT SERVICE STRUCTURE
-     * --------------------------------------------------------
+     * Clear old validation errors after
+     * successful API hydration.
      */
-
-    } else if (
-      revenueServiceId
-    ) {
-
-      setServiceFieldValues({
-        [revenueServiceId]:
-          normalizeServiceFieldValues(
-            objectValue,
-          ),
-      })
-    }
+    setValidationErrors({})
 
   }, [
     isEditMode,
     initialData,
+    revenueServices,
   ])
 
   /*
-   * ==========================================================
-   * SELECTED TAXPAYER
-   * ==========================================================
+   *----------------------------------------------------------------------
+   * Selected Taxpayer
+   *----------------------------------------------------------------------
    */
 
-  const selectedTaxpayer = useMemo(() => {
+  const selectedTaxpayer =
+    useMemo<Citizen | null>(
+      () => {
+        if (
+          !agreement.taxpayerId
+        ) {
+          return null
+        }
 
-    if (!agreement.taxpayerId) {
-      return null
-    }
-
-    return (
-      taxpayers.find(
-        (taxpayer) =>
-          taxpayer.id ===
-          agreement.taxpayerId,
-      ) ?? null
+        return (
+          taxpayers.find(
+            (
+              taxpayer,
+            ) =>
+              String(
+                taxpayer.id,
+              ) ===
+              String(
+                agreement.taxpayerId,
+              ),
+          ) ?? null
+        )
+      },
+      [
+        taxpayers,
+        agreement.taxpayerId,
+      ],
     )
 
-  }, [
-    taxpayers,
-    agreement.taxpayerId,
-  ])
-
   /*
-   * ==========================================================
-   * SELECTED REVENUE SERVICE
-   * ==========================================================
+   *----------------------------------------------------------------------
+   * Selected Revenue Service
+   *----------------------------------------------------------------------
    */
 
   const selectedRevenueService =
-    useMemo<RevenueService | null>(() => {
-
-      if (!agreement.revenueServiceId) {
-        return null
-      }
-
-      return (
-        revenueServices.find(
-          (service) =>
-            service.id ===
-            agreement.revenueServiceId,
-        ) ?? null
-      )
-
-    }, [
-      revenueServices,
-      agreement.revenueServiceId,
-    ])
+    useMemo<RevenueService | null>(
+      () => {
+        return findRevenueService(
+          revenueServices,
+          agreement.revenueServiceId,
+        )
+      },
+      [
+        revenueServices,
+        agreement.revenueServiceId,
+      ],
+    )
 
   /*
-   * ==========================================================
-   * REVENUE CODE
-   * ==========================================================
+   *----------------------------------------------------------------------
+   * Revenue Code
+   *----------------------------------------------------------------------
    */
 
   const revenueCode =
-    selectedRevenueService?.code ?? ""
+    (
+      selectedRevenueService as
+        | (
+            RevenueService & {
+              code?: string
+            }
+          )
+        | null
+        | undefined
+    )?.code ??
+    ""
 
   /*
-   * ==========================================================
-   * OUTSTANDING BALANCE
-   * ==========================================================
-   *
-   * Formula:
-   *
-   * Original Obligation
-   *        -
-   * Amount Already Paid
-   *        =
-   * Outstanding Historical Balance
-   *
-   * Example:
-   *
-   * Original Obligation = 10,000
-   * Amount Already Paid = 1,000
-   * Outstanding Balance = 9,000
+   *----------------------------------------------------------------------
+   * Outstanding Balance
+   *----------------------------------------------------------------------
    */
 
-  const outstandingBalance = useMemo(() => {
-
-    const originalObligation =
-      Number(
-        financial.originalObligation,
-      ) || 0
-
-    const amountAlreadyPaid =
-      Number(
-        financial.amountAlreadyPaid,
-      ) || 0
-
-    return Math.max(
-      0,
-      originalObligation -
-        amountAlreadyPaid,
-    )
-
-  }, [
-    financial.originalObligation,
-    financial.amountAlreadyPaid,
-  ])
-
-  /*
-   * ==========================================================
-   * CLEAR AGREEMENT ERROR
-   * ==========================================================
-   */
-
-  function clearAgreementError(
-    field: string,
-  ) {
-
-    setValidationErrors(
-      (previous) => {
-
-        const agreementErrors =
-          previous.agreement
-
-        if (
-          !agreementErrors?.[field]
-        ) {
-          return previous
-        }
-
-        const updatedErrors = {
-          ...agreementErrors,
-        }
-
-        delete updatedErrors[field]
-
-        return {
-          ...previous,
-          agreement:
-            updatedErrors,
-        }
-      },
-    )
-  }
-
-  /*
-   * ==========================================================
-   * CLEAR FINANCIAL ERROR
-   * ==========================================================
-   */
-
-  function clearFinancialError(
-    field: string,
-  ) {
-
-    setValidationErrors(
-      (previous) => {
-
-        const financialErrors =
-          previous.financial
-
-        if (
-          !financialErrors?.[field]
-        ) {
-          return previous
-        }
-
-        const updatedErrors = {
-          ...financialErrors,
-        }
-
-        delete updatedErrors[field]
-
-        return {
-          ...previous,
-          financial:
-            updatedErrors,
-        }
-      },
-    )
-  }
-
-  /*
-   * ==========================================================
-   * UPDATE AGREEMENT
-   * ==========================================================
-   */
-
-  function updateAgreement(
-    field: keyof ExistingAgreementForm,
-    value: string,
-  ) {
-
-    setAgreement(
-      (previous) => ({
-        ...previous,
-        [field]: value,
-      }),
-    )
-
-    clearAgreementError(
-      String(field),
-    )
-  }
-
-  /*
-   * ==========================================================
-   * UPDATE FINANCIAL
-   * ==========================================================
-   */
-
-  function updateFinancial(
-    field: keyof ExistingFinancialPosition,
-    value: string,
-  ) {
-
-    setFinancial(
-      (previous) => ({
-        ...previous,
-        [field]: value,
-      }),
-    )
-
-    clearFinancialError(
-      String(field),
-    )
-  }
-
-  /*
-   * ==========================================================
-   * SELECT TAXPAYER
-   * ==========================================================
-   */
-
-  function selectTaxpayer(
-    taxpayerId: string,
-  ) {
-
-    setAgreement(
-      (previous) => ({
-        ...previous,
-        taxpayerId,
-      }),
-    )
-
-    clearAgreementError(
-      "taxpayerId",
-    )
-  }
-
-  /*
-   * ==========================================================
-   * CLEAR TAXPAYER
-   * ==========================================================
-   */
-
-  function clearTaxpayer() {
-
-    setAgreement(
-      (previous) => ({
-        ...previous,
-        taxpayerId: "",
-      }),
-    )
-
-    clearAgreementError(
-      "taxpayerId",
-    )
-  }
-
-  /*
-   * ==========================================================
-   * SELECT REVENUE SERVICE
-   * ==========================================================
-   */
-
-  function selectRevenueService(
-    revenueServiceId: string,
-  ) {
-
-    setAgreement(
-      (previous) => ({
-        ...previous,
-        revenueServiceId,
-      }),
-    )
-
-    /*
-     * --------------------------------------------------------
-     * NO SERVICE
-     * --------------------------------------------------------
-     */
-
-    if (!revenueServiceId) {
-
-      setServiceFieldValues({})
-
-      setValidationErrors(
-        (previous) => ({
-          ...previous,
-          service: {},
-        }),
-      )
-
-      clearAgreementError(
-        "revenueServiceId",
-      )
-
-      return
-    }
-
-    /*
-     * --------------------------------------------------------
-     * INITIALIZE SERVICE VALUES
-     * --------------------------------------------------------
-     */
-
-    setServiceFieldValues(
-      (previous) => ({
-        ...previous,
-
-        [revenueServiceId]:
-          previous[
-            revenueServiceId
-          ] ?? {},
-      }),
-    )
-
-    /*
-     * --------------------------------------------------------
-     * CLEAR SERVICE ERROR
-     * --------------------------------------------------------
-     */
-
-    setValidationErrors(
-      (previous) => {
-
-        if (
-          !previous.service?.[
-            revenueServiceId
-          ]
-        ) {
-          return previous
-        }
-
-        const serviceErrors = {
-          ...(previous.service ?? {}),
-        }
-
-        delete serviceErrors[
-          revenueServiceId
-        ]
-
-        return {
-          ...previous,
-          service:
-            serviceErrors,
-        }
-      },
-    )
-
-    clearAgreementError(
-      "revenueServiceId",
-    )
-  }
-
-  /*
-   * ==========================================================
-   * SET SERVICE FIELD VALUE
-   * ==========================================================
-   *
-   * IMPORTANT:
-   *
-   * `field` must normally be the service-field UUID.
-   *
-   * Example:
-   *
-   * field =
-   * "01a0a71b-d3e1-7012-818e-df7a5d1e10df"
-   *
-   * NOT:
-   *
-   * "LAND_AREA"
-   */
-
-  function setServiceFieldValue(
-    serviceId: string,
-    field: string,
-    value: ServiceFieldValue,
-  ) {
-
-    setServiceFieldValues(
-      (previous) => ({
-        ...previous,
-
-        [serviceId]: {
-          ...(previous[
-            serviceId
-          ] ?? {}),
-
-          [field]:
-            value,
-        },
-      }),
-    )
-
-    /*
-     * --------------------------------------------------------
-     * CLEAR VALIDATION ERROR
-     * --------------------------------------------------------
-     */
-
-    setValidationErrors(
-      (previous) => {
-
-        const serviceErrors =
-          previous.service?.[
-            serviceId
-          ]
-
-        if (
-          !serviceErrors?.[field]
-        ) {
-          return previous
-        }
-
-        const updatedServiceErrors = {
-          ...serviceErrors,
-        }
-
-        delete updatedServiceErrors[
-          field
-        ]
-
-        return {
-          ...previous,
-
-          service: {
-            ...(previous.service ?? {}),
-
-            [serviceId]:
-              updatedServiceErrors,
-          },
-        }
-      },
-    )
-  }
-
-  /*
-   * ==========================================================
-   * FILE FIELD
-   * ==========================================================
-   *
-   * IMPORTANT:
-   *
-   * The current form state stores the selected file name.
-   *
-   * It does NOT store the actual File object.
-   *
-   * If the backend later requires real file uploads,
-   * introduce separate File state and append the files
-   * directly to FormData.
-   */
-
-  function handleFileChange(
-    serviceId: string,
-    field: string,
-    file: File | null,
-  ) {
-
-    const value:
-      ServiceFieldValue =
-      file
-        ? file.name
-        : ""
-
-    setServiceFieldValue(
-      serviceId,
-      field,
-      value,
-    )
-  }
-
-  /*
-   * ==========================================================
-   * REMOVE FILE
-   * ==========================================================
-   */
-
-  function removeFile(
-    serviceId: string,
-    field: string,
-  ) {
-
-    setServiceFieldValue(
-      serviceId,
-      field,
-      "",
-    )
-  }
-
-  /*
-   * ==========================================================
-   * REMOVE SERVICE
-   * ==========================================================
-   */
-
-  function removeService(
-    serviceId: string,
-  ) {
-
-    /*
-     * --------------------------------------------------------
-     * CLEAR SELECTED SERVICE
-     * --------------------------------------------------------
-     */
-
-    if (
-      agreement.revenueServiceId ===
-      serviceId
-    ) {
-
-      setAgreement(
-        (previous) => ({
-          ...previous,
-          revenueServiceId: "",
-        }),
-      )
-
-      clearAgreementError(
-        "revenueServiceId",
-      )
-    }
-
-    /*
-     * --------------------------------------------------------
-     * REMOVE SERVICE VALUES
-     * --------------------------------------------------------
-     */
-
-    setServiceFieldValues(
-      (previous) => {
-
-        const next = {
-          ...previous,
-        }
-
-        delete next[
-          serviceId
-        ]
-
-        return next
-      },
-    )
-
-    /*
-     * --------------------------------------------------------
-     * REMOVE SERVICE ERRORS
-     * --------------------------------------------------------
-     */
-
-    setValidationErrors(
-      (previous) => {
-
-        const nextServiceErrors = {
-          ...(previous.service ?? {}),
-        }
-
-        delete nextServiceErrors[
-          serviceId
-        ]
-
-        return {
-          ...previous,
-          service:
-            nextServiceErrors,
-        }
-      },
-    )
-  }
-
-  /*
-   * ==========================================================
-   * STEP 1 VALIDATION
-   * ==========================================================
-   */
-
-  function validateAgreementStep():
-    ValidationErrors {
-
-    const agreementErrors:
-      Record<string, string> = {}
-
-    const serviceErrors:
-      Record<string, string> = {}
-
-    /*
-     * --------------------------------------------------------
-     * TAXPAYER
-     * --------------------------------------------------------
-     */
-
-    if (
-      isEmptyServiceValue(
-        agreement.taxpayerId,
-      )
-    ) {
-
-      agreementErrors.taxpayerId =
-        "Please select a taxpayer."
-    }
-
-    /*
-     * --------------------------------------------------------
-     * REVENUE SERVICE
-     * --------------------------------------------------------
-     */
-
-    if (
-      isEmptyServiceValue(
-        agreement.revenueServiceId,
-      )
-    ) {
-
-      agreementErrors.revenueServiceId =
-        "Please select a revenue service."
-    }
-
-    /*
-     * --------------------------------------------------------
-     * DYNAMIC SERVICE FIELDS
-     * --------------------------------------------------------
-     */
-
-    const service =
-      selectedRevenueService
-
-    const serviceId =
-      agreement.revenueServiceId
-
-    if (
-      service &&
-      serviceId
-    ) {
-
-      const values =
-        serviceFieldValues[
-          serviceId
-        ] ?? {}
-
-      /*
-       * ------------------------------------------------------
-       * READ SERVICE FIELD DEFINITIONS
-       * ------------------------------------------------------
-       */
-
-      const fields =
-        (
-          service as RevenueService & {
-            fields?: unknown
-          }
-        ).fields
-
-      /*
-       * ------------------------------------------------------
-       * SAFETY CHECK
-       * ------------------------------------------------------
-       */
-
-      if (
-        Array.isArray(fields)
-      ) {
-
-        for (
-          const rawField of fields
-        ) {
-
-          if (
-            !rawField ||
-            typeof rawField !== "object"
-          ) {
-            continue
-          }
-
-          const field =
-            rawField as Record<
-              string,
-              unknown
-            >
-
-          /*
-           * --------------------------------------------------
-           * REQUIRED FLAG
-           * --------------------------------------------------
-           */
-
-          const required =
-            field.required === true ||
-            field.is_required === true
-
-          if (!required) {
-            continue
-          }
-
-          /*
-           * --------------------------------------------------
-           * FIELD IDENTIFIER
-           * --------------------------------------------------
-           *
-           * UUID first:
-           *
-           * id -> key -> name
-           *
-           * Actual submitted values use the UUID.
-           */
-
-          const fieldId =
-            typeof field.id === "string"
-              ? field.id
-              : undefined
-
-          const fieldKey =
-            fieldId ??
-            (
-              typeof field.key === "string"
-                ? field.key
-                : undefined
-            ) ??
-            (
-              typeof field.name === "string"
-                ? field.name
-                : undefined
-            )
-
-          if (!fieldKey) {
-            continue
-          }
-
-          /*
-           * --------------------------------------------------
-           * FIELD VALUE
-           * --------------------------------------------------
-           */
-
-          const value =
-            values[fieldKey]
-
-          /*
-           * --------------------------------------------------
-           * REQUIRED VALIDATION
-           * --------------------------------------------------
-           *
-           * false is valid.
-           *
-           * 0 is valid.
-           *
-           * "0" is valid.
-           */
-
-          if (
-            isEmptyServiceValue(
-              value,
-            )
-          ) {
-
-            const label =
-              typeof field.label === "string" &&
-              field.label.trim() !== ""
-                ? field.label
-                : fieldKey
-
-            serviceErrors[fieldKey] =
-              `${label} is required.`
-          }
-        }
-      }
-    }
-
-    /*
-     * --------------------------------------------------------
-     * BUILD RESULT
-     * --------------------------------------------------------
-     */
-
-    const result:
-      ValidationErrors = {}
-
-    if (
-      Object.keys(
-        agreementErrors,
-      ).length > 0
-    ) {
-
-      result.agreement =
-        agreementErrors
-    }
-
-    if (
-      serviceId &&
-      Object.keys(
-        serviceErrors,
-      ).length > 0
-    ) {
-
-      result.service = {
-        [serviceId]:
-          serviceErrors,
-      }
-    }
-
-    return result
-  }
-
-  /*
-   * ==========================================================
-   * STEP 2 VALIDATION
-   * ==========================================================
-   *
-   * Required:
-   *
-   * - Original Obligation
-   * - Amount Already Paid
-   *
-   * Business rule:
-   *
-   * Amount Already Paid
-   * cannot exceed
-   * Original Obligation.
-   *
-   * There is intentionally NO balanceAsOfDate.
-   */
-
-  function validateFinancialStep():
-    ValidationErrors {
-
-    const errors:
-      Record<string, string> = {}
-
-    /*
-     * --------------------------------------------------------
-     * ORIGINAL OBLIGATION
-     * --------------------------------------------------------
-     */
-
-    if (
-      isEmptyServiceValue(
-        financial.originalObligation,
-      )
-    ) {
-
-      errors.originalObligation =
-        "Original obligation is required."
-
-    } else {
-
-      const value =
+  const outstandingBalance =
+    useMemo(() => {
+      const original =
         Number(
           financial.originalObligation,
         )
 
-      if (
-        !Number.isFinite(value) ||
-        value < 0
-      ) {
-
-        errors.originalObligation =
-          "Original obligation must be a valid non-negative amount."
-      }
-    }
-
-    /*
-     * --------------------------------------------------------
-     * AMOUNT ALREADY PAID
-     * --------------------------------------------------------
-     */
-
-    if (
-      isEmptyServiceValue(
-        financial.amountAlreadyPaid,
-      )
-    ) {
-
-      errors.amountAlreadyPaid =
-        "Amount already paid is required."
-
-    } else {
-
-      const value =
+      const paid =
         Number(
           financial.amountAlreadyPaid,
         )
 
       if (
-        !Number.isFinite(value) ||
-        value < 0
-      ) {
-
-        errors.amountAlreadyPaid =
-          "Amount already paid must be a valid non-negative amount."
-      }
-    }
-
-    /*
-     * --------------------------------------------------------
-     * PAID CANNOT EXCEED ORIGINAL OBLIGATION
-     * --------------------------------------------------------
-     */
-
-    const originalObligation =
-      Number(
-        financial.originalObligation,
-      )
-
-    const amountAlreadyPaid =
-      Number(
-        financial.amountAlreadyPaid,
-      )
-
-    if (
-      Number.isFinite(
-        originalObligation,
-      ) &&
-      Number.isFinite(
-        amountAlreadyPaid,
-      ) &&
-      originalObligation >= 0 &&
-      amountAlreadyPaid >= 0 &&
-      amountAlreadyPaid >
-        originalObligation
-    ) {
-
-      errors.amountAlreadyPaid =
-        "Amount already paid cannot exceed the original obligation."
-    }
-
-    /*
-     * --------------------------------------------------------
-     * RESULT
-     * --------------------------------------------------------
-     */
-
-    if (
-      Object.keys(errors).length === 0
-    ) {
-      return {}
-    }
-
-    return {
-      financial:
-        errors,
-    }
-  }
-
-  /*
-   * ==========================================================
-   * STEP 3 VALIDATION
-   * ==========================================================
-   *
-   * Step 3 is the review page.
-   *
-   * Actual data has already been validated by Steps 1 and 2.
-   */
-
-  function validateReviewStep():
-    ValidationErrors {
-
-    return {}
-  }
-
-  /*
-   * ==========================================================
-   * GENERIC STEP VALIDATION
-   * ==========================================================
-   */
-
-  function validateStep(
-    step: Step,
-  ): ValidationErrors {
-
-    if (step === 1) {
-      return validateAgreementStep()
-    }
-
-    if (step === 2) {
-      return validateFinancialStep()
-    }
-
-    if (step === 3) {
-      return validateReviewStep()
-    }
-
-    return {}
-  }
-
-  /*
-   * ==========================================================
-   * HAS VALIDATION ERRORS
-   * ==========================================================
-   */
-
-  function hasValidationErrors(
-    errors: ValidationErrors,
-  ): boolean {
-
-    /*
-     * Agreement errors
-     */
-
-    if (
-      errors.agreement &&
-      Object.keys(
-        errors.agreement,
-      ).length > 0
-    ) {
-      return true
-    }
-
-    /*
-     * Financial errors
-     */
-
-    if (
-      errors.financial &&
-      Object.keys(
-        errors.financial,
-      ).length > 0
-    ) {
-      return true
-    }
-
-    /*
-     * Dynamic service-field errors
-     */
-
-    if (
-      errors.service
-    ) {
-
-      for (
-        const serviceErrors of Object.values(
-          errors.service,
+        !Number.isFinite(
+          original,
+        ) ||
+        !Number.isFinite(
+          paid,
         )
       ) {
+        return 0
+      }
+
+      return Math.max(
+        0,
+        original - paid,
+      )
+    }, [
+      financial.originalObligation,
+      financial.amountAlreadyPaid,
+    ])
+
+  /*
+   *----------------------------------------------------------------------
+   * Clear Agreement Error
+   *----------------------------------------------------------------------
+   */
+
+  const clearAgreementError =
+    useCallback(
+      (
+        field: string,
+      ) => {
+        setValidationErrors(
+          (
+            previous,
+          ) => {
+            if (
+              !previous.agreement?.[
+                field
+              ]
+            ) {
+              return previous
+            }
+
+            const agreementErrors =
+              {
+                ...previous.agreement,
+              }
+
+            delete agreementErrors[
+              field
+            ]
+
+            return {
+              ...previous,
+              agreement:
+                Object.keys(
+                  agreementErrors,
+                ).length > 0
+                  ? agreementErrors
+                  : undefined,
+            }
+          },
+        )
+      },
+      [],
+    )
+
+  /*
+   *----------------------------------------------------------------------
+   * Clear Financial Error
+   *----------------------------------------------------------------------
+   */
+
+  const clearFinancialError =
+    useCallback(
+      (
+        field: string,
+      ) => {
+        setValidationErrors(
+          (
+            previous,
+          ) => {
+            if (
+              !previous.financial?.[
+                field
+              ]
+            ) {
+              return previous
+            }
+
+            const financialErrors =
+              {
+                ...previous.financial,
+              }
+
+            delete financialErrors[
+              field
+            ]
+
+            return {
+              ...previous,
+              financial:
+                Object.keys(
+                  financialErrors,
+                ).length > 0
+                  ? financialErrors
+                  : undefined,
+            }
+          },
+        )
+      },
+      [],
+    )
+
+  /*
+   *----------------------------------------------------------------------
+   * Update Agreement
+   *----------------------------------------------------------------------
+   */
+
+  const updateAgreement =
+    useCallback(
+      (
+        field:
+          keyof ExistingAgreementForm,
+        value: string,
+      ) => {
+        setAgreement(
+          (
+            previous,
+          ) => ({
+            ...previous,
+            [field]:
+              value,
+          }),
+        )
+
+        clearAgreementError(
+          String(
+            field,
+          ),
+        )
+      },
+      [
+        clearAgreementError,
+      ],
+    )
+
+  /*
+   *----------------------------------------------------------------------
+   * Update Financial
+   *----------------------------------------------------------------------
+   */
+
+  const updateFinancial =
+    useCallback(
+      (
+        field:
+          keyof ExistingFinancialPosition,
+        value: string,
+      ) => {
+        setFinancial(
+          (
+            previous,
+          ) => ({
+            ...previous,
+            [field]:
+              value,
+          }),
+        )
+
+        clearFinancialError(
+          String(
+            field,
+          ),
+        )
+      },
+      [
+        clearFinancialError,
+      ],
+    )
+
+  /*
+   *----------------------------------------------------------------------
+   * Select Taxpayer
+   *----------------------------------------------------------------------
+   */
+
+  const selectTaxpayer =
+    useCallback(
+      (
+        taxpayerId: string,
+      ) => {
+        setAgreement(
+          (
+            previous,
+          ) => ({
+            ...previous,
+            taxpayerId,
+          }),
+        )
+
+        clearAgreementError(
+          "taxpayerId",
+        )
+      },
+      [
+        clearAgreementError,
+      ],
+    )
+
+  /*
+   *----------------------------------------------------------------------
+   * Clear Taxpayer
+   *----------------------------------------------------------------------
+   */
+
+  const clearTaxpayer =
+    useCallback(
+      () => {
+        setAgreement(
+          (
+            previous,
+          ) => ({
+            ...previous,
+            taxpayerId: "",
+          }),
+        )
+
+        clearAgreementError(
+          "taxpayerId",
+        )
+      },
+      [
+        clearAgreementError,
+      ],
+    )
+
+  /*
+   *----------------------------------------------------------------------
+   * Select Revenue Service
+   *----------------------------------------------------------------------
+   */
+
+  const selectRevenueService =
+    useCallback(
+      (
+        revenueServiceId: string,
+      ) => {
+        setAgreement(
+          (
+            previous,
+          ) => ({
+            ...previous,
+            revenueServiceId,
+          }),
+        )
 
         if (
+          !revenueServiceId
+        ) {
+          setServiceFieldValues(
+            {},
+          )
+
+          setValidationErrors(
+            (
+              previous,
+            ) => ({
+              ...previous,
+              service:
+                undefined,
+            }),
+          )
+
+          clearAgreementError(
+            "revenueServiceId",
+          )
+
+          return
+        }
+
+        /*
+         * Preserve existing hydrated values
+         * when switching back to a service.
+         */
+        setServiceFieldValues(
+          (
+            previous,
+          ) => ({
+            ...previous,
+
+            [revenueServiceId]:
+              previous[
+                revenueServiceId
+              ] ?? {},
+          }),
+        )
+
+        /*
+         * Clear selected service errors.
+         */
+        setValidationErrors(
+          (
+            previous,
+          ) => {
+            const currentErrors =
+              previous.service?.[
+                revenueServiceId
+              ]
+
+            if (
+              !currentErrors
+            ) {
+              return previous
+            }
+
+            const serviceErrors =
+              {
+                ...(
+                  previous.service ??
+                  {}
+                ),
+              }
+
+            delete serviceErrors[
+              revenueServiceId
+            ]
+
+            return {
+              ...previous,
+              service:
+                Object.keys(
+                  serviceErrors,
+                ).length > 0
+                  ? serviceErrors
+                  : undefined,
+            }
+          },
+        )
+
+        clearAgreementError(
+          "revenueServiceId",
+        )
+      },
+      [
+        clearAgreementError,
+      ],
+    )
+
+  /*
+   *----------------------------------------------------------------------
+   * Set Service Field Value
+   *----------------------------------------------------------------------
+   */
+
+  const setServiceFieldValue =
+    useCallback(
+      (
+        serviceId: string,
+        field: string,
+        value: ServiceFieldValue,
+      ) => {
+        setServiceFieldValues(
+          (
+            previous,
+          ) => ({
+            ...previous,
+
+            [serviceId]: {
+              ...(previous[
+                serviceId
+              ] ?? {}),
+
+              [field]:
+                value,
+            },
+          }),
+        )
+
+        setValidationErrors(
+          (
+            previous,
+          ) => {
+            const serviceErrors =
+              previous.service?.[
+                serviceId
+              ]
+
+            if (
+              !serviceErrors?.[
+                field
+              ]
+            ) {
+              return previous
+            }
+
+            const updatedErrors =
+              {
+                ...serviceErrors,
+              }
+
+            delete updatedErrors[
+              field
+            ]
+
+            const nextServiceErrors =
+              {
+                ...(previous.service ??
+                  {}),
+                [serviceId]:
+                  updatedErrors,
+              }
+
+            return {
+              ...previous,
+              service:
+                Object.keys(
+                  updatedErrors,
+                ).length > 0
+                  ? nextServiceErrors
+                  : (() => {
+                      const copy =
+                        {
+                          ...(previous.service ??
+                            {}),
+                        }
+
+                      delete copy[
+                        serviceId
+                      ]
+
+                      return Object.keys(
+                        copy,
+                      ).length > 0
+                        ? copy
+                        : undefined
+                    })(),
+            }
+          },
+        )
+      },
+      [],
+    )
+
+  /*
+   *----------------------------------------------------------------------
+   * File Change
+   *----------------------------------------------------------------------
+   */
+
+  const handleFileChange =
+    useCallback(
+      (
+        serviceId: string,
+        field: string,
+        file: File | null,
+      ) => {
+        /*
+         * Dynamic service values currently contain
+         * primitive values.
+         *
+         * Binary upload handling should remain
+         * separate from service_fields.
+         */
+        setServiceFieldValue(
+          serviceId,
+          field,
+          file?.name ?? "",
+        )
+      },
+      [
+        setServiceFieldValue,
+      ],
+    )
+
+  /*
+   *----------------------------------------------------------------------
+   * Remove File
+   *----------------------------------------------------------------------
+   */
+
+  const removeFile =
+    useCallback(
+      (
+        serviceId: string,
+        field: string,
+      ) => {
+        setServiceFieldValue(
+          serviceId,
+          field,
+          "",
+        )
+      },
+      [
+        setServiceFieldValue,
+      ],
+    )
+
+  /*
+   *----------------------------------------------------------------------
+   * Remove Service
+   *----------------------------------------------------------------------
+   */
+
+  const removeService =
+    useCallback(
+      (
+        serviceId: string,
+      ) => {
+        setServiceFieldValues(
+          (
+            previous,
+          ) => {
+            const next = {
+              ...previous,
+            }
+
+            delete next[
+              serviceId
+            ]
+
+            return next
+          },
+        )
+
+        setValidationErrors(
+          (
+            previous,
+          ) => {
+            if (
+              !previous.service?.[
+                serviceId
+              ]
+            ) {
+              return previous
+            }
+
+            const serviceErrors =
+              {
+                ...(previous.service ??
+                  {}),
+              }
+
+            delete serviceErrors[
+              serviceId
+            ]
+
+            return {
+              ...previous,
+              service:
+                Object.keys(
+                  serviceErrors,
+                ).length > 0
+                  ? serviceErrors
+                  : undefined,
+            }
+          },
+        )
+
+        if (
+          agreement.revenueServiceId ===
+          serviceId
+        ) {
+          setAgreement(
+            (
+              previous,
+            ) => ({
+              ...previous,
+              revenueServiceId:
+                "",
+            }),
+          )
+
+          clearAgreementError(
+            "revenueServiceId",
+          )
+        }
+      },
+      [
+        agreement.revenueServiceId,
+        clearAgreementError,
+      ],
+    )
+
+  /*
+   *----------------------------------------------------------------------
+   * Validate Agreement Step
+   *----------------------------------------------------------------------
+   */
+
+  const validateAgreementStep =
+    useCallback(
+      (): ValidationErrors => {
+        const agreementErrors:
+          Record<
+            string,
+            string
+          > = {}
+
+        const serviceErrors:
+          Record<
+            string,
+            string
+          > = {}
+
+        /*
+         * Taxpayer
+         */
+        if (
+          isEmptyValue(
+            agreement.taxpayerId,
+          )
+        ) {
+          agreementErrors.taxpayerId =
+            "Please select a taxpayer."
+        }
+
+        /*
+         * Revenue service
+         */
+        if (
+          isEmptyValue(
+            agreement.revenueServiceId,
+          )
+        ) {
+          agreementErrors.revenueServiceId =
+            "Please select a revenue service."
+        }
+
+        /*
+         * Dynamic service fields
+         */
+        const service =
+          selectedRevenueService
+
+        const serviceId =
+          agreement.revenueServiceId
+
+        if (
+          service &&
+          serviceId
+        ) {
+          const values =
+            serviceFieldValues[
+              serviceId
+            ] ?? {}
+
+          const fields =
+            getRevenueServiceFields(
+              service,
+            )
+
+          for (
+            const field of fields
+          ) {
+            const required =
+              field.required === true ||
+              field.is_required === true
+
+            if (
+              !required
+            ) {
+              continue
+            }
+
+            /*
+             * Use exactly the same canonical
+             * field key used by hydration.
+             */
+            const fieldKey =
+              getFrontendFieldKey(
+                field,
+              )
+
+            if (
+              !fieldKey
+            ) {
+              continue
+            }
+
+            const value =
+              values[
+                fieldKey
+              ]
+
+            if (
+              isEmptyValue(
+                value,
+              )
+            ) {
+              const label =
+                firstValue(
+                  field,
+                  [
+                    "label",
+                    "name",
+                    "key",
+                    "code",
+                    "fieldCode",
+                  ],
+                )
+
+              serviceErrors[
+                fieldKey
+              ] =
+                `${toStringValue(
+                  label ||
+                    fieldKey,
+                )} is required.`
+            }
+          }
+        }
+
+        const result:
+          ValidationErrors = {}
+
+        if (
+          Object.keys(
+            agreementErrors,
+          ).length > 0
+        ) {
+          result.agreement =
+            agreementErrors
+        }
+
+        if (
+          serviceId &&
           Object.keys(
             serviceErrors,
           ).length > 0
         ) {
+          result.service = {
+            [serviceId]:
+              serviceErrors,
+          }
+        }
+
+        return result
+      },
+      [
+        agreement.taxpayerId,
+        agreement.revenueServiceId,
+        selectedRevenueService,
+        serviceFieldValues,
+      ],
+    )
+
+  /*
+   *----------------------------------------------------------------------
+   * Validate Financial Step
+   *----------------------------------------------------------------------
+   */
+
+  const validateFinancialStep =
+    useCallback(
+      (): ValidationErrors => {
+        const errors:
+          Record<
+            string,
+            string
+          > = {}
+
+        /*
+         * Original obligation
+         */
+        if (
+          isEmptyValue(
+            financial.originalObligation,
+          )
+        ) {
+          errors.originalObligation =
+            "Original obligation is required."
+        } else {
+          const value =
+            Number(
+              financial.originalObligation,
+            )
+
+          if (
+            !Number.isFinite(
+              value,
+            ) ||
+            value < 0
+          ) {
+            errors.originalObligation =
+              "Original obligation must be a valid non-negative amount."
+          }
+        }
+
+        /*
+         * Amount already paid
+         */
+        if (
+          isEmptyValue(
+            financial.amountAlreadyPaid,
+          )
+        ) {
+          errors.amountAlreadyPaid =
+            "Amount already paid is required."
+        } else {
+          const value =
+            Number(
+              financial.amountAlreadyPaid,
+            )
+
+          if (
+            !Number.isFinite(
+              value,
+            ) ||
+            value < 0
+          ) {
+            errors.amountAlreadyPaid =
+              "Amount already paid must be a valid non-negative amount."
+          }
+        }
+
+        /*
+         * Balance date
+         */
+        if (
+          isEmptyValue(
+            financial.balanceAsOfDate,
+          )
+        ) {
+          errors.balanceAsOfDate =
+            "Balance as of date is required."
+        }
+
+        /*
+         * paid <= original
+         */
+        const original =
+          Number(
+            financial.originalObligation,
+          )
+
+        const paid =
+          Number(
+            financial.amountAlreadyPaid,
+          )
+
+        if (
+          Number.isFinite(
+            original,
+          ) &&
+          Number.isFinite(
+            paid,
+          ) &&
+          original >= 0 &&
+          paid >= 0 &&
+          paid > original
+        ) {
+          errors.amountAlreadyPaid =
+            "Amount already paid cannot exceed the original obligation."
+        }
+
+        if (
+          Object.keys(
+            errors,
+          ).length === 0
+        ) {
+          return {}
+        }
+
+        return {
+          financial:
+            errors,
+        }
+      },
+      [
+        financial.originalObligation,
+        financial.amountAlreadyPaid,
+        financial.balanceAsOfDate,
+      ],
+    )
+
+  /*
+   *----------------------------------------------------------------------
+   * Validate Review
+   *----------------------------------------------------------------------
+   */
+
+  const validateReviewStep =
+    useCallback(
+      (): ValidationErrors => {
+        return {}
+      },
+      [],
+    )
+
+  /*
+   *----------------------------------------------------------------------
+   * Validate Step
+   *----------------------------------------------------------------------
+   */
+
+  const validateStep =
+    useCallback(
+      (
+        step: Step,
+      ): ValidationErrors => {
+        switch (
+          step
+        ) {
+          case 1:
+            return validateAgreementStep()
+
+          case 2:
+            return validateFinancialStep()
+
+          case 3:
+            return validateReviewStep()
+
+          default:
+            return {}
+        }
+      },
+      [
+        validateAgreementStep,
+        validateFinancialStep,
+        validateReviewStep,
+      ],
+    )
+
+  /*
+   *----------------------------------------------------------------------
+   * Has Validation Errors
+   *----------------------------------------------------------------------
+   */
+
+  const hasValidationErrors =
+    useCallback(
+      (
+        errors: ValidationErrors,
+      ): boolean => {
+        if (
+          errors.agreement &&
+          Object.keys(
+            errors.agreement,
+          ).length > 0
+        ) {
           return true
         }
-      }
-    }
 
-    return false
-  }
-
-  /*
-   * ==========================================================
-   * VALIDATE ALL
-   * ==========================================================
-   *
-   * This is the only validation function the final
-   * registration action needs to call.
-   *
-   * IMPORTANT:
-   *
-   * This function does NOT call the API.
-   *
-   * It only:
-   *
-   * 1. validates Step 1
-   * 2. validates Step 2
-   * 3. stores validation errors
-   * 4. moves to the first invalid step
-   *
-   * API mutations belong to:
-   *
-   * hooks/revenue/existing-lizz.hook.ts
-   */
-
-  function validateAll(): boolean {
-
-    /*
-     * --------------------------------------------------------
-     * STEP 1
-     * --------------------------------------------------------
-     */
-
-    const step1Errors =
-      validateAgreementStep()
-
-    if (
-      hasValidationErrors(
-        step1Errors,
-      )
-    ) {
-
-      setValidationErrors(
-        step1Errors,
-      )
-
-      setCurrentStep(1)
-
-      return false
-    }
-
-    /*
-     * --------------------------------------------------------
-     * STEP 2
-     * --------------------------------------------------------
-     */
-
-    const step2Errors =
-      validateFinancialStep()
-
-    if (
-      hasValidationErrors(
-        step2Errors,
-      )
-    ) {
-
-      setValidationErrors(
-        step2Errors,
-      )
-
-      setCurrentStep(2)
-
-      return false
-    }
-
-    /*
-     * --------------------------------------------------------
-     * ALL VALID
-     * --------------------------------------------------------
-     */
-
-    setValidationErrors({})
-
-    return true
-  }
-
-  /*
-   * ==========================================================
-   * NEXT STEP
-   * ==========================================================
-   */
-
-  function nextStep() {
-
-    const errors =
-      validateStep(
-        currentStep,
-      )
-
-    if (
-      hasValidationErrors(
-        errors,
-      )
-    ) {
-
-      setValidationErrors(
-        errors,
-      )
-
-      return
-    }
-
-    setValidationErrors({})
-
-    setCurrentStep(
-      (previous) => {
-
-        if (previous === 1) {
-          return 2
+        if (
+          errors.financial &&
+          Object.keys(
+            errors.financial,
+          ).length > 0
+        ) {
+          return true
         }
 
-        if (previous === 2) {
-          return 3
+        if (
+          errors.service
+        ) {
+          return Object.values(
+            errors.service,
+          ).some(
+            (
+              serviceErrors,
+            ) =>
+              Object.keys(
+                serviceErrors,
+              ).length > 0,
+          )
         }
 
-        return previous
+        return false
       },
+      [],
     )
-  }
 
   /*
-   * ==========================================================
-   * PREVIOUS STEP
-   * ==========================================================
+   *----------------------------------------------------------------------
+   * Validate All
+   *----------------------------------------------------------------------
    */
 
-  function previousStep() {
+  const validateAll =
+    useCallback(
+      (): boolean => {
+        const agreementErrors =
+          validateAgreementStep()
 
-    setValidationErrors({})
+        if (
+          hasValidationErrors(
+            agreementErrors,
+          )
+        ) {
+          setValidationErrors(
+            agreementErrors,
+          )
 
-    setCurrentStep(
-      (previous) => {
+          setCurrentStep(
+            1,
+          )
 
-        if (previous === 3) {
-          return 2
+          return false
         }
 
-        if (previous === 2) {
-          return 1
+        const financialErrors =
+          validateFinancialStep()
+
+        if (
+          hasValidationErrors(
+            financialErrors,
+          )
+        ) {
+          setValidationErrors(
+            financialErrors,
+          )
+
+          setCurrentStep(
+            2,
+          )
+
+          return false
         }
 
-        return previous
-      },
-    )
-  }
+        const reviewErrors =
+          validateReviewStep()
 
-  /*
-   * ==========================================================
-   * GO TO STEP
-   * ==========================================================
-   *
-   * Backward navigation is always allowed.
-   *
-   * Forward navigation validates each intermediate step.
-   */
+        if (
+          hasValidationErrors(
+            reviewErrors,
+          )
+        ) {
+          setValidationErrors(
+            reviewErrors,
+          )
 
-  function goToStep(
-    targetStep: Step,
-  ) {
+          setCurrentStep(
+            3,
+          )
 
-    /*
-     * --------------------------------------------------------
-     * SAME STEP
-     * --------------------------------------------------------
-     */
-
-    if (
-      targetStep === currentStep
-    ) {
-      return
-    }
-
-    /*
-     * --------------------------------------------------------
-     * BACKWARD
-     * --------------------------------------------------------
-     */
-
-    if (
-      targetStep < currentStep
-    ) {
-
-      setValidationErrors({})
-
-      setCurrentStep(
-        targetStep,
-      )
-
-      return
-    }
-
-    /*
-     * --------------------------------------------------------
-     * FORWARD
-     * --------------------------------------------------------
-     */
-
-    for (
-      let step =
-        currentStep;
-      step < targetStep;
-      step++
-    ) {
-
-      const errors =
-        validateStep(
-          step as Step,
-        )
-
-      if (
-        hasValidationErrors(
-          errors,
-        )
-      ) {
+          return false
+        }
 
         setValidationErrors(
-          errors,
+          {},
+        )
+
+        return true
+      },
+      [
+        validateAgreementStep,
+        validateFinancialStep,
+        validateReviewStep,
+        hasValidationErrors,
+      ],
+    )
+
+  /*
+   *----------------------------------------------------------------------
+   * Next Step
+   *----------------------------------------------------------------------
+   */
+
+  const nextStep =
+    useCallback(
+      () => {
+        const errors =
+          validateStep(
+            currentStep,
+          )
+
+        if (
+          hasValidationErrors(
+            errors,
+          )
+        ) {
+          setValidationErrors(
+            errors,
+          )
+
+          return
+        }
+
+        setValidationErrors(
+          {},
         )
 
         setCurrentStep(
-          step as Step,
+          (
+            previous,
+          ) => {
+            if (
+              previous ===
+              1
+            ) {
+              return 2
+            }
+
+            if (
+              previous ===
+              2
+            ) {
+              return 3
+            }
+
+            return previous
+          },
+        )
+      },
+      [
+        currentStep,
+        validateStep,
+        hasValidationErrors,
+      ],
+    )
+
+  /*
+   *----------------------------------------------------------------------
+   * Previous Step
+   *----------------------------------------------------------------------
+   */
+
+  const previousStep =
+    useCallback(
+      () => {
+        setValidationErrors(
+          {},
         )
 
-        return
-      }
-    }
+        setCurrentStep(
+          (
+            previous,
+          ) => {
+            if (
+              previous ===
+              3
+            ) {
+              return 2
+            }
 
-    /*
-     * All intermediate steps are valid.
-     */
+            if (
+              previous ===
+              2
+            ) {
+              return 1
+            }
 
-    setValidationErrors({})
-
-    setCurrentStep(
-      targetStep,
+            return previous
+          },
+        )
+      },
+      [],
     )
-  }
 
   /*
-   * ==========================================================
-   * BUILD PAYLOAD
-   * ==========================================================
-   *
-   * Creates the plain JavaScript representation.
-   *
-   * IMPORTANT:
-   *
-   * The internal serviceFieldValues structure is:
-   *
-   * {
-   *   serviceId: {
-   *     fieldId: value
-   *   }
-   * }
-   *
-   * The API payload is FLAT:
-   *
-   * {
-   *   service_fields: {
-   *     fieldId: value
-   *   }
-   * }
-   *
-   * This matches the confirmed Existing LIZZ payload.
-   *
-   * There is intentionally:
-   *
-   * - no balance_as_of_date
-   * - no outstanding_balance
+   *----------------------------------------------------------------------
+   * Go To Step
+   *----------------------------------------------------------------------
    */
 
-  function buildPayload() {
+  const goToStep =
+    useCallback(
+      (
+        targetStep: Step,
+      ) => {
+        if (
+          targetStep ===
+          currentStep
+        ) {
+          return
+        }
 
-    const serviceId =
-      agreement.revenueServiceId
+        /*
+         * Backward navigation.
+         */
+        if (
+          targetStep <
+          currentStep
+        ) {
+          setValidationErrors(
+            {},
+          )
 
-    return {
-      taxpayer_id:
-        agreement.taxpayerId,
+          setCurrentStep(
+            targetStep,
+          )
 
-      revenue_service_id:
-        serviceId,
+          return
+        }
 
-      service_fields:
-        serviceId
-          ? serviceFieldValues[
-              serviceId
-            ] ?? {}
-          : {},
+        /*
+         * Forward navigation.
+         */
+        for (
+          let step =
+            currentStep;
+          step <
+            targetStep;
+          step++
+        ) {
+          const stepNumber =
+            step as Step
 
-      source:
-        agreement.source,
+          const errors =
+            validateStep(
+              stepNumber,
+            )
 
-      notes:
-        agreement.notes,
+          if (
+            hasValidationErrors(
+              errors,
+            )
+          ) {
+            setValidationErrors(
+              errors,
+            )
 
-      original_obligation:
-        financial.originalObligation,
+            setCurrentStep(
+              stepNumber,
+            )
 
-      amount_already_paid:
-        financial.amountAlreadyPaid,
-    }
-  }
+            return
+          }
+        }
+
+        setValidationErrors(
+          {},
+        )
+
+        setCurrentStep(
+          targetStep,
+        )
+      },
+      [
+        currentStep,
+        validateStep,
+        hasValidationErrors,
+      ],
+    )
 
   /*
-   * ==========================================================
-   * BUILD FORM DATA
-   * ==========================================================
-   *
-   * Existing LIZZ uses FormData.
-   *
-   * Current service_fields are serialized as JSON inside
-   * the multipart request:
-   *
-   * service_fields = JSON.stringify({...})
-   *
-   * The backend therefore needs to decode this field as JSON.
-   *
-   * Actual File objects are NOT uploaded here because the
-   * current state stores only the selected filename.
+   *----------------------------------------------------------------------
+   * Build Payload
+   *----------------------------------------------------------------------
+   |
+   | IMPORTANT:
+   |
+   | serviceFieldValues uses frontend field keys:
+   |
+   | {
+   |   LAND_AREA: 2000,
+   |   SADARKA_LAFAA: "1FFAA"
+   | }
+   |
+   | Laravel expects RevenueServiceField UUIDs:
+   |
+   | {
+   |   "01a0a71b-...": 2000,
+   |   "01a0a71b-...": "1FFAA"
+   | }
+   |
+   | Convert here, at the API boundary.
+   |
    */
 
-  function buildFormData(): FormData {
+  const buildPayload =
+    useCallback(
+      () => {
+        const serviceId =
+          agreement.revenueServiceId
 
-    const payload =
-      buildPayload()
+        /*
+         * Find the actual RevenueService definition
+         * so we can resolve:
+         *
+         * frontend field.key → backend field.id
+         */
+        const selectedService =
+          findRevenueService(
+            revenueServices,
+            serviceId,
+          )
 
-    const formData =
-      new FormData()
+        /*
+         * Current frontend field values.
+         *
+         * Example:
+         *
+         * {
+         *   LAND_AREA: 2000,
+         *   SADARKA_LAFAA: "1FFAA"
+         * }
+         */
+        const frontendServiceFields =
+          serviceId
+            ? serviceFieldValues[
+                serviceId
+              ] ?? {}
+            : {}
 
-    formData.append(
-      "taxpayer_id",
-      payload.taxpayer_id,
+        /*
+         * Convert frontend business keys into
+         * RevenueServiceField UUIDs expected by Laravel.
+         */
+        const backendServiceFields =
+          buildBackendServiceFields(
+            selectedService,
+            frontendServiceFields,
+          )
+
+        return {
+          taxpayer_id:
+            agreement.taxpayerId,
+
+          revenue_service_id:
+            serviceId,
+
+          service_fields:
+            backendServiceFields,
+
+          source:
+            agreement.source,
+
+          notes:
+            agreement.notes,
+
+          original_obligation:
+            financial.originalObligation,
+
+          amount_already_paid:
+            financial.amountAlreadyPaid,
+
+          balance_as_of_date:
+            financial.balanceAsOfDate,
+        }
+      },
+      [
+        agreement,
+        financial,
+        revenueServices,
+        serviceFieldValues,
+      ],
     )
-
-    formData.append(
-      "revenue_service_id",
-      payload.revenue_service_id,
-    )
-
-    formData.append(
-      "service_fields",
-      JSON.stringify(
-        payload.service_fields,
-      ),
-    )
-
-    formData.append(
-      "source",
-      payload.source,
-    )
-
-    formData.append(
-      "notes",
-      payload.notes,
-    )
-
-    formData.append(
-      "original_obligation",
-      payload.original_obligation,
-    )
-
-    formData.append(
-      "amount_already_paid",
-      payload.amount_already_paid,
-    )
-
-    return formData
-  }
 
   /*
-   * ==========================================================
-   * RESET FORM
-   * ==========================================================
+   *----------------------------------------------------------------------
+   * Build FormData
+   *----------------------------------------------------------------------
    */
 
-  function resetForm() {
+  const buildFormData =
+    useCallback(
+      (): FormData => {
+        const payload =
+          buildPayload()
 
-    setCurrentStep(1)
+        const formData =
+          new FormData()
 
-    setAgreement({
-      ...initialAgreement,
-    })
+        formData.append(
+          "taxpayer_id",
+          payload.taxpayer_id,
+        )
 
-    setFinancial({
-      ...initialFinancial,
-    })
+        formData.append(
+          "revenue_service_id",
+          payload.revenue_service_id,
+        )
 
-    setServiceFieldValues({})
+        formData.append(
+          "service_fields",
+          JSON.stringify(
+            payload.service_fields,
+          ),
+        )
 
-    setValidationErrors({})
-  }
+        formData.append(
+          "source",
+          payload.source,
+        )
+
+        formData.append(
+          "notes",
+          payload.notes,
+        )
+
+        formData.append(
+          "original_obligation",
+          payload.original_obligation,
+        )
+
+        formData.append(
+          "amount_already_paid",
+          payload.amount_already_paid,
+        )
+
+        formData.append(
+          "balance_as_of_date",
+          payload.balance_as_of_date,
+        )
+
+        return formData
+      },
+      [
+        buildPayload,
+      ],
+    )
 
   /*
-   * ==========================================================
-   * RETURN
-   * ==========================================================
-   *
-   * IMPORTANT:
-   *
-   * There is intentionally NO:
-   *
-   * - registered
-   * - handleRegister
-   *
-   * API mutations belong to:
-   *
-   * hooks/revenue/existing-lizz.hook.ts
+   *----------------------------------------------------------------------
+   * Reset
+   *----------------------------------------------------------------------
+   */
+
+  const resetForm =
+    useCallback(
+      () => {
+        setCurrentStep(
+          1,
+        )
+
+        setAgreement({
+          ...INITIAL_AGREEMENT,
+        })
+
+        setFinancial({
+          ...INITIAL_FINANCIAL,
+        })
+
+        setServiceFieldValues(
+          {},
+        )
+
+        setValidationErrors(
+          {},
+        )
+      },
+      [],
+    )
+
+  /*
+   *----------------------------------------------------------------------
+   * Return API
+   *----------------------------------------------------------------------
    */
 
   return {
-
     /*
-     * --------------------------------------------------------
-     * MODE
-     * --------------------------------------------------------
+     * Mode
      */
-
     isEditMode,
-
     assessmentId,
 
     /*
-     * --------------------------------------------------------
-     * WORKFLOW
-     * --------------------------------------------------------
+     * Workflow
      */
-
     currentStep,
-
     nextStep,
-
     previousStep,
-
     goToStep,
 
     /*
-     * --------------------------------------------------------
-     * VALIDATION
-     * --------------------------------------------------------
+     * Validation
      */
-
     validationErrors,
-
     validateStep,
-
     validateAll,
 
     /*
-     * --------------------------------------------------------
-     * PAYLOAD
-     * --------------------------------------------------------
+     * Payload
      */
-
     buildPayload,
-
     buildFormData,
 
     /*
-     * --------------------------------------------------------
-     * RESET
-     * --------------------------------------------------------
+     * Reset
      */
-
     resetForm,
 
     /*
-     * --------------------------------------------------------
-     * AGREEMENT
-     * --------------------------------------------------------
+     * Agreement
      */
-
     agreement,
-
     updateAgreement,
 
     /*
-     * --------------------------------------------------------
-     * FINANCIAL
-     * --------------------------------------------------------
+     * Financial
      */
-
     financial,
-
     updateFinancial,
 
     /*
-     * --------------------------------------------------------
-     * TAXPAYER
-     * --------------------------------------------------------
+     * Taxpayer
      */
-
     taxpayers,
-
     selectedTaxpayer,
-
     selectTaxpayer,
-
     clearTaxpayer,
 
     /*
-     * --------------------------------------------------------
-     * REVENUE SERVICE
-     * --------------------------------------------------------
+     * Revenue service
      */
-
     revenueServices,
-
     selectedRevenueService,
-
     revenueCode,
-
     selectRevenueService,
 
     /*
-     * --------------------------------------------------------
-     * DYNAMIC SERVICE FIELDS
-     * --------------------------------------------------------
+     * Dynamic service fields
      */
-
     serviceFieldValues,
-
     setServiceFieldValue,
-
     handleFileChange,
-
     removeFile,
-
     removeService,
 
     /*
-     * --------------------------------------------------------
-     * FINANCIAL CALCULATION
-     * --------------------------------------------------------
+     * Financial calculation for display only.
+     *
+     * Backend remains authoritative.
      */
-
     outstandingBalance,
   }
 }

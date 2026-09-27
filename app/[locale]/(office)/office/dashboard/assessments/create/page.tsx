@@ -1,62 +1,41 @@
 "use client";
 
-import {
-  useMemo,
-} from "react";
+import { useMemo } from "react";
 
 import {
   ArrowLeft,
   ClipboardList,
 } from "lucide-react";
 
-import {
-  Banner,
-} from "@/components/banner/topBanner";
+import { Banner } from "@/components/banner/topBanner";
 
-import {
-  IconBadge,
-} from "@/components/commen/icon-badge";
+import { IconBadge } from "@/components/commen/icon-badge";
 
-import {
-  Button,
-} from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 
-import {
-  FloatingParticles,
-} from "@/components/design/FloatingParticles";
+import { FloatingParticles } from "@/components/design/FloatingParticles";
 
-import {
+import type {
   RevenueField,
   RevenueService,
   SubmissionResult,
 } from "@/types/revenue/assessment";
 
-import {
+import type {
   RevenueService as ApiRevenueService,
   RevenueServiceField as ApiRevenueServiceField,
 } from "@/types/revenue/revenu-service";
 
-import {
-  useCitizens,
-} from "@/hooks/useCitizen.hook";
+import { useCitizens } from "@/hooks/useCitizen.hook";
 
-import {
-  useRevenueServices,
-} from "@/hooks/revenue/revenueService.hook";
+import { useRevenueServices } from "@/hooks/revenue/revenueService.hook";
 
 import {
   useSaveAssessmentDraft,
   useSubmitAssessment,
 } from "@/hooks/revenue/assessment.hook";
+import { AssessmentForm } from "@/components/revenue/assessment/assessment-form";
 
-import {
-  AssessmentForm,
-} from "@/components/revenue/assessment/assessment-form";
-
-
-// =====================================================
-// HELPERS
-// =====================================================
 
 /**
  * Safely convert an unknown value to a string.
@@ -64,7 +43,6 @@ import {
 const asString = (
   value: unknown,
 ): string => {
-
   if (
     value === undefined ||
     value === null
@@ -75,37 +53,26 @@ const asString = (
   return String(value);
 };
 
-
-// =====================================================
-// NORMALIZE FIELD TYPE
-// =====================================================
-
 /**
- * Convert the API/BaseField data type into the
+ * Normalize the API field type into the
  * RevenueField type expected by AssessmentForm.
  *
- * IMPORTANT:
+ * This function only controls field/input behavior.
  *
- * This function only controls input/presentation
- * behavior.
- *
- * It NEVER:
- *
- * - calculates money
- * - calculates tariffs
- * - calculates totals
- * - resolves pricing
+ * It does NOT:
+ * - calculate money
+ * - calculate tariffs
+ * - calculate totals
+ * - resolve pricing
  */
 const normalizeFieldType = (
   field: ApiRevenueServiceField,
 ): RevenueField["type"] => {
-
   const baseField =
     field.baseField as
       | Record<string, unknown>
       | null
       | undefined;
-
 
   const rawType =
     baseField?.dataType ??
@@ -115,7 +82,6 @@ const normalizeFieldType = (
     baseField?.field_type ??
     "TEXT";
 
-
   const normalized =
     String(rawType)
       .toUpperCase()
@@ -124,9 +90,7 @@ const normalizeFieldType = (
         "_",
       );
 
-
   switch (normalized) {
-
     case "NUMBER":
     case "INTEGER":
     case "INT":
@@ -171,34 +135,23 @@ const normalizeFieldType = (
   }
 };
 
-
-// =====================================================
-// MAP REVENUE SERVICE FIELD
-// =====================================================
-
 /**
- * Converts the real API RevenueServiceField into
- * the RevenueField structure expected by AssessmentForm.
+ * Convert an API RevenueServiceField into the
+ * RevenueField structure used by AssessmentForm.
  */
 const mapRevenueServiceField = (
   field: ApiRevenueServiceField,
 ): RevenueField => {
-
   const baseField =
     field.baseField as
       | {
           id?: string;
-
           code?: string;
-
           name?: string;
-
           description?: string;
 
           dataType?: string;
-
           data_type?: string;
-
           type?: string;
 
           options?: unknown;
@@ -220,72 +173,35 @@ const mapRevenueServiceField = (
       | null
       | undefined;
 
-
-  // ===================================================
-  // VALIDATION RULES
-  // ===================================================
-
   const validationRules =
-    field.validationRules ??
-    {};
-
-
-  // ===================================================
-  // FIELD TYPE
-  // ===================================================
+    field.validationRules ?? {};
 
   const fieldType =
-    normalizeFieldType(
-      field,
-    );
-
-
-  // ===================================================
-  // FIELD KEY
-  // ===================================================
+    normalizeFieldType(field);
 
   const baseFieldKey =
     baseField?.code ??
     baseField?.name ??
     field.baseFieldId;
 
-
-  // ===================================================
-  // FIELD LABEL
-  // ===================================================
-
   const baseFieldLabel =
     baseField?.name ??
     baseField?.code ??
     field.baseFieldId;
 
-
   const label =
     field.label?.trim() ||
-    asString(
-      baseFieldLabel,
-    );
-
-
-  // ===================================================
-  // DESCRIPTION
-  // ===================================================
+    asString(baseFieldLabel);
 
   const description =
     field.helpText?.trim() ||
     baseField?.description?.trim() ||
     undefined;
 
-
-  // ===================================================
-  // MEASUREMENT UNIT
-  // ===================================================
-
   const measurementUnit =
     baseField?.measurementUnit ??
     baseField?.measurement_unit ??
     null;
-
 
   const unit =
     measurementUnit?.symbol ??
@@ -293,107 +209,96 @@ const mapRevenueServiceField = (
     measurementUnit?.name ??
     undefined;
 
+  const rawOptions =
+    baseField?.options;
 
-// ===================================================
-// OPTIONS
-// ===================================================
-
-const rawOptions =
-  baseField?.options;
-
-const options =
-  Array.isArray(rawOptions)
-    ? rawOptions
-        .filter(
-          (option): option is Record<string, unknown> =>
-            typeof option === "object" &&
-            option !== null,
-        )
-        .sort(
-          (a, b) =>
-            Number(
-              a.sortOrder ??
-                a.sort_order ??
-                0,
-            ) -
-            Number(
-              b.sortOrder ??
-                b.sort_order ??
-                0,
-            ),
-        )
-        .map(
-          (option) => ({
-            id: asString(
-              option.id ??
-                option.value ??
-                "",
-            ),
-
-            value: asString(
-              option.value ??
-                option.id ??
-                "",
-            ),
-
-            label: asString(
-              option.label ??
-                option.name ??
-                option.value ??
-                option.id ??
-                "",
-            ),
-
-            sortOrder: Number(
-              option.sortOrder ??
-                option.sort_order ??
-                0,
-            ),
-
-            isDefault:
-              Boolean(
-                option.isDefault ??
-                  option.is_default ??
-                  false,
+  const options =
+    Array.isArray(rawOptions)
+      ? rawOptions
+          .filter(
+            (
+              option,
+            ): option is Record<
+              string,
+              unknown
+            > =>
+              typeof option ===
+                "object" &&
+              option !== null,
+          )
+          .sort(
+            (a, b) =>
+              Number(
+                a.sortOrder ??
+                  a.sort_order ??
+                  0,
+              ) -
+              Number(
+                b.sortOrder ??
+                  b.sort_order ??
+                  0,
               ),
-          }),
-        )
-        .filter(
-          (option) =>
-            option.value !== "",
-        )
-    : undefined;
+          )
+          .map(
+            (option) => ({
+              id: asString(
+                option.id ??
+                  option.value ??
+                  "",
+              ),
 
+              value: asString(
+                option.value ??
+                  option.id ??
+                  "",
+              ),
 
-  // ===================================================
-  // RESULT
-  // ===================================================
+              label: asString(
+                option.label ??
+                  option.name ??
+                  option.value ??
+                  option.id ??
+                  "",
+              ),
+
+              sortOrder: Number(
+                option.sortOrder ??
+                  option.sort_order ??
+                  0,
+              ),
+
+              isDefault:
+                Boolean(
+                  option.isDefault ??
+                    option.is_default ??
+                    false,
+                ),
+            }),
+          )
+          .filter(
+            (option) =>
+              option.value !== "",
+          )
+      : undefined;
 
   return {
+    id: field.id,
 
-    id:
-      field.id,
-
-    key:
-      asString(
-        baseFieldKey,
-      ),
+    key: asString(
+      baseFieldKey,
+    ),
 
     label,
 
-    type:
-      fieldType,
+    type: fieldType,
 
-    required:
-      Boolean(
-        field.isRequired,
-      ),
+    required: Boolean(
+      field.isRequired,
+    ),
 
-    min:
-      validationRules.min,
+    min: validationRules.min,
 
-    max:
-      validationRules.max,
+    max: validationRules.max,
 
     ...(options &&
     options.length > 0
@@ -416,142 +321,85 @@ const options =
   };
 };
 
-
-// =====================================================
-// MAP API REVENUE SERVICE
-// =====================================================
-
 /**
- * Converts the real API RevenueService into the
- * RevenueService structure used by AssessmentForm.
+ * Convert the API RevenueService into the
+ * RevenueService structure consumed by AssessmentForm.
+ *
+ * This is only an adapter between API/domain shapes.
+ * Financial calculation remains backend-owned.
  */
 export const mapRevenueService = (
   service: ApiRevenueService,
 ): RevenueService => {
-
   const revenueCode =
     service.revenueCode;
-
 
   const serviceCode =
     revenueCode?.code ??
     service.id;
 
-
   const category =
     revenueCode?.name ??
     "Revenue Service";
 
-
   const fields: RevenueField[] =
-    (
-      service.fields ??
-      []
-    )
-
+    (service.fields ?? [])
       .filter(
-        (
-          field,
-        ) =>
-          field.isActive !==
-          false,
+        (field) =>
+          field.isActive !== false,
       )
-
       .sort(
-        (
-          a,
-          b,
-        ) =>
+        (a, b) =>
           Number(
-            a.sortOrder ??
-              0,
+            a.sortOrder ?? 0,
           ) -
           Number(
-            b.sortOrder ??
-              0,
+            b.sortOrder ?? 0,
           ),
       )
-
       .map(
-        (
-          field,
-        ): RevenueField =>
+        (field) =>
           mapRevenueServiceField(
             field,
           ),
       );
 
-
   return {
+    id: service.id,
 
-    id:
-      service.id,
-
-    code:
-      serviceCode,
+    code: serviceCode,
 
     category,
 
-    name:
-      service.name,
+    name: service.name,
 
     description:
-      service.description ??
-      "",
+      service.description ?? "",
 
     collectionMode:
-      service.collectionMode ??
-      "",
+      service.collectionMode ?? "",
 
     fields,
   };
 };
 
-
-// =====================================================
-// SUBMISSION STATUS
-// =====================================================
-
-/**
- * AssessmentForm uses a UI-level submission status.
- *
- * Backend assessment statuses are different.
- *
- * Backend:
- *
- * DRAFT
- * PENDING_APPROVAL
- *
- * UI:
- *
- * DRAFT_SAVED
- * SUBMITTED
- * UPDATED
- */
 type SubmissionStatus =
   SubmissionResult["status"];
 
-
-// =====================================================
-// NORMALIZE SUBMISSION STATUS
-// =====================================================
-
 /**
- * Convert backend Assessment status into the
- * SubmissionResult status expected by AssessmentForm.
+ * Convert backend assessment status into
+ * the UI-level SubmissionResult status.
  */
 const normalizeSubmissionStatus = (
   rawStatus: unknown,
   fallbackStatus: SubmissionStatus,
 ): SubmissionStatus => {
-
   if (
     typeof rawStatus !==
     "string"
   ) {
     return fallbackStatus;
   }
-
 
   const normalized =
     rawStatus
@@ -561,39 +409,26 @@ const normalizeSubmissionStatus = (
         "_",
       );
 
-
   switch (normalized) {
-
     case "DRAFT":
     case "DRAFT_SAVED":
       return "DRAFT_SAVED";
-
 
     case "PENDING_APPROVAL":
     case "SUBMITTED":
       return "SUBMITTED";
 
-
     case "UPDATED":
       return "UPDATED";
-
 
     default:
       return fallbackStatus;
   }
 };
 
-
-// =====================================================
-// SUBMISSION RESULT ADAPTER
-// =====================================================
-
 /**
- * The API returns ApiResponse<Assessment>,
- * while AssessmentForm expects SubmissionResult.
- *
- * This keeps the API response contract separate from
- * the form presentation contract.
+ * Adapt the API response into the result contract
+ * expected by AssessmentForm.
  */
 const toSubmissionResult = (
   response: {
@@ -603,20 +438,17 @@ const toSubmissionResult = (
   fallbackMessage: string,
   fallbackStatus: SubmissionStatus,
 ): SubmissionResult => {
-
   const data =
     response.data;
-
 
   const assessment =
     data &&
     typeof data === "object"
-      ? data as Record<
+      ? (data as Record<
           string,
           unknown
-        >
+        >)
       : {};
-
 
   const referenceId =
     assessment.referenceId ??
@@ -624,71 +456,52 @@ const toSubmissionResult = (
     assessment.id ??
     "";
 
-
   const status =
     normalizeSubmissionStatus(
       assessment.status,
       fallbackStatus,
     );
 
-
   return {
-
     message:
       response.message ??
       fallbackMessage,
 
     assessmentNumber:
-      asString(
-        referenceId,
-      ),
+      asString(referenceId),
 
     status,
   };
 };
 
-
-// =====================================================
-// PAGE
-// =====================================================
-
 export default function CreateAssessmentPage() {
-
-  // ===================================================
-  // CITIZENS / TAXPAYERS
-  // ===================================================
+  /*
+   * --------------------------------------------------------------------------
+   * Taxpayers
+   * --------------------------------------------------------------------------
+   */
 
   const {
-    data:
-      citizensData,
-
-    isLoading:
-      citizensLoading,
-
-    isError:
-      citizensError,
+    data: citizensData,
+    isLoading: citizensLoading,
+    isError: citizensError,
   } = useCitizens();
-
 
   const taxpayers =
     useMemo(
       () =>
-        citizensData?.data ??
-        [],
-
-      [
-        citizensData,
-      ],
+        citizensData?.data ?? [],
+      [citizensData],
     );
 
-
-  // ===================================================
-  // REVENUE SERVICES
-  // ===================================================
+  /*
+   * --------------------------------------------------------------------------
+   * Revenue services
+   * --------------------------------------------------------------------------
+   */
 
   const {
-    data:
-      revenueServicesData,
+    data: revenueServicesData,
 
     isLoading:
       revenueServicesLoading,
@@ -698,172 +511,112 @@ export default function CreateAssessmentPage() {
 
     refetch:
       refetchRevenueServices,
+  } = useRevenueServices({
+    is_active: true,
+    per_page: 100,
+    page: 1,
+  });
 
-  } =
-    useRevenueServices({
-
-      is_active:
-        true,
-
-      per_page:
-        100,
-
-      page:
-        1,
-
-    });
-
-
-  // ===================================================
-  // MAP API SERVICES
-  // ===================================================
+  /*
+   * --------------------------------------------------------------------------
+   * Adapt API services to form services
+   * --------------------------------------------------------------------------
+   */
 
   const revenueServices =
     useMemo<RevenueService[]>(
       () => {
-
         const apiServices =
           revenueServicesData?.data ??
           [];
 
-
         return apiServices.map(
-          (
-            service,
-          ) =>
+          (service) =>
             mapRevenueService(
               service,
             ),
         );
-
       },
-      [
-        revenueServicesData,
-      ],
+      [revenueServicesData],
     );
 
-
-  // ===================================================
-  // SUBMIT ASSESSMENT MUTATION
-  // ===================================================
+  /*
+   * --------------------------------------------------------------------------
+   * Mutations
+   * --------------------------------------------------------------------------
+   */
 
   const {
     mutateAsync:
       submitAssessment,
-
-  } =
-    useSubmitAssessment();
-
-
-  // ===================================================
-  // SAVE DRAFT MUTATION
-  // ===================================================
+  } = useSubmitAssessment();
 
   const {
     mutateAsync:
       saveAssessmentDraft,
+  } = useSaveAssessmentDraft();
 
-  } =
-    useSaveAssessmentDraft();
+  /*
+   * --------------------------------------------------------------------------
+   * Navigation
+   * --------------------------------------------------------------------------
+   */
 
+  const handleBack = () => {
+    window.history.back();
+  };
 
-  // ===================================================
-  // BACK
-  // ===================================================
+  /*
+   * --------------------------------------------------------------------------
+   * Submit
+   * --------------------------------------------------------------------------
+   */
 
-  const handleBack =
-    () => {
-
-      window.history.back();
-
-    };
-
-
-  // ===================================================
-  // SUBMIT ASSESSMENT
-  // ===================================================
-
-  const handleSubmit =
-    async (
-      formData: FormData,
-    ): Promise<SubmissionResult> => {
-
-      /*
-       * AssessmentForm already creates FormData.
-       *
-       * We pass it directly to the mutation.
-       *
-       * No JSON conversion.
-       * No manual Content-Type.
-       * No tariff calculation.
-       */
-
-      const response =
-        await submitAssessment(
-          formData,
-        );
-
-
-      return toSubmissionResult(
-
-        response,
-
-        "Assessment submitted successfully.",
-
-        "SUBMITTED",
-
+  const handleSubmit = async (
+    formData: FormData,
+  ): Promise<SubmissionResult> => {
+    const response =
+      await submitAssessment(
+        formData,
       );
-    };
 
+    return toSubmissionResult(
+      response,
+      "Assessment submitted successfully.",
+      "SUBMITTED",
+    );
+  };
 
-  // ===================================================
-  // SAVE DRAFT
-  // ===================================================
+  /*
+   * --------------------------------------------------------------------------
+   * Save draft
+   * --------------------------------------------------------------------------
+   */
 
-  const handleSaveDraft =
-    async (
-      formData: FormData,
-    ): Promise<SubmissionResult> => {
-
-      /*
-       * AssessmentForm already creates FormData.
-       *
-       * The dedicated draft mutation ensures that
-       * the backend receives DRAFT status.
-       */
-
-      const response =
-        await saveAssessmentDraft(
-          formData,
-        );
-
-
-      return toSubmissionResult(
-
-        response,
-
-        "Assessment draft saved successfully.",
-
-        "DRAFT_SAVED",
-
+  const handleSaveDraft = async (
+    formData: FormData,
+  ): Promise<SubmissionResult> => {
+    const response =
+      await saveAssessmentDraft(
+        formData,
       );
-    };
 
+    return toSubmissionResult(
+      response,
+      "Assessment draft saved successfully.",
+      "DRAFT_SAVED",
+    );
+  };
 
-  // ===================================================
-  // RENDER
-  // ===================================================
+  /*
+   * --------------------------------------------------------------------------
+   * Render
+   * --------------------------------------------------------------------------
+   */
 
   return (
-
     <div className="m-auto max-w-5xl space-y-5">
-
-      {/* =================================================
-          HEADER
-      ================================================= */}
-
       <Banner
-
         badge={
           <IconBadge
             className="gap-2 rounded-full bg-black/20 p-3 text-[10px] text-white"
@@ -874,11 +627,7 @@ export default function CreateAssessmentPage() {
             Revenue Assessment
           </IconBadge>
         }
-
-        description={
-          "Capture taxpayer and revenue-service information. Pricing and tariff resolution are handled by the backend Decision Provider."
-        }
-
+        description="Capture taxpayer and revenue-service information. Pricing and tariff resolution are handled by the backend Decision Provider."
         background={
           <FloatingParticles
             color="#040404"
@@ -888,88 +637,47 @@ export default function CreateAssessmentPage() {
             position="bottom-right"
           />
         }
-
         overlayClassName="bg-gradient-to-r from-primary/95 via-primary/80 to-primary/50"
-
         className="text-white"
-
         actions={
-
           <Button
-
             type="button"
-
             variant="outline"
-
             className="border-white/30 bg-white/10 text-white backdrop-blur-sm hover:bg-white hover:text-primary"
-
-            onClick={
-              handleBack
-            }
-
+            onClick={handleBack}
           >
-
             <ArrowLeft className="mr-2 h-4 w-4" />
-
             Back to Assessments
-
           </Button>
-
         }
-
       />
 
-
-      {/* =================================================
-          ASSESSMENT FORM
-      ================================================= */}
-
       <AssessmentForm
-
-        taxpayers={
-          taxpayers
-        }
-
+        taxpayers={taxpayers}
         revenueServices={
           revenueServices
         }
-
         taxpayerLoading={
           citizensLoading
         }
-
         taxpayerError={
           citizensError
         }
-
         revenueServicesLoading={
           revenueServicesLoading
         }
-
         revenueServicesError={
           revenueServicesError
         }
-
-        onRetryRevenueServices={
-          () =>
-            refetchRevenueServices()
+        onRetryRevenueServices={() =>
+          refetchRevenueServices()
         }
-
-        onSubmit={
-          handleSubmit
-        }
-
+        onSubmit={handleSubmit}
         onSaveDraft={
           handleSaveDraft
         }
-
-        onBack={
-          handleBack
-        }
-
+        onBack={handleBack}
       />
-
     </div>
-
   );
 }

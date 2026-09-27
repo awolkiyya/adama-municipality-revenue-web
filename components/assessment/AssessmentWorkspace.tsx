@@ -464,41 +464,52 @@ export default function AssessmentWorkspace() {
 
 
   /**
-   * View assessment.
-   */
-  const handleViewAssessment =
-    (
-      row: any,
-    ) => {
+ * View assessment.
+ *
+ * Both NEW and EXISTING_LIZZ assessments use
+ * the same read-only view page.
+ */
+const handleViewAssessment = (
+  row: Assessment,
+) => {
+  if (!row?.id) {
+    return;
+  }
 
-      if (!row?.id) {
-        return;
-      }
-
-      router.push(
-        `/office/dashboard/assessments/${row.id}/view`,
-      );
-
-    };
+  router.push(
+    `/office/dashboard/assessments/${row.id}/view`,
+  );
+};
 
 
-  /**
-   * Edit assessment.
-   */
-  const handleEditAssessment =
-    (
-      row: any,
-    ) => {
+/**
+ * Edit assessment.
+ *
+ * NEW:
+ *   /assessments/{id}
+ *
+ * EXISTING_LIZZ:
+ *   /assessments/existing/{id}/edit
+ */
+const handleEditAssessment = (
+  row: Assessment,
+) => {
+  if (!row?.id) {
+    return;
+  }
 
-      if (!row?.id) {
-        return;
-      }
+  if (row.sourceType === "EXISTING_LIZZ") {
+    router.push(
+      `/office/dashboard/assessments/existing/${row.id}/edit`,
+    );
 
-      router.push(
-        `/office/dashboard/assessments/${row.id}`,
-      );
+    return;
+  }
 
-    };
+  router.push(
+    `/office/dashboard/assessments/${row.id}`,
+  );
+};
 
 
   /**
@@ -600,22 +611,16 @@ export default function AssessmentWorkspace() {
           ================================================= */}
 
       <AssessmentHeader
-        config={
-          config
-        }
+        config={config}
 
-        onCreate={
-          handleNewAssessment
-        }
+        onCreate={handleNewAssessment}
 
-        onRegisterTaxpayer={
-          handleRegisterTaxpayer
-        }
+        onRegisterTaxpayer={handleRegisterTaxpayer}
 
-        onRegisterExistingAgreement={
-          handleRegisterExistingAgreement
-        }
-      />
+        onRegisterExistingAgreement={handleRegisterExistingAgreement}
+        onManageScheduledPayments={function (): void {
+          throw new Error("Function not implemented.");
+        } }      />
 
 
       {/* =================================================

@@ -7,6 +7,7 @@ import {
   Loader2,
   XCircle,
 } from "lucide-react";
+
 import { useParams, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -15,10 +16,23 @@ import { useSelector } from "react-redux";
 import { Button } from "@/components/ui/button";
 import { Banner } from "@/components/banner/topBanner";
 import { IconBadge } from "@/components/commen/icon-badge";
-import { Card, CardContent } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+} from "@/components/ui/card";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
+
 import { FloatingParticles } from "@/components/design/FloatingParticles";
 
-import { Assessment } from "@/types/revenue/assessment";
+import {
+  Assessment,
+  AssessmentService,
+} from "@/types/revenue/assessment";
 
 import {
   useAssessment,
@@ -37,43 +51,59 @@ import { ApproveDialog } from "@/components/assessment/approve-dialog";
 import { ReturnDialog } from "@/components/assessment/return-dialog";
 
 import { RootState } from "@/lib/store/store";
+import {
+  PermissionAction,
+  UserPermission,
+} from "@/types/user";
 
 /*
 |--------------------------------------------------------------------------
 | Assessment View Page
 |--------------------------------------------------------------------------
 |
-| Assessment decision workflow:
+| Assessment-level navigation:
 |
-| DRAFT
-|    ↓
-| PENDING_APPROVAL
-|    ↓
-| ┌───────────────┐
-| │ Decision      │
-| │ Officer      │
-| └───────────────┘
-|    │
-|    ├── APPROVE
-|    │      ↓
-|    │   APPROVED
-|    │      ↓
-|    │   INVOICE CREATED
-|    │      ↓
-|    │   INVOICE ISSUED
-|    │      ↓
-|    │   TAXPAYER SMS
-|    │
-|    └── RETURN
-|           ↓
-|        RETURNED
-|           ↓
-|        Correction
-|           ↓
-|      Resubmission
-|           ↓
-|    PENDING_APPROVAL
+| Overview
+|   ├── Summary
+|   ├── Taxpayer
+|   ├── Audit
+|   └── Notes
 |
+| Services
+|   ├── One-time services
+|   └── Scheduled services
+|          └── View Payment Schedule
+|
+| Decision
+|   └── Decision history / notes
+|
+|--------------------------------------------------------------------------
+|
+| IMPORTANT
+|--------------------------------------------------------------------------
+|
+| Payment schedules belong to AssessmentService.
+|
+| One assessment may contain:
+|
+|   Service A → ONE_TIME
+|   Service B → SCHEDULED
+|   Service C → ONE_TIME
+|   Service D → SCHEDULED
+|
+| Therefore:
+|
+| Assessment
+|      ↓
+| Services
+|      ↓
+| Specific scheduled service
+|      ↓
+| Payment Schedule
+|
+|--------------------------------------------------------------------------
+|
+| Financial responsibility
 |--------------------------------------------------------------------------
 |
 | This page does NOT:
@@ -81,9 +111,9 @@ import { RootState } from "@/lib/store/store";
 | - calculate tariffs
 | - calculate assessment amounts
 | - calculate invoice totals
-| - resolve tariff rules
+| - calculate payment schedules
 |
-| All financial decisions are performed by the backend.
+| All financial calculations remain backend-authoritative.
 |
 |--------------------------------------------------------------------------
 */
@@ -96,12 +126,45 @@ export default function AssessmentViewPage() {
   */
 
   const user = useSelector(
-    (state: RootState) => state.auth.user
+    (state: RootState) =>
+      state.auth.user,
   );
 
-  const isDecisionOfficer =
-    user?.role?.name === "REVENUE_DECISION_OFFICER";
+  /*
+  |--------------------------------------------------------------------------
+  | PERMISSIONS
+  |--------------------------------------------------------------------------
+  */
 
+  const permissions =
+    user?.permissions ?? [];
+
+  const hasPermission = (
+    resource: string,
+    action: PermissionAction,
+  ): boolean => {
+    return permissions.some(
+      (permission: UserPermission) =>
+        permission.resource === resource &&
+        permission.actions.includes(action),
+    );
+  };
+
+  const canApproveAssessment =
+    hasPermission(
+      "assessment",
+      "approve",
+    );
+
+  const canReturnAssessment =
+    hasPermission(
+      "assessment",
+      "return",
+    );
+
+  const canTakeAssessmentDecision =
+    canApproveAssessment ||
+    canReturnAssessment;
 
   /*
   |--------------------------------------------------------------------------
@@ -120,6 +183,24 @@ export default function AssessmentViewPage() {
   const queryClient =
     useQueryClient();
 
+  /*
+  |--------------------------------------------------------------------------
+  | TAB STATE
+  |--------------------------------------------------------------------------
+  |
+  | Default to Overview.
+  |
+  | We intentionally keep tabs local to the page.
+  | The selected tab is UI state, not business state.
+  |
+  */
+
+  const [
+    activeTab,
+    setActiveTab,
+  ] = useState<
+    "overview" | "services" | "decision"
+  >("overview");
 
   /*
   |--------------------------------------------------------------------------
@@ -142,7 +223,6 @@ export default function AssessmentViewPage() {
     setReturnReason,
   ] = useState("");
 
-
   /*
   |--------------------------------------------------------------------------
   | ASSESSMENT QUERY
@@ -156,14 +236,13 @@ export default function AssessmentViewPage() {
     isError,
     refetch,
   } = useAssessment(
-    assessmentId ?? ""
+    assessmentId ?? "",
   );
 
   const assessment =
     assessmentResponse?.data as
       | Assessment
       | undefined;
-
 
   /*
   |--------------------------------------------------------------------------
@@ -181,7 +260,6 @@ export default function AssessmentViewPage() {
     isPending: returning,
   } = useReturnAssessment();
 
-
   /*
   |--------------------------------------------------------------------------
   | ASSESSMENT STATE
@@ -189,14 +267,16 @@ export default function AssessmentViewPage() {
   */
 
   const isPendingApproval =
-    assessment?.status === "PENDING_APPROVAL";
+    assessment?.status ===
+    "PENDING_APPROVAL";
 
   const isApproved =
-    assessment?.status === "APPROVED";
+    assessment?.status ===
+    "APPROVED";
 
   const isReturned =
-    assessment?.status === "RETURNED";
-
+    assessment?.status ===
+    "RETURNED";
 
   /*
   |--------------------------------------------------------------------------
@@ -204,9 +284,11 @@ export default function AssessmentViewPage() {
   |--------------------------------------------------------------------------
   */
 
-  const serviceCount =
-    assessment?.services?.length ?? 0;
+  const services =
+    assessment?.services ?? [];
 
+  const serviceCount =
+    services.length;
 
   /*
   |--------------------------------------------------------------------------
@@ -214,48 +296,140 @@ export default function AssessmentViewPage() {
   |--------------------------------------------------------------------------
   */
 
-  const fileCount = useMemo(() => {
-    if (!assessment?.services) {
-      return 0;
-    }
+  const fileCount =
+    useMemo(() => {
+      return services.reduce(
+        (total, service) =>
+          total +
+          (service.values ?? []).reduce(
+            (
+              valueTotal,
+              value,
+            ) =>
+              valueTotal +
+              (value.files?.length ??
+                0),
+            0,
+          ),
+        0,
+      );
+    }, [services]);
 
-    return assessment.services.reduce(
-      (total, service) =>
-        total +
-        (service.values ?? []).reduce(
-          (valueTotal, value) =>
-            valueTotal +
-            (value.files?.length ?? 0),
-          0
-        ),
-      0
-    );
-  }, [assessment?.services]);
+  /*
+  |--------------------------------------------------------------------------
+  | EXISTING LIZZ
+  |--------------------------------------------------------------------------
+  */
 
+  const isExistingLizz =
+    assessment?.sourceType ===
+    "EXISTING_LIZZ";
 
   /*
   |--------------------------------------------------------------------------
   | CALCULATION ERRORS
   |--------------------------------------------------------------------------
-  |
-  | An assessment cannot be approved if one or more
-  | assessment services failed their calculation.
-  |
   */
 
   const servicesWithErrors =
     useMemo(
       () =>
-        (assessment?.services ?? []).filter(
+        services.filter(
           (service) =>
-            Boolean(service.calculationError)
+            Boolean(
+              service.calculationError,
+            ),
         ),
-      [assessment?.services]
+      [services],
     );
 
   const hasCalculationErrors =
+    !isExistingLizz &&
     servicesWithErrors.length > 0;
 
+  /*
+  |--------------------------------------------------------------------------
+  | SERVICE PAYMENT TYPE
+  |--------------------------------------------------------------------------
+  |
+  | The actual payment type should ideally come
+  | from the backend.
+  |
+  | The service card also handles the detailed
+  | display logic.
+  |
+  | Here we only use it for page-level statistics.
+  |
+  */
+
+  const scheduledServiceCount =
+    useMemo(() => {
+      return services.filter(
+        (service) => {
+          const candidate =
+            service as AssessmentService & {
+              paymentType?: string | null;
+              payment_type?: string | null;
+              paymentScheduleRule?: {
+                isEnabled?: boolean | null;
+                is_enabled?: boolean | null;
+              } | null;
+              payment_schedule_rule?: {
+                isEnabled?: boolean | null;
+                is_enabled?: boolean | null;
+              } | null;
+            };
+
+          const paymentType =
+            candidate.paymentType ??
+            candidate.payment_type;
+
+          if (
+            typeof paymentType ===
+            "string"
+          ) {
+            return (
+              paymentType.toUpperCase() ===
+              "SCHEDULED"
+            );
+          }
+
+          const rule =
+            candidate.paymentScheduleRule ??
+            candidate.payment_schedule_rule;
+
+          if (rule) {
+            return Boolean(
+              rule.isEnabled ??
+                rule.is_enabled,
+            );
+          }
+
+          /*
+           * Existing LIZZ with remaining
+           * balance is scheduled.
+           */
+          if (
+            isExistingLizz &&
+            service.remainingAmount !==
+              null &&
+            service.remainingAmount !==
+              undefined
+          ) {
+            return (
+              Number(
+                service.remainingAmount,
+              ) > 0
+            );
+          }
+
+          return false;
+        },
+      ).length;
+    }, [
+      services,
+      isExistingLizz,
+    ]);
 
   /*
   |--------------------------------------------------------------------------
@@ -274,7 +448,6 @@ export default function AssessmentViewPage() {
       ]);
     };
 
-
   /*
   |--------------------------------------------------------------------------
   | OPEN APPROVE DIALOG
@@ -283,6 +456,16 @@ export default function AssessmentViewPage() {
 
   const handleOpenApprove =
     () => {
+      if (
+        !canApproveAssessment
+      ) {
+        toast.error(
+          "You do not have permission to approve assessments.",
+        );
+
+        return;
+      }
+
       if (
         !assessment ||
         !isPendingApproval ||
@@ -294,28 +477,24 @@ export default function AssessmentViewPage() {
       setApproveDialogOpen(true);
     };
 
-
   /*
   |--------------------------------------------------------------------------
   | CONFIRM APPROVAL
   |--------------------------------------------------------------------------
-  |
-  | Backend workflow:
-  |
-  | Assessment
-  |      ↓
-  | APPROVED
-  |      ↓
-  | Invoice created
-  |      ↓
-  | Invoice issued
-  |      ↓
-  | SMS sent
-  |
   */
 
   const handleConfirmApprove =
     async () => {
+      if (
+        !canApproveAssessment
+      ) {
+        toast.error(
+          "You do not have permission to approve assessments.",
+        );
+
+        return;
+      }
+
       if (
         !assessment ||
         !isPendingApproval ||
@@ -326,29 +505,37 @@ export default function AssessmentViewPage() {
 
       try {
         await approveAssessment(
-          assessment.id
+          assessment.id,
         );
 
-        setApproveDialogOpen(false);
+        setApproveDialogOpen(
+          false,
+        );
 
         toast.success(
-          "Assessment approved and invoice issued successfully."
+          "Assessment approved successfully.",
         );
 
         await refreshAfterDecision();
 
+        /*
+         * After approval, keep the officer
+         * on the Overview tab.
+         */
+        setActiveTab(
+          "overview",
+        );
       } catch (error) {
         console.error(
           "Failed to approve assessment:",
-          error
+          error,
         );
 
         toast.error(
-          "Could not approve this assessment. Please try again."
+          "Could not approve this assessment. Please try again.",
         );
       }
     };
-
 
   /*
   |--------------------------------------------------------------------------
@@ -358,6 +545,16 @@ export default function AssessmentViewPage() {
 
   const handleOpenReturn =
     () => {
+      if (
+        !canReturnAssessment
+      ) {
+        toast.error(
+          "You do not have permission to return assessments.",
+        );
+
+        return;
+      }
+
       if (
         !assessment ||
         !isPendingApproval
@@ -370,26 +567,24 @@ export default function AssessmentViewPage() {
       setReturnDialogOpen(true);
     };
 
-
   /*
   |--------------------------------------------------------------------------
   | RETURN ASSESSMENT
   |--------------------------------------------------------------------------
-  |
-  | This does NOT reject or permanently terminate the assessment.
-  |
-  | PENDING_APPROVAL
-  |        ↓
-  |     RETURNED
-  |        ↓
-  |    Correction
-  |        ↓
-  |   Resubmission
-  |
   */
 
   const handleReturn =
     async () => {
+      if (
+        !canReturnAssessment
+      ) {
+        toast.error(
+          "You do not have permission to return assessments.",
+        );
+
+        return;
+      }
+
       if (
         !assessment ||
         !isPendingApproval
@@ -410,48 +605,37 @@ export default function AssessmentViewPage() {
           reason,
         });
 
-        setReturnDialogOpen(false);
+        setReturnDialogOpen(
+          false,
+        );
 
         setReturnReason("");
 
         toast.success(
-          "Assessment returned for correction."
+          "Assessment returned for correction.",
         );
 
         await refreshAfterDecision();
 
+        setActiveTab(
+          "overview",
+        );
       } catch (error) {
         console.error(
           "Failed to return assessment:",
-          error
+          error,
         );
 
         toast.error(
-          "Could not return this assessment. Please try again."
+          "Could not return this assessment. Please try again.",
         );
       }
     };
 
-
   /*
   |--------------------------------------------------------------------------
-  | INITIATE INVOICE PAGE
+  | VIEW INVOICE
   |--------------------------------------------------------------------------
-  |
-  | Normally an approved assessment already has an issued invoice
-  | because approval now performs:
-  |
-  | APPROVE
-  |   ↓
-  | CREATE INVOICE
-  |   ↓
-  | ISSUE INVOICE
-  |   ↓
-  | SEND SMS
-  |
-  | This route is therefore only useful if the application
-  | provides a separate invoice viewing page.
-  |
   */
 
   const handleViewInvoice =
@@ -464,10 +648,33 @@ export default function AssessmentViewPage() {
       }
 
       router.push(
-        `/office/dashboard/revenue/assessments/${assessment.id}/invoice`
+        `/office/dashboard/revenue/assessments/${assessment.id}/invoice`,
       );
     };
 
+  /*
+  |--------------------------------------------------------------------------
+  | VIEW SERVICE PAYMENT SCHEDULE
+  |--------------------------------------------------------------------------
+  |
+  | The service card does NOT own routing.
+  |
+  | It reports the selected AssessmentService.
+  |
+  */
+
+  const handleManageScheduledPayments =
+    (
+      service: AssessmentService,
+    ) => {
+      if (!assessment) {
+        return;
+      }
+
+      router.push(
+        `/office/dashboard/revenue/assessments/${assessment.id}/services/${service.id}/schedule`,
+      );
+    };
 
   /*
   |--------------------------------------------------------------------------
@@ -488,7 +695,9 @@ export default function AssessmentViewPage() {
           <Button
             variant="outline"
             className="mt-4"
-            onClick={() => router.back()}
+            onClick={() =>
+              router.back()
+            }
           >
             Go Back
           </Button>
@@ -496,7 +705,6 @@ export default function AssessmentViewPage() {
       </div>
     );
   }
-
 
   /*
   |--------------------------------------------------------------------------
@@ -515,7 +723,6 @@ export default function AssessmentViewPage() {
       </div>
     );
   }
-
 
   /*
   |--------------------------------------------------------------------------
@@ -545,13 +752,17 @@ export default function AssessmentViewPage() {
             <div className="mt-5 flex justify-center gap-2">
               <Button
                 variant="outline"
-                onClick={() => router.back()}
+                onClick={() =>
+                  router.back()
+                }
               >
                 Go Back
               </Button>
 
               <Button
-                onClick={() => refetch()}
+                onClick={() =>
+                  refetch()
+                }
               >
                 Retry
               </Button>
@@ -562,7 +773,6 @@ export default function AssessmentViewPage() {
     );
   }
 
-
   /*
   |--------------------------------------------------------------------------
   | PAGE
@@ -570,11 +780,10 @@ export default function AssessmentViewPage() {
   */
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 pb-8">
-
-      {/* ---------------------------------------------------------------- */}
-      {/* HEADER                                                          */}
-      {/* ---------------------------------------------------------------- */}
+    <div className="mx-auto max-w-4xl space-y-5 pb-8">
+      {/* ================================================================
+          HEADER
+          ================================================================ */}
 
       <Banner
         badge={
@@ -587,9 +796,7 @@ export default function AssessmentViewPage() {
             Revenue Assessment
           </IconBadge>
         }
-
-        description={`Review assessment ${assessment.assessmentNumber} and make the appropriate revenue decision.`}
-
+        description={`Review assessment ${assessment.assessmentNumber} and manage its revenue workflow.`}
         background={
           <FloatingParticles
             color="#040404"
@@ -599,15 +806,14 @@ export default function AssessmentViewPage() {
             position="bottom-right"
           />
         }
-
         overlayClassName="bg-gradient-to-r from-primary/95 via-primary/80 to-primary/50"
-
         className="text-white"
-
         actions={
           <Button
             variant="secondary"
-            onClick={() => router.back()}
+            onClick={() =>
+              router.back()
+            }
             className="-ml-2 gap-2"
           >
             <ArrowLeft className="h-4 w-4" />
@@ -617,10 +823,9 @@ export default function AssessmentViewPage() {
         }
       />
 
-
-      {/* ---------------------------------------------------------------- */}
-      {/* REFRESHING                                                      */}
-      {/* ---------------------------------------------------------------- */}
+      {/* ================================================================
+          REFRESHING
+          ================================================================ */}
 
       {isFetching && (
         <div className="flex items-center justify-end gap-2 text-xs text-muted-foreground">
@@ -630,210 +835,380 @@ export default function AssessmentViewPage() {
         </div>
       )}
 
+      {/* ================================================================
+          MAIN TABS
+          ================================================================ */}
 
-      {/* ---------------------------------------------------------------- */}
-      {/* SUMMARY                                                         */}
-      {/* ---------------------------------------------------------------- */}
+      <Tabs
+        value={activeTab}
+        onValueChange={(value) =>
+          setActiveTab(
+            value as
+              | "overview"
+              | "services"
+              | "decision",
+          )
+        }
+        className="space-y-5"
+      >
+        {/* ============================================================
+            TAB NAVIGATION
+            ============================================================ */}
 
-      <SummaryHeaderCard
-        assessment={assessment}
-        serviceCount={serviceCount}
-        fileCount={fileCount}
-      />
+        <div className="sticky top-0 z-10 -mx-2 bg-background/95 px-2 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+          <TabsList className="grid h-auto w-full grid-cols-3">
+            <TabsTrigger
+              value="overview"
+              className="py-2.5"
+            >
+              Overview
+            </TabsTrigger>
 
+            <TabsTrigger
+              value="services"
+              className="gap-2 py-2.5"
+            >
+              Services
 
-      {/* ---------------------------------------------------------------- */}
-      {/* TAXPAYER                                                        */}
-      {/* ---------------------------------------------------------------- */}
+              <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium">
+                {serviceCount}
+              </span>
+            </TabsTrigger>
 
-      <TaxpayerCard
-        assessment={assessment}
-      />
-
-
-      {/* ---------------------------------------------------------------- */}
-      {/* AUDIT                                                           */}
-      {/* ---------------------------------------------------------------- */}
-
-      <AuditCard
-        assessment={assessment}
-      />
-
-
-      {/* ---------------------------------------------------------------- */}
-      {/* NOTES                                                           */}
-      {/* ---------------------------------------------------------------- */}
-
-      {assessment.notes && (
-        <NotesCard
-          notes={assessment.notes}
-        />
-      )}
-
-
-      {/* ---------------------------------------------------------------- */}
-      {/* REVENUE SERVICES                                                */}
-      {/* ---------------------------------------------------------------- */}
-
-      <div className="space-y-4">
-        <div>
-          <h2 className="text-xl font-semibold">
-            Revenue Services
-          </h2>
-
-          <p className="mt-1 text-sm text-muted-foreground">
-            Review the information captured by
-            the assessment officer.
-          </p>
+            <TabsTrigger
+              value="decision"
+              className="py-2.5"
+            >
+              Decision
+            </TabsTrigger>
+          </TabsList>
         </div>
 
+        {/* ============================================================
+            OVERVIEW
+            ============================================================ */}
 
-        {assessment.services?.length ? (
-          assessment.services.map(
-            (service) => (
-              <AssessmentServiceCard
-                key={service.id}
-                service={service}
-              />
-            )
-          )
-        ) : (
-          <Card>
-            <CardContent className="p-6 text-center">
-              <p className="text-sm text-muted-foreground">
-                No revenue services were captured.
+        <TabsContent
+          value="overview"
+          className="space-y-5"
+        >
+          <SummaryHeaderCard
+            assessment={
+              assessment
+            }
+            serviceCount={
+              serviceCount
+            }
+            fileCount={
+              fileCount
+            }
+          />
+
+          <TaxpayerCard
+            assessment={
+              assessment
+            }
+          />
+
+          <AuditCard
+            assessment={
+              assessment
+            }
+          />
+
+          {assessment.notes && (
+            <NotesCard
+              notes={
+                assessment.notes
+              }
+            />
+          )}
+        </TabsContent>
+
+        {/* ============================================================
+            SERVICES
+            ============================================================ */}
+
+        <TabsContent
+          value="services"
+          className="space-y-4"
+        >
+          {/* ==========================================================
+              SERVICES HEADER
+              ========================================================== */}
+
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 className="text-xl font-semibold">
+                Revenue Services
+              </h2>
+
+              <p className="mt-1 text-sm text-muted-foreground">
+                Review each revenue service and access
+                its payment management workflow.
               </p>
+            </div>
+
+            {/* ========================================================
+                SERVICE SUMMARY
+                ======================================================== */}
+
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span>
+                {serviceCount} service
+                {serviceCount === 1
+                  ? ""
+                  : "s"}
+              </span>
+
+              {scheduledServiceCount >
+                0 && (
+                <>
+                  <span>
+                    •
+                  </span>
+
+                  <span>
+                    {
+                      scheduledServiceCount
+                    }{" "}
+                    scheduled
+                  </span>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* ==========================================================
+              SERVICE CARDS
+              ========================================================== */}
+
+          {services.length > 0 ? (
+            <div className="space-y-3">
+              {services.map(
+                (
+                  service,
+                ) => (
+                  <AssessmentServiceCard
+                    key={
+                      service.id
+                    }
+                    service={
+                      service
+                    }
+                    isExistingLizz={
+                      isExistingLizz
+                    }
+                    onManageScheduledPayments={
+                      handleManageScheduledPayments
+                    }
+                  />
+                ),
+              )}
+            </div>
+          ) : (
+            <Card>
+              <CardContent className="p-8 text-center">
+                <FileText className="mx-auto h-8 w-8 text-muted-foreground" />
+
+                <p className="mt-3 font-medium">
+                  No revenue services
+                </p>
+
+                <p className="mt-1 text-sm text-muted-foreground">
+                  No revenue services were captured
+                  for this assessment.
+                </p>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        {/* ============================================================
+            DECISION
+            ============================================================ */}
+
+        <TabsContent
+          value="decision"
+          className="space-y-5"
+        >
+          {/* ==========================================================
+              DECISION HISTORY / NOTES
+              ========================================================== */}
+
+          {assessment.decisionNotes ? (
+            <DecisionCard
+              assessment={
+                assessment
+              }
+            />
+          ) : (
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border bg-muted/40">
+                    <FileText className="h-4 w-4 text-muted-foreground" />
+                  </div>
+
+                  <div>
+                    <h3 className="font-semibold">
+                      Decision
+                    </h3>
+
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      No decision notes have been recorded
+                      for this assessment.
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* ==========================================================
+              STATUS SUMMARY
+              ========================================================== */}
+
+          <Card>
+            <CardContent className="p-5">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Current Status
+                  </p>
+
+                  <p className="mt-1 text-lg font-semibold">
+                    {assessment.status}
+                  </p>
+                </div>
+
+                <div className="text-sm text-muted-foreground">
+                  {isPendingApproval &&
+                    "This assessment is waiting for a decision."}
+
+                  {isApproved &&
+                    "This assessment has been approved."}
+
+                  {isReturned &&
+                    "This assessment has been returned for correction."}
+
+                  {!isPendingApproval &&
+                    !isApproved &&
+                    !isReturned &&
+                    "Review the assessment status and workflow history."}
+                </div>
+              </div>
             </CardContent>
           </Card>
-        )}
-      </div>
+        </TabsContent>
+      </Tabs>
 
+      {/* ================================================================
+          ASSESSMENT ACTIONS
+          ================================================================ */}
 
-      {/* ---------------------------------------------------------------- */}
-      {/* DECISION                                                        */}
-      {/* ---------------------------------------------------------------- */}
-
-      {assessment.decisionNotes && (
-        <DecisionCard
-          assessment={assessment}
-        />
-      )}
-
-
-      {/* ---------------------------------------------------------------- */}
-      {/* DECISION OFFICER ACTIONS                                        */}
-      {/* ---------------------------------------------------------------- */}
-      
-      {isDecisionOfficer && (
+      {canTakeAssessmentDecision && (
         <AssessmentActionBar
           services={
-            assessment.services ?? []
+            assessment.services ??
+            []
           }
-
+          isExistingLizz={
+            isExistingLizz
+          }
           isPendingApproval={
             isPendingApproval
           }
-
           isApproved={
             isApproved
           }
-
           isReturned={
             isReturned
           }
-
           hasCalculationErrors={
             hasCalculationErrors
           }
-
           approving={
             approving
           }
-
           returning={
             returning
           }
-
+          canApprove={
+            canApproveAssessment
+          }
+          canReturn={
+            canReturnAssessment
+          }
           onOpenApprove={
             handleOpenApprove
           }
-
           onOpenReturn={
             handleOpenReturn
           }
-
           // onViewInvoice={
           //   handleViewInvoice
           // }
         />
       )}
 
+      {/* ================================================================
+          APPROVE DIALOG
+          ================================================================ */}
 
-      {/* ---------------------------------------------------------------- */}
-      {/* APPROVE DIALOG                                                  */}
-      {/* ---------------------------------------------------------------- */}
+      {canApproveAssessment && (
+        <ApproveDialog
+          open={
+            approveDialogOpen
+          }
+          onOpenChange={
+            setApproveDialogOpen
+          }
+          assessment={
+            assessment
+          }
+          services={
+            assessment.services ??
+            []
+          }
+          approving={
+            approving
+          }
+          hasCalculationErrors={
+            hasCalculationErrors
+          }
+          onConfirm={
+            handleConfirmApprove
+          }
+        />
+      )}
 
-      <ApproveDialog
-        open={
-          approveDialogOpen
-        }
+      {/* ================================================================
+          RETURN DIALOG
+          ================================================================ */}
 
-        onOpenChange={
-          setApproveDialogOpen
-        }
-
-        assessment={
-          assessment
-        }
-
-        services={
-          assessment.services ?? []
-        }
-
-        approving={
-          approving
-        }
-
-        hasCalculationErrors={
-          hasCalculationErrors
-        }
-
-        onConfirm={
-          handleConfirmApprove
-        }
-      />
-
-
-      {/* ---------------------------------------------------------------- */}
-      {/* RETURN DIALOG                                                   */}
-      {/* ---------------------------------------------------------------- */}
-
-      <ReturnDialog
-        open={
-          returnDialogOpen
-        }
-
-        onOpenChange={
-          setReturnDialogOpen
-        }
-
-        reason={
-          returnReason
-        }
-
-        onReasonChange={
-          setReturnReason
-        }
-
-        returning={
-          returning
-        }
-
-        onReturn={
-          handleReturn
-        }
-      />
-
+      {canReturnAssessment && (
+        <ReturnDialog
+          open={
+            returnDialogOpen
+          }
+          onOpenChange={
+            setReturnDialogOpen
+          }
+          reason={
+            returnReason
+          }
+          onReasonChange={
+            setReturnReason
+          }
+          returning={
+            returning
+          }
+          onReturn={
+            handleReturn
+          }
+        />
+      )}
     </div>
   );
 }

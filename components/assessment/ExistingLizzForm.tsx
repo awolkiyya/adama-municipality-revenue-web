@@ -1,74 +1,220 @@
-"use client"
 
-import { useMemo } from "react"
-import { useRouter } from "next/navigation"
+"use client";
 
-import { Button } from "@/components/ui/button"
+import { useMemo } from "react";
+import { useRouter } from "next/navigation";
 
-import { useCitizens } from "@/hooks/useCitizen.hook"
-import { useRevenueServices } from "@/hooks/revenue/revenueService.hook"
+import { Button } from "@/components/ui/button";
 
-import { useExistingAgreement } from "@/hooks/useExistingAgreement"
+import { useCitizens } from "@/hooks/useCitizen.hook";
+import { useRevenueServices } from "@/hooks/revenue/revenueService.hook";
+
+import { useExistingAgreement } from "@/hooks/useExistingAgreement";
 
 import {
   useCreateExistingLizz,
   useUpdateExistingLizz,
-} from "@/hooks/revenue/existing-lizz.hook"
+} from "@/hooks/revenue/existing-lizz.hook";
 
-import { ExistingAgreementHeader } from "@/components/assessment/ExistingAgreementHeader"
-import { ExistingAgreementStepper } from "@/components/assessment/ExistingAgreementStepper"
+import { ExistingAgreementHeader } from "@/components/assessment/ExistingAgreementHeader";
+import { ExistingAgreementStepper } from "@/components/assessment/ExistingAgreementStepper";
 
-import { AgreementInformationStep } from "@/components/assessment/AgreementInformationStep"
-import { FinancialPositionStep } from "@/components/assessment/FinancialPositionStep"
-import { ReviewRegisterStep } from "@/components/assessment/ReviewRegisterStep"
+import { AgreementInformationStep } from "@/components/assessment/AgreementInformationStep";
+import { FinancialPositionStep } from "@/components/assessment/FinancialPositionStep";
+import { ReviewRegisterStep } from "@/components/assessment/ReviewRegisterStep";
 
-import { WhatHappensNext } from "@/components/assessment/WhatHappensNext"
+import { WhatHappensNext } from "@/components/assessment/WhatHappensNext";
 
-import type {
-  RevenueService,
-} from "@/types/revenue/assessment"
+import type { RevenueService } from "@/types/revenue/assessment";
 
-import { mapRevenueService } from "@/app/[locale]/(office)/office/dashboard/assessments/create/page"
-
+import { mapRevenueService } from "@/app/[locale]/(office)/office/dashboard/assessments/create/page";
 
 // ============================================================
 // PROPS
 // ============================================================
 
 export type ExistingLizzFormProps = {
+  /**
+   * CREATE:
+   * undefined
+   *
+   * EDIT:
+   * existing assessment UUID
+   */
+  assessmentId?: string;
 
   /**
-   * CREATE
+   * Preloaded assessment data.
    *
-   * No assessment ID.
+   * In EDIT mode this should normally come from the
+   * parent page after fetching the assessment.
    *
-   * EDIT
+   * Example:
    *
-   * Existing assessment ID.
+   * initialData={assessment.data}
    */
-  assessmentId?: string
+  initialData?: unknown;
 
   /**
-   * Initial data loaded from the backend.
-   *
-   * Used primarily by edit mode.
+   * Optional callback after successful operation.
    */
-  initialData?: unknown
+  onSuccess?: () => void;
 
   /**
-   * Optional callback after successful registration.
-   *
-   * If provided, the parent can control what happens
-   * after the API operation succeeds.
+   * Back navigation URL.
    */
-  onSuccess?: () => void
+  backUrl?: string;
+};
 
-  /**
-   * Optional back URL.
-   */
-  backUrl?: string
+// ============================================================
+// CONSTANTS
+// ============================================================
+
+const DEFAULT_BACK_URL =
+  "/office/dashboard/assessments";
+
+// ============================================================
+// DEVELOPMENT LOGGING
+// ============================================================
+
+const isDevelopment =
+  process.env.NODE_ENV === "development";
+
+function devLog(
+  message: string,
+  data?: unknown,
+) {
+  if (!isDevelopment) {
+    return;
+  }
+
+  if (data === undefined) {
+    console.log(
+      `[ExistingLizzForm] ${message}`,
+    );
+
+    return;
+  }
+
+  console.log(
+    `[ExistingLizzForm] ${message}`,
+    data,
+  );
 }
 
+function devWarn(
+  message: string,
+  data?: unknown,
+) {
+  if (!isDevelopment) {
+    return;
+  }
+
+  if (data === undefined) {
+    console.warn(
+      `[ExistingLizzForm] ${message}`,
+    );
+
+    return;
+  }
+
+  console.warn(
+    `[ExistingLizzForm] ${message}`,
+    data,
+  );
+}
+
+function devError(
+  message: string,
+  data?: unknown,
+) {
+  if (!isDevelopment) {
+    return;
+  }
+
+  if (data === undefined) {
+    console.error(
+      `[ExistingLizzForm] ${message}`,
+    );
+
+    return;
+  }
+
+  console.error(
+    `[ExistingLizzForm] ${message}`,
+    data,
+  );
+}
+
+// ============================================================
+// FORMDATA DEBUG HELPER
+// ============================================================
+
+function formDataToObject(
+  formData: FormData,
+): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+
+  formData.forEach(
+    (value, key) => {
+
+      // ------------------------------------------------------
+      // FILE
+      // ------------------------------------------------------
+
+      if (value instanceof File) {
+        const fileMetadata = {
+          type: "File",
+          name: value.name,
+          size: value.size,
+          mimeType: value.type,
+        };
+
+        if (key in result) {
+          const existing = result[key];
+
+          if (Array.isArray(existing)) {
+            existing.push(fileMetadata);
+          } else {
+            result[key] = [
+              existing,
+              fileMetadata,
+            ];
+          }
+
+          return;
+        }
+
+        result[key] = fileMetadata;
+
+        return;
+      }
+
+      // ------------------------------------------------------
+      // DUPLICATE FIELD
+      // ------------------------------------------------------
+
+      if (key in result) {
+        const existing = result[key];
+
+        if (Array.isArray(existing)) {
+          existing.push(value);
+        } else {
+          result[key] = [
+            existing,
+            value,
+          ];
+        }
+
+        return;
+      }
+
+      result[key] = value;
+    },
+  );
+
+  return result;
+}
 
 // ============================================================
 // COMPONENT
@@ -78,87 +224,122 @@ export default function ExistingLizzForm({
   assessmentId,
   initialData,
   onSuccess,
-  backUrl,
+  backUrl = DEFAULT_BACK_URL,
 }: ExistingLizzFormProps) {
+  const router = useRouter();
 
-  const router = useRouter()
-
-
-  // ============================================================
+  // ==========================================================
   // MODE
-  // ============================================================
+  // ==========================================================
 
   const isEditMode =
-    Boolean(assessmentId)
+    Boolean(assessmentId);
 
+  const hasInitialData =
+    initialData !== undefined &&
+    initialData !== null;
 
-  // ============================================================
-  // API MUTATIONS
-  // ============================================================
+  // ==========================================================
+  // INITIAL DEBUG
+  // ==========================================================
 
-  /*
-   * CREATE
-   *
-   * POST /existing-lizz
-   *
-   * The mutation is responsible for:
-   *
-   * - API request
-   * - cache invalidation
-   * - success toast
-   * - navigation
-   */
+  devLog(
+    "render",
+    {
+      mode: isEditMode
+        ? "EDIT"
+        : "CREATE",
+
+      assessmentId,
+
+      hasInitialData,
+
+      initialDataType:
+        typeof initialData,
+
+      initialDataKeys:
+        initialData &&
+        typeof initialData === "object"
+          ? Object.keys(
+              initialData as Record<
+                string,
+                unknown
+              >,
+            )
+          : [],
+
+      backUrl,
+    },
+  );
+
+  // ==========================================================
+  // EDIT DATA SAFETY
+  // ==========================================================
+  //
+  // EDIT mode must receive initialData from the parent page.
+  //
+  // CREATE mode must not require initialData.
+  //
+  // We intentionally do NOT fetch the assessment here.
+  // The route/page owns assessment loading.
+  // ==========================================================
+
+  const editDataMissing =
+    isEditMode &&
+    !hasInitialData;
+
+  if (editDataMissing) {
+    devWarn(
+      "EDIT mode detected but initialData has not been provided yet.",
+      {
+        assessmentId,
+      },
+    );
+  }
+
+  // ==========================================================
+  // MUTATIONS
+  // ==========================================================
+
   const createExistingLizz =
-    useCreateExistingLizz()
+    useCreateExistingLizz();
 
-
-  /*
-   * UPDATE
-   *
-   * POST /existing-lizz/{id}
-   * with _method=PUT
-   *
-   * The mutation is responsible for:
-   *
-   * - API request
-   * - cache invalidation
-   * - success toast
-   */
   const updateExistingLizz =
-    useUpdateExistingLizz()
+    useUpdateExistingLizz();
 
-
-  /*
-   * Whether the final API request is currently
-   * being processed.
-   */
   const isSubmitting =
     createExistingLizz.isPending ||
-    updateExistingLizz.isPending
+    updateExistingLizz.isPending;
 
-
-  // ============================================================
-  // CITIZENS / TAXPAYERS
-  // ============================================================
+  // ==========================================================
+  // TAXPAYERS
+  // ==========================================================
 
   const {
     data: citizensData,
     isLoading: citizensLoading,
     isError: citizensError,
-  } = useCitizens()
-
+  } = useCitizens();
 
   const taxpayers =
     useMemo(
       () =>
         citizensData?.data ?? [],
       [citizensData],
-    )
+    );
 
+  devLog(
+    "taxpayer data state",
+    {
+      loading: citizensLoading,
+      error: citizensError,
+      total: taxpayers.length,
+    },
+  );
 
-  // ============================================================
+  // ==========================================================
   // REVENUE SERVICES
-  // ============================================================
+  // ==========================================================
 
   const {
     data: revenueServicesData,
@@ -168,74 +349,71 @@ export default function ExistingLizzForm({
     is_active: true,
     per_page: 100,
     page: 1,
-  })
+  });
 
+  devLog(
+    "revenue service data state",
+    {
+      loading: revenueServicesLoading,
+      error: revenueServicesError,
+      total:
+        revenueServicesData?.data?.length ?? 0,
+    },
+  );
 
-  /*
-   * Existing LIZZ uses revenue service
-   * 1731.
-   *
-   * We map the API response into the
-   * RevenueService shape used by the
-   * existing agreement components.
-   */
+  // ==========================================================
+  // LIZZ REVENUE SERVICES
+  // ==========================================================
+
   const revenueServices =
     useMemo<RevenueService[]>(
-      () =>
-        (
-          revenueServicesData?.data ?? []
-        )
-          .filter(
-            (service) =>
-              service.revenueCode?.code ===
-              "1731",
-          )
-          .map(
-            mapRevenueService,
-          ),
+      () => {
+        const allServices =
+          revenueServicesData?.data ?? [];
 
+        const lizzServices =
+          allServices
+            .filter(
+              (service) =>
+                service.revenueCode?.code ===
+                "1731",
+            )
+            .map(
+              mapRevenueService,
+            );
+
+        devLog(
+          "LIZZ revenue services mapped",
+          {
+            allServicesCount:
+              allServices.length,
+
+            lizzServicesCount:
+              lizzServices.length,
+
+            lizzServiceIds:
+              lizzServices.map(
+                (service) =>
+                  service.id,
+              ),
+          },
+        );
+
+        return lizzServices;
+      },
       [revenueServicesData],
-    )
+    );
 
+  // ==========================================================
+  // FORM WORKFLOW
+  // ==========================================================
 
-  // ============================================================
-  // EXISTING LIZZ FORM WORKFLOW
-  // ============================================================
-
-  /*
-   * IMPORTANT:
-   *
-   * useExistingAgreement is now responsible ONLY for
-   * the form workflow.
-   *
-   * It handles:
-   *
-   * - form state
-   * - taxpayer selection
-   * - revenue service selection
-   * - dynamic service fields
-   * - financial values
-   * - validation
-   * - wizard navigation
-   * - file state
-   * - outstanding balance
-   * - FormData construction
-   *
-   * It does NOT perform the API mutation.
-   *
-   * API operations are handled by:
-   *
-   * - useCreateExistingLizz()
-   * - useUpdateExistingLizz()
-   */
   const {
     currentStep,
 
     nextStep,
     previousStep,
     goToStep,
-
-    resetForm,
 
     agreement,
     updateAgreement,
@@ -260,350 +438,460 @@ export default function ExistingLizzForm({
 
     outstandingBalance,
 
-    /*
-     * Validate the entire wizard.
-     *
-     * This should validate:
-     *
-     * Step 1:
-     * - taxpayer
-     * - revenue service
-     * - dynamic service fields
-     *
-     * Step 2:
-     * - original obligation
-     * - amount already paid
-     * - overpayment
-     */
     validateAll,
-
-    /*
-     * Converts the current form state into
-     * the FormData expected by Laravel.
-     */
     buildFormData,
-
   } = useExistingAgreement({
-
     taxpayers,
-
     revenueServices,
-
-    /*
-     * Edit information.
-     *
-     * In CREATE mode:
-     *
-     * assessmentId = undefined
-     *
-     * In EDIT mode:
-     *
-     * assessmentId = existing assessment UUID
-     */
     assessmentId,
-
     initialData,
+  });
 
-  })
+  // ==========================================================
+  // FORM STATE DEBUG
+  // ==========================================================
 
+  devLog(
+    "form state",
+    {
+      mode: isEditMode
+        ? "EDIT"
+        : "CREATE",
 
-  // ============================================================
-  // VALIDATION ERROR LIST FOR REVIEW STEP
-  // ============================================================
+      assessmentId,
 
-  /*
-   * ReviewRegisterStep expects:
-   *
-   * errors?: string[]
-   *
-   * Our form validation is structured:
-   *
-   * {
-   *   agreement: {...},
-   *   financial: {...},
-   *   service: {
-   *     serviceId: {
-   *       fieldId: "..."
-   *     }
-   *   }
-   * }
-   *
-   * Therefore we flatten the structured errors
-   * into human-readable strings for Step 3.
-   */
+      hasInitialData,
+
+      currentStep,
+
+      agreement: {
+        taxpayerId:
+          agreement.taxpayerId,
+
+        revenueServiceId:
+          agreement.revenueServiceId,
+
+        hasSource:
+          Boolean(
+            agreement.source,
+          ),
+
+        hasNotes:
+          Boolean(
+            agreement.notes,
+          ),
+      },
+
+      financial: {
+        hasOriginalObligation:
+          Boolean(
+            financial.originalObligation,
+          ),
+
+        hasAmountAlreadyPaid:
+          Boolean(
+            financial.amountAlreadyPaid,
+          ),
+
+        balanceAsOfDate:
+          financial.balanceAsOfDate,
+      },
+
+      selectedTaxpayerId:
+        selectedTaxpayer?.id ?? null,
+
+      selectedRevenueServiceId:
+        selectedRevenueService?.id ?? null,
+
+      revenueCode,
+
+      serviceFieldServiceIds:
+        Object.keys(
+          serviceFieldValues,
+        ),
+
+      validationErrorCount:
+        Object.values(
+          validationErrors,
+        ).length,
+
+      outstandingBalance,
+
+      isSubmitting,
+    },
+  );
+
+  // ==========================================================
+  // REVIEW ERRORS
+  // ==========================================================
+
   const reviewErrors =
     useMemo(() => {
+      const errors: string[] = [];
 
-      const errors: string[] = []
-
-
-      // --------------------------------------------------------
-      // AGREEMENT ERRORS
-      // --------------------------------------------------------
+      // ------------------------------------------------------
+      // AGREEMENT
+      // ------------------------------------------------------
 
       const agreementErrors =
-        validationErrors.agreement ?? {}
+        validationErrors.agreement ?? {};
 
       Object.values(
         agreementErrors,
       ).forEach(
         (error) => {
-
           if (
             typeof error === "string" &&
             error.trim() !== ""
           ) {
-            errors.push(error)
+            errors.push(error);
           }
-
         },
-      )
+      );
 
-
-      // --------------------------------------------------------
-      // FINANCIAL ERRORS
-      // --------------------------------------------------------
+      // ------------------------------------------------------
+      // FINANCIAL
+      // ------------------------------------------------------
 
       const financialErrors =
-        validationErrors.financial ?? {}
+        validationErrors.financial ?? {};
 
       Object.values(
         financialErrors,
       ).forEach(
         (error) => {
-
           if (
             typeof error === "string" &&
             error.trim() !== ""
           ) {
-            errors.push(error)
+            errors.push(error);
           }
-
         },
-      )
+      );
 
-
-      // --------------------------------------------------------
-      // SERVICE FIELD ERRORS
-      // --------------------------------------------------------
+      // ------------------------------------------------------
+      // SERVICE
+      // ------------------------------------------------------
 
       const serviceErrors =
-        validationErrors.service ?? {}
+        validationErrors.service ?? {};
 
       Object.values(
         serviceErrors,
       ).forEach(
         (fieldErrors) => {
-
           if (
             !fieldErrors ||
             typeof fieldErrors !== "object"
           ) {
-            return
+            return;
           }
 
           Object.values(
             fieldErrors,
           ).forEach(
             (error) => {
-
               if (
                 typeof error === "string" &&
                 error.trim() !== ""
               ) {
-                errors.push(error)
+                errors.push(error);
               }
-
             },
-          )
-
+          );
         },
-      )
+      );
 
-
-      /*
-       * Remove duplicates.
-       */
       return Array.from(
         new Set(errors),
-      )
-
+      );
     }, [
       validationErrors,
-    ])
+    ]);
 
+  devLog(
+    "review validation state",
+    {
+      count: reviewErrors.length,
+    },
+  );
 
-  // ============================================================
+  // ==========================================================
   // NAVIGATION
-  // ============================================================
+  // ==========================================================
 
   function handleBack() {
+    devLog(
+      "back navigation",
+      {
+        mode: isEditMode
+          ? "EDIT"
+          : "CREATE",
 
-    if (backUrl) {
+        assessmentId,
 
-      router.push(
         backUrl,
-      )
+      },
+    );
 
-      return
-    }
-
-    router.back()
+    router.push(
+      backUrl,
+    );
   }
-
 
   function handleContinue() {
+    devLog(
+      "continue",
+      {
+        currentStep,
+        assessmentId,
+        isEditMode,
+      },
+    );
 
-    /*
-     * nextStep() is responsible for validating
-     * the current step before moving forward.
-     */
-    nextStep()
+    nextStep();
   }
-
 
   function handlePrevious() {
+    devLog(
+      "previous",
+      {
+        currentStep,
+        assessmentId,
+        isEditMode,
+      },
+    );
 
-    previousStep()
+    previousStep();
   }
 
-
-  // ============================================================
-  // CREATE / UPDATE
-  // ============================================================
+  // ==========================================================
+  // SUBMIT
+  // ==========================================================
 
   function handleRegisterAgreement() {
+    devLog(
+      "submission started",
+      {
+        mode: isEditMode
+          ? "EDIT"
+          : "CREATE",
 
-    /*
-     * First validate the entire form.
-     *
-     * This prevents Step 3 from bypassing
-     * validation.
-     */
-    const isValid =
-      validateAll()
+        assessmentId,
 
-    if (!isValid) {
+        currentStep,
+      },
+    );
 
-      return
+    // --------------------------------------------------------
+    // EDIT DATA GUARD
+    // --------------------------------------------------------
+
+    if (
+      isEditMode &&
+      !hasInitialData
+    ) {
+      devWarn(
+        "Submission blocked because edit data has not loaded.",
+        {
+          assessmentId,
+        },
+      );
+
+      return;
     }
 
+    // --------------------------------------------------------
+    // VALIDATE
+    // --------------------------------------------------------
 
-    /*
-     * Build the multipart request.
-     *
-     * This should contain:
-     *
-     * taxpayer_id
-     * revenue_service_id
-     * service_fields
-     * source
-     * notes
-     * original_obligation
-     * amount_already_paid
-     *
-     * balance_as_of_date is intentionally NOT included.
-     */
+    const isValid =
+      validateAll();
+
+    devLog(
+      "validation result",
+      {
+        isValid,
+      },
+    );
+
+    if (!isValid) {
+      devWarn(
+        "submission blocked by validation",
+        {
+          validationErrors,
+        },
+      );
+
+      return;
+    }
+
+    // --------------------------------------------------------
+    // BUILD FORMDATA
+    // --------------------------------------------------------
+
     const formData =
-      buildFormData()
+      buildFormData();
 
+    if (isDevelopment) {
+      devLog(
+        "FormData payload",
+        formDataToObject(
+          formData,
+        ),
+      );
+    }
 
-    // ==========================================================
-    // EDIT
-    // ==========================================================
+    // ========================================================
+    // UPDATE
+    // ========================================================
 
     if (
       isEditMode &&
       assessmentId
     ) {
+      devLog(
+        "sending UPDATE request",
+        {
+          assessmentId,
+          endpoint:
+            `/existing-lizz/${assessmentId}`,
+        },
+      );
 
-      updateExistingLizz.mutate({
-        id: assessmentId,
-        data: formData,
-      })
+      updateExistingLizz.mutate(
+        {
+          id: assessmentId,
+          data: formData,
+        },
+        {
+          onSuccess: (
+            response,
+          ) => {
+            devLog(
+              "UPDATE successful",
+              {
+                assessmentId,
+                response,
+              },
+            );
 
-      return
+            if (onSuccess) {
+              onSuccess();
+
+              return;
+            }
+
+            router.push(
+              backUrl,
+            );
+          },
+
+          onError: (
+            error,
+          ) => {
+            devError(
+              "UPDATE failed",
+              {
+                assessmentId,
+                error,
+              },
+            );
+          },
+        },
+      );
+
+      return;
     }
 
-
-    // ==========================================================
+    // ========================================================
     // CREATE
-    // ==========================================================
+    // ========================================================
+
+    devLog(
+      "sending CREATE request",
+      {
+        endpoint:
+          "/existing-lizz",
+      },
+    );
 
     createExistingLizz.mutate(
       formData,
       {
-        onSuccess: () => {
+        onSuccess: (
+          response,
+        ) => {
+          devLog(
+            "CREATE successful",
+            {
+              response,
+            },
+          );
 
-          /*
-           * If the parent supplied a callback,
-           * allow it to run after successful creation.
-           */
           if (onSuccess) {
+            onSuccess();
 
-            onSuccess()
-
+            return;
           }
 
+          router.push(
+            backUrl,
+          );
+        },
+
+        onError: (
+          error,
+        ) => {
+          devError(
+            "CREATE failed",
+            {
+              error,
+            },
+          );
         },
       },
-    )
+    );
   }
 
-
-  // ============================================================
-  // REGISTER ANOTHER
-  // ============================================================
-
-  function handleResetForm() {
-
-    /*
-     * Reset the local form state.
-     */
-    resetForm()
-
-  }
-
-
-  // ============================================================
-  // DONE
-  // ============================================================
-
-  function handleSuccess() {
-
-    if (onSuccess) {
-
-      onSuccess()
-
-      return
-    }
-
-    router.push(
-      "/office/dashboard/revenue/existing-lizz",
-    )
-  }
-
-
-  // ============================================================
+  // ==========================================================
   // LOADING
-  // ============================================================
+  // ==========================================================
 
   const isLoading =
     citizensLoading ||
-    revenueServicesLoading
-
+    revenueServicesLoading;
 
   if (isLoading) {
-
     return (
       <div className="min-h-screen bg-muted/20">
-
-        <div className="mx-auto flex min-h-screen w-full max-w-7xl items-center justify-center px-4 py-6 sm:px-6 lg:px-8">
-
-          <div className="w-full max-w-md rounded-xl border bg-background p-6 shadow-sm">
-
+        <div
+          className="
+            mx-auto
+            flex
+            min-h-screen
+            w-full
+            max-w-7xl
+            items-center
+            justify-center
+            px-4
+            py-6
+            sm:px-6
+            lg:px-8
+          "
+        >
+          <div
+            className="
+              w-full
+              max-w-md
+              rounded-xl
+              border
+              bg-background
+              p-6
+              shadow-sm
+            "
+          >
             <div className="space-y-4 text-center">
-
               <div
                 className="
                   mx-auto
@@ -618,74 +906,82 @@ export default function ExistingLizzForm({
               />
 
               <div className="space-y-1">
-
                 <h2 className="text-sm font-semibold">
-
                   {isEditMode
                     ? "Loading existing LIZZ"
                     : "Loading agreement data"}
-
                 </h2>
 
                 <p className="text-sm text-muted-foreground">
-
-                  Loading taxpayers and revenue
-                  services...
-
+                  {isEditMode
+                    ? "Preparing the existing agreement..."
+                    : "Loading taxpayers and revenue services..."}
                 </p>
-
               </div>
-
             </div>
-
           </div>
-
         </div>
-
       </div>
-    )
+    );
   }
 
-
-  // ============================================================
-  // ERROR
-  // ============================================================
+  // ==========================================================
+  // DATA ERROR
+  // ==========================================================
 
   if (
     citizensError ||
     revenueServicesError
   ) {
+    devError(
+      "required form data failed to load",
+      {
+        citizensError,
+        revenueServicesError,
+      },
+    );
 
     return (
       <div className="min-h-screen bg-muted/20">
-
-        <div className="mx-auto flex min-h-screen w-full max-w-7xl items-center justify-center px-4 py-6 sm:px-6 lg:px-8">
-
-          <div className="w-full max-w-lg rounded-xl border bg-background p-6 shadow-sm">
-
+        <div
+          className="
+            mx-auto
+            flex
+            min-h-screen
+            w-full
+            max-w-7xl
+            items-center
+            justify-center
+            px-4
+            py-6
+            sm:px-6
+            lg:px-8
+          "
+        >
+          <div
+            className="
+              w-full
+              max-w-lg
+              rounded-xl
+              border
+              bg-background
+              p-6
+              shadow-sm
+            "
+          >
             <div className="space-y-4">
-
               <div>
-
                 <h2 className="text-base font-semibold">
-
                   Unable to load agreement data
-
                 </h2>
 
                 <p className="mt-1 text-sm text-muted-foreground">
-
-                  The taxpayer or revenue service
-                  data could not be loaded.
-
-                  Please try again.
-
+                  The taxpayer or revenue service data
+                  could not be loaded. Please try again.
                 </p>
-
               </div>
 
               <div className="flex justify-end">
-
                 <Button
                   type="button"
                   variant="outline"
@@ -693,33 +989,114 @@ export default function ExistingLizzForm({
                     router.refresh()
                   }
                 >
-
                   Try Again
-
                 </Button>
-
               </div>
-
             </div>
-
           </div>
-
         </div>
-
       </div>
-    )
+    );
   }
 
+  // ==========================================================
+  // EDIT DATA GUARD
+  // ==========================================================
+  //
+  // The parent page fetches the assessment.
+  //
+  // Do not render the editable form with empty defaults while
+  // waiting for initialData.
+  //
+  // This prevents an important UX/data issue:
+  //
+  //     API loading
+  //          ↓
+  //     empty form rendered
+  //          ↓
+  //     user sees blank fields
+  //          ↓
+  //     hydration happens later
+  //
+  // Instead, wait until the assessment is actually available.
+  // ==========================================================
 
-  // ============================================================
+  if (editDataMissing) {
+    return (
+      <div className="min-h-screen bg-muted/20">
+        <div
+          className="
+            mx-auto
+            flex
+            min-h-screen
+            w-full
+            max-w-7xl
+            items-center
+            justify-center
+            px-4
+            py-6
+            sm:px-6
+            lg:px-8
+          "
+        >
+          <div
+            className="
+              w-full
+              max-w-md
+              rounded-xl
+              border
+              bg-background
+              p-6
+              shadow-sm
+            "
+          >
+            <div className="space-y-4 text-center">
+              <div
+                className="
+                  mx-auto
+                  h-8
+                  w-8
+                  animate-spin
+                  rounded-full
+                  border-2
+                  border-muted
+                  border-t-primary
+                "
+              />
+
+              <div className="space-y-1">
+                <h2 className="text-sm font-semibold">
+                  Loading existing LIZZ
+                </h2>
+
+                <p className="text-sm text-muted-foreground">
+                  Loading the existing agreement data...
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ==========================================================
   // PAGE
-  // ============================================================
+  // ==========================================================
 
   return (
     <div className="min-h-screen bg-muted/20">
-
-      <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-
+      <div
+        className="
+          mx-auto
+          w-full
+          max-w-7xl
+          px-4
+          py-6
+          sm:px-6
+          lg:px-8
+        "
+      >
         <div className="space-y-6">
 
           {/* ==================================================
@@ -727,26 +1104,18 @@ export default function ExistingLizzForm({
           ================================================== */}
 
           <ExistingAgreementHeader
-            onBack={
-              handleBack
-            }
+            onBack={handleBack}
+            isEditMode={isEditMode}
           />
-
 
           {/* ==================================================
               STEPPER
           ================================================== */}
 
           <ExistingAgreementStepper
-            currentStep={
-              currentStep
-            }
-
-            onStepChange={
-              goToStep
-            }
+            currentStep={currentStep}
+            onStepChange={goToStep}
           />
-
 
           {/* ==================================================
               MAIN CONTENT
@@ -759,9 +1128,8 @@ export default function ExistingLizzForm({
               lg:grid-cols-[minmax(0,1fr)_320px]
             "
           >
-
             {/* ==================================================
-                MAIN FORM
+                FORM
             ================================================== */}
 
             <main className="min-w-0">
@@ -771,12 +1139,8 @@ export default function ExistingLizzForm({
               ================================================== */}
 
               {currentStep === 1 && (
-
                 <AgreementInformationStep
-
-                  agreement={
-                    agreement
-                  }
+                  agreement={agreement}
 
                   updateAgreement={
                     updateAgreement
@@ -825,21 +1189,16 @@ export default function ExistingLizzForm({
                   removeService={
                     removeService
                   }
-
                 />
               )}
-
 
               {/* ==================================================
                   STEP 2
               ================================================== */}
 
               {currentStep === 2 && (
-
                 <FinancialPositionStep
-                  financial={
-                    financial
-                  }
+                  financial={financial}
 
                   updateFinancial={
                     updateFinancial
@@ -853,25 +1212,17 @@ export default function ExistingLizzForm({
                     validationErrors.financial ?? {}
                   }
                 />
-
               )}
-
 
               {/* ==================================================
                   STEP 3
               ================================================== */}
 
               {currentStep === 3 && (
-
                 <ReviewRegisterStep
+                  agreement={agreement}
 
-                  agreement={
-                    agreement
-                  }
-
-                  financial={
-                    financial
-                  }
+                  financial={financial}
 
                   selectedTaxpayer={
                     selectedTaxpayer
@@ -900,11 +1251,8 @@ export default function ExistingLizzForm({
                   errors={
                     reviewErrors
                   }
-
                 />
-
               )}
-
 
               {/* ==================================================
                   WORKFLOW ACTIONS
@@ -923,38 +1271,29 @@ export default function ExistingLizzForm({
                   sm:justify-between
                 "
               >
-
                 {/* ==================================================
                     PREVIOUS
                 ================================================== */}
 
                 <div>
-
                   {currentStep > 1 && (
-
                     <Button
                       type="button"
                       variant="outline"
                       onClick={
                         handlePrevious
                       }
-
                       disabled={
                         isSubmitting
                       }
                     >
-
                       Previous
-
                     </Button>
-
                   )}
-
                 </div>
 
-
                 {/* ==================================================
-                    ACTIONS
+                    NEXT / SUBMIT
                 ================================================== */}
 
                 <div
@@ -965,85 +1304,59 @@ export default function ExistingLizzForm({
                     sm:flex-row
                   "
                 >
-
-                  {/* ==================================================
-                      CONTINUE
-                  ================================================== */}
-
                   {currentStep < 3 && (
-
                     <Button
                       type="button"
                       onClick={
                         handleContinue
                       }
-
                       disabled={
                         isSubmitting
                       }
                     >
-
                       Continue
-
                     </Button>
-
                   )}
 
-
-                  {/* ==================================================
-                      CREATE / UPDATE
-                  ================================================== */}
-
                   {currentStep === 3 && (
-
                     <Button
                       type="button"
                       onClick={
                         handleRegisterAgreement
                       }
-
                       disabled={
                         isSubmitting
                       }
                     >
+                      {isSubmitting ? (
+                        <>
+                          <span
+                            className="
+                              mr-2
+                              h-4
+                              w-4
+                              animate-spin
+                              rounded-full
+                              border-2
+                              border-current
+                              border-t-transparent
+                            "
+                          />
 
-                      {isSubmitting
-                        ? (
-                          <>
-                            <span
-                              className="
-                                mr-2
-                                h-4
-                                w-4
-                                animate-spin
-                                rounded-full
-                                border-2
-                                border-current
-                                border-t-transparent
-                              "
-                            />
-
-                            {isEditMode
-                              ? "Updating..."
-                              : "Registering..."}
-                          </>
-                        )
-                        : (
-                          isEditMode
-                            ? "Update Agreement"
-                            : "Register Agreement"
-                        )}
-
+                          {isEditMode
+                            ? "Updating..."
+                            : "Registering..."}
+                        </>
+                      ) : isEditMode ? (
+                        "Update Agreement"
+                      ) : (
+                        "Register Agreement"
+                      )}
                     </Button>
-
                   )}
-
                 </div>
-
               </div>
-
             </main>
-
 
             {/* ==================================================
                 SIDEBAR
@@ -1057,17 +1370,11 @@ export default function ExistingLizzForm({
                 lg:self-start
               "
             >
-
               <WhatHappensNext />
-
             </aside>
-
           </div>
-
         </div>
-
       </div>
-
     </div>
-  )
+  );
 }

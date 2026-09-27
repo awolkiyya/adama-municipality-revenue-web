@@ -4,23 +4,72 @@ import { AlertTriangle } from "lucide-react";
 import { AssessmentService } from "@/types/revenue/assessment";
 import { formatAmount } from "@/lib/format";
 
-export function DecisionSummary({ services }: { services: AssessmentService[] }) {
-  const { total, currency, mixedCurrency, hasAmount } = useMemo(() => {
-    const amounts = services
-      .filter((s) => s.computedAmount !== null && s.computedAmount !== undefined)
-      .map((s) => ({ amount: Number(s.computedAmount), currency: s.currencyCode ?? "" }));
+type DecisionSummaryProps = {
+  services: AssessmentService[];
+  isExistingLizz: boolean;
+};
 
-    const currencies = new Set(amounts.map((a) => a.currency));
+export function DecisionSummary({
+  services,
+  isExistingLizz,
+}: DecisionSummaryProps) {
+  const {
+    total,
+    currency,
+    mixedCurrency,
+    hasAmount,
+  } = useMemo(() => {
+    const amounts = services
+      .map((service) => {
+        const rawAmount = isExistingLizz
+          ? service.remainingAmount
+          : service.computedAmount;
+
+        if (
+          rawAmount === null ||
+          rawAmount === undefined
+        ) {
+          return null;
+        }
+
+        const amount = Number(rawAmount);
+
+        if (!Number.isFinite(amount)) {
+          return null;
+        }
+
+        return {
+          amount,
+          currency: service.currencyCode ?? "",
+        };
+      })
+      .filter(
+        (
+          item,
+        ): item is {
+          amount: number;
+          currency: string;
+        } => item !== null,
+      );
+
+    const currencies = new Set(
+      amounts.map((item) => item.currency),
+    );
 
     return {
-      total: amounts.reduce((sum, a) => sum + a.amount, 0),
+      total: amounts.reduce(
+        (sum, item) => sum + item.amount,
+        0,
+      ),
       currency: amounts[0]?.currency ?? "",
       mixedCurrency: currencies.size > 1,
       hasAmount: amounts.length > 0,
     };
-  }, [services]);
+  }, [services, isExistingLizz]);
 
-  if (!hasAmount) return null;
+  if (!hasAmount) {
+    return null;
+  }
 
   return (
     <div className="flex flex-col gap-1 rounded-lg border bg-muted/30 px-4 py-3 sm:min-w-56">
@@ -29,8 +78,16 @@ export function DecisionSummary({ services }: { services: AssessmentService[] })
       </p>
 
       <p className="text-2xl font-bold">
-        {mixedCurrency ? total.toLocaleString() : formatAmount(total, currency)}
+        {mixedCurrency
+          ? total.toLocaleString()
+          : formatAmount(total, currency)}
       </p>
+
+      {isExistingLizz && (
+        <p className="text-xs text-muted-foreground">
+          Based on remaining balance
+        </p>
+      )}
 
       {mixedCurrency && (
         <p className="flex items-center gap-1.5 text-xs text-destructive">

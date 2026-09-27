@@ -5,6 +5,14 @@
 // =====================================================
 
 import {
+  CalendarClock,
+  ChevronDown,
+  FilePlus2,
+  FileText,
+  UserPlus,
+} from "lucide-react";
+
+import {
   Banner,
 } from "@/components/banner/topBanner";
 
@@ -20,10 +28,17 @@ import {
   Button,
 } from "@/components/ui/button";
 
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+
 import type {
   AssessmentConfig,
 } from "./assessment.config";
-import { Icon } from "lucide-react";
 
 
 // =====================================================
@@ -31,18 +46,15 @@ import { Icon } from "lucide-react";
 // =====================================================
 
 type AssessmentHeaderProps = {
+  config: AssessmentConfig;
 
-  config:
-    AssessmentConfig;
+  onCreate: () => void;
 
-  onCreate:
-    () => void;
+  onRegisterTaxpayer: () => void;
 
-  onRegisterTaxpayer:
-    () => void;
+  onRegisterExistingAgreement: () => void;
 
-  onRegisterExistingAgreement:
-    () => void;
+  onManageScheduledPayments: () => void;
 };
 
 
@@ -59,11 +71,12 @@ export function AssessmentHeader({
 
   onRegisterExistingAgreement,
 
+  onManageScheduledPayments,
+
 }: AssessmentHeaderProps) {
 
   return (
     <Banner
-
       badge={
         <IconBadge
           className="
@@ -113,99 +126,240 @@ export function AssessmentHeader({
       "
 
       actions={
-
         <div
           className="
             flex
             flex-wrap
             items-center
-            gap-3
+            gap-2
           "
         >
 
-          {/* ==========================================
-              CREATE ASSESSMENT
-              ========================================== */}
+          {/* ============================================================
+              PRIMARY ACTION
+              ============================================================ */}
 
-        
-                <Button
+          <Button
+            type="button"
+            onClick={
+              onCreate
+            }
+            className="
+              gap-2
+              bg-white
+              text-primary
+              shadow-sm
+              hover:bg-white/90
+            "
+          >
+            <FilePlus2
+              className="
+                h-4
+                w-4
+              "
+            />
 
-                  type="button"
-                  onClick={
-                    onCreate
-                  }
+            New Assessment
+          </Button>
+
+
+          {/* ============================================================
+              MORE ACTIONS DROPDOWN
+              ============================================================ */}
+
+          <DropdownMenu>
+
+            <DropdownMenuTrigger
+              asChild
+            >
+              <Button
+                type="button"
+                variant="outline"
+                className="
+                  gap-2
+                  border-white/30
+                  bg-white/10
+                  text-white
+                  backdrop-blur-sm
+                  hover:bg-white
+                  hover:text-primary
+                "
+              >
+                Actions
+
+                <ChevronDown
                   className="
-                    bg-white
-                    text-primary
-                    shadow-sm
-                    hover:bg-white/90
+                    h-4
+                    w-4
+                  "
+                />
+              </Button>
+            </DropdownMenuTrigger>
+
+
+            {/* ==========================================================
+                DROPDOWN CONTENT
+                ========================================================== */}
+
+            <DropdownMenuContent
+              align="end"
+              className="
+                w-72
+              "
+            >
+
+              {/* --------------------------------------------------------
+                  REGISTER EXISTING AGREEMENT
+                  -------------------------------------------------------- */}
+
+              <DropdownMenuItem
+                onClick={
+                  onRegisterExistingAgreement
+                }
+                className="
+                  cursor-pointer
+                  gap-3
+                  py-3
+                "
+              >
+                <FileText
+                  className="
+                    h-4
+                    w-4
+                    text-muted-foreground
+                  "
+                />
+
+                <div
+                  className="
+                    flex
+                    flex-col
                   "
                 >
-
-                  {/* <Icon
+                  <span
                     className="
-                      mr-2
-                      h-4
-                      w-4
+                      font-medium
                     "
-                  /> */}
+                  >
+                    Existing Agreement
+                  </span>
 
-                 New Assissment
-
-                </Button>
-     
-
-
-          {/* ==========================================
-              REGISTER EXISTING AGREEMENT
-              ALWAYS DISPLAYED
-              ========================================== */}
-
-          <Button
-            type="button"
-            variant="outline"
-            onClick={
-              onRegisterExistingAgreement
-            }
-            className="
-              border-white/30
-              bg-white/10
-              text-white
-              backdrop-blur-sm
-              hover:bg-white
-              hover:text-primary
-            "
-          >
-
-            Register Existing Agreement
-
-          </Button>
+                  <span
+                    className="
+                      text-xs
+                      text-muted-foreground
+                    "
+                  >
+                    Register an existing agreement
+                  </span>
+                </div>
+              </DropdownMenuItem>
 
 
-          {/* ==========================================
-              REGISTER TAXPAYER
-              ALWAYS DISPLAYED
-              ========================================== */}
+              <DropdownMenuSeparator />
 
-          <Button
-            type="button"
-            variant="outline"
-            onClick={
-              onRegisterTaxpayer
-            }
-            className="
-              border-white/30
-              bg-white/10
-              text-white
-              backdrop-blur-sm
-              hover:bg-white
-              hover:text-primary
-            "
-          >
 
-            Register Taxpayer
+              {/* --------------------------------------------------------
+                  REGISTER TAXPAYER
+                  -------------------------------------------------------- */}
 
-          </Button>
+              <DropdownMenuItem
+                onClick={
+                  onRegisterTaxpayer
+                }
+                className="
+                  cursor-pointer
+                  gap-3
+                  py-3
+                "
+              >
+                <UserPlus
+                  className="
+                    h-4
+                    w-4
+                    text-muted-foreground
+                  "
+                />
+
+                <div
+                  className="
+                    flex
+                    flex-col
+                  "
+                >
+                  <span
+                    className="
+                      font-medium
+                    "
+                  >
+                    Register Taxpayer
+                  </span>
+
+                  <span
+                    className="
+                      text-xs
+                      text-muted-foreground
+                    "
+                  >
+                    Add a new taxpayer
+                  </span>
+                </div>
+              </DropdownMenuItem>
+
+
+              <DropdownMenuSeparator />
+
+
+              {/* --------------------------------------------------------
+                  SCHEDULED PAYMENT MANAGEMENT
+                  -------------------------------------------------------- */}
+
+              <DropdownMenuItem
+                onClick={
+                  onManageScheduledPayments
+                }
+                className="
+                  cursor-pointer
+                  gap-3
+                  py-3
+                "
+              >
+                <CalendarClock
+                  className="
+                    h-4
+                    w-4
+                    text-muted-foreground
+                  "
+                />
+
+                <div
+                  className="
+                    flex
+                    flex-col
+                  "
+                >
+                  <span
+                    className="
+                      font-medium
+                    "
+                  >
+                    Scheduled Payments
+                  </span>
+
+                  <span
+                    className="
+                      text-xs
+                      text-muted-foreground
+                    "
+                  >
+                    Manage payment schedules and installments
+                  </span>
+                </div>
+              </DropdownMenuItem>
+
+            </DropdownMenuContent>
+
+          </DropdownMenu>
 
         </div>
       }

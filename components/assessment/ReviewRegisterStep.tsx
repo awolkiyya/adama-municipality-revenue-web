@@ -48,7 +48,183 @@ interface ReviewRegisterStepProps {
 }
 
 /* =========================================================
-   HELPERS
+   GENERIC HELPERS
+========================================================= */
+
+function hasOwn(
+  object: Record<string, unknown>,
+  key: string,
+): boolean {
+  return Object.prototype.hasOwnProperty.call(
+    object,
+    key,
+  )
+}
+
+function normalizeIdentifier(
+  value: unknown,
+): string | undefined {
+  if (
+    typeof value !== "string" &&
+    typeof value !== "number"
+  ) {
+    return undefined
+  }
+
+  const normalized =
+    String(value).trim()
+
+  return normalized
+    ? normalized
+    : undefined
+}
+
+/* =========================================================
+   FIELD IDENTIFIERS
+========================================================= */
+
+/**
+ * Returns all possible identifiers for a service field.
+ *
+ * The API persists values using fieldCode:
+ *
+ *   LAND_AREA
+ *   AGREEMENT_DATE
+ *   ZOONII
+ *
+ * The frontend configuration can represent the same
+ * field using key, code, id, fieldId, etc.
+ */
+function getFieldIdentifiers(
+  field: RevenueService["fields"][number],
+): string[] {
+  const candidateValues = [
+    field.key,
+
+    /*
+     * Some RevenueService types expose code directly.
+     * Access through a narrow runtime cast so this remains
+     * safe even if the current TypeScript type does not.
+     */
+    (field as unknown as {
+      code?: unknown
+    }).code,
+
+    (field as unknown as {
+      fieldCode?: unknown
+    }).fieldCode,
+
+    (field as unknown as {
+      field_code?: unknown
+    }).field_code,
+
+    field.id,
+
+    (field as unknown as {
+      field_id?: unknown
+    }).field_id,
+
+    (field as unknown as {
+      fieldId?: unknown
+    }).fieldId,
+
+    field.label,
+  ]
+
+  const identifiers: string[] = []
+
+  for (
+    const candidate of candidateValues
+  ) {
+    const identifier =
+      normalizeIdentifier(candidate)
+
+    if (
+      identifier &&
+      !identifiers.includes(
+        identifier,
+      )
+    ) {
+      identifiers.push(
+        identifier,
+      )
+    }
+  }
+
+  return identifiers
+}
+
+/* =========================================================
+   FORM FIELD KEY
+========================================================= */
+
+/**
+ * Determines the canonical key that should be used
+ * when looking up a dynamic service value.
+ *
+ * IMPORTANT:
+ *
+ * Prefer business field identifiers over UUIDs.
+ *
+ * This means:
+ *
+ *   field.key       -> LAND_AREA
+ *   field.code      -> LAND_AREA
+ *   field.fieldCode -> LAND_AREA
+ *
+ * before falling back to:
+ *
+ *   field.id        -> UUID
+ */
+function getFieldFormKey(
+  field: RevenueService["fields"][number],
+): string | undefined {
+  const candidates = [
+    field.key,
+
+    (field as unknown as {
+      code?: unknown
+    }).code,
+
+    (field as unknown as {
+      fieldCode?: unknown
+    }).fieldCode,
+
+    (field as unknown as {
+      field_code?: unknown
+    }).field_code,
+
+    (field as unknown as {
+      name?: unknown
+    }).name,
+
+    field.id,
+
+    (field as unknown as {
+      field_id?: unknown
+    }).field_id,
+
+    (field as unknown as {
+      fieldId?: unknown
+    }).fieldId,
+  ]
+
+  for (
+    const candidate of candidates
+  ) {
+    const value =
+      normalizeIdentifier(candidate)
+
+    if (value) {
+      return value
+    }
+  }
+
+  return undefined
+}
+
+/* =========================================================
+   CURRENCY FORMATTER
 ========================================================= */
 
 function formatCurrency(
@@ -86,13 +262,52 @@ function formatDate(
     String(value)
 
   /*
-   * Handle ISO datetime values as well
-   * as plain YYYY-MM-DD values.
+   * Handle plain YYYY-MM-DD values
+   * without allowing browser timezone
+   * conversion to shift the displayed day.
+   */
+  if (
+    /^\d{4}-\d{2}-\d{2}$/.test(
+      stringValue,
+    )
+  ) {
+    const [
+      year,
+      month,
+      day,
+    ] = stringValue
+      .split("-")
+      .map(Number)
+
+    const date = new Date(
+      year,
+      month - 1,
+      day,
+    )
+
+    if (
+      Number.isNaN(
+        date.getTime(),
+      )
+    ) {
+      return stringValue
+    }
+
+    return new Intl.DateTimeFormat(
+      "en-GB",
+      {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      },
+    ).format(date)
+  }
+
+  /*
+   * Handle ISO datetime values.
    */
   const date = new Date(
-    stringValue.length === 10
-      ? `${stringValue}T00:00:00`
-      : stringValue,
+    stringValue,
   )
 
   if (
@@ -138,9 +353,13 @@ function formatPrimitiveValue(
   if (
     typeof value === "object"
   ) {
-    return JSON.stringify(
-      value,
-    )
+    try {
+      return JSON.stringify(
+        value,
+      )
+    } catch {
+      return String(value)
+    }
   }
 
   return String(value)
@@ -212,7 +431,11 @@ function formatServiceFieldValue(
    */
   const fieldType =
     String(
-      field.type ?? "",
+      (
+        field as unknown as {
+          type?: unknown
+        }
+      ).type ?? "",
     ).toUpperCase()
 
   if (
@@ -231,9 +454,13 @@ function formatServiceFieldValue(
     typeof value ===
     "object"
   ) {
-    return JSON.stringify(
-      value,
-    )
+    try {
+      return JSON.stringify(
+        value,
+      )
+    } catch {
+      return String(value)
+    }
   }
 
   /*
@@ -243,90 +470,102 @@ function formatServiceFieldValue(
 }
 
 /* =========================================================
-   FIELD VALUE LOOKUP
+   SERVICE FIELD VALUE LOOKUP
 ========================================================= */
 
 /**
- * Returns the value stored for a service field.
+ * Finds a value regardless of whether the form currently
+ * stores it by:
  *
- * IMPORTANT:
+ *   - field key
+ *   - field code
+ *   - fieldCode
+ *   - field UUID
  *
- * The form stores dynamic service values using the
- * field UUID when available.
+ * This makes ReviewRegisterStep compatible with both:
  *
- * Example:
+ * 1. Newly entered frontend values
+ * 2. Existing assessment values hydrated from the API
  *
- * serviceFieldValues = {
- *   "service-uuid": {
- *     "field-uuid-1": 500,
- *     "field-uuid-2": "A",
- *     "field-uuid-3": "2026-09-23"
+ * Example API:
+ *
+ * values: [
+ *   {
+ *     fieldCode: "LAND_AREA",
+ *     value: 200
  *   }
+ * ]
+ *
+ * Example frontend:
+ *
+ * {
+ *   LAND_AREA: 200
  * }
  *
- * But the field configuration can also have:
+ * or:
  *
- * key = "LAND_AREA"
- *
- * Therefore we must prefer field.id and only fall
- * back to field.key/name.
+ * {
+ *   "field-uuid": 200
+ * }
  */
 function getServiceFieldValue(
   field: RevenueService["fields"][number],
   values: Record<string, unknown>,
 ): unknown {
-  const fieldId =
-    typeof field.id === "string"
-      ? field.id
-      : undefined
-
-  const fieldKey =
-    typeof field.key === "string"
-      ? field.key
-      : undefined
-
-  const fieldName =
-    typeof field.label === "string"
-      ? field.label
-      : undefined
+  const identifiers =
+    getFieldIdentifiers(
+      field,
+    )
 
   /*
-   * 1. UUID
+   * Exact lookup first.
    */
-  if (
-    fieldId &&
-    Object.prototype.hasOwnProperty.call(
-      values,
-      fieldId,
-    )
+  for (
+    const identifier of identifiers
   ) {
-    return values[fieldId]
+    if (
+      hasOwn(
+        values,
+        identifier,
+      )
+    ) {
+      return values[
+        identifier
+      ]
+    }
   }
 
   /*
-   * 2. Field key
+   * Case-insensitive fallback.
+   *
+   * This protects against differences such as:
+   *
+   * LAND_AREA
+   * land_area
    */
-  if (
-    fieldKey &&
-    Object.prototype.hasOwnProperty.call(
+  const normalizedEntries =
+    Object.entries(
       values,
-      fieldKey,
     )
-  ) {
-    return values[fieldKey]
-  }
 
-  /*
-   * 3. Field name
-   */
-  if (
-    fieldName &&
-    Object.prototype.hasOwnProperty.call(
-      values,
-      fieldName,
-    )
+  for (
+    const identifier of identifiers
   ) {
-    return values[fieldName]
+    const normalizedIdentifier =
+      identifier.toLowerCase()
+
+    const matchingEntry =
+      normalizedEntries.find(
+        ([key]) =>
+          key.toLowerCase() ===
+          normalizedIdentifier,
+      )
+
+    if (
+      matchingEntry
+    ) {
+      return matchingEntry[1]
+    }
   }
 
   return undefined
@@ -360,7 +599,7 @@ function ReviewRow({
             : "max-w-[65%] break-words text-right text-sm font-medium"
         }
       >
-        {value || "—"}
+        {value ?? "—"}
       </span>
     </div>
   )
@@ -653,16 +892,6 @@ export function ReviewRegisterStep({
           serviceFields.map(
             (field) => {
 
-              /*
-               * IMPORTANT:
-               *
-               * Do NOT use:
-               *
-               * serviceValues[field.key]
-               *
-               * because the actual stored value may
-               * be indexed by field.id (UUID).
-               */
               const value =
                 getServiceFieldValue(
                   field,
@@ -672,18 +901,20 @@ export function ReviewRegisterStep({
               const label =
                 field.label ??
                 field.description ??
-                field.key ??
+                getFieldFormKey(
+                  field,
+                ) ??
                 "Field"
 
               const fieldId =
-                typeof field.id === "string"
-                  ? field.id
-                  : undefined
+                normalizeIdentifier(
+                  field.id,
+                )
 
               const fieldKey =
-                typeof field.key === "string"
-                  ? field.key
-                  : undefined
+                getFieldFormKey(
+                  field,
+                )
 
               return (
                 <ReviewRow
@@ -744,6 +975,18 @@ export function ReviewRegisterStep({
                 )}`
               : "—"
           }
+        />
+
+        <ReviewRow
+          label="Balance As Of Date"
+          value={
+            financial.balanceAsOfDate
+              ? formatDate(
+                  financial.balanceAsOfDate,
+                )
+              : "—"
+          }
+          muted
         />
 
         <ReviewRow

@@ -276,6 +276,8 @@ export type AssessmentFileReference = {
 export type AssessmentServiceValue = {
   id: string;
 
+  assessmentServiceId: string;
+
   revenueServiceFieldId: string;
 
   fieldCode: string;
@@ -331,15 +333,31 @@ export type AssessmentServiceDefinition = {
 // =====================================================
 
 export type AssessmentService = {
+  /*
+   * --------------------------------------------------------------------------
+   * Identity
+   * --------------------------------------------------------------------------
+   */
+
   id: string;
 
+  assessmentId: string;
+
   serviceId: string;
+
+  revenueServiceId: string;
 
   serviceCode: string | null;
 
   serviceOrder: number;
 
   status: AssessmentServiceStatus;
+
+  /*
+   * --------------------------------------------------------------------------
+   * Calculation
+   * --------------------------------------------------------------------------
+   */
 
   computedAmount: number | string | null;
 
@@ -354,9 +372,108 @@ export type AssessmentService = {
 
   calculatedAt: string | null;
 
+  /*
+   * --------------------------------------------------------------------------
+   * Historical Financial Position
+   * --------------------------------------------------------------------------
+   *
+   * Particularly important for Existing LIZZ.
+   */
+
+  originalObligation: number | string | null;
+
+  paidAmount: number | string | null;
+
+  remainingAmount: number | string | null;
+
+  balanceAsOfDate: string | null;
+
+  /*
+   * --------------------------------------------------------------------------
+   * Payment Tracking
+   * --------------------------------------------------------------------------
+   */
+
+  paymentStatus: string | null;
+
+  paidPrincipalAmount: number | string | null;
+
+  /*
+   * --------------------------------------------------------------------------
+   * Payment Obligation
+   * --------------------------------------------------------------------------
+   */
+
+  dueDate: string | null;
+
+  agreementDate: string | null;
+
+  /*
+   * --------------------------------------------------------------------------
+   * Applied Financial Rules
+   * --------------------------------------------------------------------------
+   */
+
+  penaltyRuleId: string | null;
+
+  interestRuleId: string | null;
+
+  /*
+   * --------------------------------------------------------------------------
+   * Revenue Service Definition
+   * --------------------------------------------------------------------------
+   */
+
   service: AssessmentServiceDefinition | null;
 
+  /*
+   * --------------------------------------------------------------------------
+   * Captured Service Values
+   * --------------------------------------------------------------------------
+   */
+
   values: AssessmentServiceValue[];
+
+  /*
+   * --------------------------------------------------------------------------
+   * Payment Schedules
+   * --------------------------------------------------------------------------
+   */
+
+  paymentSchedules: AssessmentPaymentSchedule[];
+
+  /*
+   * --------------------------------------------------------------------------
+   * Audit
+   * --------------------------------------------------------------------------
+   */
+
+  createdAt: string | null;
+
+  updatedAt: string | null;
+};
+
+
+export type AssessmentPaymentSchedule = {
+  id: string;
+
+  assessmentServiceId: string;
+
+  installmentNumber: number;
+
+  dueDate: string | null;
+
+  amount: number | string | null;
+
+  paidAmount: number | string | null;
+
+  remainingAmount: number | string | null;
+
+  status: string;
+
+  createdAt: string | null;
+
+  updatedAt: string | null;
 };
 
 
@@ -441,7 +558,7 @@ export type Assessment = {
 
   decisionNotes: string | null;
 
-  decidedBy: string | null;
+  decidedBy: AuthUser | null;
 
   decidedAt: string | null;
 

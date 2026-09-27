@@ -42,38 +42,6 @@ import type {
  * ============================================================
  * SERVICE FIELD VALUE
  * ============================================================
- *
- * Dynamic revenue-service fields can contain different
- * primitive values.
- *
- * Examples:
- *
- * Text:
- *   "AGR-001"
- *
- * Number:
- *   50000
- *
- * Checkbox:
- *   true
- *
- * Checkbox:
- *   false
- *
- * IMPORTANT:
- *
- * We intentionally do NOT convert these values to strings.
- *
- * In particular:
- *
- *   false !== ""
- *
- * A checkbox with "No" selected is a valid boolean value:
- *
- *   false
- *
- * The validation hook must therefore treat false as a
- * legitimate value.
  */
 
 export type ServiceFieldValue =
@@ -156,18 +124,26 @@ interface AgreementInformationStepProps {
    * SERVICE FIELD VALUES
    * ----------------------------------------------------------
    *
+   * The existing agreement hook stores values using field.key.
+   *
    * Example:
    *
    * {
    *   "service-uuid": {
-   *     land_area: "500",
-   *     sadarka_lafaa: "A",
-   *     agreement_date: "2026-09-23",
-   *     first_installment_required: false
+   *     LAND_AREA: 200,
+   *     SADARKA_LAFAA: "1FFAA",
+   *     AGREEMENT_DATE: "2009-09-11",
+   *     FIRST_INSTALLMENT_REQUIRED: true
    *   }
    * }
    *
-   * Values retain their original primitive type.
+   * IMPORTANT:
+   *
+   * RevenueServiceFields is a shared component and expects
+   * values indexed by field.id.
+   *
+   * Therefore this component adapts the values before passing
+   * them to RevenueServiceFields.
    */
 
   serviceFieldValues: Record<
@@ -180,12 +156,6 @@ interface AgreementInformationStepProps {
    * ----------------------------------------------------------
    * VALIDATION ERRORS
    * ----------------------------------------------------------
-   *
-   * Validation is handled by the parent hook.
-   *
-   * This component does NOT validate anything.
-   *
-   * It only displays errors supplied by the hook.
    */
 
   validationErrors: {
@@ -204,19 +174,6 @@ interface AgreementInformationStepProps {
    * ----------------------------------------------------------
    * SERVICE FIELD UPDATE
    * ----------------------------------------------------------
-   *
-   * IMPORTANT:
-   *
-   * Do NOT use:
-   *
-   *   String(value)
-   *
-   * because:
-   *
-   *   true  -> "true"
-   *   false -> "false"
-   *
-   * Instead preserve the original value.
    */
 
   setServiceFieldValue: (
@@ -302,20 +259,6 @@ export function AgreementInformationStep({
    * ==========================================================
    * SERVICE ERRORS
    * ==========================================================
-   *
-   * Only display validation errors belonging to the currently
-   * selected revenue service.
-   *
-   * Example:
-   *
-   * validationErrors.service = {
-   *
-   *   "service-uuid": {
-   *     land_area: "Land Area is required.",
-   *     sadarka_lafaa: "Sadarka Lafaa is required."
-   *   }
-   *
-   * }
    */
 
   const serviceErrors =
@@ -330,11 +273,6 @@ export function AgreementInformationStep({
    * ==========================================================
    * SELECTED SERVICE IDS
    * ==========================================================
-   *
-   * Existing LIZZ supports exactly ONE revenue service.
-   *
-   * RevenueServiceSelector supports an array of IDs, so we
-   * adapt our single-service value into that structure.
    */
 
   const selectedServiceIds =
@@ -356,9 +294,6 @@ export function AgreementInformationStep({
    * ==========================================================
    * SELECTED SERVICES
    * ==========================================================
-   *
-   * Resolve the selected service object from the available
-   * revenue services.
    */
 
   const selectedServices =
@@ -379,9 +314,124 @@ export function AgreementInformationStep({
 
 
   /*
-   * ============================================================
+   * ==========================================================
+   * ADAPT SERVICE VALUES
+   * ==========================================================
+   *
+   * IMPORTANT:
+   *
+   * DO NOT change RevenueServiceFields.
+   *
+   * RevenueServiceFields is shared by multiple modules and
+   * currently expects:
+   *
+   *   values[field.id]
+   *
+   * However, ExistingLizz hydration uses:
+   *
+   *   serviceFieldValues[field.key]
+   *
+   * Example:
+   *
+   *   serviceFieldValues[service.id].LAND_AREA = 200
+   *
+   * becomes:
+   *
+   *   values["01a0a71b-d3e1-7012-818e-df7a5d1e10df"] = 200
+   *
+   * This adapter exists only at this boundary.
+   */
+
+  const selectedServiceFieldValues =
+    useMemo(() => {
+
+      const result: Record<
+        string,
+        Record<string, ServiceFieldValue>
+      > = {}
+
+      for (
+        const service
+        of selectedServices
+      ) {
+
+        const sourceValues =
+          serviceFieldValues[
+            service.id
+          ] ?? {}
+
+        const adaptedValues: Record<
+          string,
+          ServiceFieldValue
+        > = {}
+
+        /*
+         * Map:
+         *
+         * field.key -> field.id
+         *
+         * while preserving the actual value type.
+         */
+
+        for (
+          const field
+          of service.fields
+        ) {
+
+          if (!field.id) {
+            continue
+          }
+
+          const fieldKey =
+            field.key
+
+          if (!fieldKey) {
+            continue
+          }
+
+          /*
+           * Only copy values that actually exist.
+           *
+           * This is important because false and 0 are valid
+           * values and must NOT be treated as missing.
+           */
+
+          if (
+            Object.prototype.hasOwnProperty.call(
+              sourceValues,
+              fieldKey,
+            )
+          ) {
+
+            adaptedValues[
+              field.id
+            ] =
+              sourceValues[
+                fieldKey
+              ]
+          }
+
+        }
+
+        result[
+          service.id
+        ] =
+          adaptedValues
+
+      }
+
+      return result
+
+    }, [
+      selectedServices,
+      serviceFieldValues,
+    ])
+
+
+  /*
+   * ==========================================================
    * RENDER
-   * ============================================================
+   * ==========================================================
    */
 
   return (
@@ -682,10 +732,6 @@ export function AgreementInformationStep({
 
         ) : (
 
-          /* ==================================================
-             SELECTED SERVICE
-          ================================================== */
-
           <div className="space-y-6">
 
             {selectedServices.map(
@@ -709,77 +755,86 @@ export function AgreementInformationStep({
                   }
 
                   /*
-                   * --------------------------------------------
-                   * FIELD VALUES
-                   * --------------------------------------------
+                   * ------------------------------------------------
+                   * IMPORTANT:
                    *
-                   * Values are passed exactly as stored.
+                   * Use the ADAPTED values here.
                    *
-                   * For example:
+                   * RevenueServiceFields expects:
                    *
-                   * land_area: "500"
-                   * sadarka_lafaa: "A"
-                   * agreement_date: "2026-09-23"
-                   * first_installment_required: false
+                   *   values[field.id]
+                   *
+                   * The adapter above converts:
+                   *
+                   *   LAND_AREA -> field.id
+                   *   AGREEMENT_DATE -> field.id
+                   *   etc.
+                   * ------------------------------------------------
                    */
 
                   values={
-                    serviceFieldValues[
+                    selectedServiceFieldValues[
                       service.id
                     ] ?? {}
                   }
 
-
                   /*
-                   * --------------------------------------------
-                   * SERVICE VALIDATION ERRORS
-                   * --------------------------------------------
-                   *
-                   * Errors are produced by useExistingAgreement.
-                   *
-                   * This component only displays them through
-                   * RevenueServiceFields.
+                   * ------------------------------------------------
+                   * VALIDATION ERRORS
+                   * ------------------------------------------------
                    */
 
                   errors={
                     serviceErrors
                   }
 
-
                   /*
-                   * --------------------------------------------
+                   * ------------------------------------------------
                    * FIELD CHANGE
-                   * --------------------------------------------
+                   * ------------------------------------------------
                    *
-                   * Preserve the actual primitive type.
+                   * RevenueServiceFields returns field.id.
                    *
-                   * DO NOT:
+                   * But ExistingAgreement hook stores values using
+                   * field.key.
                    *
-                   *   String(value)
+                   * Therefore convert:
                    *
-                   * because that would convert:
+                   *   field.id -> field.key
                    *
-                   *   false -> "false"
-                   *
-                   * which breaks required checkbox validation.
+                   * before updating the hook.
                    */
 
                   onChange={(
-                    field,
+                    fieldId,
                     value,
-                  ) =>
+                  ) => {
+
+                    const field =
+                      service.fields.find(
+                        (
+                          item,
+                        ) =>
+                          item.id ===
+                          fieldId,
+                      )
+
+                    if (!field?.key) {
+                      return
+                    }
+
                     setServiceFieldValue(
                       service.id,
-                      field,
+                      field.key,
                       value as ServiceFieldValue,
                     )
-                  }
+                  }}
 
 
                   /*
-                   * --------------------------------------------
+                   * ------------------------------------------------
                    * FILE CHANGE
-                   * --------------------------------------------
+                   * ------------------------------------------------
                    */
 
                   onFileChange={(
@@ -796,9 +851,9 @@ export function AgreementInformationStep({
 
 
                   /*
-                   * --------------------------------------------
+                   * ------------------------------------------------
                    * REMOVE FILE
-                   * --------------------------------------------
+                   * ------------------------------------------------
                    */
 
                   onRemoveFile={(
@@ -812,9 +867,9 @@ export function AgreementInformationStep({
 
 
                   /*
-                   * --------------------------------------------
+                   * ------------------------------------------------
                    * REMOVE SERVICE
-                   * --------------------------------------------
+                   * ------------------------------------------------
                    */
 
                   onRemove={

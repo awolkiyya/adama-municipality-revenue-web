@@ -1,4 +1,6 @@
-import { useState } from "react";
+"use client";
+
+import { useMemo, useState } from "react";
 import {
   AlertTriangle,
   Briefcase,
@@ -14,7 +16,11 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+} from "@/components/ui/card";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,70 +28,276 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-import { AssessmentService } from "@/types/revenue/assessment";
 import { useOpenFile } from "@/hooks/use-open-file";
 import { formatAmount } from "@/lib/format";
 import { formatEthiopianDate } from "@/lib/utils";
+import { AssessmentService } from "@/types/revenue/assessment";
 
-import { StatusBadge } from "./status-badge";
-import { FieldRow } from "./field-row";
 import { EvidenceFileRow } from "./evidence-file-row";
+import { FieldRow } from "./field-row";
+import { StatusBadge } from "./status-badge";
 
-// Maps a service name/code to the icon that best represents what it actually
-// is, so the card is scannable in a list without reading every title.
-const SERVICE_ICON_RULES: Array<{ match: RegExp; icon: LucideIcon }> = [
-  { match: /land|property|real estate|cadastr/i, icon: Landmark },
-  { match: /vehicle|car|transport|plate/i, icon: Car },
-  { match: /business|trade|license|licence/i, icon: Briefcase },
-  { match: /building|construction|permit/i, icon: Building2 },
-  { match: /income|salary|payroll|wage/i, icon: Wallet },
+const SERVICE_ICON_RULES: Array<{
+  match: RegExp;
+  icon: LucideIcon;
+}> = [
+  {
+    match: /land|property|real estate|cadastr/i,
+    icon: Landmark,
+  },
+  {
+    match: /vehicle|car|transport|plate/i,
+    icon: Car,
+  },
+  {
+    match: /business|trade|license|licence/i,
+    icon: Briefcase,
+  },
+  {
+    match: /building|construction|permit/i,
+    icon: Building2,
+  },
+  {
+    match: /income|salary|payroll|wage/i,
+    icon: Wallet,
+  },
 ];
 
-function getServiceIcon(name?: string | null): LucideIcon {
-  if (!name) return FileText;
+function getServiceIcon(
+  name?: string | null,
+): LucideIcon {
+  if (!name) {
+    return FileText;
+  }
 
   return (
-    SERVICE_ICON_RULES.find((rule) => rule.match.test(name))?.icon ??
-    FileText
+    SERVICE_ICON_RULES.find(
+      (rule) => rule.match.test(name),
+    )?.icon ?? FileText
   );
+}
+
+/**
+ * Keep the frontend tolerant of slightly different API
+ * representations while the backend contract is finalized.
+ *
+ * Preferred contract:
+ *
+ * service.paymentType === "SCHEDULED"
+ *
+ * The fallbacks allow the card to work if the API currently
+ * exposes payment_schedule_rule or paymentScheduleRule.
+ */
+function isScheduledPaymentService(
+  service: AssessmentService,
+): boolean {
+  const candidate = service as AssessmentService & {
+    paymentType?: string | null;
+    payment_type?: string | null;
+    paymentScheduleRule?: {
+      isEnabled?: boolean | null;
+      is_enabled?: boolean | null;
+    } | null;
+    payment_schedule_rule?: {
+      isEnabled?: boolean | null;
+      is_enabled?: boolean | null;
+    } | null;
+  };
+
+  const paymentType =
+    candidate.paymentType ??
+    candidate.payment_type;
+
+  if (
+    typeof paymentType === "string"
+  ) {
+    return (
+      paymentType.toUpperCase() ===
+      "SCHEDULED"
+    );
+  }
+
+  const rule =
+    candidate.paymentScheduleRule ??
+    candidate.payment_schedule_rule;
+
+  if (rule) {
+    return Boolean(
+      rule.isEnabled ??
+        rule.is_enabled,
+    );
+  }
+
+  /*
+   * Existing LIZZ is a scheduled obligation
+   * when it has a remaining balance.
+   *
+   * This is only a frontend fallback.
+   * The backend should remain authoritative.
+   */
+  if (
+    service.remainingAmount !== null &&
+    service.remainingAmount !== undefined
+  ) {
+    return Number(service.remainingAmount) > 0;
+  }
+
+  return false;
+}
+
+interface AssessmentServiceCardProps {
+  service: AssessmentService;
+
+  /**
+   * Existing LIZZ represents historical financial data,
+   * not a newly calculated assessment.
+   */
+  isExistingLizz?: boolean;
+
+  /**
+   * Parent owns navigation / sheet state.
+   *
+   * The card only reports the selected assessment service.
+   */
+  onManageScheduledPayments?: (
+    service: AssessmentService,
+  ) => void;
 }
 
 export function AssessmentServiceCard({
   service,
+  isExistingLizz = false,
   onManageScheduledPayments,
-}: {
-  service: AssessmentService;
-  onManageScheduledPayments?: (service: AssessmentService) => void;
-}) {
-  const { openFile, isOpening } = useOpenFile();
+}: AssessmentServiceCardProps) {
+  const {
+    openFile,
+    isOpening,
+  } = useOpenFile();
 
-  // Errors need eyes on them immediately, so those cards start open;
-  // everything else starts collapsed to keep a long service list scannable.
-  const hasError = Boolean(service.calculationError);
-  const [open, setOpen] = useState(hasError);
+  /*
+   * ============================================================
+   * STATE
+   * ============================================================
+   */
 
-  const computedAmount = service.computedAmount;
+  const hasError =
+    !isExistingLizz &&
+    Boolean(service.calculationError);
+
+  const [open, setOpen] =
+    useState(hasError);
+
+  /*
+   * ============================================================
+   * DERIVED DATA
+   * ============================================================
+   */
+
+  const computedAmount =
+    service.computedAmount;
+
+  const originalObligation =
+    service.originalObligation;
+
+  const paidAmount =
+    service.paidAmount;
+
+  const remainingAmount =
+    service.remainingAmount;
 
   const files =
-    service.values?.flatMap((value) => value.files ?? []) ?? [];
+    service.values?.flatMap(
+      (value) =>
+        value.files ?? [],
+    ) ?? [];
 
-  const fieldCount = service.values?.length ?? 0;
+  const fieldCount =
+    service.values?.length ?? 0;
 
   const title =
     service.service?.name ??
     service.serviceCode ??
     service.serviceId;
 
-  const Icon = getServiceIcon(
-    service.service?.name ?? service.serviceCode,
-  );
+  const Icon =
+    getServiceIcon(
+      service.service?.name ??
+        service.serviceCode,
+    );
+
+  /**
+   * This is the important distinction:
+   *
+   * One assessment can contain:
+   *
+   * Service A → ONE_TIME
+   * Service B → SCHEDULED
+   * Service C → ONE_TIME
+   * Service D → SCHEDULED
+   *
+   * Therefore schedule actions belong to the
+   * individual AssessmentService.
+   */
+  const hasScheduledPayments =
+    useMemo(
+      () =>
+        isScheduledPaymentService(
+          service,
+        ),
+      [service],
+    );
+
+  /*
+   * Existing LIZZ uses remaining balance as
+   * the financial amount that remains to be
+   * scheduled/collected.
+   */
+  const displayBalance =
+    isExistingLizz
+      ? remainingAmount
+      : computedAmount;
+
+  /*
+   * ============================================================
+   * HANDLERS
+   * ============================================================
+   */
+
+  const handleToggle = () => {
+    setOpen(
+      (value) => !value,
+    );
+  };
+
+  const handleViewPaymentSchedule = () => {
+    if (!hasScheduledPayments) {
+      return;
+    }
+
+    onManageScheduledPayments?.(
+      service,
+    );
+  };
+
+  /*
+   * ============================================================
+   * RENDER
+   * ============================================================
+   */
 
   return (
-    <Card className={hasError ? "border-destructive/40" : undefined}>
+    <Card
+      className={
+        hasError
+          ? "border-destructive/40"
+          : undefined
+      }
+    >
       <CardHeader className="select-none">
         <div className="flex items-start gap-3">
-
-          {/* ============ SERVICE ICON ============ */}
+          {/* ==================================================
+              SERVICE ICON
+              ================================================== */}
 
           <div className="relative shrink-0">
             <div
@@ -111,27 +323,38 @@ export function AssessmentServiceCard({
             )}
           </div>
 
-          {/* ============ TITLE + META ============ */}
+          {/* ==================================================
+              TITLE + META + SUMMARY
+              ================================================== */}
 
           <div
             role="button"
             tabIndex={0}
-            onClick={() => setOpen((v) => !v)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                setOpen((v) => !v);
+            onClick={handleToggle}
+            onKeyDown={(event) => {
+              if (
+                event.key === "Enter" ||
+                event.key === " "
+              ) {
+                event.preventDefault();
+                handleToggle();
               }
             }}
             className="min-w-0 flex-1 cursor-pointer"
           >
+            {/* TITLE */}
+
             <div className="flex flex-wrap items-center gap-2">
               <h3 className="truncate font-semibold leading-tight">
                 {title}
               </h3>
 
-              <StatusBadge status={service.status} />
+              <StatusBadge
+                status={service.status}
+              />
             </div>
+
+            {/* SERVICE CODE */}
 
             {service.service?.code && (
               <p className="mt-0.5 text-xs text-muted-foreground">
@@ -139,23 +362,66 @@ export function AssessmentServiceCard({
               </p>
             )}
 
-            {/* ============ SUMMARY STRIP ============ */}
+            {/* SUMMARY */}
 
             <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-              {computedAmount !== null &&
-                computedAmount !== undefined && (
+              {isExistingLizz ? (
+                <>
+                  {originalObligation !==
+                    null &&
+                    originalObligation !==
+                      undefined && (
+                      <span className="font-medium text-foreground">
+                        Original{" "}
+                        {formatAmount(
+                          Number(
+                            originalObligation,
+                          ),
+                          service.currencyCode ??
+                            "",
+                        )}
+                      </span>
+                    )}
+
+                  {remainingAmount !==
+                    null &&
+                    remainingAmount !==
+                      undefined && (
+                      <span>
+                        Remaining{" "}
+                        {formatAmount(
+                          Number(
+                            remainingAmount,
+                          ),
+                          service.currencyCode ??
+                            "",
+                        )}
+                      </span>
+                    )}
+                </>
+              ) : (
+                computedAmount !==
+                  null &&
+                computedAmount !==
+                  undefined && (
                   <span className="font-medium text-foreground">
                     {formatAmount(
-                      Number(computedAmount),
-                      service.currencyCode ?? "",
+                      Number(
+                        computedAmount,
+                      ),
+                      service.currencyCode ??
+                        "",
                     )}
                   </span>
-                )}
+                )
+              )}
 
               {fieldCount > 0 && (
                 <span>
                   {fieldCount} field
-                  {fieldCount === 1 ? "" : "s"}
+                  {fieldCount === 1
+                    ? ""
+                    : "s"}
                 </span>
               )}
 
@@ -163,6 +429,21 @@ export function AssessmentServiceCard({
                 <span className="inline-flex items-center gap-1">
                   <Paperclip className="h-3 w-3" />
                   {files.length}
+                </span>
+              )}
+
+              {/* PAYMENT TYPE */}
+
+              {hasScheduledPayments && (
+                <span className="inline-flex items-center gap-1 font-medium text-foreground">
+                  <CalendarClock className="h-3 w-3" />
+                  Scheduled
+                </span>
+              )}
+
+              {!hasScheduledPayments && (
+                <span>
+                  One-time
                 </span>
               )}
 
@@ -175,14 +456,20 @@ export function AssessmentServiceCard({
             </div>
           </div>
 
-          {/* ============ ACTIONS ============ */}
+          {/* ==================================================
+              ACTIONS
+              ================================================== */}
 
           <div className="flex shrink-0 items-center gap-1">
+            {/* ACTION MENU */}
+
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
-                  onClick={(e) => e.stopPropagation()}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                  }}
                   className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                   aria-label={`Actions for ${title}`}
                 >
@@ -193,30 +480,62 @@ export function AssessmentServiceCard({
               <DropdownMenuContent
                 align="end"
                 className="w-56"
-                onClick={(e) => e.stopPropagation()}
+                onClick={(event) => {
+                  event.stopPropagation();
+                }}
               >
-                <DropdownMenuItem
-                  onClick={() =>
-                    onManageScheduledPayments?.(service)
-                  }
-                >
-                  <CalendarClock className="mr-2 h-4 w-4" />
-                  Manage Scheduled Payments
-                </DropdownMenuItem>
+                {/* ==================================================
+                    SCHEDULED PAYMENT ACTION
+                    ================================================== */}
+
+                {hasScheduledPayments && (
+                  <DropdownMenuItem
+                    onSelect={
+                      handleViewPaymentSchedule
+                    }
+                  >
+                    <CalendarClock className="mr-2 h-4 w-4" />
+
+                    <span>
+                      View Payment Schedule
+                    </span>
+                  </DropdownMenuItem>
+                )}
+
+                {/* ==================================================
+                    ONE-TIME SERVICE
+                    ================================================== */}
+
+                {!hasScheduledPayments && (
+                  <DropdownMenuItem disabled>
+                    <Wallet className="mr-2 h-4 w-4" />
+
+                    <span>
+                      One-time payment
+                    </span>
+                  </DropdownMenuItem>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
 
-            {/* ============ COLLAPSE TOGGLE ============ */}
+            {/* COLLAPSE / EXPAND */}
 
             <button
               type="button"
-              onClick={() => setOpen((v) => !v)}
+              onClick={handleToggle}
               className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-              aria-label={open ? "Collapse service" : "Expand service"}
+              aria-label={
+                open
+                  ? "Collapse service"
+                  : "Expand service"
+              }
+              aria-expanded={open}
             >
               <ChevronDown
                 className={`h-4 w-4 transition-transform duration-200 ${
-                  open ? "rotate-180" : ""
+                  open
+                    ? "rotate-180"
+                    : ""
                 }`}
               />
             </button>
@@ -224,10 +543,226 @@ export function AssessmentServiceCard({
         </div>
       </CardHeader>
 
+      {/* ======================================================
+          EXPANDED CONTENT
+          ====================================================== */}
+
       {open && (
         <CardContent className="pt-0">
-          {computedAmount !== null &&
-            computedAmount !== undefined && (
+          {/* ==================================================
+              PAYMENT PLAN SUMMARY
+              ================================================== */}
+
+          {hasScheduledPayments && (
+            <div className="mb-5 rounded-lg border bg-muted/30 p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <CalendarClock className="h-4 w-4 text-muted-foreground" />
+
+                    <p className="text-sm font-semibold">
+                      Payment Schedule
+                    </p>
+                  </div>
+
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Scheduled payments are generated by the
+                    revenue system and managed through
+                    collection.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={
+                    handleViewPaymentSchedule
+                  }
+                  className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-md border bg-background px-3 text-sm font-medium transition-colors hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
+                >
+                  <CalendarClock className="h-4 w-4" />
+
+                  <span>
+                    View Schedule
+                  </span>
+                </button>
+              </div>
+
+              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                {/* BALANCE */}
+
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    {isExistingLizz
+                      ? "Remaining Balance"
+                      : "Calculated Amount"}
+                  </p>
+
+                  <p className="mt-1 text-base font-bold">
+                    {displayBalance !==
+                      null &&
+                    displayBalance !==
+                      undefined
+                      ? formatAmount(
+                          Number(
+                            displayBalance,
+                          ),
+                          service.currencyCode ??
+                            "",
+                        )
+                      : "—"}
+                  </p>
+                </div>
+
+                {/* PAYMENT TYPE */}
+
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Payment Type
+                  </p>
+
+                  <p className="mt-1 text-base font-semibold">
+                    Scheduled
+                  </p>
+                </div>
+
+                {/* EXISTING LIZZ BALANCE DATE */}
+
+                {isExistingLizz ? (
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      Balance As Of
+                    </p>
+
+                    <p className="mt-1 text-sm font-semibold">
+                      {service.balanceAsOfDate
+                        ? formatEthiopianDate(
+                            service.balanceAsOfDate,
+                          )
+                        : "—"}
+                    </p>
+                  </div>
+                ) : (
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      Calculated
+                    </p>
+
+                    <p className="mt-1 text-sm font-semibold">
+                      {service.calculatedAt
+                        ? formatEthiopianDate(
+                            service.calculatedAt,
+                          )
+                        : "—"}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ==================================================
+              EXISTING LIZZ
+              HISTORICAL FINANCIAL POSITION
+              ================================================== */}
+
+          {isExistingLizz ? (
+            <div className="mb-5 rounded-lg border bg-muted/30 p-4">
+              <div className="grid gap-4 sm:grid-cols-3">
+                {/* ORIGINAL OBLIGATION */}
+
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Original Obligation
+                  </p>
+
+                  <p className="mt-1 text-lg font-bold">
+                    {originalObligation !==
+                      null &&
+                    originalObligation !==
+                      undefined
+                      ? formatAmount(
+                          Number(
+                            originalObligation,
+                          ),
+                          service.currencyCode ??
+                            "",
+                        )
+                      : "—"}
+                  </p>
+                </div>
+
+                {/* ALREADY PAID */}
+
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Already Paid
+                  </p>
+
+                  <p className="mt-1 text-lg font-bold">
+                    {paidAmount !==
+                      null &&
+                    paidAmount !==
+                      undefined
+                      ? formatAmount(
+                          Number(
+                            paidAmount,
+                          ),
+                          service.currencyCode ??
+                            "",
+                        )
+                      : "—"}
+                  </p>
+                </div>
+
+                {/* REMAINING BALANCE */}
+
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Remaining Balance
+                  </p>
+
+                  <p className="mt-1 text-lg font-bold">
+                    {remainingAmount !==
+                      null &&
+                    remainingAmount !==
+                      undefined
+                      ? formatAmount(
+                          Number(
+                            remainingAmount,
+                          ),
+                          service.currencyCode ??
+                            "",
+                        )
+                      : "—"}
+                  </p>
+                </div>
+              </div>
+
+              {/* BALANCE DATE */}
+
+              {service.balanceAsOfDate && (
+                <div className="mt-4 border-t pt-3">
+                  <p className="text-xs text-muted-foreground">
+                    Financial Position As Of
+                  </p>
+
+                  <p className="mt-1 text-sm font-medium">
+                    {formatEthiopianDate(
+                      service.balanceAsOfDate,
+                    )}
+                  </p>
+                </div>
+              )}
+            </div>
+          ) : (
+            /* =================================================
+               NORMAL ASSESSMENT
+               CURRENT TARIFF CALCULATION
+               ================================================= */
+
+            computedAmount !== null &&
+            computedAmount !==
+              undefined && (
               <div className="mb-5 rounded-lg border bg-muted/30 p-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
@@ -237,8 +772,11 @@ export function AssessmentServiceCard({
 
                     <p className="mt-1 text-xl font-bold">
                       {formatAmount(
-                        Number(computedAmount),
-                        service.currencyCode ?? "",
+                        Number(
+                          computedAmount,
+                        ),
+                        service.currencyCode ??
+                          "",
                       )}
                     </p>
                   </div>
@@ -246,19 +784,31 @@ export function AssessmentServiceCard({
                   {service.calculatedAt && (
                     <p className="text-xs text-muted-foreground">
                       Calculated{" "}
-                      {formatEthiopianDate(service.calculatedAt)}
+                      {formatEthiopianDate(
+                        service.calculatedAt,
+                      )}
                     </p>
                   )}
                 </div>
 
+                {/* CALCULATION ERROR */}
+
                 {service.calculationError && (
                   <p className="mt-3 flex items-start gap-2 text-sm text-destructive">
                     <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                    {service.calculationError}
+
+                    <span>
+                      {service.calculationError}
+                    </span>
                   </p>
                 )}
               </div>
-            )}
+            )
+          )}
+
+          {/* ==================================================
+              SERVICE DESCRIPTION
+              ================================================== */}
 
           {service.service?.description && (
             <p className="mb-4 text-sm text-muted-foreground">
@@ -266,24 +816,36 @@ export function AssessmentServiceCard({
             </p>
           )}
 
+          {/* ==================================================
+              CAPTURED INFORMATION
+              ================================================== */}
+
           {service.values?.length ? (
             <div>
               <h4 className="mb-2 text-sm font-semibold">
                 Captured Information
               </h4>
 
-              {service.values.map((value) => (
-                <FieldRow
-                  key={value.id}
-                  value={value}
-                />
-              ))}
+              <div className="space-y-1">
+                {service.values.map(
+                  (value) => (
+                    <FieldRow
+                      key={value.id}
+                      value={value}
+                    />
+                  ),
+                )}
+              </div>
             </div>
           ) : (
             <p className="py-4 text-sm text-muted-foreground">
               No captured values.
             </p>
           )}
+
+          {/* ==================================================
+              EVIDENCE FILES
+              ================================================== */}
 
           {files.length > 0 && (
             <div className="mt-5 border-t pt-5">
@@ -294,7 +856,8 @@ export function AssessmentServiceCard({
                   </h4>
 
                   <p className="mt-0.5 text-xs text-muted-foreground">
-                    Supporting documents submitted with this service.
+                    Supporting documents submitted with
+                    this service.
                   </p>
                 </div>
 
@@ -306,14 +869,20 @@ export function AssessmentServiceCard({
               <div className="space-y-2">
                 {service.values?.flatMap(
                   (value) =>
-                    value.files?.map((file) => (
-                      <EvidenceFileRow
-                        key={file.id}
-                        file={file}
-                        isOpening={isOpening(file.id)}
-                        onOpen={openFile}
-                      />
-                    )) ?? [],
+                    value.files?.map(
+                      (file) => (
+                        <EvidenceFileRow
+                          key={file.id}
+                          file={file}
+                          isOpening={isOpening(
+                            file.id,
+                          )}
+                          onOpen={
+                            openFile
+                          }
+                        />
+                      ),
+                    ) ?? [],
                 )}
               </div>
             </div>

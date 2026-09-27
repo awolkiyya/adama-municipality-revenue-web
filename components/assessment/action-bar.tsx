@@ -5,7 +5,6 @@ import {
   Info,
   Loader2,
   RotateCcw,
-  XCircle,
   type LucideIcon,
 } from "lucide-react";
 
@@ -16,12 +15,24 @@ import { AssessmentService } from "@/types/revenue/assessment";
 
 import { DecisionSummary } from "./decision-summary";
 
+/*
+|--------------------------------------------------------------------------
+| BAR STATE
+|--------------------------------------------------------------------------
+*/
+
 type BarState =
   | "error"
   | "pending"
   | "approved"
   | "returned"
   | "idle";
+
+/*
+|--------------------------------------------------------------------------
+| STATE CONFIGURATION
+|--------------------------------------------------------------------------
+*/
 
 const STATE_CONFIG: Record<
   BarState,
@@ -45,7 +56,7 @@ const STATE_CONFIG: Record<
     iconClasses: "bg-amber-50 text-amber-600",
     accentClasses: "border-l-4 border-l-amber-400",
     message:
-      "Review the assessment and either return it for correction or approve it.",
+      "Review the assessment and take the available decision action.",
   },
 
   approved: {
@@ -72,6 +83,12 @@ const STATE_CONFIG: Record<
       "No further decision action is currently available.",
   },
 };
+
+/*
+|--------------------------------------------------------------------------
+| RESOLVE BAR STATE
+|--------------------------------------------------------------------------
+*/
 
 function resolveState({
   hasCalculationErrors,
@@ -103,18 +120,39 @@ function resolveState({
   return "idle";
 }
 
+/*
+|--------------------------------------------------------------------------
+| COMPONENT
+|--------------------------------------------------------------------------
+*/
+
 export function AssessmentActionBar({
   services,
+  isExistingLizz,
   isPendingApproval,
   isApproved,
   isReturned,
   hasCalculationErrors,
   approving,
   returning,
+  canApprove,
+  canReturn,
   onOpenApprove,
   onOpenReturn,
 }: {
   services: AssessmentService[];
+
+  /*
+  |--------------------------------------------------------------------------
+  | ASSESSMENT TYPE
+  |--------------------------------------------------------------------------
+  |
+  | Existing LIZZ does not use tariff-calculated amount for approval.
+  | Its approval amount is based on remainingAmount.
+  |
+  */
+
+  isExistingLizz: boolean;
 
   isPendingApproval: boolean;
 
@@ -128,13 +166,49 @@ export function AssessmentActionBar({
 
   returning: boolean;
 
+  /*
+  |--------------------------------------------------------------------------
+  | PERMISSIONS
+  |--------------------------------------------------------------------------
+  */
+
+  canApprove: boolean;
+
+  canReturn: boolean;
+
   onOpenApprove: () => void;
 
   onOpenReturn: () => void;
 }) {
+  /*
+  |--------------------------------------------------------------------------
+  | PROCESSING STATE
+  |--------------------------------------------------------------------------
+  */
+
   const processing =
     approving ||
     returning;
+
+  /*
+  |--------------------------------------------------------------------------
+  | AVAILABLE ACTIONS
+  |--------------------------------------------------------------------------
+  */
+
+  const canShowApprove =
+    isPendingApproval &&
+    canApprove;
+
+  const canShowReturn =
+    isPendingApproval &&
+    canReturn;
+
+  /*
+  |--------------------------------------------------------------------------
+  | BAR STATE
+  |--------------------------------------------------------------------------
+  */
 
   const state =
     resolveState({
@@ -150,6 +224,12 @@ export function AssessmentActionBar({
     accentClasses,
     message,
   } = STATE_CONFIG[state];
+
+  /*
+  |--------------------------------------------------------------------------
+  | RENDER
+  |--------------------------------------------------------------------------
+  */
 
   return (
     <Card
@@ -206,7 +286,7 @@ export function AssessmentActionBar({
 
             <div>
               <p className="font-medium leading-tight">
-                Decision Officer Actions
+                Assessment Actions
               </p>
 
               <p className="mt-0.5 text-sm text-muted-foreground">
@@ -221,10 +301,19 @@ export function AssessmentActionBar({
 
           {isPendingApproval && (
             <>
-              <div className="hidden h-10 w-px bg-border sm:block" />
+              <div
+                className="
+                  hidden
+                  h-10
+                  w-px
+                  bg-border
+                  sm:block
+                "
+              />
 
               <DecisionSummary
                 services={services}
+                isExistingLizz={isExistingLizz}
               />
             </>
           )}
@@ -235,7 +324,6 @@ export function AssessmentActionBar({
         ============================================================ */}
 
         <div className="flex flex-wrap gap-2">
-
           {/* ==========================================================
               PENDING APPROVAL
           ========================================================== */}
@@ -246,76 +334,80 @@ export function AssessmentActionBar({
                   RETURN FOR CORRECTION
               ------------------------------------------------------ */}
 
-              <Button
-                variant="outline"
-                onClick={onOpenReturn}
-                disabled={processing}
-                className="
-                  border-orange-300
-                  text-orange-600
-                  hover:bg-orange-50
-                  hover:text-orange-700
-                "
-              >
-                {returning ? (
-                  <Loader2
-                    className="
-                      mr-2
-                      h-4
-                      w-4
-                      animate-spin
-                    "
-                  />
-                ) : (
-                  <RotateCcw
-                    className="
-                      mr-2
-                      h-4
-                      w-4
-                    "
-                  />
-                )}
+              {canShowReturn && (
+                <Button
+                  variant="outline"
+                  onClick={onOpenReturn}
+                  disabled={processing}
+                  className="
+                    border-orange-300
+                    text-orange-600
+                    hover:bg-orange-50
+                    hover:text-orange-700
+                  "
+                >
+                  {returning ? (
+                    <Loader2
+                      className="
+                        mr-2
+                        h-4
+                        w-4
+                        animate-spin
+                      "
+                    />
+                  ) : (
+                    <RotateCcw
+                      className="
+                        mr-2
+                        h-4
+                        w-4
+                      "
+                    />
+                  )}
 
-                Return for Correction
-              </Button>
+                  Return for Correction
+                </Button>
+              )}
 
               {/* ------------------------------------------------------
                   APPROVE
               ------------------------------------------------------ */}
 
-              <Button
-                onClick={onOpenApprove}
-                disabled={
-                  processing ||
-                  hasCalculationErrors
-                }
-                title={
-                  hasCalculationErrors
-                    ? "Resolve calculation errors before approving"
-                    : undefined
-                }
-              >
-                {approving ? (
-                  <Loader2
-                    className="
-                      mr-2
-                      h-4
-                      w-4
-                      animate-spin
-                    "
-                  />
-                ) : (
-                  <CheckCircle2
-                    className="
-                      mr-2
-                      h-4
-                      w-4
-                    "
-                  />
-                )}
+              {canShowApprove && (
+                <Button
+                  onClick={onOpenApprove}
+                  disabled={
+                    processing ||
+                    hasCalculationErrors
+                  }
+                  title={
+                    hasCalculationErrors
+                      ? "Resolve calculation errors before approving"
+                      : undefined
+                  }
+                >
+                  {approving ? (
+                    <Loader2
+                      className="
+                        mr-2
+                        h-4
+                        w-4
+                        animate-spin
+                      "
+                    />
+                  ) : (
+                    <CheckCircle2
+                      className="
+                        mr-2
+                        h-4
+                        w-4
+                      "
+                    />
+                  )}
 
-                Approve Assessment
-              </Button>
+                  Approve Assessment
+                </Button>
+              )}
             </>
           )}
 

@@ -1,7 +1,6 @@
 "use client"
 
 import {
-  CalendarDays,
   CircleDollarSign,
   Info,
   Wallet,
@@ -13,6 +12,13 @@ import { Label } from "@/components/ui/label"
 import type {
   ExistingFinancialPosition,
 } from "@/types/existing-agreement"
+
+import { EthiopianDatePicker } from "../input/EthiopianDatePicker"
+
+
+// ============================================================
+// PROPS
+// ============================================================
 
 interface FinancialPositionStepProps {
   financial: ExistingFinancialPosition
@@ -44,6 +50,7 @@ interface FinancialPositionStepProps {
   >
 }
 
+
 // ============================================================
 // HELPERS
 // ============================================================
@@ -72,6 +79,7 @@ function formatCurrency(
       : 0,
   )
 }
+
 
 /**
  * Sanitize a monetary input.
@@ -116,6 +124,86 @@ function sanitizeAmount(
     .slice(0, 2)}`
 }
 
+
+/**
+ * Convert a YYYY-MM-DD string into a local Date.
+ *
+ * IMPORTANT:
+ *
+ * We intentionally avoid:
+ *
+ * new Date("YYYY-MM-DD")
+ *
+ * because JavaScript interprets date-only ISO
+ * strings as UTC, which can cause the displayed
+ * Ethiopian/local date to shift by one day.
+ */
+function parseLocalDate(
+  value?: string,
+): Date | undefined {
+  if (!value) {
+    return undefined
+  }
+
+  const [
+    year,
+    month,
+    day,
+  ] = value
+    .split("-")
+    .map(Number)
+
+  if (
+    !year ||
+    !month ||
+    !day
+  ) {
+    return undefined
+  }
+
+  return new Date(
+    year,
+    month - 1,
+    day,
+  )
+}
+
+
+/**
+ * Convert a Date to YYYY-MM-DD using
+ * local calendar fields.
+ *
+ * IMPORTANT:
+ *
+ * Do not use toISOString() here because
+ * timezone conversion can change the calendar date.
+ */
+function formatDateForApi(
+  date: Date,
+): string {
+  const year =
+    date.getFullYear()
+
+  const month =
+    String(
+      date.getMonth() + 1,
+    ).padStart(
+      2,
+      "0",
+    )
+
+  const day =
+    String(
+      date.getDate(),
+    ).padStart(
+      2,
+      "0",
+    )
+
+  return `${year}-${month}-${day}`
+}
+
+
 // ============================================================
 // COMPONENT
 // ============================================================
@@ -126,12 +214,12 @@ export function FinancialPositionStep({
   outstandingBalance,
   validationErrors = {},
 }: FinancialPositionStepProps) {
+
   // ----------------------------------------------------------
-  // Convert the current values to numbers for display and
-  // calculation.
+  // Convert the current values to numbers for display.
   //
   // Empty strings become 0 only for display/calculation.
-  // Validation itself is handled by the hook.
+  // Actual validation remains inside the form hook.
   // ----------------------------------------------------------
 
   const originalObligation =
@@ -144,17 +232,34 @@ export function FinancialPositionStep({
       financial.amountAlreadyPaid || 0,
     )
 
+
   // ----------------------------------------------------------
-  // Determine whether the user has entered at least one
-  // financial value.
+  // Determine whether the user has entered financial data.
   //
-  // We intentionally check the original strings because
-  // 0 is a valid financial amount.
+  // We check the original strings because 0 is a valid
+  // financial value.
   // ----------------------------------------------------------
 
   const hasFinancialValues =
     financial.originalObligation !== "" ||
-    financial.amountAlreadyPaid !== ""
+    financial.amountAlreadyPaid !== "" ||
+    financial.balanceAsOfDate !== ""
+
+
+  // ----------------------------------------------------------
+  // Convert the stored YYYY-MM-DD value into a local Date
+  // for EthiopianDatePicker.
+  // ----------------------------------------------------------
+
+  const balanceAsOfDate =
+    parseLocalDate(
+      financial.balanceAsOfDate,
+    )
+
+
+  // ==========================================================
+  // RENDER
+  // ==========================================================
 
   return (
     <div className="space-y-8">
@@ -167,8 +272,28 @@ export function FinancialPositionStep({
 
         <div className="flex items-start gap-3">
 
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border bg-muted/40">
-            <CircleDollarSign className="h-4 w-4 text-muted-foreground" />
+          <div
+            className="
+              flex
+              h-9
+              w-9
+              shrink-0
+              items-center
+              justify-center
+              rounded-lg
+              border
+              bg-muted/40
+            "
+          >
+
+            <CircleDollarSign
+              className="
+                h-4
+                w-4
+                text-muted-foreground
+              "
+            />
+
           </div>
 
           <div className="min-w-0">
@@ -177,7 +302,15 @@ export function FinancialPositionStep({
               Historical Financial Position
             </h2>
 
-            <p className="mt-1 max-w-2xl text-xs leading-5 text-muted-foreground">
+            <p
+              className="
+                mt-1
+                max-w-2xl
+                text-xs
+                leading-5
+                text-muted-foreground
+              "
+            >
               Record the verified historical financial
               position of this existing agreement, including
               the date on which the historical balance was
@@ -189,6 +322,7 @@ export function FinancialPositionStep({
         </div>
 
       </section>
+
 
       {/* ======================================================
           HISTORICAL AMOUNTS
@@ -216,7 +350,18 @@ export function FinancialPositionStep({
 
             <div className="relative">
 
-              <span className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-sm text-muted-foreground">
+              <span
+                className="
+                  pointer-events-none
+                  absolute
+                  left-3
+                  top-1/2
+                  z-10
+                  -translate-y-1/2
+                  text-sm
+                  text-muted-foreground
+                "
+              >
                 ETB
               </span>
 
@@ -244,16 +389,18 @@ export function FinancialPositionStep({
                     validationErrors.originalObligation,
                   )
                 }
-                className="pl-12"
+                className="py-5 pl-12"
               />
 
             </div>
+
 
             {/* ------------------------------------------------
                 VALIDATION ERROR
             ------------------------------------------------ */}
 
             {validationErrors.originalObligation && (
+
               <p
                 className="text-xs text-destructive"
                 role="alert"
@@ -262,14 +409,23 @@ export function FinancialPositionStep({
                   validationErrors.originalObligation
                 }
               </p>
+
             )}
 
-            <p className="text-xs leading-5 text-muted-foreground">
+
+            <p
+              className="
+                text-xs
+                leading-5
+                text-muted-foreground
+              "
+            >
               Total historical financial obligation recorded
               for this agreement.
             </p>
 
           </div>
+
 
           {/* ==================================================
               AMOUNT ALREADY PAID
@@ -289,7 +445,18 @@ export function FinancialPositionStep({
 
             <div className="relative">
 
-              <span className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-sm text-muted-foreground">
+              <span
+                className="
+                  pointer-events-none
+                  absolute
+                  left-3
+                  top-1/2
+                  z-10
+                  -translate-y-1/2
+                  text-sm
+                  text-muted-foreground
+                "
+              >
                 ETB
               </span>
 
@@ -317,16 +484,18 @@ export function FinancialPositionStep({
                     validationErrors.amountAlreadyPaid,
                   )
                 }
-                className="pl-12"
+                className="py-5 pl-12"
               />
 
             </div>
+
 
             {/* ------------------------------------------------
                 VALIDATION ERROR
             ------------------------------------------------ */}
 
             {validationErrors.amountAlreadyPaid && (
+
               <p
                 className="text-xs text-destructive"
                 role="alert"
@@ -335,9 +504,17 @@ export function FinancialPositionStep({
                   validationErrors.amountAlreadyPaid
                 }
               </p>
+
             )}
 
-            <p className="text-xs leading-5 text-muted-foreground">
+
+            <p
+              className="
+                text-xs
+                leading-5
+                text-muted-foreground
+              "
+            >
               Total amount confirmed as already paid according
               to the available historical municipal records.
             </p>
@@ -347,6 +524,7 @@ export function FinancialPositionStep({
         </div>
 
       </section>
+
 
       {/* ======================================================
           BALANCE AS OF DATE
@@ -364,38 +542,31 @@ export function FinancialPositionStep({
 
         </Label>
 
-        <div className="relative">
 
-          <CalendarDays className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <EthiopianDatePicker
+          value={
+            balanceAsOfDate
+          }
 
-          <Input
-            id="balance-as-of-date"
-            name="balanceAsOfDate"
-            type="date"
-            value={
-              financial.balanceAsOfDate
-            }
-            onChange={(event) =>
-              updateFinancial(
-                "balanceAsOfDate",
-                event.target.value,
-              )
-            }
-            aria-invalid={
-              Boolean(
-                validationErrors.balanceAsOfDate,
-              )
-            }
-            className="pl-10"
-          />
+          onChange={(date) =>
+            updateFinancial(
+              "balanceAsOfDate",
+              date
+                ? formatDateForApi(
+                    date,
+                  )
+                : "",
+            )
+          }
+        />
 
-        </div>
 
         {/* ----------------------------------------------------
             VALIDATION ERROR
         ---------------------------------------------------- */}
 
         {validationErrors.balanceAsOfDate && (
+
           <p
             className="text-xs text-destructive"
             role="alert"
@@ -404,20 +575,36 @@ export function FinancialPositionStep({
               validationErrors.balanceAsOfDate
             }
           </p>
+
         )}
 
-        <p className="text-xs leading-5 text-muted-foreground">
+
+        <p
+          className="
+            text-xs
+            leading-5
+            text-muted-foreground
+          "
+        >
           The date on which the historical paid amount and
           outstanding balance were established or verified.
         </p>
 
       </section>
 
+
       {/* ======================================================
           CALCULATED OPENING BALANCE
       ====================================================== */}
 
-      <section className="rounded-xl border bg-muted/30 p-5">
+      <section
+        className="
+          rounded-xl
+          border
+          bg-muted/30
+          p-5
+        "
+      >
 
         <div className="flex items-start gap-3">
 
@@ -425,11 +612,30 @@ export function FinancialPositionStep({
               ICON
           -------------------------------------------------- */}
 
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border bg-background">
+          <div
+            className="
+              flex
+              h-9
+              w-9
+              shrink-0
+              items-center
+              justify-center
+              rounded-lg
+              border
+              bg-background
+            "
+          >
 
-            <Wallet className="h-4 w-4 text-muted-foreground" />
+            <Wallet
+              className="
+                h-4
+                w-4
+                text-muted-foreground
+              "
+            />
 
           </div>
+
 
           {/* --------------------------------------------------
               CONTENT
@@ -437,11 +643,20 @@ export function FinancialPositionStep({
 
           <div className="min-w-0 flex-1">
 
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div
+              className="
+                flex
+                flex-col
+                gap-4
+                sm:flex-row
+                sm:items-center
+                sm:justify-between
+              "
+            >
 
-              {/* ------------------------------------------------
+              {/* ----------------------------------------------
                   TITLE
-              ------------------------------------------------ */}
+              ---------------------------------------------- */}
 
               <div className="min-w-0">
 
@@ -449,18 +664,34 @@ export function FinancialPositionStep({
                   Outstanding Historical Balance
                 </p>
 
-                <p className="mt-1 max-w-xl text-xs leading-5 text-muted-foreground">
+                <p
+                  className="
+                    mt-1
+                    max-w-xl
+                    text-xs
+                    leading-5
+                    text-muted-foreground
+                  "
+                >
                   Automatically calculated from the original
                   obligation less the amount already paid.
                 </p>
 
               </div>
 
-              {/* ------------------------------------------------
-                  BALANCE
-              ------------------------------------------------ */}
 
-              <p className="shrink-0 text-lg font-semibold tracking-tight">
+              {/* ----------------------------------------------
+                  BALANCE
+              ---------------------------------------------- */}
+
+              <p
+                className="
+                  shrink-0
+                  text-lg
+                  font-semibold
+                  tracking-tight
+                "
+              >
                 ETB{" "}
                 {formatCurrency(
                   outstandingBalance,
@@ -469,12 +700,24 @@ export function FinancialPositionStep({
 
             </div>
 
+
             {/* ==================================================
                 CALCULATION BREAKDOWN
             ================================================== */}
 
             {hasFinancialValues && (
-              <div className="mt-4 grid gap-3 border-t pt-4 text-xs sm:grid-cols-3">
+
+              <div
+                className="
+                  mt-4
+                  grid
+                  gap-3
+                  border-t
+                  pt-4
+                  text-xs
+                  sm:grid-cols-3
+                "
+              >
 
                 {/* ----------------------------------------------
                     ORIGINAL OBLIGATION
@@ -495,6 +738,7 @@ export function FinancialPositionStep({
 
                 </div>
 
+
                 {/* ----------------------------------------------
                     AMOUNT ALREADY PAID
                 ---------------------------------------------- */}
@@ -514,6 +758,7 @@ export function FinancialPositionStep({
 
                 </div>
 
+
                 {/* ----------------------------------------------
                     BALANCE AS OF
                 ---------------------------------------------- */}
@@ -525,11 +770,14 @@ export function FinancialPositionStep({
                   </p>
 
                   <p className="mt-1 font-medium">
-                    {financial.balanceAsOfDate ||
-                      "—"}
+                    {
+                      financial.balanceAsOfDate ||
+                      "—"
+                    }
                   </p>
 
                 </div>
+
 
                 {/* ----------------------------------------------
                     REMAINING BALANCE
@@ -551,6 +799,7 @@ export function FinancialPositionStep({
                 </div>
 
               </div>
+
             )}
 
           </div>
@@ -559,15 +808,31 @@ export function FinancialPositionStep({
 
       </section>
 
+
       {/* ======================================================
           INFORMATION NOTICE
       ====================================================== */}
 
-      <section className="rounded-lg border bg-muted/20 p-4">
+      <section
+        className="
+          rounded-lg
+          border
+          bg-muted/20
+          p-4
+        "
+      >
 
         <div className="flex items-start gap-3">
 
-          <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+          <Info
+            className="
+              mt-0.5
+              h-4
+              w-4
+              shrink-0
+              text-muted-foreground
+            "
+          />
 
           <div className="space-y-2">
 
@@ -575,23 +840,51 @@ export function FinancialPositionStep({
               Historical financial data
             </p>
 
-            <p className="text-xs leading-5 text-muted-foreground">
+            <p
+              className="
+                text-xs
+                leading-5
+                text-muted-foreground
+              "
+            >
               These values represent the verified historical
               financial position carried into the municipal
               revenue system.
             </p>
 
-            <p className="text-xs leading-5 text-muted-foreground">
+            <p
+              className="
+                text-xs
+                leading-5
+                text-muted-foreground
+              "
+            >
               The outstanding balance is calculated
               automatically as:
             </p>
 
-            <p className="rounded-md border bg-background px-3 py-2 text-xs font-medium">
+            <p
+              className="
+                rounded-md
+                border
+                bg-background
+                px-3
+                py-2
+                text-xs
+                font-medium
+              "
+            >
               Original Obligation − Amount Already Paid
               = Outstanding Historical Balance
             </p>
 
-            <p className="text-xs leading-5 text-muted-foreground">
+            <p
+              className="
+                text-xs
+                leading-5
+                text-muted-foreground
+              "
+            >
               The Balance As Of Date records when the historical
               financial position was established or verified.
               Individual historical payment transactions do not

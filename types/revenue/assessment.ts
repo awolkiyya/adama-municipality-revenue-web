@@ -323,6 +323,11 @@ export type AssessmentServiceDefinition = {
 };
 
 
+export type AssessmentPaymentPlanType =
+  | "ONE_TIME"
+  | "SCHEDULED";
+
+
 // =====================================================
 // ASSESSMENT SERVICE
 // =====================================================
@@ -403,6 +408,8 @@ export type AssessmentService = {
    * Payment Obligation
    * --------------------------------------------------------------------------
    */
+
+  paymentPlanType: AssessmentPaymentPlanType;
 
   dueDate: string | null;
 

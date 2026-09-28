@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import {
   AlertTriangle,
   Briefcase,
@@ -36,6 +36,12 @@ import { AssessmentService } from "@/types/revenue/assessment";
 import { EvidenceFileRow } from "./evidence-file-row";
 import { FieldRow } from "./field-row";
 import { StatusBadge } from "./status-badge";
+
+/*
+|--------------------------------------------------------------------------
+| SERVICE ICONS
+|--------------------------------------------------------------------------
+*/
 
 const SERVICE_ICON_RULES: Array<{
   match: RegExp;
@@ -77,73 +83,11 @@ function getServiceIcon(
   );
 }
 
-/**
- * Keep the frontend tolerant of slightly different API
- * representations while the backend contract is finalized.
- *
- * Preferred contract:
- *
- * service.paymentType === "SCHEDULED"
- *
- * The fallbacks allow the card to work if the API currently
- * exposes payment_schedule_rule or paymentScheduleRule.
- */
-function isScheduledPaymentService(
-  service: AssessmentService,
-): boolean {
-  const candidate = service as AssessmentService & {
-    paymentType?: string | null;
-    payment_type?: string | null;
-    paymentScheduleRule?: {
-      isEnabled?: boolean | null;
-      is_enabled?: boolean | null;
-    } | null;
-    payment_schedule_rule?: {
-      isEnabled?: boolean | null;
-      is_enabled?: boolean | null;
-    } | null;
-  };
-
-  const paymentType =
-    candidate.paymentType ??
-    candidate.payment_type;
-
-  if (
-    typeof paymentType === "string"
-  ) {
-    return (
-      paymentType.toUpperCase() ===
-      "SCHEDULED"
-    );
-  }
-
-  const rule =
-    candidate.paymentScheduleRule ??
-    candidate.payment_schedule_rule;
-
-  if (rule) {
-    return Boolean(
-      rule.isEnabled ??
-        rule.is_enabled,
-    );
-  }
-
-  /*
-   * Existing LIZZ is a scheduled obligation
-   * when it has a remaining balance.
-   *
-   * This is only a frontend fallback.
-   * The backend should remain authoritative.
-   */
-  if (
-    service.remainingAmount !== null &&
-    service.remainingAmount !== undefined
-  ) {
-    return Number(service.remainingAmount) > 0;
-  }
-
-  return false;
-}
+/*
+|--------------------------------------------------------------------------
+| TYPES
+|--------------------------------------------------------------------------
+*/
 
 interface AssessmentServiceCardProps {
   service: AssessmentService;
@@ -163,6 +107,12 @@ interface AssessmentServiceCardProps {
     service: AssessmentService,
   ) => void;
 }
+
+/*
+|--------------------------------------------------------------------------
+| COMPONENT
+|--------------------------------------------------------------------------
+*/
 
 export function AssessmentServiceCard({
   service,
@@ -205,6 +155,26 @@ export function AssessmentServiceCard({
   const remainingAmount =
     service.remainingAmount;
 
+  /*
+   * The backend is authoritative.
+   *
+   * ONE_TIME  → one-time payment
+   * SCHEDULED → payment schedule applies
+   */
+  const hasScheduledPayments =
+    service.paymentPlanType ===
+    "SCHEDULED";
+
+  const paymentPlanLabel =
+    hasScheduledPayments
+      ? "Scheduled"
+      : "One-time";
+
+  const paymentPlanDescription =
+    hasScheduledPayments
+      ? "Payment can be managed through a payment schedule."
+      : "This service is payable as a one-time obligation.";
+
   const files =
     service.values?.flatMap(
       (value) =>
@@ -225,32 +195,12 @@ export function AssessmentServiceCard({
         service.serviceCode,
     );
 
-  /**
-   * This is the important distinction:
-   *
-   * One assessment can contain:
-   *
-   * Service A → ONE_TIME
-   * Service B → SCHEDULED
-   * Service C → ONE_TIME
-   * Service D → SCHEDULED
-   *
-   * Therefore schedule actions belong to the
-   * individual AssessmentService.
-   */
-  const hasScheduledPayments =
-    useMemo(
-      () =>
-        isScheduledPaymentService(
-          service,
-        ),
-      [service],
-    );
-
   /*
-   * Existing LIZZ uses remaining balance as
-   * the financial amount that remains to be
-   * scheduled/collected.
+   * For Existing LIZZ, the remaining balance
+   * represents the current collectible position.
+   *
+   * For normal assessments, computedAmount
+   * represents the current assessment result.
    */
   const displayBalance =
     isExistingLizz
@@ -293,7 +243,7 @@ export function AssessmentServiceCard({
           : undefined
       }
     >
-      <CardHeader className="select-none">
+      <CardHeader className="select-none pb-4">
         <div className="flex items-start gap-3">
           {/* ==================================================
               SERVICE ICON
@@ -324,7 +274,7 @@ export function AssessmentServiceCard({
           </div>
 
           {/* ==================================================
-              TITLE + META + SUMMARY
+              TITLE + SUMMARY
               ================================================== */}
 
           <div
@@ -340,7 +290,7 @@ export function AssessmentServiceCard({
                 handleToggle();
               }
             }}
-            className="min-w-0 flex-1 cursor-pointer"
+            className="min-w-0 flex-1 cursor-pointer rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             {/* TITLE */}
 
@@ -364,7 +314,9 @@ export function AssessmentServiceCard({
 
             {/* SUMMARY */}
 
-            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
+              {/* FINANCIAL SUMMARY */}
+
               {isExistingLizz ? (
                 <>
                   {originalObligation !==
@@ -416,6 +368,8 @@ export function AssessmentServiceCard({
                 )
               )}
 
+              {/* CAPTURED FIELDS */}
+
               {fieldCount > 0 && (
                 <span>
                   {fieldCount} field
@@ -425,6 +379,8 @@ export function AssessmentServiceCard({
                 </span>
               )}
 
+              {/* FILES */}
+
               {files.length > 0 && (
                 <span className="inline-flex items-center gap-1">
                   <Paperclip className="h-3 w-3" />
@@ -432,20 +388,19 @@ export function AssessmentServiceCard({
                 </span>
               )}
 
-              {/* PAYMENT TYPE */}
+              {/* PAYMENT PLAN */}
 
-              {hasScheduledPayments && (
-                <span className="inline-flex items-center gap-1 font-medium text-foreground">
+              <span className="inline-flex items-center gap-1 font-medium text-foreground">
+                {hasScheduledPayments ? (
                   <CalendarClock className="h-3 w-3" />
-                  Scheduled
-                </span>
-              )}
+                ) : (
+                  <Wallet className="h-3 w-3" />
+                )}
 
-              {!hasScheduledPayments && (
-                <span>
-                  One-time
-                </span>
-              )}
+                {paymentPlanLabel}
+              </span>
+
+              {/* CALCULATION ERROR */}
 
               {hasError && (
                 <span className="inline-flex items-center gap-1 text-destructive">
@@ -479,14 +434,12 @@ export function AssessmentServiceCard({
 
               <DropdownMenuContent
                 align="end"
-                className="w-56"
+                className="w-60"
                 onClick={(event) => {
                   event.stopPropagation();
                 }}
               >
-                {/* ==================================================
-                    SCHEDULED PAYMENT ACTION
-                    ================================================== */}
+                {/* SCHEDULED PAYMENT */}
 
                 {hasScheduledPayments && (
                   <DropdownMenuItem
@@ -496,23 +449,33 @@ export function AssessmentServiceCard({
                   >
                     <CalendarClock className="mr-2 h-4 w-4" />
 
-                    <span>
-                      View Payment Schedule
-                    </span>
+                    <div className="flex flex-col">
+                      <span>
+                        View Payment Schedule
+                      </span>
+
+                      <span className="text-xs text-muted-foreground">
+                        Manage scheduled payments
+                      </span>
+                    </div>
                   </DropdownMenuItem>
                 )}
 
-                {/* ==================================================
-                    ONE-TIME SERVICE
-                    ================================================== */}
+                {/* ONE-TIME */}
 
                 {!hasScheduledPayments && (
                   <DropdownMenuItem disabled>
                     <Wallet className="mr-2 h-4 w-4" />
 
-                    <span>
-                      One-time payment
-                    </span>
+                    <div className="flex flex-col">
+                      <span>
+                        One-time Payment
+                      </span>
+
+                      <span className="text-xs text-muted-foreground">
+                        No payment schedule
+                      </span>
+                    </div>
                   </DropdownMenuItem>
                 )}
               </DropdownMenuContent>
@@ -553,112 +516,119 @@ export function AssessmentServiceCard({
               PAYMENT PLAN SUMMARY
               ================================================== */}
 
-          {hasScheduledPayments && (
-            <div className="mb-5 rounded-lg border bg-muted/30 p-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
+          <div className="mb-5 rounded-lg border bg-muted/30 p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  {hasScheduledPayments ? (
                     <CalendarClock className="h-4 w-4 text-muted-foreground" />
+                  ) : (
+                    <Wallet className="h-4 w-4 text-muted-foreground" />
+                  )}
 
-                    <p className="text-sm font-semibold">
-                      Payment Schedule
-                    </p>
-                  </div>
-
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Scheduled payments are generated by the
-                    revenue system and managed through
-                    collection.
+                  <p className="text-sm font-semibold">
+                    Payment Plan
                   </p>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={
-                    handleViewPaymentSchedule
-                  }
-                  className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-md border bg-background px-3 text-sm font-medium transition-colors hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
-                >
-                  <CalendarClock className="h-4 w-4" />
-
-                  <span>
-                    View Schedule
-                  </span>
-                </button>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {paymentPlanDescription}
+                </p>
               </div>
 
-              <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                {/* BALANCE */}
+              {/* SCHEDULE ACTION */}
 
+              {hasScheduledPayments &&
+                onManageScheduledPayments && (
+                  <button
+                    type="button"
+                    onClick={
+                      handleViewPaymentSchedule
+                    }
+                    className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-md border bg-background px-3 text-sm font-medium transition-colors hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <CalendarClock className="h-4 w-4" />
+
+                    <span>
+                      View Schedule
+                    </span>
+                  </button>
+                )}
+            </div>
+
+            {/* PAYMENT PLAN DETAILS */}
+
+            <div className="mt-4 grid gap-4 sm:grid-cols-3">
+              {/* BALANCE */}
+
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  {isExistingLizz
+                    ? "Remaining Balance"
+                    : "Calculated Amount"}
+                </p>
+
+                <p className="mt-1 text-base font-bold">
+                  {displayBalance !==
+                    null &&
+                  displayBalance !==
+                    undefined
+                    ? formatAmount(
+                        Number(
+                          displayBalance,
+                        ),
+                        service.currencyCode ??
+                          "",
+                      )
+                    : "—"}
+                </p>
+              </div>
+
+              {/* PAYMENT TYPE */}
+
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Payment Type
+                </p>
+
+                <p className="mt-1 text-base font-semibold">
+                  {paymentPlanLabel}
+                </p>
+              </div>
+
+              {/* DATE */}
+
+              {isExistingLizz ? (
                 <div>
                   <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    {isExistingLizz
-                      ? "Remaining Balance"
-                      : "Calculated Amount"}
+                    Balance As Of
                   </p>
 
-                  <p className="mt-1 text-base font-bold">
-                    {displayBalance !==
-                      null &&
-                    displayBalance !==
-                      undefined
-                      ? formatAmount(
-                          Number(
-                            displayBalance,
-                          ),
-                          service.currencyCode ??
-                            "",
+                  <p className="mt-1 text-sm font-semibold">
+                    {service.balanceAsOfDate
+                      ? formatEthiopianDate(
+                          service.balanceAsOfDate,
                         )
                       : "—"}
                   </p>
                 </div>
-
-                {/* PAYMENT TYPE */}
-
+              ) : (
                 <div>
                   <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Payment Type
+                    Calculated
                   </p>
 
-                  <p className="mt-1 text-base font-semibold">
-                    Scheduled
+                  <p className="mt-1 text-sm font-semibold">
+                    {service.calculatedAt
+                      ? formatEthiopianDate(
+                          service.calculatedAt,
+                        )
+                      : "—"}
                   </p>
                 </div>
-
-                {/* EXISTING LIZZ BALANCE DATE */}
-
-                {isExistingLizz ? (
-                  <div>
-                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                      Balance As Of
-                    </p>
-
-                    <p className="mt-1 text-sm font-semibold">
-                      {service.balanceAsOfDate
-                        ? formatEthiopianDate(
-                            service.balanceAsOfDate,
-                          )
-                        : "—"}
-                    </p>
-                  </div>
-                ) : (
-                  <div>
-                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                      Calculated
-                    </p>
-
-                    <p className="mt-1 text-sm font-semibold">
-                      {service.calculatedAt
-                        ? formatEthiopianDate(
-                            service.calculatedAt,
-                          )
-                        : "—"}
-                    </p>
-                  </div>
-                )}
-              </div>
+              )}
             </div>
-          )}
+          </div>
 
           {/* ==================================================
               EXISTING LIZZ
@@ -667,6 +637,17 @@ export function AssessmentServiceCard({
 
           {isExistingLizz ? (
             <div className="mb-5 rounded-lg border bg-muted/30 p-4">
+              <div className="mb-4">
+                <h4 className="text-sm font-semibold">
+                  Historical Financial Position
+                </h4>
+
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Existing obligation and payments recorded
+                  before this assessment.
+                </p>
+              </div>
+
               <div className="grid gap-4 sm:grid-cols-3">
                 {/* ORIGINAL OBLIGATION */}
 
@@ -811,9 +792,15 @@ export function AssessmentServiceCard({
               ================================================== */}
 
           {service.service?.description && (
-            <p className="mb-4 text-sm text-muted-foreground">
-              {service.service.description}
-            </p>
+            <div className="mb-5">
+              <h4 className="mb-1 text-sm font-semibold">
+                Service Description
+              </h4>
+
+              <p className="text-sm leading-relaxed text-muted-foreground">
+                {service.service.description}
+              </p>
+            </div>
           )}
 
           {/* ==================================================
@@ -822,9 +809,21 @@ export function AssessmentServiceCard({
 
           {service.values?.length ? (
             <div>
-              <h4 className="mb-2 text-sm font-semibold">
-                Captured Information
-              </h4>
+              <div className="mb-2 flex items-center justify-between">
+                <div>
+                  <h4 className="text-sm font-semibold">
+                    Captured Information
+                  </h4>
+
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Information submitted for this service.
+                  </p>
+                </div>
+
+                <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium">
+                  {fieldCount}
+                </span>
+              </div>
 
               <div className="space-y-1">
                 {service.values.map(
@@ -838,9 +837,11 @@ export function AssessmentServiceCard({
               </div>
             </div>
           ) : (
-            <p className="py-4 text-sm text-muted-foreground">
-              No captured values.
-            </p>
+            <div className="rounded-lg border border-dashed p-4">
+              <p className="text-sm text-muted-foreground">
+                No captured values.
+              </p>
+            </div>
           )}
 
           {/* ==================================================

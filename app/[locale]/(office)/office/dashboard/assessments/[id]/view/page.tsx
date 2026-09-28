@@ -672,7 +672,7 @@ export default function AssessmentViewPage() {
       }
 
       router.push(
-        `/office/dashboard/revenue/assessments/${assessment.id}/services/${service.id}/schedule`,
+        `/office/dashboard/assessments/${assessment.id}/services/${service.id}/schedule`,
       );
     };
 

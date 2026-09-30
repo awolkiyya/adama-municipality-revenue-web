@@ -11,10 +11,7 @@ import type {
   PaymentFilters,
   InitializePaymentRequest,
   InitializePaymentResponse,
-  VerifyPaymentRequest,
-  VerifyPaymentResponse,
 } from "@/types/payment";
-
 
 // =====================================================
 // PAYMENT SERVICE
@@ -23,15 +20,8 @@ import type {
 const cleanPaymentParams = (
   params?: PaymentFilters,
 ): Record<string, unknown> => {
-
-  return Object.entries(
-    params ?? {},
-  ).reduce(
-    (
-      acc,
-      [key, value],
-    ) => {
-
+  return Object.entries(params ?? {}).reduce(
+    (acc, [key, value]) => {
       if (
         value !== undefined &&
         value !== null &&
@@ -47,9 +37,7 @@ const cleanPaymentParams = (
   );
 };
 
-
 export const paymentService = {
-
   // ===================================================
   // GET ALL PAYMENTS
   // ===================================================
@@ -57,7 +45,6 @@ export const paymentService = {
   // GET /payments
   //
   // Backend performs:
-  //
   // - filtering
   // - searching
   // - pagination
@@ -67,35 +54,20 @@ export const paymentService = {
 
   getPayments: async (
     params?: PaymentFilters,
-  ): Promise<
-    ListResponse<Payment>
-  > => {
-
+  ): Promise<ListResponse<Payment>> => {
     try {
-
-      const res =
-        await api.get<
-          ListResponse<Payment>
-        >(
-          "/payments",
-          {
-            params:
-              cleanPaymentParams(
-                params,
-              ),
-          },
-        );
+      const res = await api.get<ListResponse<Payment>>(
+        "/payments",
+        {
+          params: cleanPaymentParams(params),
+        },
+      );
 
       return res.data;
-
     } catch (error) {
-
-      throw normalizeApiError(
-        error,
-      );
+      throw normalizeApiError(error);
     }
   },
-
 
   // ===================================================
   // GET PAYMENT DETAIL
@@ -107,77 +79,17 @@ export const paymentService = {
 
   getPaymentById: async (
     id: string,
-  ): Promise<
-    ApiResponse<Payment>
-  > => {
-
+  ): Promise<ApiResponse<Payment>> => {
     try {
-
-      const res =
-        await api.get<
-          ApiResponse<Payment>
-        >(
-          `/payments/${encodeURIComponent(id)}`,
-        );
+      const res = await api.get<ApiResponse<Payment>>(
+        `/payments/${encodeURIComponent(id)}`,
+      );
 
       return res.data;
-
     } catch (error) {
-
-      throw normalizeApiError(
-        error,
-      );
+      throw normalizeApiError(error);
     }
   },
-
-
-  // ===================================================
-  // INITIALIZE PAYMENT
-  // ===================================================
-  //
-  // POST /payments/initialize
-  //
-  // Generic provider initialization.
-  //
-  // Supported providers can include:
-  //
-  // - CHAPA
-  // - TELEBIRR
-  // - CBE BIRR
-  // - BANK
-  // - CASH
-  //
-  // The backend decides which provider implementation
-  // is used.
-  //
-  // ===================================================
-
-  initializePayment: async (
-    data: InitializePaymentRequest,
-  ): Promise<
-    InitializePaymentResponse
-  > => {
-
-    try {
-
-      const res =
-        await api.post<
-          InitializePaymentResponse
-        >(
-          "/payments/chapa/initialize",
-          data,
-        );
-
-      return res.data;
-
-    } catch (error) {
-
-      throw normalizeApiError(
-        error,
-      );
-    }
-  },
-
 
   // ===================================================
   // INITIALIZE CHAPA PAYMENT
@@ -185,82 +97,39 @@ export const paymentService = {
   //
   // POST /payments/chapa/initialize
   //
-  // Chapa-specific initialization.
+  // Flow:
   //
-  // The backend should generate the actual Chapa
-  // checkout session and return checkout_url.
+  // 1. Frontend sends invoice + amount.
+  // 2. Laravel authenticates taxpayer.
+  // 3. Laravel validates invoice ownership.
+  // 4. Laravel reads CURRENT balance_due.
+  // 5. Laravel validates requested amount.
+  // 6. Laravel creates PENDING payment.
+  // 7. Laravel initializes Chapa.
+  // 8. Laravel returns checkout information.
+  //
+  // IMPORTANT:
+  //
+  // The frontend amount is only a request.
+  // Laravel remains the financial authority.
   //
   // ===================================================
 
   initializeChapaPayment: async (
     data: InitializePaymentRequest,
-  ): Promise<
-    InitializePaymentResponse
-  > => {
-
+  ): Promise<InitializePaymentResponse> => {
     try {
-
       const res =
-        await api.post<
-          InitializePaymentResponse
-        >(
+        await api.post<InitializePaymentResponse>(
           "/payments/chapa/initialize",
-          {
-            ...data,
-          },
-        );
-
-      return res.data;
-
-    } catch (error) {
-
-      throw normalizeApiError(
-        error,
-      );
-    }
-  },
-
-
-  // ===================================================
-  // VERIFY PAYMENT
-  // ===================================================
-  //
-  // POST /payments/verify
-  //
-  // Laravel verifies the payment directly with the
-  // configured payment provider.
-  //
-  // The frontend NEVER decides whether a payment
-  // succeeded.
-  //
-  // ===================================================
-
-  verifyPayment: async (
-    data: VerifyPaymentRequest,
-  ): Promise<
-    VerifyPaymentResponse
-  > => {
-
-    try {
-
-      const res =
-        await api.post<
-          VerifyPaymentResponse
-        >(
-          "/payments/verify",
           data,
         );
 
       return res.data;
-
     } catch (error) {
-
-      throw normalizeApiError(
-        error,
-      );
+      throw normalizeApiError(error);
     }
   },
-
 
   // ===================================================
   // GET CHAPA PAYMENT STATUS
@@ -268,76 +137,31 @@ export const paymentService = {
   //
   // GET /payments/chapa/{payment}/status
   //
-  // Used after the customer returns from Chapa.
+  // Used after the taxpayer returns from Chapa.
   //
   // IMPORTANT:
   //
-  // This returns the LOCAL Laravel payment state.
+  // This endpoint should return the LOCAL Laravel
+  // payment state.
+  //
   // Laravel remains the source of truth.
   //
   // ===================================================
 
   getChapaPaymentStatus: async (
     paymentId: string,
-  ): Promise<
-    ApiResponse<Payment>
-  > => {
-
+  ): Promise<ApiResponse<Payment>> => {
     try {
-
       const res =
-        await api.get<
-          ApiResponse<Payment>
-        >(
+        await api.get<ApiResponse<Payment>>(
           `/payments/chapa/${encodeURIComponent(
             paymentId,
           )}/status`,
         );
 
       return res.data;
-
     } catch (error) {
-
-      throw normalizeApiError(
-        error,
-      );
+      throw normalizeApiError(error);
     }
   },
-
-
-  // ===================================================
-  // GET PAYMENT BY TRANSACTION REFERENCE
-  // ===================================================
-  //
-  // GET /payments/transaction/{transactionReference}
-  //
-  // ===================================================
-
-  getPaymentByTransactionReference: async (
-    transactionReference: string,
-  ): Promise<
-    ApiResponse<Payment>
-  > => {
-
-    try {
-
-      const res =
-        await api.get<
-          ApiResponse<Payment>
-        >(
-          `/payments/transaction/${encodeURIComponent(
-            transactionReference,
-          )}`,
-        );
-
-      return res.data;
-
-    } catch (error) {
-
-      throw normalizeApiError(
-        error,
-      );
-    }
-  },
-
 };

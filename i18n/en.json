@@ -61,7 +61,6 @@
     }
   },
 
-
   "auth": {
     "welcome": "Welcome Back",
 
@@ -77,134 +76,181 @@
   },
 
   "navigation": {
-
     "dashboard": "Dashboard",
     "roles": "Roles",
-  
+
     "user_access": "User & Access Management",
-  
+
     "users": "Users",
-  
+
     "taxpayers": "Taxpayers",
-  
+
     "access_managements": "Access Management",
-  
+
     "administrative_structure": "Administrative Structure",
-  
+
     "administrative_units": "Administrative Units",
-  
+
     "sectors": "Sectors",
-  
+
     "workflow_configuration": "Workflow Configuration",
-  
+
     "service_sector_access": "Service Sector Access",
-  
+
     "system_settings": "System Settings",
-  
+
     "audit_logs": "Audit Logs",
-  
+
     "revenue_configuration": "Revenue Configuration",
-  
+
     "revenue_categories": "Revenue Categories",
-  
+
     "revenue_codes": "Revenue Codes",
-  
+
     "revenue_services": "Revenue Services",
-  
+
     "interest_rates": "Interest Rates",
-  
+
     "penalty_rules": "Penalty Rules",
-  
+
     "payment_schedule_rules": "Payment Schedule Rules",
-  
+
     "calculation_setup": "Calculation Setup",
-  
+
     "measurement_units": "Measurement Units",
-  
+
     "base_fields": "Base Fields",
-  
+
     "formula_variables": "Formula Variables",
-  
+
     "tariff_management": "Tariff Management",
-  
+
     "tariff_versions": "Tariff Versions",
-  
+
     "tariff_rules": "Tariff Rules",
-  
+
     "data_validation": "Data Validation",
-  
+
     "data_reports": "Data Reports",
-  
+
     "executive_dashboard": "Executive Dashboard",
-  
+
     "revenue_overview": "Revenue Overview",
-  
+
     "performance_reports": "Performance Reports",
-  
+
     "sector_dashboard": "Sector Dashboard",
-  
+
     "revenue_operations": "Revenue Operations",
-  
+
     "revenue_data": "Revenue Data",
-  
+
     "assessments": "Assessments",
-  
+
     "invoices": "Invoices",
-  
+
     "field_collection": "Field Collection",
-  
+
     "penalty_discount_requests": "Penalty Discount Requests",
-  
+
     "workflow": "Workflow",
-  
+
     "drafts": "Drafts",
-  
+
     "pending_approval": "Pending Approval",
-  
+
     "submitted": "Submitted",
-  
+
     "returned": "Returned",
-  
+
     "reports": "Reports",
-  
+
     "revenue_reports": "Revenue Reports",
-  
+
     "sector_performance_reports": "Performance Reports",
-  
+
     "decision_dashboard": "Decision Dashboard",
-  
+
     "assessment_decisions": "Assessment Decisions",
-  
+
     "pending_assessments": "Pending Assessments",
-  
+
     "decision_history": "Decision History",
-  
+
     "decision_reports": "Decision Reports",
-  
+
     "collections": "Collections",
-  
+
     "pending_collections": "Pending Collections",
-  
+
     "completed_collections": "Completed Collections",
-  
+
     "payments": "Payments",
-  
+
     "create_payment": "Create Payment",
-  
+
     "payment_history": "Payment History",
-  
+
     "receipts": "Receipts",
-  
+
     "collection_reports": "Collection Reports",
-  
+
     "registration_dashboard": "Registration Dashboard",
-  
+
     "taxpayer_registration": "Taxpayer Registration",
-  
-    "registration_reports": "Registration Reports"
-  
+
+    "registration_reports": "Registration Reports",
+
+    "paymentSchedules": "Payment Schedules",
+
+    "notifications": "Notifications",
+
+    "profile": "Profile",
+
+    "taxpayerPortal": "Taxpayer Portal"
+  },
+
+  "taxpayer": {
+    "dashboard": {
+      "welcome": "Welcome",
+      "title": "Taxpayer Dashboard",
+      "description": "View your municipal invoices, payments, and upcoming obligations.",
+      "viewInvoices": "View Invoices",
+      "viewAll": "View All",
+
+      "balance": {
+        "title": "Outstanding Balance",
+        "description": "Total amount currently due across your invoices.",
+        "payNow": "Pay Now",
+        "viewSchedule": "View Schedule",
+        "unpaidInvoices": "{count, plural, =1 {1 unpaid invoice} other {# unpaid invoices}}",
+        "nextDue": "Next payment due {date}"
+      },
+
+      "cards": {
+        "totalInvoices": "Total Invoices",
+        "totalInvoicesDescription": "All invoices issued to you",
+
+        "upcomingPayments": "Upcoming Payments",
+        "upcomingPaymentsDescription": "Scheduled payments due soon",
+
+        "totalPaid": "Total Paid",
+        "totalPaidDescription": "Payments completed"
+      },
+
+      "upcomingPayments": {
+        "title": "Upcoming Payments",
+        "description": "Your next scheduled payment obligations.",
+        "emptyTitle": "No upcoming payments",
+        "emptyDescription": "Your scheduled payments will appear here."
+      },
+
+      "recentInvoices": {
+        "title": "Recent Invoices",
+        "description": "Your latest municipal invoices.",
+        "emptyTitle": "No recent invoices",
+        "emptyDescription": "Your latest invoices will appear here."
+      }
+    }
   }
-
-
-  
 }

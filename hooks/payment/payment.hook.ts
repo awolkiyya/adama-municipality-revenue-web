@@ -16,8 +16,6 @@ import type {
   PaymentFilters,
   InitializePaymentRequest,
   InitializePaymentResponse,
-  VerifyPaymentRequest,
-  VerifyPaymentResponse,
 } from "@/types/payment";
 
 import {
@@ -60,15 +58,6 @@ export const paymentKeys = {
     id: string,
   ) => [
     ...paymentKeys.details(),
-    id,
-  ] as const,
-
-
-  verification: (
-    id: string,
-  ) => [
-    ...paymentKeys.all,
-    "verification",
     id,
   ] as const,
 
@@ -163,10 +152,46 @@ export const usePayment = (
 
 
 // =====================================================
-// INITIALIZE GENERIC PAYMENT
+// INITIALIZE CHAPA PAYMENT
+// =====================================================
+//
+// POST /payments/chapa/initialize
+//
+// Flow:
+//
+// Invoice
+//    ↓
+// Pay Invoice
+//    ↓
+// Initialize Chapa Payment
+//    ↓
+// Laravel creates PENDING payment
+//    ↓
+// Chapa checkout
+//
+// IMPORTANT:
+//
+// The frontend amount is only a requested amount.
+//
+// Laravel MUST:
+//
+// - authenticate the taxpayer
+// - verify invoice ownership
+// - read the current invoice balance
+// - validate the requested amount
+// - create the payment transaction
+// - initialize Chapa
+//
+// The frontend must NEVER update:
+//
+// - invoice.paid_amount
+// - invoice.balance_due
+// - invoice.status
+// - payment.status
+//
 // =====================================================
 
-export const useInitializePayment = () => {
+export const useInitializeChapaPayment = () => {
 
   const queryClient =
     useQueryClient();
@@ -178,22 +203,14 @@ export const useInitializePayment = () => {
     InitializePaymentRequest
   >({
 
-    // ===================================================
-    // MUTATION
-    // ===================================================
-
     mutationFn:
       (
         data,
       ) =>
-        paymentService.initializePayment(
+        paymentService.initializeChapaPayment(
           data,
         ),
 
-
-    // ===================================================
-    // SUCCESS
-    // ===================================================
 
     onSuccess:
       (
@@ -201,139 +218,38 @@ export const useInitializePayment = () => {
       ) => {
 
         /*
-         * The initialize-payment response does NOT
-         * return a Payment resource.
+         * Initialization does not mean payment success.
          *
-         * It returns the provider initialization result:
+         * The payment should normally still be PENDING
+         * until Laravel receives and verifies the provider
+         * result.
          *
-         * - paymentReference
-         * - providerReference
-         * - checkoutUrl
-         * - status
-         * - amount
-         * - currency
-         *
-         * Therefore, do not try to access:
-         *
-         * response.data.payment
+         * Therefore we do not update invoice/payment
+         * financial values here.
          */
+
 
         const paymentReference =
           response?.data
             ?.paymentReference;
 
 
+        /*
+         * If the backend returns a payment reference,
+         * refresh payment-related queries.
+         *
+         * Do not construct a fake Payment object from
+         * the initialization response.
+         */
+
         if (!paymentReference) {
           return;
         }
 
 
-        // =================================================
-        // REFRESH PAYMENT LISTS
-        // =================================================
-
         queryClient.invalidateQueries({
           queryKey:
             paymentKeys.lists(),
-        });
-
-
-        /*
-         * Do NOT construct a fake ApiResponse.
-         *
-         * The initialize response has its own response
-         * structure and should remain separate from the
-         * payment-detail response.
-         */
-      },
-
-  });
-
-};
-
-
-// =====================================================
-// VERIFY PAYMENT
-// =====================================================
-
-export const useVerifyPayment = () => {
-
-  const queryClient =
-    useQueryClient();
-
-
-  return useMutation<
-    VerifyPaymentResponse,
-    Error,
-    VerifyPaymentRequest
-  >({
-
-    mutationFn:
-      (
-        data,
-      ) =>
-        paymentService.verifyPayment(
-          data,
-        ),
-
-
-    onSuccess:
-      (
-        response,
-        variables,
-      ) => {
-
-        const payment =
-          response?.data?.payment;
-
-
-        if (payment?.id) {
-
-          // ------------------------------------------------
-          // Store the actual verification response
-          // ------------------------------------------------
-
-          queryClient.setQueryData(
-            paymentKeys.verification(
-              payment.id,
-            ),
-            response,
-          );
-
-
-          // ------------------------------------------------
-          // Refresh payment detail from backend
-          // ------------------------------------------------
-
-          queryClient.invalidateQueries({
-            queryKey:
-              paymentKeys.detail(
-                payment.id,
-              ),
-          });
-
-
-          // ------------------------------------------------
-          // Refresh payment list
-          // ------------------------------------------------
-
-          queryClient.invalidateQueries({
-            queryKey:
-              paymentKeys.lists(),
-          });
-
-        }
-
-
-        // ------------------------------------------------
-        // Also invalidate verification query
-        // ------------------------------------------------
-
-        queryClient.invalidateQueries({
-          queryKey:
-            paymentKeys.verification(
-              variables.payment_id,
-            ),
         });
 
       },
@@ -345,6 +261,26 @@ export const useVerifyPayment = () => {
 
 // =====================================================
 // GET CHAPA PAYMENT STATUS
+// =====================================================
+//
+// GET /payments/chapa/{payment}/status
+//
+// This endpoint returns the LOCAL Laravel payment state.
+//
+// Laravel remains the source of truth.
+//
+// Possible lifecycle:
+//
+// PENDING
+//    ↓
+// SUCCESS
+//
+// or
+//
+// PENDING
+//    ↓
+// FAILED
+//
 // =====================================================
 
 export const useChapaPaymentStatus = (

@@ -1,52 +1,30 @@
 "use client"
 
-import React, {
-  useMemo,
-  useState,
-} from "react"
-
+import React, { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
-
 import { useQueryClient } from "@tanstack/react-query"
-
 import {
   Download,
   FileText,
   MoreHorizontal,
   Pencil,
+  Plus,
   Printer,
   Search,
   Wallet,
+  X,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
-
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
-
+import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-
-import { Badge } from "@/components/ui/badge"
-
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-
 import {
   Table,
   TableBody,
@@ -60,616 +38,212 @@ import {
   directCollectionKeys,
   useDirectCollections,
 } from "@/hooks/revenue/use-direct-collection"
-
+import type { DirectCollectionInvoice } from "@/types/revenue/direct-collection"
 import type {
-  DirectCollectionInvoice,
-} from "@/types/revenue/direct-collection"
+  CollectionRecord,
+  CollectionStatus,
+  OptionalInvoiceFields,
+  OptionalItemFields,
+} from "@/types/field-collection"
+import { DataTablePagination } from "@/components/table/data-pagination"
+import { formatCurrency, toNumber } from "@/utils/helpers"
+import { cn, formatEthiopianDate } from "@/lib/utils"
 
 // =========================================================
-// TYPES
+// CONFIG
 // =========================================================
 
-type CollectionStatus =
-  | "PENDING"
-  | "PARTIALLY_PAID"
-  | "COLLECTED"
-  | "CANCELLED"
+const STATUS_TABS = [
+  { value: "ALL", label: "All" },
+  { value: "PENDING", label: "Pending" },
+  { value: "PARTIALLY_PAID", label: "Partially paid" },
+  { value: "COLLECTED", label: "Collected" },
+  { value: "CANCELLED", label: "Cancelled" },
+] as const
 
-type CollectionRecord = {
-  id: string
+const STATUS_STYLE: Record<
+  CollectionStatus,
+  { label: string; dot: string; text: string }
+> = {
+  PENDING: { label: "Pending", dot: "bg-amber-500", text: "text-amber-700" },
+  PARTIALLY_PAID: {
+    label: "Partially paid",
+    dot: "bg-blue-500",
+    text: "text-blue-700",
+  },
+  COLLECTED: {
+    label: "Collected",
+    dot: "bg-emerald-500",
+    text: "text-emerald-700",
+  },
+  CANCELLED: { label: "Cancelled", dot: "bg-red-500", text: "text-red-700" },
+}
 
-  invoiceId: string
-  invoiceNumber: string
-
-  taxpayerId: string
-  taxpayerName: string
-  taxpayerPhone: string
-
-  serviceId: string
-  serviceName: string
-  revenueDomain: string
-
-  tariffCode: string
-  tariffName: string
-  tariffUnit: string
-  tariffRate: number
-  quantity: number
-
-  amount: number
-  paidAmount: number
-  balance: number
-
-  dueDate: string | null
-
-  status: CollectionStatus
-
-  createdAt: string | null
+const API_STATUS: Record<string, string> = {
+  PENDING: "ISSUED",
+  PARTIALLY_PAID: "PARTIALLY_PAID",
+  COLLECTED: "PAID",
+  CANCELLED: "CANCELLED",
 }
 
 // =========================================================
-// SAFE API EXTENSIONS
-// =========================================================
-
-type OptionalInvoiceFields = {
-  id?: string | null
-
-  invoice_number?: string | null
-  status?: string | null
-
-  total_amount?: string | number | null
-  amount?: string | number | null
-
-  paid_amount?: string | number | null
-  amount_paid?: string | number | null
-
-  balance_due?: string | number | null
-  balance?: string | number | null
-
-  due_date?: string | null
-  created_at?: string | null
-}
-
-type OptionalItemFields = {
-  service?: {
-    id?: string | null
-    name?: string | null
-    revenue_domain?: string | null
-    domain?: string | null
-    unit?: string | null
-  } | null
-
-  service_name?: string | null
-
-  tariff_code?: string | null
-  tariff_name?: string | null
-
-  tariff_rule_id?: string | null
-
-  unit?: string | null
-
-  unit_price?: string | number | null
-
-  quantity?: string | number | null
-
-  amount?: string | number | null
-}
-
-// =========================================================
-// HELPERS
-// =========================================================
-
-function toNumber(
-  value: unknown,
-): number {
-  if (
-    typeof value === "number"
-  ) {
-    return Number.isFinite(value)
-      ? value
-      : 0
-  }
-
-  if (
-    typeof value === "string" &&
-    value.trim() !== ""
-  ) {
-    const parsed =
-      Number(value)
-
-    return Number.isFinite(parsed)
-      ? parsed
-      : 0
-  }
-
-  return 0
-}
-
-function formatCurrency(
-  amount: number,
-): string {
-  return new Intl.NumberFormat(
-    "en-ET",
-    {
-      style: "currency",
-      currency: "ETB",
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    },
-  ).format(amount)
-}
-
-function formatDate(
-  value:
-    | string
-    | null
-    | undefined,
-): string {
-  if (!value) {
-    return "—"
-  }
-
-  const date =
-    new Date(value)
-
-  if (
-    Number.isNaN(
-      date.getTime(),
-    )
-  ) {
-    return value
-  }
-
-  return new Intl.DateTimeFormat(
-    "en-ET",
-    {
-      year: "numeric",
-      month: "short",
-      day: "2-digit",
-    },
-  ).format(date)
-}
-
-// =========================================================
-// STATUS
+// MAPPING (unchanged logic)
 // =========================================================
 
 function resolveCollectionStatus(
   collection: DirectCollectionInvoice,
 ): CollectionStatus {
-  const invoice =
-    collection.invoice
-
-  const status =
-    String(
-      invoice?.status ?? "",
-    ).toUpperCase()
+  const status = String(collection.invoice?.status ?? "").toUpperCase()
 
   switch (status) {
     case "PAID":
     case "COLLECTED":
       return "COLLECTED"
-
     case "PARTIALLY_PAID":
       return "PARTIALLY_PAID"
-
     case "CANCELLED":
     case "CANCELED":
       return "CANCELLED"
-
-    case "ISSUED":
-    case "PENDING":
-    case "DRAFT":
     default:
       return "PENDING"
   }
 }
 
-// =========================================================
-// API STATUS FILTER
-// =========================================================
-
-function resolveApiStatus(
-  status: string,
-): string | undefined {
-  switch (status) {
-    case "PENDING":
-      return "ISSUED"
-
-    case "PARTIALLY_PAID":
-      return "PARTIALLY_PAID"
-
-    case "COLLECTED":
-      return "PAID"
-
-    case "CANCELLED":
-      return "CANCELLED"
-
-    default:
-      return undefined
-  }
-}
-
-// =========================================================
-// RECORD HELPERS
-// =========================================================
-
-function getInvoiceFields(
-  collection: DirectCollectionInvoice,
-): OptionalInvoiceFields {
-  return (
-    collection.invoice as
-      | OptionalInvoiceFields
-      | null
-      | undefined
-  ) ?? {}
-}
-
-function getFirstItem(
-  collection: DirectCollectionInvoice,
-): OptionalItemFields & {
+type ItemWithExtras = OptionalItemFields & {
   id?: string
   service_id?: string | null
-  tariff_version_id?: string | null
-  penalty_rule_id?: string | null
-  interest_rule_id?: string | null
-} {
-  const item =
-    collection.items?.[0]
-
-  if (!item) {
-    return {}
-  }
-
-  return item as typeof item &
-    OptionalItemFields & {
-      id?: string
-      service_id?: string | null
-      tariff_version_id?: string | null
-      penalty_rule_id?: string | null
-      interest_rule_id?: string | null
-    }
 }
-
-// =========================================================
-// API → UI MAPPER
-// =========================================================
 
 function mapDirectCollection(
   collection: DirectCollectionInvoice,
 ): CollectionRecord {
   const invoice =
-    getInvoiceFields(
-      collection,
-    )
+    (collection.invoice as OptionalInvoiceFields | null | undefined) ?? {}
+  const item = (collection.items?.[0] ?? {}) as ItemWithExtras
+  const service = item.service ?? null
 
-  const item =
-    getFirstItem(
-      collection,
-    )
+  const amount = toNumber(
+    invoice.total_amount ?? invoice.amount ?? item.amount ?? 0,
+  )
 
-  const service =
-    item.service ?? null
+  let paidAmount = toNumber(invoice.paid_amount ?? invoice.amount_paid ?? 0)
 
-  // -------------------------------------------------------
-  // INVOICE ID
-  // -------------------------------------------------------
-
-  const invoiceId =
-    invoice.id ??
-    collection.id
-
-  // -------------------------------------------------------
-  // TOTAL AMOUNT
-  // -------------------------------------------------------
-
-  const amount =
-    toNumber(
-      invoice.total_amount ??
-        invoice.amount ??
-        item.amount ??
-        0,
-    )
-
-  // -------------------------------------------------------
-  // STATUS
-  // -------------------------------------------------------
-
-  const status =
-    resolveCollectionStatus(
-      collection,
-    )
-
-  // -------------------------------------------------------
-  // PAID AMOUNT
-  // -------------------------------------------------------
-
-  let paidAmount =
-    toNumber(
-      invoice.paid_amount ??
-        invoice.amount_paid ??
-        0,
-    )
-
-  /*
-   * Defensive fallback:
-   *
-   * If the invoice status is PAID but the API does not
-   * expose paid_amount, consider the full invoice amount paid.
-   */
-  if (
-    (
-      invoice.status ??
-      ""
-    ).toUpperCase() ===
-      "PAID" &&
-    paidAmount === 0
-  ) {
-    paidAmount =
-      amount
+  // Defensive fallback: PAID invoice without paid_amount
+  if ((invoice.status ?? "").toUpperCase() === "PAID" && paidAmount === 0) {
+    paidAmount = amount
   }
 
-  // -------------------------------------------------------
-  // BALANCE
-  // -------------------------------------------------------
-
-  const explicitBalance =
-    invoice.balance_due ??
-    invoice.balance ??
-    null
-
-  /*
-   * Always calculate the balance from:
-   *
-   * total amount - paid amount
-   *
-   * when the API reports zero/missing balance incorrectly.
-   */
-  const calculatedBalance =
-    Math.max(
-      amount -
-        paidAmount,
-      0,
-    )
-
+  const explicitBalance = invoice.balance_due ?? invoice.balance ?? null
+  const calculatedBalance = Math.max(amount - paidAmount, 0)
   const reportedBalance =
-    explicitBalance !==
-      null &&
-    explicitBalance !==
-      undefined
-      ? Math.max(
-          toNumber(
-            explicitBalance,
-          ),
-          0,
-        )
+    explicitBalance !== null && explicitBalance !== undefined
+      ? Math.max(toNumber(explicitBalance), 0)
       : 0
 
   const balance =
     calculatedBalance === 0
       ? 0
       : reportedBalance > 0
-        ? Math.min(
-            reportedBalance,
-            calculatedBalance,
-          )
+        ? Math.min(reportedBalance, calculatedBalance)
         : calculatedBalance
 
-  // -------------------------------------------------------
-  // SERVICE
-  // -------------------------------------------------------
-
-  const serviceId =
-    item.service_id ??
-    collection.revenue_service_id ??
-    ""
-
-  const serviceName =
-    item.service_name ??
-    service?.name ??
-    "—"
-
-  // -------------------------------------------------------
-  // TARIFF
-  // -------------------------------------------------------
-
-  const tariffCode =
-    item.tariff_code ??
-    item.tariff_rule_id ??
-    "—"
-
-  const tariffName =
-    item.tariff_name ??
-    "—"
-
-  // -------------------------------------------------------
-  // TAXPAYER
-  // -------------------------------------------------------
-
-  const taxpayerId =
-    collection.taxpayer_id ??
-    collection.taxpayer?.id ??
-    ""
-
-  const taxpayerName =
-    collection.taxpayer?.name ??
-    "Unknown taxpayer"
-
-  const taxpayerPhone =
-    collection.taxpayer?.phone ??
-    "—"
-
-  // -------------------------------------------------------
-  // RETURN
-  // -------------------------------------------------------
-
   return {
-    id:
-      collection.id,
-
-    invoiceId,
-
-    invoiceNumber:
-      invoice.invoice_number ??
-      "—",
-
-    taxpayerId,
-
-    taxpayerName,
-
-    taxpayerPhone,
-
-    serviceId,
-
-    serviceName,
-
-    revenueDomain:
-      service?.revenue_domain ??
-      service?.domain ??
-      "—",
-
-    tariffCode,
-
-    tariffName,
-
-    tariffUnit:
-      item.unit ??
-      service?.unit ??
-      "—",
-
-    tariffRate:
-      toNumber(
-        item.unit_price,
-      ),
-
-    quantity:
-      toNumber(
-        item.quantity ??
-          1,
-      ),
-
+    id: collection.id,
+    invoiceId: invoice.id ?? collection.id,
+    invoiceNumber: invoice.invoice_number ?? "—",
+    taxpayerId: collection.taxpayer_id ?? collection.taxpayer?.id ?? "",
+    taxpayerName: collection.taxpayer?.name ?? "Unknown taxpayer",
+    taxpayerPhone: collection.taxpayer?.phone ?? "—",
+    serviceId: item.service_id ?? collection.revenue_service_id ?? "",
+    serviceName: item.service_name ?? service?.name ?? "—",
+    revenueDomain: service?.revenue_domain ?? service?.domain ?? "—",
+    tariffCode: item.tariff_code ?? item.tariff_rule_id ?? "—",
+    tariffName: item.tariff_name ?? "—",
+    tariffUnit: item.unit ?? service?.unit ?? "—",
+    tariffRate: toNumber(item.unit_price),
+    quantity: toNumber(item.quantity ?? 1),
     amount,
-
     paidAmount,
-
     balance,
-
-    dueDate:
-      invoice.due_date ??
-      null,
-
-    status,
-
-    createdAt:
-      invoice.created_at ??
-      null,
+    dueDate: invoice.due_date ?? null,
+    status: resolveCollectionStatus(collection),
+    createdAt: invoice.created_at ?? null,
   }
 }
 
-// =========================================================
-// STATUS LABEL
-// =========================================================
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) return error.message
 
-function getStatusLabel(
-  status: CollectionStatus,
-): string {
-  switch (status) {
-    case "PENDING":
-      return "Pending"
-
-    case "PARTIALLY_PAID":
-      return "Partially Paid"
-
-    case "COLLECTED":
-      return "Collected"
-
-    case "CANCELLED":
-      return "Cancelled"
-
-    default:
-      return status
-  }
-}
-
-// =========================================================
-// STATUS CLASS
-// =========================================================
-
-function getStatusClassName(
-  status: CollectionStatus,
-): string {
-  switch (status) {
-    case "PENDING":
-      return "bg-amber-500/10 text-amber-700 border-amber-500/20"
-
-    case "PARTIALLY_PAID":
-      return "bg-blue-500/10 text-blue-700 border-blue-500/20"
-
-    case "COLLECTED":
-      return "bg-emerald-500/10 text-emerald-700 border-emerald-500/20"
-
-    case "CANCELLED":
-      return "bg-red-500/10 text-red-700 border-red-500/20"
-
-    default:
-      return ""
-  }
-}
-
-// =========================================================
-// ERROR MESSAGE
-// =========================================================
-
-function getErrorMessage(
-  error: unknown,
-): string {
-  if (
-    error instanceof Error &&
-    error.message
-  ) {
-    return error.message
-  }
-
-  const responseError =
-    error as {
-      response?: {
-        data?: {
-          message?: string
-          errors?: Record<
-            string,
-            string[]
-          >
-        }
-      }
-    }
-
-  const message =
-    responseError
-      ?.response
-      ?.data
-      ?.message
-
-  if (message) {
-    return message
-  }
-
-  const errors =
-    responseError
-      ?.response
-      ?.data
-      ?.errors
-
-  if (errors) {
-    const firstError =
-      Object.values(
-        errors,
-      )[0]?.[0]
-
-    if (firstError) {
-      return firstError
+  const responseError = error as {
+    response?: {
+      data?: { message?: string; errors?: Record<string, string[]> }
     }
   }
+  const data = responseError?.response?.data
 
-  return "Unable to load field collections."
+  if (data?.message) return data.message
+  if (data?.errors) {
+    const first = Object.values(data.errors)[0]?.[0]
+    if (first) return first
+  }
+  return "Unable to load collections."
+}
+
+// =========================================================
+// SMALL UI PIECES
+// =========================================================
+
+function StatusBadge({ status }: { status: CollectionStatus }) {
+  const style = STATUS_STYLE[status]
+
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1.5 text-sm font-medium",
+        style.text,
+      )}
+    >
+      <span className={cn("size-1.5 rounded-full", style.dot)} />
+      {style.label}
+    </span>
+  )
+}
+
+function Stat({
+  label,
+  value,
+  emphasis = false,
+}: {
+  label: string
+  value: React.ReactNode
+  emphasis?: boolean
+}) {
+  return (
+    <div className="flex-1 px-5 py-4">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p
+        className={cn(
+          "mt-1 font-semibold tracking-tight",
+          emphasis ? "text-2xl" : "text-xl",
+        )}
+      >
+        {value}
+      </p>
+    </div>
+  )
+}
+
+function PaidProgress({ paid, total }: { paid: number; total: number }) {
+  const percent = total > 0 ? Math.min((paid / total) * 100, 100) : 0
+
+  return (
+    <div className="mt-1.5 h-1 w-28 overflow-hidden rounded-full bg-muted">
+      <div
+        className="h-full rounded-full bg-emerald-500 transition-all"
+        style={{ width: `${percent}%` }}
+      />
+    </div>
+  )
 }
 
 // =========================================================
@@ -677,398 +251,160 @@ function getErrorMessage(
 // =========================================================
 
 export default function FieldCollectionPage() {
-  const router =
-    useRouter()
+  const router = useRouter()
+  const queryClient = useQueryClient()
 
-  const queryClient =
-    useQueryClient()
+  // ---------------- filters ----------------
+  const [searchInput, setSearchInput] = useState("")
+  const [search, setSearch] = useState("")
+  const [statusFilter, setStatusFilter] = useState<string>("ALL")
+  const [page, setPage] = useState(1)
+  const [perPage, setPerPage] = useState(10)
 
-  // =======================================================
-  // FILTERS
-  // =======================================================
+  // Debounce search so we don't hit the API on every keystroke
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearch(searchInput.trim())
+      setPage(1)
+    }, 400)
 
-  const [
-    search,
-    setSearch,
-  ] = useState("")
+    return () => clearTimeout(timer)
+  }, [searchInput])
 
-  const [
-    statusFilter,
-    setStatusFilter,
-  ] = useState("ALL")
+  const listParams = useMemo(
+    () => ({
+      page,
+      per_page: perPage,
+      ...(search ? { search } : {}),
+      ...(API_STATUS[statusFilter] ? { status: API_STATUS[statusFilter] } : {}),
+    }),
+    [page, perPage, search, statusFilter],
+  )
 
-  const [
-    page,
-    setPage,
-  ] = useState(1)
-
-  const perPage = 20
-
-  // =======================================================
-  // API FILTERS
-  // =======================================================
-
-  const listParams =
-    useMemo(
-      () => {
-        const apiStatus =
-          resolveApiStatus(
-            statusFilter,
-          )
-
-        return {
-          page,
-
-          per_page:
-            perPage,
-
-          ...(search.trim()
-            ? {
-                search:
-                  search.trim(),
-              }
-            : {}),
-
-          ...(apiStatus
-            ? {
-                status:
-                  apiStatus,
-              }
-            : {}),
-        }
-      },
-      [
-        page,
-        perPage,
-        search,
-        statusFilter,
-      ],
-    )
-
-  // =======================================================
-  // COLLECTION LIST
-  // =======================================================
-
+  // ---------------- data ----------------
   const {
-    data:
-      collectionResponse,
+    data: response,
     isLoading,
     isFetching,
     isError,
     error,
-  } =
-    useDirectCollections(
-      listParams,
-    )
+  } = useDirectCollections(listParams)
 
-  // =======================================================
-  // MAP LIST
-  // =======================================================
+  const collections = useMemo(
+    () => (response?.data ?? []).map(mapDirectCollection),
+    [response],
+  )
 
-  const collections =
-    useMemo(() => {
-      return (
-        collectionResponse?.data ??
-        []
-      ).map(
-        mapDirectCollection,
+  const pagination = response?.meta
+
+  const summary = useMemo(
+    () => ({
+      pending: collections.filter((c) => c.status === "PENDING").length,
+      partial: collections.filter((c) => c.status === "PARTIALLY_PAID").length,
+      collected: collections.filter((c) => c.status === "COLLECTED").length,
+      outstanding: collections.reduce((sum, c) => sum + c.balance, 0),
+    }),
+    [collections],
+  )
+
+  // ---------------- actions ----------------
+  const go = (path: string) => router.push(path)
+  const enc = encodeURIComponent
+
+  const canPay = (c: CollectionRecord) =>
+    c.balance > 0 && c.status !== "CANCELLED" && !!c.invoiceId
+
+  const canEdit = (c: CollectionRecord) =>
+    c.status === "PENDING" && c.paidAmount <= 0 && c.balance > 0
+
+  const canPrint = (c: CollectionRecord) =>
+    !!c.invoiceId && (c.status !== "PENDING" || c.balance > 0)
+
+  const startCollection = () =>
+    go("/office/dashboard/field-collections/create")
+
+  const viewDetails = (c: CollectionRecord) =>
+    go(`/office/dashboard/field-collections/${enc(c.id)}`)
+
+  const edit = (c: CollectionRecord) => {
+    if (canEdit(c))
+      go(`/office/dashboard/field-collections/${enc(c.id)}/edit`)
+  }
+
+  const collectPayment = (c: CollectionRecord) => {
+    if (canPay(c))
+      go(`/office/dashboard/payments/create?invoice_id=${enc(c.invoiceId)}`)
+  }
+
+  const printInvoice = (c: CollectionRecord) => {
+    if (canPrint(c))
+      go(`/office/dashboard/invoices/${enc(c.invoiceId)}/print`)
+  }
+
+  const downloadInvoice = (c: CollectionRecord) => {
+    if (canPrint(c))
+      window.open(
+        `/office/dashboard/invoices/${enc(c.invoiceId)}/print?download=1`,
+        "_blank",
+        "noopener,noreferrer",
       )
-    }, [
-      collectionResponse,
-    ])
-
-  // =======================================================
-  // PAGINATION
-  // =======================================================
-
-  const pagination =
-    collectionResponse?.meta
-
-  // =======================================================
-  // SUMMARY
-  // =======================================================
-
-  const summary =
-    useMemo(() => {
-      const pending =
-        collections.filter(
-          (item) =>
-            item.status ===
-            "PENDING",
-        ).length
-
-      const partial =
-        collections.filter(
-          (item) =>
-            item.status ===
-            "PARTIALLY_PAID",
-        ).length
-
-      const collected =
-        collections.filter(
-          (item) =>
-            item.status ===
-            "COLLECTED",
-        ).length
-
-      const outstanding =
-        collections.reduce(
-          (
-            total,
-            item,
-          ) =>
-            total +
-            item.balance,
-          0,
-        )
-
-      return {
-        pending,
-        partial,
-        collected,
-        outstanding,
-      }
-    }, [
-      collections,
-    ])
-
-  // =======================================================
-  // START COLLECTION
-  // =======================================================
-
-  function handleStartCollection() {
-    router.push(
-      "/office/dashboard/field-collections/create",
-    )
   }
 
-  // =======================================================
-  // UPDATE
-  // =======================================================
-
-  function handleUpdate(
-    collection: CollectionRecord,
-  ) {
-    /*
-     * Update is only available for pending/unpaid
-     * direct collections.
-     *
-     * Backend also enforces this rule.
-     */
-    if (
-      collection.status !==
-        "PENDING" ||
-      collection.paidAmount >
-        0 ||
-      collection.balance <=
-        0
-    ) {
-      return
-    }
-
-    router.push(
-      `/office/dashboard/field-collections/${encodeURIComponent(
-        collection.id,
-      )}/edit`,
-    )
-  }
-
-  // =======================================================
-  // VIEW DETAILS
-  // =======================================================
-
-  function handleViewDetails(
-    collection: CollectionRecord,
-  ) {
-    router.push(
-      `/office/dashboard/field-collections/${encodeURIComponent(
-        collection.id,
-      )}`,
-    )
-  }
-
-  // =======================================================
-  // PRINT INVOICE
-  // =======================================================
-
-  function handlePrintInvoice(
-    collection: CollectionRecord,
-  ) {
-    if (
-      !collection.invoiceId
-    ) {
-      return
-    }
-
-    /*
-     * Draft invoices are not official invoices.
-     * Field Collection records mapped as PENDING normally
-     * represent ISSUED invoices in the backend.
-     */
-    if (
-      collection.status ===
-      "PENDING" &&
-      collection.balance <=
-        0
-    ) {
-      return
-    }
-
-    router.push(
-      `/office/dashboard/invoices/${encodeURIComponent(
-        collection.invoiceId,
-      )}/print`,
-    )
-  }
-
-  // =======================================================
-  // DOWNLOAD INVOICE
-  // =======================================================
-
-  function handleDownloadInvoice(
-    collection: CollectionRecord,
-  ) {
-    if (
-      !collection.invoiceId
-    ) {
-      return
-    }
-
-    /*
-     * This opens the printable invoice route with the
-     * download flag.
-     *
-     * The print page should handle ?download=1.
-     */
-    window.open(
-      `/office/dashboard/invoices/${encodeURIComponent(
-        collection.invoiceId,
-      )}/print?download=1`,
-      "_blank",
-      "noopener,noreferrer",
-    )
-  }
-
-  // =======================================================
-  // COLLECT PAYMENT
-  // =======================================================
-
-  function handleCollectPayment(
-    collection: CollectionRecord,
-  ) {
-    if (
-      collection.balance <=
-      0
-    ) {
-      return
-    }
-
-    if (
-      collection.status ===
-      "CANCELLED"
-    ) {
-      return
-    }
-
-    if (
-      !collection.invoiceId
-    ) {
-      return
-    }
-
-    /*
-     * All invoice types use the same payment page.
-     *
-     * The payment method (cash, bank transfer,
-     * mobile banking, etc.) is selected inside PaymentForm.
-     */
-    router.push(
-      `/office/dashboard/payments/create?invoice_id=${encodeURIComponent(
-        collection.invoiceId,
-      )}`,
-    )
-  }
-
-  // =======================================================
-  // FILTER HANDLERS
-  // =======================================================
-
-  function handleSearchChange(
-    value: string,
-  ) {
-    setSearch(value)
-    setPage(1)
-  }
-
-  function handleStatusChange(
-    value: string,
-  ) {
+  const changeStatus = (value: string) => {
     setStatusFilter(value)
     setPage(1)
   }
 
-  // =======================================================
-  // ERROR
-  // =======================================================
+  const hasFilters = statusFilter !== "ALL" || searchInput !== ""
 
+  const clearFilters = () => {
+    setSearchInput("")
+    setSearch("")
+    setStatusFilter("ALL")
+    setPage(1)
+  }
+
+  // ---------------- header (shared) ----------------
+  const header = (
+    <div className="flex flex-wrap items-center justify-between gap-4">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">
+          Direct collection
+        </h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Collect payments and manage invoices in the field.
+        </p>
+      </div>
+
+      <Button onClick={startCollection} className="gap-2">
+        <Plus className="size-4" />
+        Start collection
+      </Button>
+    </div>
+  )
+
+  // ---------------- error ----------------
   if (isError) {
     return (
       <div className="space-y-6 p-6">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <div className="flex items-center gap-2">
-              <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10">
-                <Wallet className="size-5 text-primary" />
-              </div>
-
-              <h1 className="text-2xl font-semibold tracking-tight">
-                Field Collection
-              </h1>
-            </div>
-
-            <p className="mt-1 text-sm text-muted-foreground">
-              Manage direct collections
-              and their invoices.
-            </p>
-          </div>
-
-          <Button
-            className="gap-2"
-            onClick={
-              handleStartCollection
-            }
-          >
-            <Wallet className="size-4" />
-            Start Collection
-          </Button>
-        </div>
+        {header}
 
         <Card>
           <CardContent className="flex min-h-64 flex-col items-center justify-center gap-3">
             <FileText className="size-8 text-muted-foreground" />
-
-            <p className="font-medium">
-              Unable to load collections
-            </p>
-
+            <p className="font-medium">Couldn&apos;t load collections</p>
             <p className="max-w-md text-center text-sm text-muted-foreground">
-              {getErrorMessage(
-                error,
-              )}
+              {getErrorMessage(error)}
             </p>
-
             <Button
               variant="outline"
               onClick={() =>
-                queryClient.invalidateQueries(
-                  {
-                    queryKey:
-                      directCollectionKeys.all,
-                  },
-                )
+                queryClient.invalidateQueries({
+                  queryKey: directCollectionKeys.all,
+                })
               }
             >
-              Try Again
+              Try again
             </Button>
           </CardContent>
         </Card>
@@ -1076,666 +412,262 @@ export default function FieldCollectionPage() {
     )
   }
 
-  // =======================================================
-  // UI
-  // =======================================================
-
+  // ---------------- UI ----------------
   return (
     <div className="space-y-6 p-6">
-      {/* ===================================================
-          HEADER
-      =================================================== */}
+      {header}
 
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <div className="flex items-center gap-2">
-            <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10">
-              <Wallet className="size-5 text-primary" />
-            </div>
-
-            <h1 className="text-2xl font-semibold tracking-tight">
-              Field Collection
-            </h1>
-          </div>
-
-          <p className="mt-1 text-sm text-muted-foreground">
-            Manage direct collections
-            and their invoices.
-          </p>
+      {/* SUMMARY — one compact strip instead of four cards */}
+      <Card className="overflow-hidden">
+        <div className="flex flex-col divide-y sm:flex-row sm:divide-x sm:divide-y-0">
+          <Stat
+            label="Outstanding (this page)"
+            value={formatCurrency(summary.outstanding)}
+            emphasis
+          />
+          <Stat label="Pending" value={summary.pending} />
+          <Stat label="Partially paid" value={summary.partial} />
+          <Stat label="Collected" value={summary.collected} />
         </div>
+      </Card>
 
-        <Button
-          className="gap-2"
-          onClick={
-            handleStartCollection
-          }
-        >
-          <Wallet className="size-4" />
-          Start Collection
-        </Button>
-      </div>
-
-      {/* ===================================================
-          SUMMARY
-      =================================================== */}
-
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {/* PENDING */}
-
-        <Card>
-          <CardContent className="p-5">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">
-                  Pending Collection
-                </p>
-
-                <p className="mt-2 text-2xl font-semibold">
-                  {summary.pending}
-                </p>
-
-                <p className="mt-1 text-xs text-muted-foreground">
-                  On this page
-                </p>
-              </div>
-
-              <div className="flex size-9 items-center justify-center rounded-lg bg-amber-500/10">
-                <Wallet className="size-4 text-amber-600" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* PARTIALLY PAID */}
-
-        <Card>
-          <CardContent className="p-5">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">
-                  Partially Paid
-                </p>
-
-                <p className="mt-2 text-2xl font-semibold">
-                  {summary.partial}
-                </p>
-
-                <p className="mt-1 text-xs text-muted-foreground">
-                  On this page
-                </p>
-              </div>
-
-              <div className="flex size-9 items-center justify-center rounded-lg bg-blue-500/10">
-                <FileText className="size-4 text-blue-600" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* COLLECTED */}
-
-        <Card>
-          <CardContent className="p-5">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">
-                  Collected
-                </p>
-
-                <p className="mt-2 text-2xl font-semibold">
-                  {summary.collected}
-                </p>
-
-                <p className="mt-1 text-xs text-muted-foreground">
-                  On this page
-                </p>
-              </div>
-
-              <div className="flex size-9 items-center justify-center rounded-lg bg-emerald-500/10">
-                <FileText className="size-4 text-emerald-600" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* OUTSTANDING */}
-
-        <Card>
-          <CardContent className="p-5">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">
-                  Outstanding
-                </p>
-
-                <p className="mt-2 text-2xl font-semibold">
-                  {formatCurrency(
-                    summary.outstanding,
-                  )}
-                </p>
-
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Current page
-                </p>
-              </div>
-
-              <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10">
-                <FileText className="size-4 text-primary" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* ===================================================
-          COLLECTION QUEUE
-      =================================================== */}
-
-      <Card>
-        <CardHeader className="border-b">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <CardTitle className="text-base">
-                Collection Queue
-              </CardTitle>
-
-              <p className="mt-1 text-sm text-muted-foreground">
-                Direct collection invoices
-                available for payment.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-3">
-              {isFetching &&
-                !isLoading && (
-                  <span className="text-xs text-muted-foreground">
-                    Updating...
-                  </span>
+      {/* LIST */}
+      <Card className="overflow-hidden">
+        {/* toolbar: tabs + search */}
+        <div className="flex flex-col gap-3 border-b p-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-wrap gap-1 rounded-lg bg-muted p-1">
+            {STATUS_TABS.map((tab) => (
+              <button
+                key={tab.value}
+                type="button"
+                onClick={() => changeStatus(tab.value)}
+                className={cn(
+                  "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+                  statusFilter === tab.value
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
                 )}
-
-              <span className="text-sm text-muted-foreground">
-                {pagination?.total ??
-                  0}{" "}
-                records
-              </span>
-            </div>
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
-        </CardHeader>
 
-        <CardContent className="p-0">
-          {/* =================================================
-              FILTERS
-          ================================================= */}
-
-          <div className="flex flex-col gap-3 border-b p-4 lg:flex-row">
-            <div className="relative flex-1">
+          <div className="flex items-center gap-2">
+            <div className="relative w-full lg:w-80">
               <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-
               <Input
-                value={
-                  search
-                }
-                onChange={(
-                  event,
-                ) =>
-                  handleSearchChange(
-                    event.target
-                      .value,
-                  )
-                }
-                placeholder="Search taxpayer, invoice or service..."
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                placeholder="Search taxpayer, invoice or service"
                 className="pl-9"
               />
             </div>
 
-            <Select
-              value={
-                statusFilter
-              }
-              onValueChange={
-                handleStatusChange
-              }
-            >
-              <SelectTrigger className="w-full lg:w-[180px]">
-                <SelectValue />
-              </SelectTrigger>
-
-              <SelectContent>
-                <SelectItem value="ALL">
-                  All statuses
-                </SelectItem>
-
-                <SelectItem value="PENDING">
-                  Pending
-                </SelectItem>
-
-                <SelectItem value="PARTIALLY_PAID">
-                  Partially paid
-                </SelectItem>
-
-                <SelectItem value="COLLECTED">
-                  Collected
-                </SelectItem>
-
-                <SelectItem value="CANCELLED">
-                  Cancelled
-                </SelectItem>
-              </SelectContent>
-            </Select>
+            {hasFilters && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={clearFilters}
+                aria-label="Clear filters"
+              >
+                <X className="size-4" />
+              </Button>
+            )}
           </div>
+        </div>
 
-          {/* =================================================
-              TABLE
-          ================================================= */}
+        {/* table */}
+        <div
+          className={cn(
+            "overflow-x-auto transition-opacity",
+            isFetching && !isLoading && "opacity-60",
+          )}
+        >
+          <Table>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead className="w-12">No.</TableHead>
+                <TableHead>Invoice</TableHead>
+                <TableHead>Taxpayer</TableHead>
+                <TableHead>Service</TableHead>
+                <TableHead className="text-right">Amount</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="w-[170px]" />
+              </TableRow>
+            </TableHeader>
 
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>
-                    Invoice
-                  </TableHead>
-
-                  <TableHead>
-                    Taxpayer
-                  </TableHead>
-
-                  <TableHead>
-                    Service / Tariff
-                  </TableHead>
-
-                  <TableHead className="text-right">
-                    Amount
-                  </TableHead>
-
-                  <TableHead className="text-right">
-                    Balance
-                  </TableHead>
-
-                  <TableHead>
-                    Status
-                  </TableHead>
-
-                  <TableHead className="w-[50px]" />
-                </TableRow>
-              </TableHeader>
-
-              <TableBody>
-                {isLoading ? (
-                  Array.from({
-                    length: 5,
-                  }).map(
-                    (
-                      _,
-                      index,
-                    ) => (
-                      <TableRow
-                        key={
-                          index
-                        }
-                      >
-                        <TableCell colSpan={7}>
-                          <div className="h-12 animate-pulse rounded-md bg-muted" />
-                        </TableCell>
-                      </TableRow>
-                    ),
-                  )
-                ) : collections.length ===
-                  0 ? (
-                  <TableRow>
-                    <TableCell
-                      colSpan={7}
-                      className="h-32 text-center"
-                    >
-                      <div className="flex flex-col items-center gap-2">
+            <TableBody>
+              {isLoading ? (
+                Array.from({ length: 6 }).map((_, i) => (
+                  <TableRow key={i}>
+                    <TableCell colSpan={7}>
+                      <div className="h-10 animate-pulse rounded-md bg-muted" />
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : collections.length === 0 ? (
+                <TableRow className="hover:bg-transparent">
+                  <TableCell colSpan={7} className="h-56 text-center">
+                    <div className="flex flex-col items-center gap-2">
+                      <div className="flex size-10 items-center justify-center rounded-full bg-muted">
                         <Search className="size-5 text-muted-foreground" />
+                      </div>
+                      <p className="text-sm font-medium">
+                        {hasFilters
+                          ? "No collections match your filters"
+                          : "No collections yet"}
+                      </p>
+                      {hasFilters ? (
+                        <Button variant="outline" size="sm" onClick={clearFilters}>
+                          Clear filters
+                        </Button>
+                      ) : (
+                        <Button size="sm" onClick={startCollection}>
+                          Start your first collection
+                        </Button>
+                      )}
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                collections.map((c, index) => (
+                  <TableRow
+                    key={c.id}
+                    onClick={() => viewDetails(c)}
+                    className="cursor-pointer"
+                  >
+                    {/* no. */}
+                    <TableCell className="text-muted-foreground">
+                      {(page - 1) * perPage + index + 1}
+                    </TableCell>
 
-                        <p className="text-sm font-medium">
-                          No collections
-                          found
-                        </p>
+                    {/* invoice */}
+                    <TableCell>
+                      <p className="font-medium">{c.invoiceNumber}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {c.createdAt ? formatEthiopianDate(c.createdAt) : "—"}
+                      </p>
+                    </TableCell>
 
-                        <p className="text-xs text-muted-foreground">
-                          Try changing
-                          your filters.
-                        </p>
+                    {/* taxpayer */}
+                    <TableCell>
+                      <p className="font-medium">{c.taxpayerName}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {c.taxpayerPhone}
+                      </p>
+                    </TableCell>
+
+                    {/* service */}
+                    <TableCell>
+                      <p className="font-medium">{c.serviceName}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {c.tariffName !== "—" ? c.tariffName : c.tariffCode}
+                      </p>
+                    </TableCell>
+
+                    {/* amount + balance + progress */}
+                    <TableCell className="text-right">
+                      <div className="flex flex-col items-end">
+                        <span className="font-medium">
+                          {formatCurrency(c.amount)}
+                        </span>
+                        {c.balance > 0 ? (
+                          <span className="text-xs text-muted-foreground">
+                            {formatCurrency(c.balance)} due
+                          </span>
+                        ) : null}
+                        {c.status === "PARTIALLY_PAID" && (
+                          <PaidProgress paid={c.paidAmount} total={c.amount} />
+                        )}
+                      </div>
+                    </TableCell>
+
+                    {/* status */}
+                    <TableCell>
+                      <StatusBadge status={c.status} />
+                    </TableCell>
+
+                    {/* actions */}
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center justify-end gap-1">
+                        {canPay(c) && (
+                          <Button
+                            size="sm"
+                            className="gap-1.5"
+                            onClick={() => collectPayment(c)}
+                          >
+                            <Wallet className="size-3.5" />
+                            Collect
+                          </Button>
+                        )}
+
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="size-8"
+                              aria-label="More actions"
+                            >
+                              <MoreHorizontal className="size-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+
+                          <DropdownMenuContent align="end" className="w-48">
+                            <DropdownMenuItem onClick={() => viewDetails(c)}>
+                              <FileText className="mr-2 size-4" />
+                              View details
+                            </DropdownMenuItem>
+
+                            {canEdit(c) && (
+                              <DropdownMenuItem onClick={() => edit(c)}>
+                                <Pencil className="mr-2 size-4" />
+                                Edit
+                              </DropdownMenuItem>
+                            )}
+
+                            {canPrint(c) && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={() => printInvoice(c)}>
+                                  <Printer className="mr-2 size-4" />
+                                  Print invoice
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => downloadInvoice(c)}
+                                >
+                                  <Download className="mr-2 size-4" />
+                                  Download invoice
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     </TableCell>
                   </TableRow>
-                ) : (
-                  collections.map(
-                    (
-                      collection,
-                    ) => (
-                      <TableRow
-                        key={
-                          collection.id
-                        }
-                      >
-                        {/* INVOICE */}
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
 
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <div className="flex size-8 items-center justify-center rounded-md bg-muted">
-                              <FileText className="size-4 text-muted-foreground" />
-                            </div>
-
-                            <div>
-                              <p className="font-medium">
-                                {
-                                  collection.invoiceNumber
-                                }
-                              </p>
-
-                              <p className="text-xs text-muted-foreground">
-                                {formatDate(
-                                  collection.createdAt,
-                                )}
-                              </p>
-                            </div>
-                          </div>
-                        </TableCell>
-
-                        {/* TAXPAYER */}
-
-                        <TableCell>
-                          <div>
-                            <p className="font-medium">
-                              {
-                                collection.taxpayerName
-                              }
-                            </p>
-
-                            <p className="text-xs text-muted-foreground">
-                              {
-                                collection.taxpayerPhone
-                              }
-                            </p>
-                          </div>
-                        </TableCell>
-
-                        {/* SERVICE / TARIFF */}
-
-                        <TableCell>
-                          <div>
-                            <p className="font-medium">
-                              {
-                                collection.serviceName
-                              }
-                            </p>
-
-                            <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                              <Badge
-                                variant="outline"
-                                className="font-mono text-[10px]"
-                              >
-                                {
-                                  collection.tariffCode
-                                }
-                              </Badge>
-
-                              <span className="text-xs text-muted-foreground">
-                                {
-                                  collection.tariffName
-                                }
-                              </span>
-                            </div>
-                          </div>
-                        </TableCell>
-
-                        {/* AMOUNT */}
-
-                        <TableCell className="text-right">
-                          <span className="font-medium">
-                            {formatCurrency(
-                              collection.amount,
-                            )}
-                          </span>
-                        </TableCell>
-
-                        {/* BALANCE */}
-
-                        <TableCell className="text-right">
-                          <span
-                            className={
-                              collection.balance >
-                              0
-                                ? "font-semibold"
-                                : "text-muted-foreground"
-                            }
-                          >
-                            {formatCurrency(
-                              collection.balance,
-                            )}
-                          </span>
-                        </TableCell>
-
-                        {/* STATUS */}
-
-                        <TableCell>
-                          <Badge
-                            variant="outline"
-                            className={getStatusClassName(
-                              collection.status,
-                            )}
-                          >
-                            {getStatusLabel(
-                              collection.status,
-                            )}
-                          </Badge>
-                        </TableCell>
-
-                        {/* ACTIONS */}
-
-                        <TableCell>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger
-                              asChild
-                            >
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="size-8"
-                                aria-label="Collection actions"
-                              >
-                                <MoreHorizontal className="size-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-
-                            <DropdownMenuContent
-                              align="end"
-                              className="w-52"
-                            >
-                              {/* VIEW DETAILS */}
-
-                              <DropdownMenuItem
-                                onClick={() =>
-                                  handleViewDetails(
-                                    collection,
-                                  )
-                                }
-                              >
-                                <FileText className="mr-2 size-4" />
-                                View Details
-                              </DropdownMenuItem>
-
-                              {/* PRINT INVOICE */}
-
-                              {(collection.status !==
-                                "PENDING" ||
-                                collection.balance >
-                                  0) && (
-                                <DropdownMenuItem
-                                  onClick={() =>
-                                    handlePrintInvoice(
-                                      collection,
-                                    )
-                                  }
-                                >
-                                  <Printer className="mr-2 size-4" />
-                                  Print Invoice
-                                </DropdownMenuItem>
-                              )}
-
-                              {/* DOWNLOAD INVOICE */}
-
-                              {(collection.status !==
-                                "PENDING" ||
-                                collection.balance >
-                                  0) && (
-                                <DropdownMenuItem
-                                  onClick={() =>
-                                    handleDownloadInvoice(
-                                      collection,
-                                    )
-                                  }
-                                >
-                                  <Download className="mr-2 size-4" />
-                                  Download Invoice
-                                </DropdownMenuItem>
-                              )}
-
-                              {/* UPDATE */}
-
-                              {collection.status ===
-                                "PENDING" &&
-                                collection.paidAmount <=
-                                  0 &&
-                                collection.balance >
-                                  0 && (
-                                  <DropdownMenuItem
-                                    onClick={() =>
-                                      handleUpdate(
-                                        collection,
-                                      )
-                                    }
-                                  >
-                                    <Pencil className="mr-2 size-4" />
-                                    Update
-                                  </DropdownMenuItem>
-                                )}
-
-                              {/* COLLECT PAYMENT */}
-
-                              {collection.balance >
-                                0 &&
-                                collection.status !==
-                                  "CANCELLED" && (
-                                  <DropdownMenuItem
-                                    onClick={() =>
-                                      handleCollectPayment(
-                                        collection,
-                                      )
-                                    }
-                                  >
-                                    <Wallet className="mr-2 size-4" />
-                                    Collect Payment
-                                  </DropdownMenuItem>
-                                )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
-                      </TableRow>
-                    ),
-                  )
-                )}
-              </TableBody>
-            </Table>
+        {/* pagination — wired to real state (the old one threw errors) */}
+        {(pagination?.total ?? 0) > 0 && (
+          <div className="border-t p-4">
+            <DataTablePagination
+              page={page}
+              pageSize={perPage}
+              total={pagination?.total ?? 0}
+              onPageChange={setPage}
+              onPageSizeChange={(size: number) => {
+                setPerPage(size)
+                setPage(1)
+              }}
+            />
           </div>
-
-          {/* =================================================
-              PAGINATION
-          ================================================= */}
-
-          {pagination &&
-            pagination.last_page >
-              1 && (
-              <div className="flex items-center justify-between border-t p-4">
-                <p className="text-sm text-muted-foreground">
-                  Showing{" "}
-                  <span className="font-medium">
-                    {pagination.from ??
-                      0}
-                  </span>{" "}
-                  to{" "}
-                  <span className="font-medium">
-                    {pagination.to ??
-                      0}
-                  </span>{" "}
-                  of{" "}
-                  <span className="font-medium">
-                    {
-                      pagination.total
-                    }
-                  </span>
-                </p>
-
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={
-                      page <= 1 ||
-                      isFetching
-                    }
-                    onClick={() =>
-                      setPage(
-                        (
-                          current,
-                        ) =>
-                          Math.max(
-                            1,
-                            current -
-                              1,
-                          ),
-                      )
-                    }
-                  >
-                    Previous
-                  </Button>
-
-                  <span className="px-2 text-sm">
-                    Page{" "}
-                    <span className="font-medium">
-                      {
-                        pagination.current_page
-                      }
-                    </span>{" "}
-                    of{" "}
-                    <span className="font-medium">
-                      {
-                        pagination.last_page
-                      }
-                    </span>
-                  </span>
-
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={
-                      page >=
-                        pagination.last_page ||
-                      isFetching
-                    }
-                    onClick={() =>
-                      setPage(
-                        (
-                          current,
-                        ) =>
-                          Math.min(
-                            pagination.last_page,
-                            current +
-                              1,
-                          ),
-                      )
-                    }
-                  >
-                    Next
-                  </Button>
-                </div>
-              </div>
-            )}
-        </CardContent>
+        )}
       </Card>
     </div>
   )

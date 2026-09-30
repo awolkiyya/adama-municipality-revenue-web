@@ -22,7 +22,8 @@ import type {
 
 import {
   invoiceService,
-} from "@/services/invoice/office";
+} from "@/services/invoice/invoice.service";
+import { InvoiceDetail } from "@/types/invoice/invoice-detail";
 
 
 // =====================================================
@@ -157,7 +158,7 @@ export const useInvoice = (
 ) => {
 
   return useQuery<
-    ApiResponse<Invoice>
+    ApiResponse<InvoiceDetail>
   >({
 
     queryKey:

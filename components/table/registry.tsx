@@ -823,6 +823,7 @@ assessment: {
   invoice: {
     columns: [
       "invoice_number",
+      "source_type",
       "citizen_name",
       "total_amount",
       "currency",
@@ -830,6 +831,7 @@ assessment: {
       "due_date",
       "status",
     ],
+  
 
     actions: {
       /*

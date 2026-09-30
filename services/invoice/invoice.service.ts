@@ -6,6 +6,7 @@ import {
   ListResponse,
 } from "@/types/api";
 import { Invoice, InvoiceFilters } from "@/types/invoice/invoice";
+import { InvoiceDetail } from "@/types/invoice/invoice-detail";
 import { InvoiceSummary } from "@/types/invoice/invoice-summary";
 
 
@@ -104,14 +105,14 @@ export const invoiceService = {
   getInvoiceById: async (
     id: string,
   ): Promise<
-    ApiResponse<Invoice>
+    ApiResponse<InvoiceDetail>
   > => {
 
     try {
 
       const res =
         await api.get<
-          ApiResponse<Invoice>
+          ApiResponse<InvoiceDetail>
         >(
           `/invoices/${id}`,
         );

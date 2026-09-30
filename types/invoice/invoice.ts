@@ -22,8 +22,8 @@ export type InvoiceStatus =
 
 export type InvoiceSourceType =
   | "ASSESSMENT"
+  | "EXISTING_LIZZ"
   | "DIRECT_COLLECTION";
-
 
 /*
 |--------------------------------------------------------------------------

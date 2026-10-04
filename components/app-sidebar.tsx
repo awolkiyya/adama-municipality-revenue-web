@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useSelector } from "react-redux";
+import { useTranslations } from "next-intl";
 
 import { NavMain } from "@/components/nav-main";
 import { NavUser } from "@/components/nav-user";
@@ -14,23 +15,11 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar";
 
-import {
-  NavItem,
-} from "@/types/commen";
-
-import {
-  RootState,
-} from "@/lib/store/store";
-
-import {
-  useTranslations,
-} from "next-intl";
-
-import {
-  usePermission,
-} from "@/hooks/usePermission";
-import { NAV_ITEMS } from "@/configs/navConfig";
+import { NavItem } from "@/types/commen";
+import { RootState } from "@/lib/store/store";
 import { PermissionAction } from "@/types/user";
+
+import { usePermission } from "@/hooks/usePermission";
 
 /* =====================================================
    SIDEBAR SKELETON
@@ -59,25 +48,32 @@ function SidebarSkeleton() {
 ===================================================== */
 
 /**
- * Builds the navigation based ONLY on permissions.
+ * Builds navigation based ONLY on permissions.
  *
  * Roles are intentionally NOT used here.
  *
- * Database:
+ * The selected portal navigation configuration is
+ * provided by the parent layout.
  *
- *   Role
- *      ↓
- *   Permissions
- *      ↓
- *   Authenticated User
- *      ↓
- *   Frontend
- *      ↓
- *   buildNav()
+ * Office Layout:
  *
- * This means a newly-created role in the database
- * automatically gets the correct navigation according
- * to its assigned permissions.
+ *   <AppSidebar navItems={NAV_ITEMS} />
+ *
+ * Agent Layout:
+ *
+ *   <AppSidebar navItems={AGENT_NAV_ITEMS} />
+ *
+ * AppSidebar does NOT determine which portal is active.
+ *
+ * Its responsibility is only to:
+ *
+ *   1. Receive navigation configuration
+ *   2. Filter items by permissions
+ *   3. Translate navigation labels
+ *   4. Render the sidebar
+ *
+ * Backend authorization remains the real security
+ * boundary.
  */
 function buildNav(
   items: NavItem[],
@@ -114,36 +110,11 @@ function buildNav(
 
       /* =================================================
          DETERMINE VISIBILITY
-      =================================================
-      
-      A normal menu item:
-      
-        permission ✓
-            ↓
-        visible
-      
-      A group:
-      
-        group
-          ├── child ✓
-          └── child ✗
-      
-        → group remains with child ✓
-      
-      A completely empty group:
-      
-        group
-          ├── child ✗
-          └── child ✗
-      
-        → group disappears
       ================================================= */
 
       if (item.items) {
         /*
          * Parent/group with visible children.
-         *
-         * The parent's own permission is optional.
          */
         if (children && children.length > 0) {
           return {
@@ -156,11 +127,8 @@ function buildNav(
         /*
          * No visible children.
          *
-         * If the parent itself has a permission and
-         * the user has it, we can keep it as a direct
-         * navigation item.
-         *
-         * Otherwise remove it.
+         * Keep the parent only if it is itself a
+         * permitted direct navigation item.
          */
         if (
           hasPermission &&
@@ -204,9 +172,19 @@ function buildNav(
    APP SIDEBAR
 ===================================================== */
 
-export function AppSidebar(
-  props: React.ComponentProps<typeof Sidebar>,
-) {
+interface AppSidebarProps
+  extends React.ComponentProps<typeof Sidebar> {
+  navItems: NavItem[];
+}
+
+export function AppSidebar({
+  navItems,
+  ...props
+}: AppSidebarProps) {
+  /* ===================================================
+     AUTHENTICATED USER
+  =================================================== */
+
   const {
     user,
     isLoading,
@@ -256,32 +234,11 @@ export function AppSidebar(
   }
 
   /* ===================================================
-     NAVIGATION CONFIGURATION
-  =================================================== */
-
-  /**
-   * IMPORTANT:
-   *
-   * We intentionally DO NOT do:
-   *
-   *   user.role
-   *   userRole
-   *   NAV_BY_ROLE[userRole]
-   *
-   * Roles are dynamic database records.
-   *
-   * Navigation is determined entirely by permissions.
-   */
-
-  const navConfig =
-    NAV_ITEMS;
-
-  /* ===================================================
      BUILD AUTHORIZED NAVIGATION
   =================================================== */
 
-  const navMain = buildNav(
-    navConfig,
+  const authorizedNav = buildNav(
+    navItems,
     can,
     tNav,
   );
@@ -336,8 +293,7 @@ export function AppSidebar(
 
       <SidebarContent className="bg-primary">
         <NavMain
-          items={navMain}
-
+          items={authorizedNav}
         />
       </SidebarContent>
 

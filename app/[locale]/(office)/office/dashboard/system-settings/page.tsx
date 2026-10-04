@@ -149,12 +149,12 @@ const NAVIGATION: {
     description: "Assessment behavior",
     icon: FileCheck2,
   },
-  {
-    id: "lizz",
-    label: "Lizz",
-    description: "Lizz installment policy",
-    icon: Landmark,
-  },
+  // {
+  //   id: "lizz",
+  //   label: "Lizz",
+  //   description: "Lizz installment policy",
+  //   icon: Landmark,
+  // },
   {
     id: "invoice",
     label: "Invoice",
@@ -1218,7 +1218,7 @@ export default function RevenueGeneralSettingsPage() {
             SUMMARY
         ========================================================= */}
 
-        <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {/* Annual Payment Due Date */}
 
           <button
@@ -1337,7 +1337,7 @@ export default function RevenueGeneralSettingsPage() {
 
           {/* Lizz */}
 
-          <button
+          {/* <button
             type="button"
             onClick={() => navigate("lizz")}
             className="text-left"
@@ -1372,7 +1372,7 @@ export default function RevenueGeneralSettingsPage() {
                 </div>
               </CardContent>
             </Card>
-          </button>
+          </button> */}
 
           {/* Payment Methods */}
 
@@ -1586,7 +1586,7 @@ export default function RevenueGeneralSettingsPage() {
                         </div>
                       </div>
 
-                      <div className="rounded-xl border bg-muted/20 p-5">
+                      {/* <div className="rounded-xl border bg-muted/20 p-5">
                         <div className="flex items-center gap-3">
                           <Landmark className="h-4 w-4 text-muted-foreground" />
 
@@ -1605,7 +1605,7 @@ export default function RevenueGeneralSettingsPage() {
                             </p>
                           </div>
                         </div>
-                      </div>
+                      </div> */}
 
                       <div className="rounded-xl border bg-muted/20 p-5">
                         <div className="flex items-center gap-3">
@@ -1659,21 +1659,6 @@ export default function RevenueGeneralSettingsPage() {
                           "Assessment configuration",
                         status:
                           settings.assessment_auto_calculation,
-                      },
-                      {
-                        label:
-                          "Lizz first installment policy",
-                        status:
-                          lizzFirstInstallmentPercentage !==
-                            null &&
-                          lizzFirstInstallmentPercentage !==
-                            undefined &&
-                          Number(
-                            lizzFirstInstallmentPercentage,
-                          ) > 0 &&
-                          Number(
-                            lizzFirstInstallmentPercentage,
-                          ) <= 100,
                       },
                       {
                         label:
@@ -2046,7 +2031,7 @@ export default function RevenueGeneralSettingsPage() {
                 LIZZ
             ===================================================== */}
 
-            {activeSection === "lizz" && (
+            {/* {activeSection === "lizz" && (
               <div className="space-y-6">
                 <Card>
                   <CardHeader>
@@ -2266,7 +2251,7 @@ export default function RevenueGeneralSettingsPage() {
                   </p>
                 </div>
               </div>
-            )}
+            )} */}
 
             {/* ====================================================
                 INVOICE

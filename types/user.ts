@@ -8,7 +8,9 @@ export type UserRole =
   | "REVENUE_DECISION_OFFICER"
   | "REVENUE_COMPLAINT_OFFICER"
   | "REVENUE_TAX_ADMINISTRATION_OFFICER"
-  | "REVENUE_COLLECTOR";
+  | "REVENUE_COLLECTOR"
+  | "AGENT"
+  ;
 
 
 export type AdministrativeLevel = "CITY" | "SUBCITY" | "WEREDA";
@@ -58,7 +60,9 @@ export type PermissionAction =
   | "export"
   | "manage"
   | "close"
-  | "upload";
+  | "upload"
+  | "portal_access"
+  ;
 
 export interface UserPermission {
   resource: string;

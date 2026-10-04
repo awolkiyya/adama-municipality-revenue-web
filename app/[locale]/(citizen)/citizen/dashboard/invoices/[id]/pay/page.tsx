@@ -2,1190 +2,917 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft,
   CheckCircle2,
   CreditCard,
   FileText,
-  ShieldCheck,
+  Loader2,
 } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
-  CardHeader,
-  CardTitle,
 } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+
+
 
 import { useTaxpayerInvoice } from "@/hooks/taxpayer/use-taxpayer-invoices";
 
-import type { TaxpayerInvoice } from "@/types/taxpayer/invoice";
-import { useInitializeChapaPayment } from "@/hooks/payment/payment.hook";
+import {
+  useCreateBankTransfer,
+  useInitializeOnlinePayment,
+} from "@/hooks/payment/payment.hook";
 
-type PaymentMethod = "CHAPA";
+import { usePaymentOptions } from "@/hooks/revenue/payment-option.hook";
+
+import type { TaxpayerInvoice } from "@/types/taxpayer/invoice";
+import { AmountMode, PaymentAmountSection } from "@/components/payment/section/PaymentAmountSection";
+import { BankAccount } from "@/types/revenue/bank-account";
+import { PaymentProvider } from "@/types/revenue/payment-provider";
+import { PaymentMethod, PaymentMethodSection } from "@/components/payment/section/PaymentMethodSection";
+import { OnlinePaymentSection } from "@/components/payment/section/OnlinePaymentSection";
+import { BankTransferSection } from "@/components/payment/section/BankTransferSection";
+
+/* ==========================================================================
+ * CONFIG
+ * ========================================================================== */
+
+const EVIDENCE_MAX_MB = 5;
+
+/* ==========================================================================
+ * PAGE
+ * ========================================================================== */
 
 export default function InvoicePayPage() {
+  const router = useRouter();
+
   const params = useParams<{ id: string }>();
   const invoiceId = params?.id;
 
+  /* ------------------------------------------------------------------------
+   * Invoice
+   * ---------------------------------------------------------------------- */
+
   const {
     data: invoice,
-    isLoading,
-    isError,
+    isLoading: isInvoiceLoading,
+    isError: isInvoiceError,
     refetch,
-    isFetching,
   } = useTaxpayerInvoice(invoiceId);
 
-  /*
-   * ============================================================
-   * PAYMENT INITIALIZATION MUTATION
-   * ============================================================
+  /* ------------------------------------------------------------------------
+   * Payment options
    *
-   * Backend:
+   * Backend is the source of truth for:
    *
-   * POST /payments/chapa/initialize
-   *
-   * The backend remains responsible for:
-   *
-   * - authentication
-   * - taxpayer authorization
-   * - invoice ownership
-   * - current balance
-   * - amount validation
-   * - payment creation
-   * - Chapa initialization
-   *
-   */
-  const initializeChapaPayment =
-    useInitializeChapaPayment();
+   * - enabled payment methods
+   * - active bank accounts
+   * - active payment providers
+   * - provider fees
+   * ---------------------------------------------------------------------- */
+
+  const {
+    data: paymentOptionsResponse,
+    isLoading: isPaymentOptionsLoading,
+    isError: isPaymentOptionsError,
+    refetch: refetchPaymentOptions,
+  } = usePaymentOptions();
+
+  const paymentOptions =
+    paymentOptionsResponse?.data;
+
+  const enabledPaymentMethods =
+    paymentOptions?.payment_methods ?? [];
+
+  const bankAccounts =
+    (paymentOptions?.bank_accounts ??
+      []) as BankAccount[];
+
+  const paymentProviders =
+    (paymentOptions?.payment_providers ??
+      []) as PaymentProvider[];
 
   /*
-   * The amount the taxpayer wants to pay now.
+   * Backend payment method:
    *
-   * This is NOT the invoice balance itself.
+   * MOBILE_MONEY → taxpayer UI: ONLINE
+   * BANK         → taxpayer UI: BANK_TRANSFER
    *
-   * Example:
-   *
-   * Invoice total = 5,000
-   * Already paid   = 2,000
-   * Balance due    = 3,000
-   *
-   * The taxpayer may enter:
-   *
-   * 3,000 -> full payment
-   * 1,500 -> partial payment
+   * CASH is intentionally excluded because this is
+   * the taxpayer self-service payment page.
    */
-  const [paymentAmount, setPaymentAmount] =
+
+  const hasOnlinePayment =
+    enabledPaymentMethods.includes(
+      "MOBILE_MONEY",
+    );
+
+  const hasBankTransfer =
+    enabledPaymentMethods.includes(
+      "BANK",
+    );
+
+  const hasPaymentOption =
+    hasOnlinePayment ||
+    hasBankTransfer;
+
+  const paymentOptionsReady =
+    !isPaymentOptionsLoading &&
+    !isPaymentOptionsError;
+
+  /* ------------------------------------------------------------------------
+   * Mutations
+   * ---------------------------------------------------------------------- */
+
+  const initializeOnlinePayment =
+    useInitializeOnlinePayment();
+
+  const createBankTransfer =
+    useCreateBankTransfer();
+
+  /* ------------------------------------------------------------------------
+   * State
+   * ---------------------------------------------------------------------- */
+
+  const [method, setMethod] =
+    useState<PaymentMethod>("ONLINE");
+
+  const [onlineProvider, setOnlineProvider] =
     useState("");
 
-  /*
-   * Currently supported payment method.
-   *
-   * The current backend contract supports Chapa.
-   *
-   * Telebirr / Online Banking should be added here only
-   * when their backend initialization endpoints/contracts
-   * are implemented.
-   */
-  const [paymentMethod] =
-    useState<PaymentMethod>("CHAPA");
+  const [amountMode, setAmountMode] =
+    useState<AmountMode>("FULL");
 
-  /*
-   * Prevent repeated initialization when the invoice query
-   * refetches.
-   */
-  const [initializedInvoiceId, setInitializedInvoiceId] =
+  const [partialAmount, setPartialAmount] =
+    useState("");
+
+  const [bankId, setBankId] =
     useState<string | null>(null);
 
-  /*
-   * Payment initialization error shown directly on this page.
-   */
-  const [paymentError, setPaymentError] =
+  const [reference, setReference] =
+    useState("");
+
+  const [evidence, setEvidence] =
+    useState<File | null>(null);
+
+  const [transferDate, setTransferDate] =
+    useState("");
+
+  const [error, setError] =
     useState<string | null>(null);
 
-  /*
-   * ============================================================
-   * INITIALIZE PAYMENT AMOUNT
-   * ============================================================
-   */
+  /* ------------------------------------------------------------------------
+   * Synchronize payment method
+   * ---------------------------------------------------------------------- */
 
   useEffect(() => {
-    if (!invoice) {
+    if (!paymentOptionsReady) {
       return;
     }
 
-    if (initializedInvoiceId === invoice.id) {
-      return;
-    }
+    setMethod((current) => {
+      if (
+        current === "ONLINE" &&
+        hasOnlinePayment
+      ) {
+        return current;
+      }
 
-    setPaymentAmount(
-      normalizeAmountForInput(
-        invoice.balance_due,
-      ),
-    );
+      if (
+        current === "BANK_TRANSFER" &&
+        hasBankTransfer
+      ) {
+        return current;
+      }
 
-    setInitializedInvoiceId(invoice.id);
+      if (hasOnlinePayment) {
+        return "ONLINE";
+      }
+
+      if (hasBankTransfer) {
+        return "BANK_TRANSFER";
+      }
+
+      return current;
+    });
   }, [
-    invoice,
-    initializedInvoiceId,
+    paymentOptionsReady,
+    hasOnlinePayment,
+    hasBankTransfer,
   ]);
 
-  /*
-   * ============================================================
-   * LOADING
-   * ============================================================
-   */
+  /* ------------------------------------------------------------------------
+   * Synchronize online provider
+   * ---------------------------------------------------------------------- */
 
-  if (isLoading) {
-    return <InvoicePaySkeleton />;
+  useEffect(() => {
+    if (!hasOnlinePayment) {
+      setOnlineProvider("");
+      return;
+    }
+
+    if (paymentProviders.length === 0) {
+      setOnlineProvider("");
+      return;
+    }
+
+    const currentExists =
+      paymentProviders.some(
+        (provider) =>
+          provider.code === onlineProvider,
+      );
+
+    if (!currentExists) {
+      setOnlineProvider(
+        paymentProviders[0].code,
+      );
+    }
+  }, [
+    hasOnlinePayment,
+    paymentProviders,
+    onlineProvider,
+  ]);
+
+  /* ------------------------------------------------------------------------
+   * Synchronize bank account
+   * ---------------------------------------------------------------------- */
+
+  useEffect(() => {
+    if (!hasBankTransfer) {
+      setBankId(null);
+      return;
+    }
+
+    if (bankAccounts.length === 0) {
+      setBankId(null);
+      return;
+    }
+
+    const currentExists =
+      bankAccounts.some(
+        (bank) => bank.id === bankId,
+      );
+
+    if (!currentExists) {
+      setBankId(
+        bankAccounts.length === 1
+          ? bankAccounts[0].id
+          : null,
+      );
+    }
+  }, [
+    hasBankTransfer,
+    bankAccounts,
+    bankId,
+  ]);
+
+  /* ------------------------------------------------------------------------
+   * Loading
+   * ---------------------------------------------------------------------- */
+
+  if (
+    isInvoiceLoading ||
+    isPaymentOptionsLoading
+  ) {
+    return <PageSkeleton />;
   }
 
-  /*
-   * ============================================================
-   * ERROR
-   * ============================================================
-   */
+  /* ------------------------------------------------------------------------
+   * Invoice error
+   * ---------------------------------------------------------------------- */
 
-  if (isError || !invoice) {
+  if (
+    isInvoiceError ||
+    !invoice
+  ) {
     return (
-      <InvoicePayError
-        onRetry={() => {
-          void refetch();
-        }}
+      <StateCard
+        icon={
+          <FileText className="size-6 text-muted-foreground" />
+        }
+        title="Unable to load invoice"
+        text="We could not load the payment information. Please try again."
+        primary={
+          <Button
+            onClick={() => {
+              void refetch();
+            }}
+          >
+            Try again
+          </Button>
+        }
+        backHref="/citizen/dashboard/invoices"
       />
     );
   }
 
-  /*
-   * ============================================================
-   * PAYABLE CHECK
-   * ============================================================
-   */
+  /* ------------------------------------------------------------------------
+   * Payment options error
+   * ---------------------------------------------------------------------- */
 
-  const payable =
-    isInvoicePayable(invoice);
-
-  if (!payable) {
+  if (isPaymentOptionsError) {
     return (
-      <InvoiceNotPayable
-        invoice={invoice}
+      <StateCard
+        icon={
+          <CreditCard className="size-6 text-muted-foreground" />
+        }
+        title="Payment options unavailable"
+        text="We could not load the payment methods currently available."
+        primary={
+          <Button
+            onClick={() => {
+              void refetchPaymentOptions();
+            }}
+          >
+            Try again
+          </Button>
+        }
+        backHref={`/citizen/dashboard/invoices/${invoice.id}`}
       />
     );
   }
 
-  /*
-   * ============================================================
-   * CURRENT BALANCE
-   * ============================================================
-   */
+  /* ------------------------------------------------------------------------
+   * Invoice not payable
+   * ---------------------------------------------------------------------- */
 
-  const balanceDue =
-    parseMoney(
-      invoice.balance_due,
+  if (!isInvoicePayable(invoice)) {
+    const paid =
+      invoice.is_fully_paid;
+
+    const cancelled =
+      invoice.status === "CANCELLED";
+
+    return (
+      <StateCard
+        icon={
+          paid ? (
+            <CheckCircle2 className="size-6 text-muted-foreground" />
+          ) : (
+            <FileText className="size-6 text-muted-foreground" />
+          )
+        }
+        title={
+          paid
+            ? "Invoice already paid"
+            : cancelled
+              ? "Invoice cancelled"
+              : "Invoice cannot be paid"
+        }
+        text={`Invoice ${invoice.invoice_number} is not available for payment.`}
+        primary={
+          <Button asChild>
+            <Link
+              href={`/citizen/dashboard/invoices/${invoice.id}`}
+            >
+              View invoice
+            </Link>
+          </Button>
+        }
+        backHref="/citizen/dashboard/invoices"
+      />
     );
+  }
 
-  /*
-   * ============================================================
-   * SELECTED PAYMENT AMOUNT
-   * ============================================================
-   */
+  /* ------------------------------------------------------------------------
+   * No supported self-service method
+   * ---------------------------------------------------------------------- */
 
-  const selectedAmount =
-    parseMoney(
-      paymentAmount,
+  if (!hasPaymentOption) {
+    return (
+      <StateCard
+        icon={
+          <CreditCard className="size-6 text-muted-foreground" />
+        }
+        title="Online payment unavailable"
+        text="There are currently no online or bank-transfer payment methods available."
+        primary={
+          <Button asChild>
+            <Link
+              href={`/citizen/dashboard/invoices/${invoice.id}`}
+            >
+              View invoice
+            </Link>
+          </Button>
+        }
+        backHref="/citizen/dashboard/invoices"
+      />
     );
+  }
 
-  /*
-   * ============================================================
-   * FRONTEND VALIDATION
-   * ============================================================
-   *
-   * This is only for user experience.
-   *
-   * Backend MUST perform the same validation against the
-   * CURRENT invoice balance.
-   */
+  /* ------------------------------------------------------------------------
+   * Derived values
+   * ---------------------------------------------------------------------- */
 
-  const amountValidation =
-    validatePaymentAmount(
-      paymentAmount,
+  const balanceDue = parseMoney(
+    invoice.balance_due,
+  );
+
+  const amountText =
+    amountMode === "FULL"
+      ? balanceDue.toFixed(2)
+      : partialAmount;
+
+  const validation =
+    validateAmount(
+      amountText,
       balanceDue,
     );
 
-  const isAmountValid =
-    amountValidation.isValid;
+  const amount =
+    parseMoney(amountText);
 
-  /*
-   * ============================================================
-   * REMAINING BALANCE
-   * ============================================================
-   */
-
-  const remainingAfterPayment =
-    isAmountValid
+  const remaining =
+    validation.isValid
       ? Math.max(
           0,
-          balanceDue - selectedAmount,
+          balanceDue - amount,
         )
       : null;
 
-  /*
-   * ============================================================
-   * FULL / PARTIAL PAYMENT
-   * ============================================================
-   */
+  const selectedBank =
+    bankAccounts.find(
+      (bank) => bank.id === bankId,
+    ) ?? null;
 
-  const isFullPayment =
-    isAmountValid &&
-    selectedAmount === balanceDue;
+  const selectedProvider =
+    paymentProviders.find(
+      (provider) =>
+        provider.code === onlineProvider,
+    ) ?? null;
 
-  const isPartialPayment =
-    isAmountValid &&
-    selectedAmount > 0 &&
-    selectedAmount < balanceDue;
+  const isOnline =
+    method === "ONLINE";
 
-  /*
-   * ============================================================
-   * CONTINUE BUTTON
-   * ============================================================
-   */
+  const isBank =
+    method === "BANK_TRANSFER";
 
-  const canContinue =
-    isAmountValid &&
-    balanceDue > 0 &&
-    !initializeChapaPayment.isPending;
+  const isSubmitting =
+    initializeOnlinePayment.isPending ||
+    createBankTransfer.isPending;
 
-  /*
-   * ============================================================
-   * PAYMENT INITIALIZATION
-   * ============================================================
-   */
+  /* ------------------------------------------------------------------------
+   * Payment readiness
+   * ---------------------------------------------------------------------- */
 
-  const handlePayment = async () => {
-    /*
-     * Clear previous error.
-     */
-    setPaymentError(null);
+  const methodReady =
+    (isOnline &&
+      hasOnlinePayment &&
+      paymentProviders.length > 0 &&
+      !!selectedProvider) ||
+    (isBank &&
+      hasBankTransfer &&
+      bankAccounts.length > 0 &&
+      !!selectedBank);
 
-    /*
-     * Never submit invalid frontend data.
-     */
-    if (!amountValidation.isValid) {
-      setPaymentError(
-        amountValidation.message ??
-          "Please enter a valid payment amount.",
+  const bankReady =
+    !isBank ||
+    (!!selectedBank &&
+      !!reference.trim() &&
+      !!evidence);
+
+  const canSubmit =
+    paymentOptionsReady &&
+    methodReady &&
+    validation.isValid &&
+    bankReady &&
+    !isSubmitting;
+
+  /* ------------------------------------------------------------------------
+   * Submit
+   * ---------------------------------------------------------------------- */
+
+  const handleSubmit = async () => {
+    if (isSubmitting) {
+      return;
+    }
+
+    setError(null);
+
+    /* ----------------------------------------------------------------------
+     * Payment options
+     * -------------------------------------------------------------------- */
+
+    if (!paymentOptionsReady) {
+      setError(
+        "Payment options are currently unavailable. Please try again.",
       );
+      return;
+    }
+
+    /* ----------------------------------------------------------------------
+     * Amount
+     * -------------------------------------------------------------------- */
+
+    if (!validation.isValid) {
+      setError(
+        validation.message ??
+          "Enter a valid amount.",
+      );
+      return;
+    }
+
+    /* ----------------------------------------------------------------------
+     * BANK TRANSFER
+     * -------------------------------------------------------------------- */
+
+    if (isBank) {
+      if (!hasBankTransfer) {
+        setError(
+          "Bank transfer is currently unavailable.",
+        );
+        return;
+      }
+
+      if (!selectedBank) {
+        setError(
+          "Select the bank you transferred to.",
+        );
+        return;
+      }
+
+      if (!reference.trim()) {
+        setError(
+          "Enter your transfer reference.",
+        );
+        return;
+      }
+
+      if (!evidence) {
+        setError(
+          "Upload your payment receipt as evidence.",
+        );
+        return;
+      }
+
+      try {
+        await createBankTransfer.mutateAsync({
+          invoice_id: invoice.id,
+          amount,
+          transfer_reference:
+            reference.trim(),
+          bank_name:
+            selectedBank.bank_name,
+          bank_account_number:
+            selectedBank.account_number,
+          evidence,
+          transfer_date:
+            transferDate || "",
+        });
+
+        router.push(
+          `/citizen/dashboard/invoices/${invoice.id}?payment=bank-transfer-submitted`,
+        );
+      } catch (err) {
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Something went wrong. Please try again.",
+        );
+      }
 
       return;
     }
 
-    /*
-     * Never initialize if the invoice no longer has
-     * a payable balance according to the currently loaded
-     * invoice.
-     */
-    if (balanceDue <= 0) {
-      setPaymentError(
-        "This invoice has no outstanding balance.",
-      );
+    /* ----------------------------------------------------------------------
+     * ONLINE PAYMENT
+     * -------------------------------------------------------------------- */
 
+    if (!hasOnlinePayment) {
+      setError(
+        "Online payment is currently unavailable.",
+      );
       return;
     }
 
-    /*
-     * Prevent duplicate submissions.
-     */
-    if (
-      initializeChapaPayment.isPending
-    ) {
+    if (!selectedProvider) {
+      setError(
+        "Select an available payment provider.",
+      );
       return;
     }
 
     try {
       /*
-       * IMPORTANT:
+       * The frontend provider fee is only a preview.
        *
-       * paymentAmount is a request from the taxpayer.
+       * Laravel/payment integration remains authoritative for:
        *
-       * Laravel MUST reload the invoice and validate the
-       * CURRENT balance before creating the payment.
+       * - provider fee
+       * - final payable amount
+       * - checkout amount
        */
-      const response =
-      await initializeChapaPayment.mutateAsync({
-        invoice_id: invoice.id,
-        amount: selectedAmount,
-        payment_method: paymentMethod,
-        payment_provider:"CHAPA",
-      });
 
-      /*
-       * The initialization response should contain the
-       * provider checkout URL.
-       *
-       * Example:
-       *
-       * response.data.checkoutUrl
-       */
+      const response =
+        await initializeOnlinePayment.mutateAsync(
+          {
+            invoice_id: invoice.id,
+            amount,
+            payment_provider:
+              selectedProvider.code,
+          },
+        );
+
       const checkoutUrl =
         response?.data?.checkoutUrl;
 
       if (!checkoutUrl) {
-        setPaymentError(
-          "The payment service did not return a checkout URL. Please try again.",
+        setError(
+          "The payment service did not return a checkout link. Please try again.",
         );
-
         return;
       }
 
-      /*
-       * Redirect the taxpayer to the provider.
-       *
-       * Do NOT mark the payment as successful here.
-       *
-       * Chapa must complete the transaction and Laravel
-       * must verify the result.
-       */
       window.location.assign(
         checkoutUrl,
       );
-    } catch (error) {
-      /*
-       * normalizeApiError() from the service should already
-       * convert the backend error into a usable Error object.
-       */
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Unable to initialize the payment. Please try again.";
-
-      setPaymentError(message);
-    }
-  };
-
-  return (
-    <div className="min-w-0">
-      <div className="mx-auto w-full max-w-5xl space-y-6 p-4 sm:p-6 lg:p-8">
-        {/* ============================================================ */}
-        {/* HEADER                                                       */}
-        {/* ============================================================ */}
-
-        <header>
-          <div className="flex items-start gap-3">
-            <Button
-              asChild
-              variant="ghost"
-              size="icon"
-              className="mt-0.5 shrink-0"
-              disabled={
-                initializeChapaPayment.isPending
-              }
-            >
-              <Link
-                href={`/citizen/dashboard/invoices/${invoice.id}`}
-              >
-                <ArrowLeft className="size-4" />
-
-                <span className="sr-only">
-                  Back to invoice
-                </span>
-              </Link>
-            </Button>
-
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <h1 className="text-2xl font-semibold tracking-tight">
-                  Pay invoice
-                </h1>
-
-                <InvoiceStatusBadge
-                  invoice={invoice}
-                />
-              </div>
-
-              <p className="mt-1 text-sm text-muted-foreground">
-                Make a full or partial payment for{" "}
-                <span className="font-medium text-foreground">
-                  {invoice.invoice_number}
-                </span>
-              </p>
-            </div>
-
-            {isFetching && (
-              <span
-                className="ml-auto shrink-0 text-xs text-muted-foreground"
-                aria-live="polite"
-              >
-                Updating...
-              </span>
-            )}
-          </div>
-        </header>
-
-        {/* ============================================================ */}
-        {/* PAYMENT LAYOUT                                               */}
-        {/* ============================================================ */}
-
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
-          <div className="space-y-6">
-            {/* ======================================================== */}
-            {/* PAYMENT AMOUNT                                           */}
-            {/* ======================================================== */}
-
-            <PaymentAmountCard
-              invoice={invoice}
-              paymentAmount={paymentAmount}
-              balanceDue={balanceDue}
-              amountValidation={
-                amountValidation
-              }
-              isFullPayment={
-                isFullPayment
-              }
-              isPartialPayment={
-                isPartialPayment
-              }
-              remainingAfterPayment={
-                remainingAfterPayment
-              }
-              onPaymentAmountChange={
-                (value) => {
-                  setPaymentError(null);
-                  setPaymentAmount(value);
-                }
-              }
-            />
-
-            {/* ======================================================== */}
-            {/* PAYMENT METHOD                                           */}
-            {/* ======================================================== */}
-
-            <PaymentMethodCard />
-
-            {/* ======================================================== */}
-            {/* SECURITY                                                 */}
-            {/* ======================================================== */}
-
-            <SecurityNote />
-
-            {/* ======================================================== */}
-            {/* PAYMENT ERROR                                            */}
-            {/* ======================================================== */}
-
-            {paymentError && (
-              <div
-                className="rounded-xl border border-red-200 bg-red-50 p-4"
-                role="alert"
-              >
-                <p className="text-sm font-medium text-red-800">
-                  Payment could not be started
-                </p>
-
-                <p className="mt-1 text-xs leading-5 text-red-700">
-                  {paymentError}
-                </p>
-              </div>
-            )}
-
-            {/* ======================================================== */}
-            {/* PAYMENT ACTION                                           */}
-            {/* ======================================================== */}
-
-            <PaymentActions
-              invoice={invoice}
-              paymentAmount={
-                paymentAmount
-              }
-              paymentMethod={
-                paymentMethod
-              }
-              disabled={
-                !canContinue
-              }
-              isPending={
-                initializeChapaPayment.isPending
-              }
-              onContinue={
-                handlePayment
-              }
-            />
-
-            <p className="text-center text-xs leading-5 text-muted-foreground">
-              You will be redirected to Chapa to
-              complete the transaction securely.
-            </p>
-          </div>
-
-          {/* ========================================================== */}
-          {/* INVOICE SUMMARY                                            */}
-          {/* ========================================================== */}
-
-          <InvoicePaymentSummary
-            invoice={invoice}
-          />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ==========================================================================
- * Payment amount
- * ========================================================================== */
-
-function PaymentAmountCard({
-  invoice,
-  paymentAmount,
-  balanceDue,
-  amountValidation,
-  isFullPayment,
-  isPartialPayment,
-  remainingAfterPayment,
-  onPaymentAmountChange,
-}: {
-  invoice: TaxpayerInvoice;
-  paymentAmount: string;
-  balanceDue: number;
-  amountValidation: PaymentAmountValidation;
-  isFullPayment: boolean;
-  isPartialPayment: boolean;
-  remainingAfterPayment: number | null;
-  onPaymentAmountChange: (
-    value: string,
-  ) => void;
-}) {
-  const hasInput =
-    paymentAmount.length > 0;
-
-  const setFullBalance = () => {
-    onPaymentAmountChange(
-      normalizeAmountForInput(
-        invoice.balance_due,
-      ),
-    );
-  };
-
-  const handleAmountChange = (
-    event: React.ChangeEvent<HTMLInputElement>,
-  ) => {
-    const value =
-      event.target.value;
-
-    /*
-     * Allow the user to clear the field.
-     */
-    if (value === "") {
-      onPaymentAmountChange("");
-      return;
-    }
-
-    /*
-     * Allow:
-     *
-     * 123
-     * 123.
-     * 123.4
-     * 123.45
-     *
-     * Maximum two decimal places.
-     */
-    if (!/^\d*\.?\d{0,2}$/.test(value)) {
-      return;
-    }
-
-    /*
-     * Prevent unnecessary leading zeros.
-     *
-     * Preserve:
-     *
-     * 0.
-     */
-    if (
-      value.length > 1 &&
-      value.startsWith("0") &&
-      !value.startsWith("0.")
-    ) {
-      const normalized =
-        value.replace(/^0+/, "");
-
-      onPaymentAmountChange(
-        normalized === ""
-          ? "0"
-          : normalized,
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Something went wrong. Please try again.",
       );
-
-      return;
     }
-
-    onPaymentAmountChange(value);
   };
 
+  /* ------------------------------------------------------------------------
+   * Render
+   * ---------------------------------------------------------------------- */
+
   return (
-    <Card>
-      <CardHeader className="border-b">
-        <CardTitle className="text-base">
-          Payment amount
-        </CardTitle>
+    <div className="mx-auto w-full max-w-2xl space-y-6 p-4 sm:p-6">
+      {/* ================================================================
+          HEADER
+          ================================================================ */}
 
-        <p className="text-xs text-muted-foreground">
-          Pay the full balance or choose a
-          smaller amount for a partial payment.
-        </p>
-      </CardHeader>
+      <header className="flex items-center gap-3">
+        <Button
+          asChild
+          variant="ghost"
+          size="icon"
+          className="shrink-0"
+        >
+          <Link
+            href={`/citizen/dashboard/invoices/${invoice.id}`}
+          >
+            <ArrowLeft className="size-4" />
 
-      <CardContent className="space-y-5 pt-5">
-        {/* ========================================================== */}
-        {/* CURRENT BALANCE                                            */}
-        {/* ========================================================== */}
+            <span className="sr-only">
+              Back to invoice
+            </span>
+          </Link>
+        </Button>
 
-        <div className="rounded-xl border bg-muted/30 p-5">
-          <div className="flex items-center justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight">
+            Pay invoice
+          </h1>
+
+          <p className="text-sm text-muted-foreground">
+            {invoice.invoice_number}
+          </p>
+        </div>
+      </header>
+
+      {/* ================================================================
+          INVOICE SUMMARY
+          ================================================================ */}
+
+      <Card>
+        <CardContent className="p-5">
+          <div className="flex items-start justify-between gap-4">
             <div>
               <p className="text-sm text-muted-foreground">
-                Current balance due
+                Balance due
               </p>
 
-              <p className="mt-1 text-2xl font-bold tracking-tight tabular-nums">
+              <p className="mt-1 text-3xl font-bold tracking-tight tabular-nums">
                 {formatMoney(
                   invoice.currency,
-                  invoice.balance_due,
+                  balanceDue,
                 )}
               </p>
-
-              <p className="mt-1 text-xs text-muted-foreground">
-                Maximum amount that can be paid now
-              </p>
             </div>
 
-            <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-background">
-              <CreditCard className="size-5 text-muted-foreground" />
-            </div>
-          </div>
-        </div>
-
-        {/* ========================================================== */}
-        {/* AMOUNT INPUT                                               */}
-        {/* ========================================================== */}
-
-        <div className="space-y-2">
-          <div className="flex items-center justify-between gap-3">
-            <Label htmlFor="payment-amount">
-              Amount to pay
-            </Label>
-
-            <button
-              type="button"
-              onClick={
-                setFullBalance
-              }
-              disabled={
-                balanceDue <= 0 ||
-                !invoice.is_fully_paid === false
-              }
-              className="text-xs font-medium text-primary hover:underline disabled:pointer-events-none disabled:opacity-50"
-            >
-              Pay full balance
-            </button>
+            <StatusBadge invoice={invoice} />
           </div>
 
-          <div className="relative">
-            <Input
-              id="payment-amount"
-              name="payment_amount"
-              type="text"
-              inputMode="decimal"
-              autoComplete="off"
-              value={paymentAmount}
-              onChange={
-                handleAmountChange
-              }
-              placeholder="0.00"
-              disabled={false}
-              className={[
-                "h-12 pr-16 text-right text-lg font-semibold tabular-nums",
-                hasInput &&
-                !amountValidation.isValid
-                  ? "border-red-500 focus-visible:ring-red-500"
-                  : "",
-              ].join(" ")}
-              aria-invalid={
-                hasInput &&
-                !amountValidation.isValid
-              }
-              aria-describedby="payment-amount-help payment-amount-error"
+          <dl className="mt-4 grid grid-cols-3 gap-4 border-t pt-4 text-sm">
+            <Meta
+              label="Total"
+              value={formatMoney(
+                invoice.currency,
+                invoice.total_amount,
+              )}
             />
 
-            <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm font-medium text-muted-foreground">
-              {invoice.currency}
-            </span>
-          </div>
-
-          {/* ======================================================== */}
-          {/* VALIDATION                                               */}
-          {/* ======================================================== */}
-
-          {hasInput &&
-            !amountValidation.isValid && (
-              <p
-                id="payment-amount-error"
-                className="text-xs font-medium text-red-600"
-                role="alert"
-              >
-                {
-                  amountValidation.message
-                }
-              </p>
-            )}
-
-          {/* ======================================================== */}
-          {/* PARTIAL PAYMENT                                          */}
-          {/* ======================================================== */}
-
-          {isPartialPayment &&
-            remainingAfterPayment !==
-              null && (
-              <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="text-xs font-semibold text-blue-800">
-                      Partial payment
-                    </p>
-
-                    <p className="mt-1 text-xs leading-5 text-blue-700">
-                      This payment will reduce
-                      your outstanding balance.
-                    </p>
-                  </div>
-
-                  <div className="shrink-0 text-right">
-                    <p className="text-[11px] text-blue-700">
-                      Remaining
-                    </p>
-
-                    <p className="text-sm font-bold tabular-nums text-blue-800">
-                      {formatMoney(
-                        invoice.currency,
-                        remainingAfterPayment,
-                      )}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-          {/* ======================================================== */}
-          {/* FULL PAYMENT                                             */}
-          {/* ======================================================== */}
-
-          {isFullPayment && (
-            <div className="rounded-lg border border-green-200 bg-green-50 p-3">
-              <div className="flex items-start gap-3">
-                <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-green-700" />
-
-                <div>
-                  <p className="text-xs font-semibold text-green-800">
-                    Full payment
-                  </p>
-
-                  <p className="mt-1 text-xs leading-5 text-green-700">
-                    This payment will clear the
-                    remaining invoice balance.
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <p
-            id="payment-amount-help"
-            className="text-xs leading-5 text-muted-foreground"
-          >
-            Enter any amount from 0.01 up to
-            your current balance of{" "}
-            {formatMoney(
-              invoice.currency,
-              balanceDue,
-            )}
-            .
-          </p>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-/* ==========================================================================
- * Payment methods
- * ========================================================================== */
-
-function PaymentMethodCard() {
-  return (
-    <Card>
-      <CardHeader className="border-b">
-        <CardTitle className="text-base">
-          Online payment method
-        </CardTitle>
-
-        <p className="text-xs text-muted-foreground">
-          Select how you want to complete this
-          payment.
-        </p>
-      </CardHeader>
-
-      <CardContent className="pt-5">
-        <div className="space-y-3">
-          <PaymentMethodOption
-            title="Chapa"
-            description="Pay securely online through Chapa's supported payment options."
-            icon={
-              <CreditCard className="size-4" />
-            }
-            badge="Online"
-            selected
-          />
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function PaymentMethodOption({
-  title,
-  description,
-  icon,
-  badge,
-  selected,
-}: {
-  title: string;
-  description: string;
-  icon: React.ReactNode;
-  badge?: string;
-  selected: boolean;
-}) {
-  return (
-    <div
-      className={[
-        "flex items-start gap-3 rounded-xl border p-4 transition-colors",
-        selected
-          ? "border-foreground/30 bg-muted/30"
-          : "",
-      ].join(" ")}
-    >
-      <div className="mt-1 flex size-4 shrink-0 items-center justify-center">
-        <span
-          className={[
-            "size-3 rounded-full border-4",
-            selected
-              ? "border-foreground"
-              : "border-muted-foreground/40",
-          ].join(" ")}
-        />
-      </div>
-
-      <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-        {icon}
-      </div>
-
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <p className="text-sm font-medium">
-            {title}
-          </p>
-
-          {badge && (
-            <Badge
-              variant="secondary"
-              className="text-[10px]"
-            >
-              {badge}
-            </Badge>
-          )}
-        </div>
-
-        <p className="mt-1 text-xs leading-5 text-muted-foreground">
-          {description}
-        </p>
-      </div>
-    </div>
-  );
-}
-
-/* ==========================================================================
- * Invoice summary
- * ========================================================================== */
-
-function InvoicePaymentSummary({
-  invoice,
-}: {
-  invoice: TaxpayerInvoice;
-}) {
-  return (
-    <Card className="h-fit lg:sticky lg:top-6">
-      <CardHeader className="border-b">
-        <CardTitle className="text-base">
-          Invoice summary
-        </CardTitle>
-
-        <p className="text-xs text-muted-foreground">
-          Key information for this payment.
-        </p>
-      </CardHeader>
-
-      <CardContent className="space-y-4 pt-5">
-        <SummaryRow
-          label="Invoice"
-          value={
-            invoice.invoice_number
-          }
-        />
-
-        <SummaryRow
-          label="Issued"
-          value={formatDate(
-            invoice.issued_at,
-          )}
-        />
-
-        <SummaryRow
-          label="Due date"
-          value={formatDate(
-            invoice.due_date,
-          )}
-        />
-
-        <div className="border-t pt-4">
-          <SummaryRow
-            label="Invoice total"
-            value={formatMoney(
-              invoice.currency,
-              invoice.total_amount,
-            )}
-          />
-
-          <div className="mt-3">
-            <SummaryRow
-              label="Already paid"
+            <Meta
+              label="Paid"
               value={formatMoney(
                 invoice.currency,
                 invoice.paid_amount,
               )}
             />
-          </div>
 
-          <div className="mt-3">
-            <SummaryRow
-              label="Balance due"
-              value={formatMoney(
-                invoice.currency,
-                invoice.balance_due,
+            <Meta
+              label="Due date"
+              value={formatDate(
+                invoice.due_date,
               )}
             />
-          </div>
-        </div>
+          </dl>
 
-        <div className="rounded-xl border bg-muted/40 p-4">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <p className="text-sm font-semibold">
-                Current balance
-              </p>
-
-              <p className="mt-1 text-xs text-muted-foreground">
-                Maximum payable amount
-              </p>
-            </div>
-
-            <span className="text-lg font-bold tabular-nums">
-              {formatMoney(
-                invoice.currency,
-                invoice.balance_due,
-              )}
-            </span>
-          </div>
-        </div>
-
-        {invoice.is_overdue && (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-3">
-            <p className="text-xs font-medium text-red-800">
-              This invoice is overdue.
+          {invoice.is_overdue && (
+            <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-xs text-red-700">
+              This invoice is overdue. Any
+              penalty or interest is already
+              included in the balance.
             </p>
+          )}
+        </CardContent>
+      </Card>
 
-            <p className="mt-1 text-xs leading-5 text-red-700">
-              Any applicable penalty or
-              interest is already reflected
-              in the invoice balance.
-            </p>
-          </div>
+      {/* ================================================================
+          1. PAYMENT AMOUNT
+          ================================================================ */}
+
+      <PaymentAmountSection
+        currency={invoice.currency}
+        balanceDue={balanceDue}
+        mode={amountMode}
+        amount={amountText}
+        onModeChange={(nextMode) => {
+          setError(null);
+          setAmountMode(nextMode);
+
+          if (nextMode === "FULL") {
+            setPartialAmount("");
+          }
+        }}
+        onAmountChange={(nextAmount) => {
+          setError(null);
+          setPartialAmount(nextAmount);
+        }}
+      />
+
+      {/* ================================================================
+          2. PAYMENT METHOD
+          ================================================================ */}
+
+      <PaymentMethodSection
+        hasOnlinePayment={
+          hasOnlinePayment
+        }
+        hasBankTransfer={
+          hasBankTransfer
+        }
+        method={method}
+        onMethodChange={(nextMethod) => {
+          setError(null);
+          setMethod(nextMethod);
+        }}
+      />
+
+      {/* ================================================================
+          ONLINE PAYMENT
+          ================================================================ */}
+
+      {isOnline &&
+        hasOnlinePayment && (
+          <OnlinePaymentSection
+            currency={invoice.currency}
+            amount={amount}
+            providers={paymentProviders}
+            selectedProvider={
+              selectedProvider
+            }
+            onProviderChange={(
+              provider,
+            ) => {
+              setError(null);
+              setOnlineProvider(
+                provider.code,
+              );
+            }}
+          />
         )}
-      </CardContent>
-    </Card>
-  );
-}
 
-/* ==========================================================================
- * Security
- * ========================================================================== */
+      {/* ================================================================
+          BANK TRANSFER
+          ================================================================ */}
 
-function SecurityNote() {
-  return (
-    <div className="flex items-start gap-3 rounded-xl border bg-muted/20 p-4">
-      <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted">
-        <ShieldCheck className="size-4 text-muted-foreground" />
-      </div>
+      {isBank &&
+        hasBankTransfer && (
+          <BankTransferSection
+            banks={bankAccounts}
+            selectedBank={selectedBank}
+            onBankChange={(bank) => {
+              setError(null);
+              setBankId(bank.id);
+            }}
+            transferReference={reference}
+            onTransferReferenceChange={(
+              value,
+            ) => {
+              setError(null);
+              setReference(value);
+            }}
+            evidence={evidence}
+            onEvidenceChange={(file) => {
+              setError(null);
+              setEvidence(file);
+            }}
+            evidenceMaxMb={
+              EVIDENCE_MAX_MB
+            }
+          />
+        )}
 
-      <div>
-        <p className="text-sm font-medium">
-          Secure online payment
-        </p>
+      {/* ================================================================
+          ERROR
+          ================================================================ */}
 
-        <p className="mt-1 text-xs leading-5 text-muted-foreground">
-          Your payment will be processed
-          through the selected payment provider.
-          The municipality will verify the
-          transaction before updating your
-          invoice.
-        </p>
-      </div>
-    </div>
-  );
-}
-
-/* ==========================================================================
- * Actions
- * ========================================================================== */
-
-function PaymentActions({
-  invoice,
-  paymentAmount,
-  paymentMethod,
-  disabled,
-  isPending,
-  onContinue,
-}: {
-  invoice: TaxpayerInvoice;
-  paymentAmount: string;
-  paymentMethod: PaymentMethod;
-  disabled: boolean;
-  isPending: boolean;
-  onContinue: () => void;
-}) {
-  return (
-    <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-between">
-      <Button
-        asChild
-        variant="outline"
-        disabled={isPending}
-      >
-        <Link
-          href={`/citizen/dashboard/invoices/${invoice.id}`}
+      {error && (
+        <div
+          role="alert"
+          className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
         >
-          <ArrowLeft className="mr-2 size-4" />
-          Back to invoice
-        </Link>
-      </Button>
+          {error}
+        </div>
+      )}
 
-      <Button
-        size="lg"
-        className="h-11 sm:min-w-48"
-        type="button"
-        disabled={disabled}
-        onClick={onContinue}
-      >
-        {isPending ? (
-          <>
-            <span className="mr-2 size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-            Starting payment...
-          </>
-        ) : (
-          <>
-            <CreditCard className="mr-2 size-4" />
-            Continue to payment
-          </>
-        )}
-      </Button>
-    </div>
-  );
-}
+      {/* ================================================================
+          SUBMIT
+          ================================================================ */}
 
-/* ==========================================================================
- * Not payable
- * ========================================================================== */
+      <div className="space-y-3">
+        <Button
+          type="button"
+          size="lg"
+          className="h-12 w-full text-base"
+          disabled={!canSubmit}
+          onClick={handleSubmit}
+        >
+          {isSubmitting ? (
+            <>
+              <Loader2 className="mr-2 size-4 animate-spin" />
 
-function InvoiceNotPayable({
-  invoice,
-}: {
-  invoice: TaxpayerInvoice;
-}) {
-  const isPaid =
-    invoice.is_fully_paid;
+              {isBank
+                ? "Submitting..."
+                : "Redirecting..."}
+            </>
+          ) : isBank ? (
+            "Submit bank transfer"
+          ) : (
+            `Pay ${formatMoney(
+              invoice.currency,
+              validation.isValid
+                ? amount
+                : 0,
+            )}`
+          )}
+        </Button>
 
-  const isCancelled =
-    invoice.status === "CANCELLED";
-
-  return (
-    <div className="min-w-0">
-      <div className="mx-auto flex min-h-[600px] w-full max-w-2xl items-center justify-center p-4 sm:p-6 lg:p-8">
-        <Card className="w-full">
-          <CardContent className="flex flex-col items-center px-6 py-12 text-center">
-            <div className="flex size-14 items-center justify-center rounded-full bg-muted">
-              {isPaid ? (
-                <CheckCircle2 className="size-6 text-muted-foreground" />
-              ) : (
-                <FileText className="size-6 text-muted-foreground" />
-              )}
-            </div>
-
-            <h1 className="mt-5 text-xl font-semibold">
-              {isPaid
-                ? "Invoice already paid"
-                : isCancelled
-                  ? "Invoice cancelled"
-                  : "Invoice cannot be paid"}
-            </h1>
-
-            <p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground">
-              {isPaid
-                ? `Invoice ${invoice.invoice_number} has no remaining balance.`
-                : isCancelled
-                  ? `Invoice ${invoice.invoice_number} has been cancelled and cannot be paid.`
-                  : `Invoice ${invoice.invoice_number} is not currently available for online payment.`}
-            </p>
-
-            <div className="mt-6 flex flex-col gap-2 sm:flex-row">
-              <Button asChild>
-                <Link
-                  href={`/citizen/dashboard/invoices/${invoice.id}`}
-                >
-                  <FileText className="mr-2 size-4" />
-                  View invoice
-                </Link>
-              </Button>
-
-              <Button
-                asChild
-                variant="outline"
-              >
-                <Link href="/citizen/dashboard/invoices">
-                  Back to invoices
-                </Link>
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+        <p className="text-center text-xs text-muted-foreground">
+          {isBank
+            ? "Your transfer will remain pending until the receipt is verified."
+            : selectedProvider
+              ? `You will be redirected to ${selectedProvider.name} to complete your payment.`
+              : "Select an available payment provider to continue."}
+        </p>
       </div>
     </div>
   );
 }
 
 /* ==========================================================================
- * Status
+ * SMALL UI
  * ========================================================================== */
 
-function InvoiceStatusBadge({
+function Meta({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div>
+      <dt className="text-xs text-muted-foreground">
+        {label}
+      </dt>
+
+      <dd className="mt-0.5 truncate font-medium tabular-nums">
+        {value}
+      </dd>
+    </div>
+  );
+}
+
+function StatusBadge({
   invoice,
 }: {
   invoice: TaxpayerInvoice;
@@ -1193,11 +920,11 @@ function InvoiceStatusBadge({
   const status =
     getDisplayStatus(invoice);
 
-  const config: Record<
+  const map: Record<
     string,
     {
       label: string;
-      className?: string;
+      className: string;
     }
   > = {
     ISSUED: {
@@ -1227,125 +954,93 @@ function InvoiceStatusBadge({
     CANCELLED: {
       label: "Cancelled",
       className:
-        "border-muted bg-muted text-muted-foreground",
+        "bg-muted text-muted-foreground",
     },
   };
 
   const current =
-    config[status] ?? {
-      label: formatStatus(status),
+    map[status] ?? {
+      label: status,
+      className: "",
     };
 
   return (
-    <Badge
-      variant="outline"
-      className={current.className}
+    <span
+      className={[
+        "inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium",
+        current.className,
+      ].join(" ")}
     >
       {current.label}
-    </Badge>
+    </span>
   );
 }
 
-/* ==========================================================================
- * Shared UI helpers
- * ========================================================================== */
-
-function SummaryRow({
-  label,
-  value,
+function StateCard({
+  icon,
+  title,
+  text,
+  primary,
+  backHref,
 }: {
-  label: string;
-  value: string;
+  icon: React.ReactNode;
+  title: string;
+  text: string;
+  primary: React.ReactNode;
+  backHref: string;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4">
-      <span className="text-sm text-muted-foreground">
-        {label}
-      </span>
+    <div className="mx-auto flex min-h-[420px] w-full max-w-md items-center p-4">
+      <Card className="w-full">
+        <CardContent className="flex flex-col items-center px-6 py-10 text-center">
+          <div className="flex size-12 items-center justify-center rounded-full bg-muted">
+            {icon}
+          </div>
 
-      <span className="max-w-[60%] truncate text-right text-sm font-medium tabular-nums">
-        {value}
-      </span>
+          <h1 className="mt-4 text-lg font-semibold">
+            {title}
+          </h1>
+
+          <p className="mt-2 text-sm text-muted-foreground">
+            {text}
+          </p>
+
+          <div className="mt-6 flex flex-col gap-2 sm:flex-row">
+            {primary}
+
+            <Button
+              asChild
+              variant="outline"
+            >
+              <Link href={backHref}>
+                Back to invoices
+              </Link>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function PageSkeleton() {
+  return (
+    <div className="mx-auto w-full max-w-2xl animate-pulse space-y-6 p-4 sm:p-6">
+      <div className="h-10 w-48 rounded bg-muted" />
+
+      <div className="h-36 rounded-xl bg-muted" />
+
+      <div className="h-40 rounded-xl bg-muted" />
+
+      <div className="h-32 rounded-xl bg-muted" />
+
+      <div className="h-12 rounded bg-muted" />
     </div>
   );
 }
 
 /* ==========================================================================
- * Payment validation
- * ========================================================================== */
-
-interface PaymentAmountValidation {
-  isValid: boolean;
-  message: string | null;
-}
-
-function validatePaymentAmount(
-  value: string,
-  balanceDue: number,
-): PaymentAmountValidation {
-  if (value.trim() === "") {
-    return {
-      isValid: false,
-      message:
-        "Enter an amount to pay.",
-    };
-  }
-
-  if (
-    !/^\d+(\.\d{1,2})?$/.test(value)
-  ) {
-    return {
-      isValid: false,
-      message:
-        "Enter a valid amount with up to two decimal places.",
-    };
-  }
-
-  const amount =
-    Number(value);
-
-  if (!Number.isFinite(amount)) {
-    return {
-      isValid: false,
-      message:
-        "Enter a valid payment amount.",
-    };
-  }
-
-  if (amount <= 0) {
-    return {
-      isValid: false,
-      message:
-        "Payment amount must be greater than 0.00.",
-    };
-  }
-
-  if (balanceDue <= 0) {
-    return {
-      isValid: false,
-      message:
-        "This invoice has no outstanding balance.",
-    };
-  }
-
-  if (amount > balanceDue) {
-    return {
-      isValid: false,
-      message:
-        `Payment cannot exceed the current balance of ${formatAmount(
-          balanceDue,
-        )}.`,
-    };
-  }
-
-  return {
-    isValid: true,
-    message: null,
-  };
-}
-
-/* ==========================================================================
- * Business logic
+ * BUSINESS LOGIC
  * ========================================================================== */
 
 function isInvoicePayable(
@@ -1376,9 +1071,54 @@ function getDisplayStatus(
   return invoice.status;
 }
 
-/* ==========================================================================
- * Money helpers
- * ========================================================================== */
+function validateAmount(
+  value: string,
+  balanceDue: number,
+): {
+  isValid: boolean;
+  message: string | null;
+} {
+  if (value.trim() === "") {
+    return {
+      isValid: false,
+      message: "Enter an amount to pay.",
+    };
+  }
+
+  if (
+    !/^\d+(\.\d{1,2})?$/.test(value)
+  ) {
+    return {
+      isValid: false,
+      message:
+        "Enter a valid amount (up to 2 decimals).",
+    };
+  }
+
+  const amount = Number(value);
+
+  if (amount <= 0) {
+    return {
+      isValid: false,
+      message:
+        "Amount must be greater than 0.",
+    };
+  }
+
+  if (amount > balanceDue) {
+    return {
+      isValid: false,
+      message: `Amount cannot exceed the balance of ${formatAmount(
+        balanceDue,
+      )}.`,
+    };
+  }
+
+  return {
+    isValid: true,
+    message: null,
+  };
+}
 
 function parseMoney(
   value:
@@ -1387,50 +1127,19 @@ function parseMoney(
     | null
     | undefined,
 ): number {
-  if (
-    value === null ||
-    value === undefined
-  ) {
-    return 0;
-  }
-
-  const parsed =
-    Number(value);
-
-  if (!Number.isFinite(parsed)) {
-    return 0;
-  }
-
-  return (
-    Math.round(
-      parsed * 100,
-    ) / 100
+  const parsed = Number(
+    value ?? 0,
   );
-}
 
-function normalizeAmountForInput(
-  value: string | number,
-): string {
-  const amount =
-    parseMoney(value);
-
-  return amount.toFixed(2);
-}
-
-function formatMoney(
-  currency: string,
-  value: string | number,
-): string {
-  return `${currency} ${formatAmount(
-    value,
-  )}`;
+  return Number.isFinite(parsed)
+    ? Math.round(parsed * 100) / 100
+    : 0;
 }
 
 function formatAmount(
   value: string | number,
 ): string {
-  const amount =
-    Number(value);
+  const amount = Number(value);
 
   if (!Number.isFinite(amount)) {
     return "—";
@@ -1445,9 +1154,12 @@ function formatAmount(
   ).format(amount);
 }
 
-/* ==========================================================================
- * Date helpers
- * ========================================================================== */
+function formatMoney(
+  currency: string,
+  value: string | number,
+): string {
+  return `${currency} ${formatAmount(value)}`;
+}
 
 function formatDate(
   value: string | null,
@@ -1457,154 +1169,24 @@ function formatDate(
   }
 
   const date =
-    /^\d{4}-\d{2}-\d{2}$/.test(
-      value,
-    )
+    /^\d{4}-\d{2}-\d{2}$/.test(value)
       ? new Date(
           `${value}T00:00:00`,
         )
       : new Date(value);
 
   if (
-    Number.isNaN(
-      date.getTime(),
-    )
+    Number.isNaN(date.getTime())
   ) {
     return "—";
   }
 
   return new Intl.DateTimeFormat(
-    "en-GB",
+    "en-US",
     {
       day: "2-digit",
       month: "short",
       year: "numeric",
     },
   ).format(date);
-}
-
-/* ==========================================================================
- * Status formatting
- * ========================================================================== */
-
-function formatStatus(
-  value: string,
-): string {
-  return value
-    .replace(/_/g, " ")
-    .toLowerCase()
-    .replace(
-      /\b\w/g,
-      (letter) =>
-        letter.toUpperCase(),
-    );
-}
-
-/* ==========================================================================
- * Loading
- * ========================================================================== */
-
-function InvoicePaySkeleton() {
-  return (
-    <div className="min-w-0 animate-pulse">
-      <div className="mx-auto w-full max-w-5xl space-y-6 p-4 sm:p-6 lg:p-8">
-        <div className="flex items-start gap-3">
-          <div className="size-9 rounded-md bg-muted" />
-
-          <div className="space-y-2">
-            <div className="h-7 w-40 rounded bg-muted" />
-            <div className="h-4 w-72 rounded bg-muted" />
-          </div>
-        </div>
-
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
-          <div className="space-y-6">
-            <Card>
-              <CardContent className="space-y-5 p-6">
-                <div className="h-5 w-32 rounded bg-muted" />
-                <div className="h-24 w-full rounded-xl bg-muted" />
-                <div className="h-5 w-28 rounded bg-muted" />
-                <div className="h-12 w-full rounded bg-muted" />
-                <div className="h-10 w-full rounded-lg bg-muted" />
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="space-y-4 p-6">
-                <div className="h-5 w-40 rounded bg-muted" />
-                <div className="h-16 w-full rounded-xl bg-muted" />
-              </CardContent>
-            </Card>
-
-            <div className="h-20 w-full rounded-xl bg-muted" />
-            <div className="h-11 w-full rounded bg-muted" />
-          </div>
-
-          <Card>
-            <CardContent className="space-y-5 p-6">
-              <div className="h-5 w-32 rounded bg-muted" />
-
-              {[1, 2, 3, 4, 5].map(
-                (item) => (
-                  <div
-                    key={item}
-                    className="h-5 w-full rounded bg-muted"
-                  />
-                ),
-              )}
-
-              <div className="h-16 w-full rounded-xl bg-muted" />
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ==========================================================================
- * Error
- * ========================================================================== */
-
-function InvoicePayError({
-  onRetry,
-}: {
-  onRetry: () => void;
-}) {
-  return (
-    <div className="flex min-h-[500px] items-center justify-center p-4">
-      <Card className="w-full max-w-md">
-        <CardContent className="flex flex-col items-center px-6 py-10 text-center">
-          <div className="flex size-12 items-center justify-center rounded-full bg-muted">
-            <FileText className="size-6 text-muted-foreground" />
-          </div>
-
-          <h2 className="mt-4 text-lg font-semibold">
-            Unable to load invoice
-          </h2>
-
-          <p className="mt-2 text-sm leading-5 text-muted-foreground">
-            We could not load the invoice
-            payment information. Please try
-            again.
-          </p>
-
-          <div className="mt-5 flex flex-col gap-2 sm:flex-row">
-            <Button onClick={onRetry}>
-              Try again
-            </Button>
-
-            <Button
-              asChild
-              variant="outline"
-            >
-              <Link href="/citizen/dashboard/invoices">
-                Back to invoices
-              </Link>
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
 }

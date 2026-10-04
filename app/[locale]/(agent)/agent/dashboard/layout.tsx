@@ -26,10 +26,10 @@ import {
 
 import { RootState } from "@/lib/store/store";
 import { usePermission } from "@/hooks/usePermission";
-import { NAV_ITEMS } from "@/configs/navConfig";
+import { AGENT_NAV_ITEMS } from "@/configs/agentNavConfig";
 
 /* =====================================================
-   OFFICE PORTAL LAYOUT
+   AGENT PORTAL LAYOUT
 ===================================================== */
 
 export default function Layout({
@@ -39,18 +39,18 @@ export default function Layout({
 }) {
   return (
     <AuthProvider>
-      <OfficeContent>
+      <AgentContent>
         {children}
-      </OfficeContent>
+      </AgentContent>
     </AuthProvider>
   );
 }
 
 /* =====================================================
-   OFFICE PORTAL CONTENT
+   AGENT PORTAL CONTENT
 ===================================================== */
 
-function OfficeContent({
+function AgentContent({
   children,
 }: {
   children: React.ReactNode;
@@ -78,14 +78,14 @@ function OfficeContent({
      PORTAL ACCESS
   =================================================== */
 
-  const canAccessOffice =
-    can("office", "portal_access");
-
   const canAccessAgent =
     can("agent", "portal_access");
 
+  const canAccessOffice =
+    can("office", "portal_access");
+
   /* ===================================================
-     OFFICE PORTAL GUARD
+     AGENT PORTAL GUARD
   =================================================== */
 
   useEffect(() => {
@@ -110,14 +110,14 @@ function OfficeContent({
     }
 
     /*
-     * Authenticated user without Office portal access.
+     * Authenticated user without Agent portal access.
      *
-     * If the user has Agent portal access, redirect there.
+     * If the user has Office portal access, redirect there.
      * Otherwise send the user to the unauthorized page.
      */
-    if (!canAccessOffice) {
-      if (canAccessAgent) {
-        router.replace("/agent/dashboard");
+    if (!canAccessAgent) {
+      if (canAccessOffice) {
+        router.replace("/office/dashboard");
       } else {
         router.replace("/unauthorized");
       }
@@ -125,8 +125,8 @@ function OfficeContent({
   }, [
     isLoading,
     user,
-    canAccessOffice,
     canAccessAgent,
+    canAccessOffice,
     router,
   ]);
 
@@ -153,24 +153,26 @@ function OfficeContent({
   }
 
   /* ===================================================
-     NO OFFICE PORTAL ACCESS
+     NO AGENT PORTAL ACCESS
   =================================================== */
 
-  if (!canAccessOffice) {
+  if (!canAccessAgent) {
     return null;
   }
 
   /* ===================================================
-     OFFICE PORTAL
+     AGENT PORTAL
   =================================================== */
 
   return (
     <SidebarProvider>
 
       {/* =================================================
-          OFFICE SIDEBAR
+          AGENT SIDEBAR
       ================================================= */}
-      <AppSidebar navItems={NAV_ITEMS} />
+
+      <AppSidebar navItems={AGENT_NAV_ITEMS} />
+
       {/* =================================================
           MAIN CONTENT AREA
       ================================================= */}

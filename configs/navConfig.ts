@@ -146,6 +146,12 @@ export const NAV_ITEMS: NavItem[] = [
         permission: APP_PERMISSIONS.CITIZENS_VIEW,
       },
 
+      // {
+      //   title: "agents",
+      //   url: "/office/dashboard/agents",
+      //   permission: APP_PERMISSIONS.AGENTS_VIEW,
+      // },
+
       {
         title: "roles",
         url: "/office/dashboard/access-managements",
@@ -179,7 +185,7 @@ export const NAV_ITEMS: NavItem[] = [
     ],
   },
 
-  // =========================================================
+ // =========================================================
 // REVENUE CONFIGURATION
 // =========================================================
 
@@ -227,11 +233,24 @@ export const NAV_ITEMS: NavItem[] = [
       icon: CalendarClock,
       permission: APP_PERMISSIONS.PAYMENT_SCHEDULE_RULES_VIEW,
     },
+
+    {
+      title: "bank_accounts",
+      url: "/office/dashboard/revenue-managements/bank-accounts",
+      icon: Landmark,
+      permission: APP_PERMISSIONS.BANK_ACCOUNTS_VIEW,
+    },
+
+    {
+      title: "payment_providers",
+      url: "/office/dashboard/revenue-managements/payment-providers",
+      icon: CreditCard,
+      permission: APP_PERMISSIONS.PAYMENT_PROVIDERS_VIEW,
+    },
   ],
 },
 
-
- // =========================================================
+// =========================================================
 // REVENUE OPERATIONS
 // =========================================================
 
@@ -246,6 +265,13 @@ export const NAV_ITEMS: NavItem[] = [
       url: "/office/dashboard/assessments",
       permission: APP_PERMISSIONS.ASSESSMENT_VIEW,
     },
+
+    // {
+    //   title: "lease_amendments",
+    //   url: "/office/dashboard/lease-amendments",
+    //   icon: FileText,
+    //   permission: APP_PERMISSIONS.LEASE_AMENDMENTS_VIEW,
+    // },
 
     {
       title: "invoices",
@@ -338,8 +364,56 @@ export const NAV_ITEMS: NavItem[] = [
         permission: APP_PERMISSIONS.ASSESSMENT_VIEW_HISTORY,
       },
     ]
-  }
+    
+  },
 
+// =========================================================
+// REPORTS
+// =========================================================
+
+{
+  title: "reports",
+  url: "#",
+  icon: FileText,
+
+  items: [
+    {
+      title: "revenue_collection_report",
+      url: "/office/dashboard/reports/revenue-collection",
+      permission: APP_PERMISSIONS.REPORTS_REVENUE_COLLECTION_VIEW,
+    },
+
+    {
+      title: "payment_report",
+      url: "/office/dashboard/reports/payments",
+      permission: APP_PERMISSIONS.REPORTS_PAYMENTS_VIEW,
+    },
+
+    {
+      title: "invoice_report",
+      url: "/office/dashboard/reports/invoices",
+      permission: APP_PERMISSIONS.REPORTS_INVOICES_VIEW,
+    },
+
+    {
+      title: "assessment_report",
+      url: "/office/dashboard/reports/assessments",
+      permission: APP_PERMISSIONS.REPORTS_ASSESSMENTS_VIEW,
+    },
+
+    {
+      title: "outstanding_revenue",
+      url: "/office/dashboard/reports/outstanding-revenue",
+      permission: APP_PERMISSIONS.REPORTS_OUTSTANDING_REVENUE_VIEW,
+    },
+
+    {
+      title: "cash_reconciliation",
+      url: "/office/dashboard/reports/cash-reconciliation",
+      permission: APP_PERMISSIONS.REPORTS_CASH_RECONCILIATION_VIEW,
+    },
+  ],
+},
 
 
 

@@ -25,48 +25,13 @@ type Locale = (typeof LOCALES)[number];
 
 /*
 |--------------------------------------------------------------------------
-| APPLICATION TYPES
-|--------------------------------------------------------------------------
-*/
-
-type Application = "office" | "citizen";
-
-/*
-|--------------------------------------------------------------------------
 | ROUTE AREAS
 |--------------------------------------------------------------------------
 */
 
 const OFFICE_PREFIX = "/office";
+const AGENT_PREFIX = "/agent";
 const CITIZEN_PREFIX = "/citizen";
-
-/*
-|--------------------------------------------------------------------------
-| APPLICATION COOKIE
-|--------------------------------------------------------------------------
-|
-| This cookie identifies which frontend application
-| the authenticated session belongs to.
-|
-| Values:
-|
-|     office
-|     citizen
-|
-| IMPORTANT:
-|
-| This cookie is NOT a security boundary.
-|
-| It is only used to determine which frontend
-| application the user is attempting to access.
-|
-| Laravel remains the real authentication and
-| authorization authority.
-|
-|--------------------------------------------------------------------------
-*/
-
-const APPLICATION_COOKIE = "app";
 
 /*
 |--------------------------------------------------------------------------
@@ -77,7 +42,7 @@ const APPLICATION_COOKIE = "app";
 /**
  * Remove locale from pathname.
  *
- * Example:
+ * Examples:
  *
  * /or/office/dashboard
  *      ↓
@@ -86,6 +51,10 @@ const APPLICATION_COOKIE = "app";
  * /en/citizen/profile
  *      ↓
  * /citizen/profile
+ *
+ * /am/agent/dashboard
+ *      ↓
+ * /agent/dashboard
  */
 function stripLocale(pathname: string): string {
   const parts = pathname.split("/");
@@ -102,11 +71,11 @@ function stripLocale(pathname: string): string {
 /**
  * Get locale from pathname.
  *
- * Example:
+ * Examples:
  *
  * /or/office/dashboard → or
  * /en/citizen/profile  → en
- * /am/office/dashboard → am
+ * /am/agent/dashboard  → am
  */
 function getLocale(pathname: string): Locale {
   const firstSegment = pathname.split("/")[1];
@@ -120,7 +89,7 @@ function getLocale(pathname: string): Locale {
 
 /**
  * Determine whether the route belongs to the
- * citizen application.
+ * Citizen application.
  */
 function isCitizenRoute(path: string): boolean {
   return (
@@ -131,7 +100,7 @@ function isCitizenRoute(path: string): boolean {
 
 /**
  * Determine whether the route belongs to the
- * office application.
+ * Office application.
  */
 function isOfficeRoute(path: string): boolean {
   return (
@@ -140,12 +109,23 @@ function isOfficeRoute(path: string): boolean {
   );
 }
 
+/**
+ * Determine whether the route belongs to the
+ * Agent application.
+ */
+function isAgentRoute(path: string): boolean {
+  return (
+    path === AGENT_PREFIX ||
+    path.startsWith(`${AGENT_PREFIX}/`)
+  );
+}
+
 /*
 |--------------------------------------------------------------------------
 | PUBLIC ROUTES
 |--------------------------------------------------------------------------
 |
-| These routes do not require authentication.
+| These routes do not require an authenticated session.
 |
 |--------------------------------------------------------------------------
 */
@@ -180,7 +160,7 @@ function redirectTo(
 
 /*
 |--------------------------------------------------------------------------
-| REDIRECT TO OFFICE LOGIN
+| OFFICE LOGIN
 |--------------------------------------------------------------------------
 */
 
@@ -197,7 +177,7 @@ function redirectToOfficeLogin(
 
 /*
 |--------------------------------------------------------------------------
-| REDIRECT TO CITIZEN LOGIN
+| CITIZEN LOGIN
 |--------------------------------------------------------------------------
 */
 
@@ -214,17 +194,18 @@ function redirectToCitizenLogin(
 
 /*
 |--------------------------------------------------------------------------
-| LARAVEL SESSION COOKIE
+| LARAVEL SESSION
 |--------------------------------------------------------------------------
 |
 | IMPORTANT:
 |
-| This is ONLY a frontend navigation signal.
+| This only detects whether the browser appears to have
+| a Laravel session cookie.
 |
-| The existence of this cookie does NOT prove that
-| Laravel considers the session authenticated.
+| It does NOT prove authentication.
 |
-| Laravel remains the actual authentication authority.
+| The Laravel API remains the source of truth for
+| authentication.
 |
 |--------------------------------------------------------------------------
 */
@@ -237,34 +218,6 @@ function hasLaravelSession(
     request.cookies.get("laravel_session");
 
   return Boolean(sessionCookie?.value);
-}
-
-/*
-|--------------------------------------------------------------------------
-| GET APPLICATION COOKIE
-|--------------------------------------------------------------------------
-|
-| Returns:
-|
-|     office
-|     citizen
-|     null
-|
-|--------------------------------------------------------------------------
-*/
-
-function getApplication(
-  request: NextRequest,
-): Application | null {
-  const value = request.cookies.get(
-    APPLICATION_COOKIE,
-  )?.value;
-
-  if (value === "office" || value === "citizen") {
-    return value;
-  }
-
-  return null;
 }
 
 /*
@@ -293,7 +246,7 @@ export function middleware(
   | 2. PUBLIC ROUTES
   |--------------------------------------------------------------------------
   |
-  | Public routes are allowed through next-intl.
+  | Public routes are handled by next-intl.
   |
   |--------------------------------------------------------------------------
   */
@@ -304,39 +257,31 @@ export function middleware(
 
   /*
   |--------------------------------------------------------------------------
-  | 3. APPLICATION
-  |--------------------------------------------------------------------------
-  */
-
-  const application = getApplication(request);
-
-  /*
-  |--------------------------------------------------------------------------
-  | 4. CITIZEN APPLICATION
+  | 3. CITIZEN APPLICATION
   |--------------------------------------------------------------------------
   |
-  | Citizen routes require:
+  | Middleware performs only a basic session-presence
+  | check.
   |
-  |     1. Laravel session cookie
-  |     2. app = citizen
+  | It does NOT check:
   |
-  | No role or permission is checked here.
-  |
-  | Laravel remains responsible for:
-  |
-  |     - authentication
-  |     - citizen authorization
+  |     - role
+  |     - permission
+  |     - user identity
   |     - resource ownership
-  |     - IDOR protection
   |     - business rules
+  |
+  | Those belong to the authenticated application and
+  | Laravel backend.
   |
   |--------------------------------------------------------------------------
   */
 
   if (isCitizenRoute(cleanPath)) {
+
     /*
     |--------------------------------------------------------------------------
-    | 4.1 NO SESSION
+    | 3.1 SESSION REQUIRED
     |--------------------------------------------------------------------------
     */
 
@@ -349,26 +294,7 @@ export function middleware(
 
     /*
     |--------------------------------------------------------------------------
-    | 4.2 WRONG APPLICATION
-    |--------------------------------------------------------------------------
-    |
-    | An office session must not enter the citizen
-    | frontend application.
-    |
-    |--------------------------------------------------------------------------
-    */
-
-    if (application !== "citizen") {
-      return redirectTo(
-        request,
-        locale,
-        "/unauthorized",
-      );
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | 4.3 AUTHENTICATED CITIZEN FRONTEND
+    | 3.2 PASS TO NEXT-INTL
     |--------------------------------------------------------------------------
     */
 
@@ -377,33 +303,45 @@ export function middleware(
 
   /*
   |--------------------------------------------------------------------------
-  | 5. OFFICE APPLICATION
+  | 4. OFFICE APPLICATION
   |--------------------------------------------------------------------------
   |
-  | Office routes require:
-  |
-  |     1. Laravel session cookie
-  |     2. app = office
+  | Office routes require an apparent Laravel session.
   |
   | IMPORTANT:
   |
-  | There is NO role check here.
+  | No portal permission is checked here.
   |
-  | There is NO permission check here.
+  | The Office layout performs:
   |
-  | The frontend permission system should control
-  | navigation visibility.
+  |     office.portal_access
   |
-  | Laravel MUST enforce the actual permissions
-  | on every protected API operation.
+  | and, when necessary:
+  |
+  |     agent.portal_access
+  |
+  | Example:
+  |
+  |     Agent logs in
+  |          ↓
+  |     /office/dashboard
+  |          ↓
+  |     Office Layout
+  |          ↓
+  |     office.portal_access = false
+  |          ↓
+  |     agent.portal_access = true
+  |          ↓
+  |     /agent/dashboard
   |
   |--------------------------------------------------------------------------
   */
 
   if (isOfficeRoute(cleanPath)) {
+
     /*
     |--------------------------------------------------------------------------
-    | 5.1 NO SESSION
+    | 4.1 SESSION REQUIRED
     |--------------------------------------------------------------------------
     */
 
@@ -416,35 +354,52 @@ export function middleware(
 
     /*
     |--------------------------------------------------------------------------
-    | 5.2 WRONG APPLICATION
-    |--------------------------------------------------------------------------
-    |
-    | A citizen session must not enter the office
-    | frontend application.
-    |
+    | 4.2 PASS TO NEXT-INTL
     |--------------------------------------------------------------------------
     */
 
-    if (application !== "office") {
-      return redirectTo(
+    return intlMiddleware(request);
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | 5. AGENT APPLICATION
+  |--------------------------------------------------------------------------
+  |
+  | Agent routes require an apparent Laravel session.
+  |
+  | The Agent layout performs the actual frontend portal
+  | permission check:
+  |
+  |     agent.portal_access
+  |
+  | Laravel additionally protects Agent APIs with:
+  |
+  |     permission:agent.portal_access
+  |
+  | No role check is performed here.
+  |
+  |--------------------------------------------------------------------------
+  */
+
+  if (isAgentRoute(cleanPath)) {
+
+    /*
+    |--------------------------------------------------------------------------
+    | 5.1 SESSION REQUIRED
+    |--------------------------------------------------------------------------
+    */
+
+    if (!hasLaravelSession(request)) {
+      return redirectToOfficeLogin(
         request,
         locale,
-        "/unauthorized",
       );
     }
 
     /*
     |--------------------------------------------------------------------------
-    | 5.3 AUTHENTICATED OFFICE FRONTEND
-    |--------------------------------------------------------------------------
-    |
-    | No role check.
-    |
-    | No permission check.
-    |
-    | Permission authorization is handled by the
-    | application/backend architecture.
-    |
+    | 5.2 PASS TO NEXT-INTL
     |--------------------------------------------------------------------------
     */
 
@@ -456,15 +411,10 @@ export function middleware(
   | 6. UNKNOWN ROUTES
   |--------------------------------------------------------------------------
   |
-  | Security default:
+  | Security-conscious default:
   |
-  | Anything outside:
-  |
-  |     /
-  |     /office/*
-  |     /citizen/*
-  |
-  | is redirected to unauthorized.
+  | Anything outside the known frontend route areas is
+  | redirected to the localized unauthorized page.
   |
   |--------------------------------------------------------------------------
   */

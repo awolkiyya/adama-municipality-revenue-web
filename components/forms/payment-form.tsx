@@ -1,13 +1,13 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
-  Building2,
-  CalendarDays,
+  AlertCircle,
   CheckCircle2,
-  ChevronsUpDown,
+  ChevronDown,
   FileText,
   Loader2,
+  UserRound,
   Wallet,
 } from "lucide-react";
 
@@ -18,33 +18,28 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-
 import { Textarea } from "@/components/ui/textarea";
 
 import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
+  Alert,
+  AlertDescription,
+  AlertTitle,
+} from "@/components/ui/alert";
 
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+
+import { useInvoice } from "@/hooks/invoice/useInvoice.hook";
+import { useCreateCashPayment } from "@/hooks/payment/payment.hook";
 
 /*
 |--------------------------------------------------------------------------
@@ -52,23 +47,20 @@ import {
 |--------------------------------------------------------------------------
 */
 
-export type PaymentMethod =
-  | "CASH"
-  | "BANK_TRANSFER";
-
-export type PaymentProvider =
-  | "COMMERCIAL_BANK"
-  | "OTHER";
-
-export type Invoice = {
+type InvoiceView = {
   id: string;
   invoiceNumber: string;
+
   taxpayerName: string;
   taxpayerTin: string;
+  taxpayerPhone: string;
+
   assessmentNumber: string;
+
   totalAmount: number;
   paidAmount: number;
   outstandingAmount: number;
+
   issueDate: string;
   dueDate: string;
 };
@@ -80,59 +72,10 @@ export type Invoice = {
 */
 
 type PaymentFormProps = {
-  invoices?: Invoice[];
-  initialInvoiceId?: string;
+  initialInvoiceId: string;
   onCancel?: () => void;
   onSuccess?: () => void;
 };
-
-/*
-|--------------------------------------------------------------------------
-| Mock Data
-|--------------------------------------------------------------------------
-|
-| Remove this when invoices come from the API.
-|
-*/
-
-const MOCK_INVOICES: Invoice[] = [
-  {
-    id: "inv-001",
-    invoiceNumber: "INV-2026-000125",
-    taxpayerName: "Abebe Kebede",
-    taxpayerTin: "0012345678",
-    assessmentNumber: "ASM-2026-000098",
-    totalAmount: 25000,
-    paidAmount: 5000,
-    outstandingAmount: 20000,
-    issueDate: "2026-09-10",
-    dueDate: "2026-09-30",
-  },
-  {
-    id: "inv-002",
-    invoiceNumber: "INV-2026-000126",
-    taxpayerName: "Fatuma Ali",
-    taxpayerTin: "0023456789",
-    assessmentNumber: "ASM-2026-000099",
-    totalAmount: 18000,
-    paidAmount: 0,
-    outstandingAmount: 18000,
-    issueDate: "2026-09-11",
-    dueDate: "2026-09-30",
-  },
-  {
-    id: "inv-003",
-    invoiceNumber: "INV-2026-000127",
-    taxpayerName: "Mohammed Hassan",
-    taxpayerTin: "0034567890",
-    assessmentNumber: "ASM-2026-000100",
-    totalAmount: 45000,
-    paidAmount: 15000,
-    outstandingAmount: 30000,
-    issueDate: "2026-09-12",
-    dueDate: "2026-10-05",
-  },
-];
 
 /*
 |--------------------------------------------------------------------------
@@ -146,30 +89,85 @@ const formatCurrency = (amount: number) =>
     maximumFractionDigits: 2,
   }).format(amount);
 
-const getMethodIcon = (method: PaymentMethod) => {
-  switch (method) {
-    case "BANK_TRANSFER":
-      return Building2;
-
-    case "CASH":
-    default:
-      return Wallet;
+const formatDate = (value?: string | null) => {
+  if (!value) {
+    return "—";
   }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  }).format(date);
 };
 
-const getProviderLabel = (
-  provider: PaymentProvider | "",
-) => {
-  switch (provider) {
-    case "COMMERCIAL_BANK":
-      return "Commercial Bank";
+/*
+|--------------------------------------------------------------------------
+| Invoice Normalizer
+|--------------------------------------------------------------------------
+*/
 
-    case "OTHER":
-      return "Other Bank";
+const normalizeInvoice = (
+  raw: Record<string, any>,
+): InvoiceView => {
+  const citizen = raw.citizen ?? {};
+  const financial = raw.financial ?? {};
+  const dates = raw.dates ?? {};
+  const assessment = raw.assessment ?? null;
 
-    default:
-      return "";
-  }
+  return {
+    id: String(raw.id ?? ""),
+
+    invoiceNumber: String(
+      raw.invoice_number ?? "",
+    ),
+
+    taxpayerName:
+      citizen.name?.trim() ||
+      "Unnamed taxpayer",
+
+    taxpayerTin: String(
+      citizen.tin ??
+        citizen.taxpayer_tin ??
+        "",
+    ),
+
+    taxpayerPhone: String(
+      citizen.phone ?? "",
+    ),
+
+    assessmentNumber: String(
+      assessment?.assessment_number ??
+        assessment?.number ??
+        "",
+    ),
+
+    totalAmount: Number(
+      financial.total_amount ?? 0,
+    ),
+
+    paidAmount: Number(
+      financial.paid_amount ?? 0,
+    ),
+
+    outstandingAmount: Number(
+      financial.balance_due ?? 0,
+    ),
+
+    issueDate: String(
+      dates.issued_at ?? "",
+    ),
+
+    dueDate: String(
+      dates.due_date ?? "",
+    ),
+  };
 };
 
 /*
@@ -179,30 +177,78 @@ const getProviderLabel = (
 */
 
 export function PaymentForm({
-  invoices = MOCK_INVOICES,
-  initialInvoiceId = "",
+  initialInvoiceId,
   onCancel,
   onSuccess,
 }: PaymentFormProps) {
   /*
   |--------------------------------------------------------------------------
-  | Invoice
+  | Invoice ID
   |--------------------------------------------------------------------------
   */
 
-  const [invoiceId, setInvoiceId] =
-    useState(initialInvoiceId);
+  const invoiceId = initialInvoiceId.trim();
 
-  const [invoiceOpen, setInvoiceOpen] =
-    useState(false);
+  /*
+  |--------------------------------------------------------------------------
+  | Load Invoice
+  |--------------------------------------------------------------------------
+  */
 
-  const selectedInvoice = useMemo(
-    () =>
-      invoices.find(
-        (invoice) => invoice.id === invoiceId,
-      ),
-    [invoices, invoiceId],
+  const {
+    data: invoiceResponse,
+    isLoading: isLoadingInvoice,
+    isError: isInvoiceError,
+    error: invoiceError,
+  } = useInvoice(
+    invoiceId,
+    !!invoiceId,
   );
+
+  /*
+  |--------------------------------------------------------------------------
+  | Create Cash Payment
+  |--------------------------------------------------------------------------
+  */
+
+  const createCashPayment =
+    useCreateCashPayment();
+
+  /*
+  |--------------------------------------------------------------------------
+  | Resolve Invoice
+  |--------------------------------------------------------------------------
+  */
+
+  const selectedInvoice = useMemo(() => {
+    if (!invoiceResponse) {
+      return null;
+    }
+
+    const response =
+      invoiceResponse as unknown as Record<
+        string,
+        unknown
+      >;
+
+    const rawInvoice =
+      response.data &&
+      typeof response.data === "object"
+        ? (response.data as Record<
+            string,
+            any
+          >)
+        : null;
+
+    if (
+      !rawInvoice ||
+      typeof rawInvoice.id !== "string"
+    ) {
+      return null;
+    }
+
+    return normalizeInvoice(rawInvoice);
+  }, [invoiceResponse]);
 
   /*
   |--------------------------------------------------------------------------
@@ -210,25 +256,47 @@ export function PaymentForm({
   |--------------------------------------------------------------------------
   */
 
-  const [paymentMethod, setPaymentMethod] =
-    useState<PaymentMethod>("CASH");
-
-  const [provider, setProvider] =
-    useState<PaymentProvider | "">("");
-
   const [amount, setAmount] = useState("");
-
-  const [transactionReference, setTransactionReference] =
-    useState("");
-
-  const [paymentDate, setPaymentDate] = useState(
-    new Date().toISOString().split("T")[0],
-  );
 
   const [notes, setNotes] = useState("");
 
-  const [isSubmitting, setIsSubmitting] =
-    useState(false);
+  const [
+    showConfirmation,
+    setShowConfirmation,
+  ] = useState(false);
+
+  /*
+  |--------------------------------------------------------------------------
+  | Invoice Details
+  |--------------------------------------------------------------------------
+  */
+
+  const [
+    showInvoiceDetails,
+    setShowInvoiceDetails,
+  ] = useState(false);
+
+  /*
+  |--------------------------------------------------------------------------
+  | Default Amount
+  |--------------------------------------------------------------------------
+  */
+
+  useEffect(() => {
+    if (
+      selectedInvoice &&
+      amount === ""
+    ) {
+      setAmount(
+        selectedInvoice.outstandingAmount.toFixed(
+          2,
+        ),
+      );
+    }
+  }, [
+    selectedInvoice,
+    amount,
+  ]);
 
   /*
   |--------------------------------------------------------------------------
@@ -239,75 +307,87 @@ export function PaymentForm({
   const maxAmount =
     selectedInvoice?.outstandingAmount ?? 0;
 
-  const numericAmount = Number(amount || 0);
+  const numericAmount =
+    amount === ""
+      ? 0
+      : Number(amount);
 
   const amountError =
     numericAmount > maxAmount
       ? `Payment amount cannot exceed ${formatCurrency(
           maxAmount,
         )} ETB.`
-      : "";
+      : numericAmount <= 0 &&
+          amount !== ""
+        ? "Payment amount must be greater than zero."
+        : "";
 
-  const isBankTransfer =
-    paymentMethod === "BANK_TRANSFER";
+  const remainingBalance = Math.max(
+    maxAmount - numericAmount,
+    0,
+  );
+
+  const isFullSettlement =
+    !!selectedInvoice &&
+    numericAmount === maxAmount &&
+    numericAmount > 0;
 
   const isValid =
     !!selectedInvoice &&
+    selectedInvoice.id === invoiceId &&
+    maxAmount > 0 &&
     numericAmount > 0 &&
     numericAmount <= maxAmount &&
-    !!paymentDate &&
-    (!isBankTransfer || !!provider) &&
-    (!isBankTransfer ||
-      !!transactionReference.trim());
-
-  const MethodIcon = getMethodIcon(paymentMethod);
+    !amountError;
 
   /*
   |--------------------------------------------------------------------------
-  | Invoice Change
+  | Amount Change
   |--------------------------------------------------------------------------
   */
 
-  const handleInvoiceChange = (
+  const handleAmountChange = (
     value: string,
   ) => {
-    setInvoiceId(value);
-
-    const invoice = invoices.find(
-      (item) => item.id === value,
-    );
-
-    if (invoice) {
-      setAmount(
-        invoice.outstandingAmount.toString(),
-      );
-    } else {
+    if (value === "") {
       setAmount("");
+      return;
     }
 
-    setInvoiceOpen(false);
+    if (
+      !/^\d*\.?\d{0,2}$/.test(value)
+    ) {
+      return;
+    }
+
+    const numericValue = Number(value);
+
+    if (
+      !Number.isNaN(numericValue) &&
+      numericValue < 0
+    ) {
+      return;
+    }
+
+    setAmount(value);
   };
 
   /*
   |--------------------------------------------------------------------------
-  | Payment Method Change
+  | Collect Full Balance
   |--------------------------------------------------------------------------
   */
 
-  const handlePaymentMethodChange = (
-    value: PaymentMethod,
-  ) => {
-    setPaymentMethod(value);
+  const handlePayFullAmount = () => {
+    if (!selectedInvoice) {
+      return;
+    }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Clear bank-specific fields when switching
-    | back to Cash.
-    |--------------------------------------------------------------------------
-    */
-
-    setProvider("");
-    setTransactionReference("");
+    setAmount(
+      selectedInvoice.outstandingAmount.toFixed(
+        2,
+      ),
+    );
   };
 
   /*
@@ -316,45 +396,209 @@ export function PaymentForm({
   |--------------------------------------------------------------------------
   */
 
-  const handleSubmit = async (
+  const handleSubmit = (
     event: React.FormEvent,
   ) => {
     event.preventDefault();
 
-    if (!isValid || !selectedInvoice) {
+    if (!isValid) {
       return;
     }
 
-    setIsSubmitting(true);
-
-    try {
-      /*
-      |--------------------------------------------------------------------------
-      | TODO: Replace with API request
-      |--------------------------------------------------------------------------
-      |
-      | await paymentsApi.create({
-      |   invoice_id: selectedInvoice.id,
-      |   amount: numericAmount,
-      |   payment_method: paymentMethod,
-      |   payment_provider: provider || null,
-      |   transaction_reference:
-      |     transactionReference || null,
-      |   payment_date: paymentDate,
-      |   notes: notes || null,
-      | });
-      |
-      */
-
-      await new Promise((resolve) =>
-        setTimeout(resolve, 1000),
-      );
-
-      onSuccess?.();
-    } finally {
-      setIsSubmitting(false);
-    }
+    setShowConfirmation(true);
   };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Confirm Payment
+  |--------------------------------------------------------------------------
+  */
+
+  const handleConfirmPayment =
+    async () => {
+      if (
+        !isValid ||
+        !selectedInvoice
+      ) {
+        return;
+      }
+
+      try {
+        /*
+        |--------------------------------------------------------------------------
+        | Backend determines:
+        |
+        | received_by    = authenticated user
+        | payment_method = CASH
+        | payment_date   = now()
+        |--------------------------------------------------------------------------
+        */
+
+        await createCashPayment.mutateAsync(
+          {
+            invoice_id:
+              selectedInvoice.id,
+
+            amount:
+              numericAmount,
+
+            metadata: {
+              notes:
+                notes.trim() || null,
+            },
+          },
+        );
+
+        setShowConfirmation(false);
+
+        onSuccess?.();
+      } catch {
+        /*
+        |--------------------------------------------------------------------------
+        | Error is exposed through:
+        |
+        | createCashPayment.error
+        |--------------------------------------------------------------------------
+        */
+      }
+    };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Loading
+  |--------------------------------------------------------------------------
+  */
+
+  if (isLoadingInvoice) {
+    return (
+      <Card>
+        <CardContent className="flex min-h-[300px] items-center justify-center">
+          <div className="flex flex-col items-center gap-3 text-center">
+            <Loader2 className="h-7 w-7 animate-spin text-muted-foreground" />
+
+            <div>
+              <p className="text-sm font-medium">
+                Loading invoice...
+              </p>
+
+              <p className="mt-1 text-xs text-muted-foreground">
+                Retrieving invoice details before
+                creating the payment.
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Missing Invoice ID
+  |--------------------------------------------------------------------------
+  */
+
+  if (!invoiceId) {
+    return (
+      <Alert variant="destructive">
+        <AlertCircle className="h-4 w-4" />
+
+        <AlertTitle>
+          Invoice is required
+        </AlertTitle>
+
+        <AlertDescription>
+          This page must be opened with an
+          invoice ID.
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Invoice Error
+  |--------------------------------------------------------------------------
+  */
+
+  if (
+    isInvoiceError ||
+    !selectedInvoice
+  ) {
+    return (
+      <div className="space-y-4">
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+
+          <AlertTitle>
+            Unable to load invoice
+          </AlertTitle>
+
+          <AlertDescription>
+            {invoiceError instanceof Error
+              ? invoiceError.message
+              : "The invoice could not be loaded. Please try again."}
+          </AlertDescription>
+        </Alert>
+
+        <Button
+          type="button"
+          variant="outline"
+          onClick={onCancel}
+        >
+          Go Back
+        </Button>
+      </div>
+    );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Fully Paid
+  |--------------------------------------------------------------------------
+  */
+
+  if (
+    selectedInvoice.outstandingAmount <=
+    0
+  ) {
+    return (
+      <Card>
+        <CardContent className="py-10">
+          <div className="flex flex-col items-center text-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+              <CheckCircle2 className="h-6 w-6" />
+            </div>
+
+            <h3 className="mt-4 text-base font-semibold">
+              Invoice is fully paid
+            </h3>
+
+            <p className="mt-1 max-w-md text-sm text-muted-foreground">
+              Invoice{" "}
+              <span className="font-medium text-foreground">
+                {
+                  selectedInvoice.invoiceNumber
+                }
+              </span>{" "}
+              has no outstanding balance.
+              A new cash payment cannot be
+              created against it.
+            </p>
+
+            <Button
+              type="button"
+              variant="outline"
+              className="mt-6"
+              onClick={onCancel}
+            >
+              Go Back
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   /*
   |--------------------------------------------------------------------------
@@ -363,141 +607,120 @@ export function PaymentForm({
   */
 
   return (
-    <form onSubmit={handleSubmit}>
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* Main Form */}
-        <div className="space-y-6 lg:col-span-2">
-          {/* Invoice */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <FileText className="h-4 w-4" />
-                Invoice
-              </CardTitle>
-            </CardHeader>
+    <>
+      <form
+        onSubmit={handleSubmit}
+        className=" space-y-6"
+      >
+     
 
-            <CardContent className="space-y-5">
-              <div className="space-y-2">
-                <Label htmlFor="invoice">
-                  Invoice{" "}
-                  <span className="text-destructive">
-                    *
-                  </span>
-                </Label>
+        {/* =========================================================
+            INVOICE
+        ========================================================= */}
 
-                <Popover
-                  open={invoiceOpen}
-                  onOpenChange={setInvoiceOpen}
-                >
-                  <PopoverTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      role="combobox"
-                      aria-expanded={invoiceOpen}
-                      className="w-full justify-between font-normal"
-                    >
-                      {selectedInvoice ? (
-                        <span className="truncate">
-                          {
-                            selectedInvoice.invoiceNumber
-                          }{" "}
-                          —{" "}
-                          {
-                            selectedInvoice.taxpayerName
-                          }
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground">
-                          Search and select invoice
-                        </span>
-                      )}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <FileText className="h-4 w-4" />
+              Invoice
+            </CardTitle>
+          </CardHeader>
 
-                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                    </Button>
-                  </PopoverTrigger>
+          <CardContent>
+            <div className="rounded-lg border">
+              {/* ===================================================
+                  COMPACT INVOICE SUMMARY
+              =================================================== */}
 
-                  <PopoverContent
-                    align="start"
-                    className="w-[var(--radix-popover-trigger-width)] p-0"
-                  >
-                    <Command>
-                      <CommandInput placeholder="Search invoice, taxpayer, or TIN..." />
+              <div className="p-4">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
+                      <FileText className="h-5 w-5" />
+                    </div>
 
-                      <CommandList>
-                        <CommandEmpty>
-                          No invoice found.
-                        </CommandEmpty>
-
-                        <CommandGroup>
-                          {invoices.map(
-                            (invoice) => (
-                              <CommandItem
-                                key={invoice.id}
-                                value={`${invoice.invoiceNumber} ${invoice.taxpayerName} ${invoice.taxpayerTin}`}
-                                onSelect={() =>
-                                  handleInvoiceChange(
-                                    invoice.id,
-                                  )
-                                }
-                              >
-                                <div className="flex w-full flex-col gap-1">
-                                  <span className="font-medium">
-                                    {
-                                      invoice.invoiceNumber
-                                    }
-                                  </span>
-
-                                  <span className="text-xs text-muted-foreground">
-                                    {
-                                      invoice.taxpayerName
-                                    }{" "}
-                                    · TIN{" "}
-                                    {
-                                      invoice.taxpayerTin
-                                    }
-                                  </span>
-
-                                  <span className="text-xs text-muted-foreground">
-                                    Outstanding:{" "}
-                                    {formatCurrency(
-                                      invoice.outstandingAmount,
-                                    )}{" "}
-                                    ETB
-                                  </span>
-                                </div>
-                              </CommandItem>
-                            ),
-                          )}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
-              </div>
-
-              {/* Selected Invoice */}
-              {selectedInvoice && (
-                <div className="rounded-lg border bg-muted/30 p-4">
-                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                    <div>
+                    <div className="min-w-0">
                       <p className="text-xs text-muted-foreground">
                         Invoice
                       </p>
 
-                      <p className="font-medium">
+                      <p className="truncate font-semibold">
                         {
                           selectedInvoice.invoiceNumber
                         }
                       </p>
-                    </div>
 
+                      <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                        {
+                          selectedInvoice.taxpayerName
+                        }
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="sm:text-right">
+                    <p className="text-xs text-muted-foreground">
+                      Outstanding
+                    </p>
+
+                    <p className="text-xl font-semibold tracking-tight">
+                      {formatCurrency(
+                        selectedInvoice.outstandingAmount,
+                      )}{" "}
+                      <span className="text-sm font-medium">
+                        ETB
+                      </span>
+                    </p>
+                  </div>
+                </div>
+
+                {/* =================================================
+                    VIEW DETAILS
+                ================================================= */}
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setShowInvoiceDetails(
+                      (current) => !current,
+                    )
+                  }
+                  className="mt-4 flex w-full items-center justify-between border-t pt-3 text-left text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+                  aria-expanded={
+                    showInvoiceDetails
+                  }
+                  aria-controls="invoice-details"
+                >
+                  <span>
+                    Invoice details
+                  </span>
+
+                  <ChevronDown
+                    className={`h-4 w-4 transition-transform duration-200 ${
+                      showInvoiceDetails
+                        ? "rotate-180"
+                        : ""
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {/* ===================================================
+                  EXPANDED DETAILS
+              =================================================== */}
+
+              {showInvoiceDetails && (
+                <div
+                  id="invoice-details"
+                  className="border-t bg-muted/10 px-4 py-4"
+                >
+                  <div className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
                     <div>
                       <p className="text-xs text-muted-foreground">
                         Taxpayer
                       </p>
 
-                      <p className="font-medium">
+                      <p className="mt-1 text-sm font-medium">
                         {
                           selectedInvoice.taxpayerName
                         }
@@ -506,13 +729,23 @@ export function PaymentForm({
 
                     <div>
                       <p className="text-xs text-muted-foreground">
+                        Phone
+                      </p>
+
+                      <p className="mt-1 text-sm font-medium">
+                        {selectedInvoice.taxpayerPhone ||
+                          "—"}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-xs text-muted-foreground">
                         TIN
                       </p>
 
-                      <p className="font-medium">
-                        {
-                          selectedInvoice.taxpayerTin
-                        }
+                      <p className="mt-1 text-sm font-medium">
+                        {selectedInvoice.taxpayerTin ||
+                          "—"}
                       </p>
                     </div>
 
@@ -521,19 +754,42 @@ export function PaymentForm({
                         Assessment
                       </p>
 
-                      <p className="font-medium">
-                        {
-                          selectedInvoice.assessmentNumber
-                        }
+                      <p className="mt-1 text-sm font-medium">
+                        {selectedInvoice.assessmentNumber ||
+                          "—"}
                       </p>
                     </div>
 
                     <div>
                       <p className="text-xs text-muted-foreground">
-                        Invoice Total
+                        Invoice date
                       </p>
 
-                      <p className="font-medium">
+                      <p className="mt-1 text-sm font-medium">
+                        {formatDate(
+                          selectedInvoice.issueDate,
+                        )}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-xs text-muted-foreground">
+                        Due date
+                      </p>
+
+                      <p className="mt-1 text-sm font-medium">
+                        {formatDate(
+                          selectedInvoice.dueDate,
+                        )}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-xs text-muted-foreground">
+                        Invoice total
+                      </p>
+
+                      <p className="mt-1 text-sm font-medium">
                         {formatCurrency(
                           selectedInvoice.totalAmount,
                         )}{" "}
@@ -543,12 +799,12 @@ export function PaymentForm({
 
                     <div>
                       <p className="text-xs text-muted-foreground">
-                        Outstanding
+                        Already paid
                       </p>
 
-                      <p className="font-semibold">
+                      <p className="mt-1 text-sm font-medium">
                         {formatCurrency(
-                          selectedInvoice.outstandingAmount,
+                          selectedInvoice.paidAmount,
                         )}{" "}
                         ETB
                       </p>
@@ -556,370 +812,469 @@ export function PaymentForm({
                   </div>
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </CardContent>
+        </Card>
 
-          {/* Payment Details */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <MethodIcon className="h-4 w-4" />
-                Payment Details
-              </CardTitle>
-            </CardHeader>
+        {/* =========================================================
+            PAYMENT
+        ========================================================= */}
 
-            <CardContent className="space-y-5">
-              <div className="grid gap-5 md:grid-cols-2">
-                {/* Amount */}
-                <div className="space-y-2">
-                  <Label htmlFor="amount">
-                    Payment Amount{" "}
-                    <span className="text-destructive">
-                      *
-                    </span>
-                  </Label>
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Wallet className="h-4 w-4" />
+              Payment
+            </CardTitle>
+          </CardHeader>
 
-                  <div className="relative">
-                    <Input
-                      id="amount"
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={amount}
-                      onChange={(event) =>
-                        setAmount(
-                          event.target.value,
-                        )
-                      }
-                      placeholder="0.00"
-                      disabled={!selectedInvoice}
-                      className="pr-14"
-                    />
+          <CardContent className="space-y-6">
+            {/* =====================================================
+                PAYMENT METHOD
+            ===================================================== */}
 
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-                      ETB
-                    </span>
-                  </div>
+            <div className="flex items-center justify-between border-b pb-4">
+              <div>
+                <p className="text-sm font-medium">
+                  Payment method
+                </p>
 
-                  {selectedInvoice && (
-                    <p className="text-xs text-muted-foreground">
-                      Maximum payable:{" "}
-                      {formatCurrency(
-                        maxAmount,
-                      )}{" "}
-                      ETB
-                    </p>
-                  )}
-
-                  {amountError && (
-                    <p className="text-sm text-destructive">
-                      {amountError}
-                    </p>
-                  )}
-                </div>
-
-                {/* Payment Date */}
-                <div className="space-y-2">
-                  <Label htmlFor="payment-date">
-                    Payment Date{" "}
-                    <span className="text-destructive">
-                      *
-                    </span>
-                  </Label>
-
-                  <div className="relative">
-                    <CalendarDays className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-
-                    <Input
-                      id="payment-date"
-                      type="date"
-                      value={paymentDate}
-                      onChange={(event) =>
-                        setPaymentDate(
-                          event.target.value,
-                        )
-                      }
-                      className="pl-9"
-                    />
-                  </div>
-                </div>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Cash
+                </p>
               </div>
 
-              {/* Payment Method */}
-              <div className="space-y-2">
-                <Label htmlFor="payment-method">
-                  Payment Method{" "}
+              <Wallet className="h-5 w-5 text-muted-foreground" />
+            </div>
+
+            {/* =====================================================
+                AMOUNT
+            ===================================================== */}
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-4">
+                <Label htmlFor="amount">
+                  Amount collected{" "}
                   <span className="text-destructive">
                     *
                   </span>
                 </Label>
 
-                <Select
-                  value={paymentMethod}
-                  onValueChange={(value) =>
-                    handlePaymentMethodChange(
-                      value as PaymentMethod,
-                    )
+                <button
+                  type="button"
+                  className="text-xs font-medium text-primary hover:underline disabled:pointer-events-none disabled:opacity-50"
+                  onClick={
+                    handlePayFullAmount
+                  }
+                  disabled={
+                    createCashPayment.isPending
                   }
                 >
-                  <SelectTrigger id="payment-method">
-                    <SelectValue placeholder="Select payment method" />
-                  </SelectTrigger>
-
-                  <SelectContent>
-                    <SelectItem value="CASH">
-                      Cash
-                    </SelectItem>
-
-                    <SelectItem value="BANK_TRANSFER">
-                      Bank Transfer
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
+                  Collect full balance
+                </button>
               </div>
 
-              {/* Bank Transfer Details */}
-              {isBankTransfer && (
-                <div className="grid gap-5 md:grid-cols-2">
-                  {/* Bank */}
-                  <div className="space-y-2">
-                    <Label htmlFor="provider">
-                      Bank{" "}
-                      <span className="text-destructive">
-                        *
-                      </span>
-                    </Label>
+              <div className="relative">
+                <Input
+                  id="amount"
+                  type="number"
+                  min="0"
+                  max={maxAmount}
+                  step="0.01"
+                  inputMode="decimal"
+                  value={amount}
+                  onChange={(event) =>
+                    handleAmountChange(
+                      event.target.value,
+                    )
+                  }
+                  placeholder="0.00"
+                  className="h-12 pr-16 text-lg font-semibold"
+                  disabled={
+                    createCashPayment.isPending
+                  }
+                />
 
-                    <Select
-                      value={provider}
-                      onValueChange={(value) =>
-                        setProvider(
-                          value as PaymentProvider,
-                        )
-                      }
-                    >
-                      <SelectTrigger id="provider">
-                        <SelectValue placeholder="Select bank" />
-                      </SelectTrigger>
+                <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm font-medium text-muted-foreground">
+                  ETB
+                </span>
+              </div>
 
-                      <SelectContent>
-                        <SelectItem value="COMMERCIAL_BANK">
-                          Commercial Bank
-                        </SelectItem>
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>
+                  Outstanding balance
+                </span>
 
-                        <SelectItem value="OTHER">
-                          Other Bank
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                <span className="font-medium text-foreground">
+                  {formatCurrency(
+                    maxAmount,
+                  )}{" "}
+                  ETB
+                </span>
+              </div>
 
-                  {/* Transaction Reference */}
-                  <div className="space-y-2">
-                    <Label htmlFor="transaction-reference">
-                      Transaction Reference{" "}
-                      <span className="text-destructive">
-                        *
-                      </span>
-                    </Label>
+              {amountError && (
+                <Alert
+                  variant="destructive"
+                  className="mt-3"
+                >
+                  <AlertCircle className="h-4 w-4" />
 
-                    <Input
-                      id="transaction-reference"
-                      value={
-                        transactionReference
-                      }
-                      onChange={(event) =>
-                        setTransactionReference(
-                          event.target.value,
-                        )
-                      }
-                      placeholder="Enter bank transaction reference"
-                    />
+                  <AlertTitle>
+                    Invalid amount
+                  </AlertTitle>
+
+                  <AlertDescription>
+                    {amountError}
+                  </AlertDescription>
+                </Alert>
+              )}
+            </div>
+
+            {/* =====================================================
+                REMAINING BALANCE
+            ===================================================== */}
+
+            <div className="flex items-center justify-between border-y py-4">
+              <span className="text-sm text-muted-foreground">
+                Remaining balance
+              </span>
+
+              <span className="text-lg font-semibold">
+                {formatCurrency(
+                  remainingBalance,
+                )}{" "}
+                ETB
+              </span>
+            </div>
+
+            {/* =====================================================
+                SETTLEMENT STATUS
+            ===================================================== */}
+
+            {numericAmount > 0 &&
+              !amountError && (
+                <div className="flex items-start gap-3">
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+
+                  <div>
+                    <p className="text-sm font-medium">
+                      {isFullSettlement
+                        ? "Full settlement"
+                        : "Partial payment"}
+                    </p>
+
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {isFullSettlement
+                        ? "This payment will fully settle the invoice."
+                        : "The remaining balance will stay payable."}
+                    </p>
                   </div>
                 </div>
               )}
 
-              {/* Notes */}
-              <div className="space-y-2">
-                <Label htmlFor="notes">
-                  Notes
-                </Label>
+            {/* =====================================================
+                NOTES
+            ===================================================== */}
 
-                <Textarea
-                  id="notes"
-                  value={notes}
-                  onChange={(event) =>
-                    setNotes(event.target.value)
-                  }
-                  placeholder="Add payment notes if necessary..."
-                  rows={4}
-                />
+            <div className="space-y-2">
+              <Label htmlFor="notes">
+                Collection notes
+                <span className="ml-1 text-xs font-normal text-muted-foreground">
+                  (Optional)
+                </span>
+              </Label>
+
+              <Textarea
+                id="notes"
+                value={notes}
+                onChange={(event) =>
+                  setNotes(
+                    event.target.value,
+                  )
+                }
+                placeholder="Add relevant collection information..."
+                rows={3}
+                disabled={
+                  createCashPayment.isPending
+                }
+              />
+            </div>
+
+            {/* =====================================================
+                COLLECTOR
+            ===================================================== */}
+
+            <div className="flex items-center gap-3 border-t pt-4">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted">
+                <UserRound className="h-4 w-4" />
               </div>
-            </CardContent>
-          </Card>
-        </div>
 
-        {/* Summary */}
-        <div className="space-y-6">
-          <Card className="sticky top-6">
-            <CardHeader>
-              <CardTitle className="text-base">
-                Payment Summary
-              </CardTitle>
-            </CardHeader>
+              <div>
+                <p className="text-xs text-muted-foreground">
+                  Collected by
+                </p>
 
-            <CardContent className="space-y-5">
-              {selectedInvoice ? (
+                <p className="text-sm font-medium">
+                  Current authenticated user
+                </p>
+              </div>
+            </div>
+
+            <p className="-mt-3 text-xs text-muted-foreground">
+              The collector and collection time are
+              recorded automatically for audit purposes.
+            </p>
+
+            {/* =====================================================
+                ERROR
+            ===================================================== */}
+
+            {createCashPayment.isError && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+
+                <AlertTitle>
+                  Payment could not be created
+                </AlertTitle>
+
+                <AlertDescription>
+                  {createCashPayment.error instanceof
+                  Error
+                    ? createCashPayment.error.message
+                    : "An error occurred while creating the cash payment. Please try again."}
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {/* =====================================================
+                ACTIONS
+            ===================================================== */}
+
+            <div className="flex flex-col-reverse gap-3 border-t pt-5 sm:flex-row sm:justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                className="sm:min-w-28"
+                onClick={onCancel}
+                disabled={
+                  createCashPayment.isPending
+                }
+              >
+                Cancel
+              </Button>
+
+              <Button
+                type="submit"
+                className="sm:min-w-40"
+                disabled={
+                  !isValid ||
+                  createCashPayment.isPending
+                }
+              >
+                <Wallet className="mr-2 h-4 w-4" />
+                Collect Payment
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </form>
+
+      {/* =========================================================
+          CONFIRMATION DIALOG
+      ========================================================= */}
+
+      <Dialog
+        open={showConfirmation}
+        onOpenChange={(open) => {
+          if (
+            !createCashPayment.isPending
+          ) {
+            setShowConfirmation(open);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              Confirm cash collection
+            </DialogTitle>
+
+            <DialogDescription>
+              Review the collection before creating
+              the payment record.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-5 py-2">
+            {/* ===================================================
+                BASIC INFORMATION
+            =================================================== */}
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-4 text-sm">
+                <span className="text-muted-foreground">
+                  Invoice
+                </span>
+
+                <span className="font-medium">
+                  {
+                    selectedInvoice.invoiceNumber
+                  }
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between gap-4 text-sm">
+                <span className="text-muted-foreground">
+                  Taxpayer
+                </span>
+
+                <span className="text-right font-medium">
+                  {
+                    selectedInvoice.taxpayerName
+                  }
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between gap-4 text-sm">
+                <span className="text-muted-foreground">
+                  Payment method
+                </span>
+
+                <span className="font-medium">
+                  Cash
+                </span>
+              </div>
+            </div>
+
+            {/* ===================================================
+                AMOUNT
+            =================================================== */}
+
+            <div className="rounded-lg bg-muted/40 p-4">
+              <p className="text-xs text-muted-foreground">
+                Amount collected
+              </p>
+
+              <p className="mt-1 text-2xl font-semibold tracking-tight">
+                {formatCurrency(
+                  numericAmount,
+                )}{" "}
+                <span className="text-sm font-medium">
+                  ETB
+                </span>
+              </p>
+            </div>
+
+            {/* ===================================================
+                REMAINING
+            =================================================== */}
+
+            <div className="flex items-center justify-between border-y py-3 text-sm">
+              <span className="text-muted-foreground">
+                Remaining after collection
+              </span>
+
+              <span className="font-semibold">
+                {formatCurrency(
+                  remainingBalance,
+                )}{" "}
+                ETB
+              </span>
+            </div>
+
+            {/* ===================================================
+                NOTES
+            =================================================== */}
+
+            {notes.trim() && (
+              <div>
+                <p className="text-xs text-muted-foreground">
+                  Collection notes
+                </p>
+
+                <p className="mt-1 text-sm">
+                  {notes.trim()}
+                </p>
+              </div>
+            )}
+
+            {/* ===================================================
+                AUDIT
+            =================================================== */}
+
+            <div className="flex items-start gap-3">
+              <UserRound className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+
+              <div>
+                <p className="text-sm font-medium">
+                  Collector and time are automatic
+                </p>
+
+                <p className="mt-1 text-xs text-muted-foreground">
+                  The system records the authenticated
+                  collector and the payment time.
+                </p>
+              </div>
+            </div>
+
+            {/* ===================================================
+                CASH WARNING
+            =================================================== */}
+
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+
+              <AlertTitle>
+                Confirm cash received
+              </AlertTitle>
+
+              <AlertDescription>
+                Confirm that the cash has physically
+                been received from the taxpayer before
+                creating this payment.
+              </AlertDescription>
+            </Alert>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() =>
+                setShowConfirmation(false)
+              }
+              disabled={
+                createCashPayment.isPending
+              }
+            >
+              Review Again
+            </Button>
+
+            <Button
+              type="button"
+              onClick={
+                handleConfirmPayment
+              }
+              disabled={
+                createCashPayment.isPending
+              }
+            >
+              {createCashPayment.isPending ? (
                 <>
-                  {/* Invoice */}
-                  <div className="space-y-3">
-                    <div className="flex justify-between gap-4 text-sm">
-                      <span className="text-muted-foreground">
-                        Invoice
-                      </span>
-
-                      <span className="font-medium">
-                        {
-                          selectedInvoice.invoiceNumber
-                        }
-                      </span>
-                    </div>
-
-                    <div className="flex justify-between gap-4 text-sm">
-                      <span className="text-muted-foreground">
-                        Taxpayer
-                      </span>
-
-                      <span className="text-right font-medium">
-                        {
-                          selectedInvoice.taxpayerName
-                        }
-                      </span>
-                    </div>
-
-                    <div className="flex justify-between gap-4 text-sm">
-                      <span className="text-muted-foreground">
-                        Outstanding
-                      </span>
-
-                      <span className="font-medium">
-                        {formatCurrency(
-                          maxAmount,
-                        )}{" "}
-                        ETB
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Amount */}
-                  <div className="border-t pt-4">
-                    <div className="flex items-end justify-between gap-4">
-                      <span className="text-sm text-muted-foreground">
-                        Payment Amount
-                      </span>
-
-                      <span className="text-2xl font-semibold">
-                        {formatCurrency(
-                          numericAmount,
-                        )}{" "}
-                        ETB
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Method */}
-                  <div className="rounded-lg border bg-muted/30 p-3">
-                    <div className="flex items-center gap-2">
-                      <MethodIcon className="h-4 w-4" />
-
-                      <span className="text-sm font-medium">
-                        {paymentMethod === "CASH"
-                          ? "Cash"
-                          : "Bank Transfer"}
-                      </span>
-                    </div>
-
-                    {provider && (
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        Bank:{" "}
-                        {getProviderLabel(
-                          provider,
-                        )}
-                      </p>
-                    )}
-
-                    {transactionReference && (
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        Reference:{" "}
-                        {transactionReference}
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Full Settlement */}
-                  {numericAmount > 0 &&
-                    numericAmount ===
-                      maxAmount && (
-                      <div className="flex items-start gap-2 rounded-lg border p-3 text-sm">
-                        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
-
-                        <span>
-                          This payment will fully
-                          settle the invoice.
-                        </span>
-                      </div>
-                    )}
-
-                  {/* Actions */}
-                  <div className="flex gap-3">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="flex-1"
-                      onClick={onCancel}
-                      disabled={isSubmitting}
-                    >
-                      Cancel
-                    </Button>
-
-                    <Button
-                      type="submit"
-                      className="flex-1"
-                      disabled={
-                        !isValid ||
-                        isSubmitting
-                      }
-                    >
-                      {isSubmitting ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Recording...
-                        </>
-                      ) : (
-                        "Record Payment"
-                      )}
-                    </Button>
-                  </div>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Creating Payment...
                 </>
               ) : (
-                <div className="py-8 text-center">
-                  <FileText className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
-
-                  <p className="text-sm font-medium">
-                    Select an invoice
-                  </p>
-
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Select an invoice to start
-                    recording the payment.
-                  </p>
-                </div>
+                <>
+                  <CheckCircle2 className="mr-2 h-4 w-4" />
+                  Confirm Collection
+                </>
               )}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    </form>
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
-

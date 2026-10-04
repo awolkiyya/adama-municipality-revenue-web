@@ -54,14 +54,14 @@ export const useLogin = () => {
       |--------------------------------------------------------------------------
       */
 
-      Cookies.set(
-        "app",
-        "office",
-        {
-          path: "/",
-          sameSite: "lax",
-        }
-      );
+      // Cookies.set(
+      //   "app",
+      //   "office",
+      //   {
+      //     path: "/",
+      //     sameSite: "lax",
+      //   }
+      // );
 
 
       /*

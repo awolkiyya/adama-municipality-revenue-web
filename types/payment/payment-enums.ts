@@ -9,7 +9,7 @@
  *   Physical cash paid to the municipality.
  *
  * BANK_TRANSFER
- *   Manual bank transfer submitted for verification.
+ *   Bank transfer submitted for municipal verification.
  *
  * ONLINE
  *   Payment processed through an online payment provider.
@@ -21,27 +21,25 @@ export type PaymentMethod =
 
 
 /* ============================================================
-   PAYMENT PROVIDER
+   PAYMENT SOURCE
 ============================================================ */
 
 /**
- * Who/processes the payment.
+ * Where/how the payment entered the municipal system.
  *
- * CASH
- *   Physical municipal cash collection.
+ * OFFICE_RECORDED
+ *   Payment was recorded directly by a municipal officer.
  *
- * BANK
- *   Manual bank transfer through a bank.
+ * BANK_TRANSFER
+ *   Payment originated from a bank transfer.
  *
- * CHAPA / TELEBIRR / CBE_BIRR
- *   External online payment providers.
+ * ONLINE
+ *   Payment originated from an online payment provider.
  */
-export type PaymentProvider =
-  | "CASH"
-  | "BANK"
-  | "CHAPA"
-  | "TELEBIRR"
-  | "CBE_BIRR";
+export type PaymentSource =
+  | "OFFICE_RECORDED"
+  | "BANK_TRANSFER"
+  | "ONLINE";
 
 
 /* ============================================================
@@ -51,95 +49,38 @@ export type PaymentProvider =
 /**
  * Municipal payment lifecycle.
  *
- * IMPORTANT:
+ * PENDING
+ *   Payment has been created and is waiting for completion,
+ *   verification, or the next processing step.
  *
- * Only POSTED represents an officially recognized
- * municipal financial payment.
+ * PROCESSING
+ *   Payment is actively being processed.
+ *   Commonly used for online payments.
+ *
+ * COMPLETED
+ *   Payment has been successfully completed and is officially
+ *   recognized by the municipality.
+ *
+ * FAILED
+ *   Payment processing failed.
+ *
+ * CANCELLED
+ *   Payment was explicitly cancelled.
+ *
+ * EXPIRED
+ *   Payment attempt expired before completion.
+ *
+ * REVERSED
+ *   A previously completed payment was reversed.
  */
 export type PaymentStatus =
-  // ----------------------------------------------------------
-  // Initial states
-  // ----------------------------------------------------------
-
-  /**
-   * Payment record has been created but processing
-   * has not started/completed.
-   */
-  | "INITIATED"
-
-  /**
-   * Payment is currently being processed.
-   *
-   * Common for online payments.
-   */
   | "PENDING"
-
-
-  // ----------------------------------------------------------
-  // Cash workflow
-  // ----------------------------------------------------------
-
-  /**
-   * Cash payment has been recorded by the collector
-   * but has not yet been finally posted.
-   */
-  | "RECORDED"
-
-
-  // ----------------------------------------------------------
-  // Bank-transfer workflow
-  // ----------------------------------------------------------
-
-  /**
-   * Bank transfer has been submitted and is waiting
-   * for municipal verification.
-   */
-  | "AWAITING_VERIFICATION"
-
-  /**
-   * Bank transfer has passed verification but may still
-   * be awaiting the final posting operation.
-   */
-  | "VERIFIED"
-
-
-  // ----------------------------------------------------------
-  // Final financial state
-  // ----------------------------------------------------------
-
-  /**
-   * Payment is officially recognized by the municipality.
-   *
-   * POSTED payments affect invoice balances.
-   */
-  | "POSTED"
-
-
-  // ----------------------------------------------------------
-  // Failure / rejection states
-  // ----------------------------------------------------------
-
-  /**
-   * Payment processing failed.
-   */
+  | "PROCESSING"
+  | "COMPLETED"
   | "FAILED"
-
-  /**
-   * Payment was explicitly rejected.
-   *
-   * Particularly relevant to bank-transfer verification.
-   */
-  | "REJECTED"
-
-  /**
-   * Payment was cancelled.
-   */
   | "CANCELLED"
-
-  /**
-   * Payment attempt expired before completion.
-   */
-  | "EXPIRED";
+  | "EXPIRED"
+  | "REVERSED";
 
 
 /* ============================================================
@@ -147,23 +88,15 @@ export type PaymentStatus =
 ============================================================ */
 
 /**
- * Result returned when an external payment provider
- * is checked.
+ * Verification state for payment methods that require
+ * verification, especially bank transfers.
  *
- * This is NOT the municipal payment lifecycle.
- *
- * Example:
- *
- * Chapa → SUCCESS
- *       ↓
- * Municipal payment → VERIFIED
- *       ↓
- * Municipal payment → POSTED
+ * This is separate from PaymentStatus.
  */
 export type PaymentVerificationStatus =
-  | "SUCCESS"
-  | "FAILED"
-  | "PENDING";
+  | "PENDING"
+  | "VERIFIED"
+  | "REJECTED";
 
 
 /* ============================================================
@@ -171,11 +104,10 @@ export type PaymentVerificationStatus =
 ============================================================ */
 
 /**
- * Generic result of a payment operation.
+ * Immediate result of a payment operation.
  *
- * This is useful for API/service responses where we need
- * to describe the immediate result of an operation without
- * replacing the actual PaymentStatus.
+ * This is an operation/result status and does not replace
+ * the actual PaymentStatus stored on the payment.
  */
 export type PaymentResultStatus =
   | "SUCCESS"

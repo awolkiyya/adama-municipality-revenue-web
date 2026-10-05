@@ -5,10 +5,23 @@ import type {
   ApiResponse,
   ListResponse,
 } from "@/types/api";
-import { Payment, PaymentDetail, PaymentFilters } from "@/types/payment";
-import { CreateBankTransferPaymentRequest, CreateCashPaymentRequest, InitializeOnlinePaymentRequest, InitializeOnlinePaymentResponse, RejectBankTransferRequest, VerifyBankTransferRequest, VerifyOnlinePaymentResponse } from "@/types/payment/payment-requests";
 
+import type {
+  Payment,
+  PaymentDetail,
+  PaymentFilters,
+  PaymentReceipt,
+} from "@/types/payment";
 
+import type {
+  CreateBankTransferPaymentRequest,
+  CreateCashPaymentRequest,
+  InitializeOnlinePaymentRequest,
+  InitializeOnlinePaymentResponse,
+  RejectBankTransferRequest,
+  VerifyBankTransferRequest,
+  VerifyOnlinePaymentResponse,
+} from "@/types/payment/payment-requests";
 
 
 // ============================================================
@@ -18,10 +31,8 @@ import { CreateBankTransferPaymentRequest, CreateCashPaymentRequest, InitializeO
 const cleanPaymentParams = (
   params?: PaymentFilters,
 ): Record<string, unknown> => {
-
   return Object.entries(params ?? {}).reduce(
     (acc, [key, value]) => {
-
       if (
         value !== undefined &&
         value !== null &&
@@ -32,7 +43,6 @@ const cleanPaymentParams = (
       }
 
       return acc;
-
     },
     {} as Record<string, unknown>,
   );
@@ -51,42 +61,45 @@ export const paymentService = {
   //
   // GET /payments
   //
-  // Common payment query endpoint.
+  // Administrative payment listing.
   //
-  // Supports:
+  // Supported filters implemented by the backend:
   //
   // - search
-  // - payment method
-  // - payment provider
+  // - transaction_reference
+  // - invoice_id
+  // - citizen_id
+  // - payment_method
+  // - payment_source
   // - status
-  // - invoice
-  // - assessment
-  // - amount
-  // - date
-  // - pagination
-  // - sorting
+  // - currency
+  // - amount_from
+  // - amount_to
+  // - payment_date_from
+  // - payment_date_to
+  // - verified_from
+  // - verified_to
+  // - page
+  // - per_page
+  // - sort_by
+  // - sort_direction
   //
   // ==========================================================
 
   getPayments: async (
     params?: PaymentFilters,
   ): Promise<ListResponse<Payment>> => {
-
     try {
-
       const response =
         await api.get<ListResponse<Payment>>(
           "/payments",
           {
-            params:
-              cleanPaymentParams(params),
+            params: cleanPaymentParams(params),
           },
         );
 
       return response.data;
-
     } catch (error) {
-
       throw normalizeApiError(error);
     }
   },
@@ -98,31 +111,30 @@ export const paymentService = {
   //
   // GET /payments/{payment}
   //
-  // Common endpoint for:
+  // Administrative payment detail.
   //
-  // - CASH
-  // - BANK_TRANSFER
-  // - ONLINE
+  // Returns:
+  //
+  // - payment
+  // - invoice
+  // - citizen
+  // - method-specific details
+  // - receipt
+  // - files
   //
   // ==========================================================
 
   getPaymentById: async (
     paymentId: string,
   ): Promise<ApiResponse<PaymentDetail>> => {
-
     try {
-
       const response =
         await api.get<ApiResponse<PaymentDetail>>(
-          `/payments/${encodeURIComponent(
-            paymentId,
-          )}`,
+          `/payments/${encodeURIComponent(paymentId)}`,
         );
 
       return response.data;
-
     } catch (error) {
-
       throw normalizeApiError(error);
     }
   },
@@ -134,27 +146,97 @@ export const paymentService = {
   //
   // GET /payments/{payment}/receipt
   //
-  // Common receipt endpoint.
+  // Returns the existing official receipt.
+  //
+  // IMPORTANT:
+  //
+  // This endpoint does NOT create a receipt.
+  //
+  // A receipt is created automatically when a payment reaches
+  // COMPLETED status.
   //
   // ==========================================================
 
   getPaymentReceipt: async (
     paymentId: string,
-  ): Promise<ApiResponse<Payment>> => {
-
+  ): Promise<ApiResponse<PaymentReceipt>> => {
     try {
-
       const response =
-        await api.get<ApiResponse<Payment>>(
-          `/payments/${encodeURIComponent(
-            paymentId,
-          )}/receipt`,
+        await api.get<ApiResponse<PaymentReceipt>>(
+          `/payments/${encodeURIComponent(paymentId)}/receipt`,
         );
 
       return response.data;
-
     } catch (error) {
+      throw normalizeApiError(error);
+    }
+  },
 
+
+  // ==========================================================
+  // DOWNLOAD PAYMENT RECEIPT PDF
+  // ==========================================================
+  //
+  // GET /payments/{payment}/receipt/pdf
+  //
+  // Downloads the official receipt as a PDF.
+  //
+  // The backend:
+  //
+  // - verifies authentication
+  // - verifies payment access
+  // - verifies payment is completed
+  // - verifies an official receipt exists
+  // - renders the receipt PDF
+  //
+  // The frontend receives a Blob.
+  //
+  // ==========================================================
+
+  downloadPaymentReceiptPdf: async (
+    paymentId: string,
+  ): Promise<Blob> => {
+    try {
+      const response =
+        await api.get<Blob>(
+          `/payments/${encodeURIComponent(paymentId)}/receipt/pdf`,
+          {
+            responseType: "blob",
+          },
+        );
+
+      return response.data;
+    } catch (error) {
+      throw normalizeApiError(error);
+    }
+  },
+
+
+  // ==========================================================
+  // STREAM PAYMENT RECEIPT PDF
+  // ==========================================================
+  //
+  // GET /payments/{payment}/receipt/pdf/stream
+  //
+  // Returns the official receipt PDF as a Blob so the frontend
+  // can open it in a browser tab or PDF viewer.
+  //
+  // ==========================================================
+
+  streamPaymentReceiptPdf: async (
+    paymentId: string,
+  ): Promise<Blob> => {
+    try {
+      const response =
+        await api.get<Blob>(
+          `/payments/${encodeURIComponent(paymentId)}/receipt/pdf/stream`,
+          {
+            responseType: "blob",
+          },
+        );
+
+      return response.data;
+    } catch (error) {
       throw normalizeApiError(error);
     }
   },
@@ -166,24 +248,22 @@ export const paymentService = {
   //
   // POST /online-payments/initialize
   //
-  // The provider can be:
+  // Online payment processing belongs to the online-payment
+  // controller/module.
   //
-  // - CHAPA
-  // - TELEBIRR
-  // - CBE_BIRR
-  //
-  // The backend automatically determines:
+  // The backend determines:
   //
   // payment_method = ONLINE
+  //
+  // Provider-specific information belongs to the online
+  // payment details/configuration.
   //
   // ==========================================================
 
   initializeOnlinePayment: async (
     data: InitializeOnlinePaymentRequest,
   ): Promise<InitializeOnlinePaymentResponse> => {
-
     try {
-
       const response =
         await api.post<InitializeOnlinePaymentResponse>(
           "/online-payments/initialize",
@@ -191,9 +271,7 @@ export const paymentService = {
         );
 
       return response.data;
-
     } catch (error) {
-
       throw normalizeApiError(error);
     }
   },
@@ -205,37 +283,31 @@ export const paymentService = {
   //
   // GET /online-payments/{payment}/status
   //
-  // This returns the LOCAL payment state.
+  // Returns the current LOCAL payment state.
   //
   // The backend is responsible for:
   //
-  // - checking provider state
-  // - verifying the provider transaction
-  // - updating the local payment
-  // - returning the current state
+  // 1. Checking the external provider.
+  // 2. Verifying the transaction.
+  // 3. Updating the local payment.
+  // 4. Returning the current payment state.
   //
-  // The frontend must NOT treat the browser return URL
-  // itself as proof of payment.
+  // The frontend must NOT treat a browser redirect/return
+  // as proof that the payment was completed.
   //
   // ==========================================================
 
   getOnlinePaymentStatus: async (
     paymentId: string,
   ): Promise<VerifyOnlinePaymentResponse> => {
-
     try {
-
       const response =
         await api.get<VerifyOnlinePaymentResponse>(
-          `/online-payments/${encodeURIComponent(
-            paymentId,
-          )}/status`,
+          `/online-payments/${encodeURIComponent(paymentId)}/status`,
         );
 
       return response.data;
-
     } catch (error) {
-
       throw normalizeApiError(error);
     }
   },
@@ -247,22 +319,16 @@ export const paymentService = {
   //
   // POST /cash-payments
   //
-  // The backend determines:
+  // Creates a cash payment in PENDING status.
   //
-  // - payment method
-  // - payment provider
-  // - transaction reference
-  // - collector / authenticated user
-  // - initial status
+  // No receipt is created at this stage.
   //
   // ==========================================================
 
   createCashPayment: async (
     data: CreateCashPaymentRequest,
   ): Promise<ApiResponse<Payment>> => {
-
     try {
-
       const response =
         await api.post<ApiResponse<Payment>>(
           "/cash-payments",
@@ -270,42 +336,44 @@ export const paymentService = {
         );
 
       return response.data;
-
     } catch (error) {
-
       throw normalizeApiError(error);
     }
   },
 
 
   // ==========================================================
-  // POST CASH PAYMENT
+  // COMPLETE CASH PAYMENT
   // ==========================================================
   //
-  // POST /cash-payments/{payment}/post
+  // POST /cash-payments/{payment}/complete
   //
-  // Changes the cash payment from its recorded state
-  // to POSTED after the required municipal control.
+  // PENDING
+  //    ↓
+  // COMPLETED
+  //
+  // On completion the backend:
+  //
+  // - completes the payment
+  // - records verification
+  // - creates the official receipt
+  // - updates invoice paid amount
+  // - updates invoice balance
+  // - updates invoice status
   //
   // ==========================================================
 
-  postCashPayment: async (
+  completeCashPayment: async (
     paymentId: string,
   ): Promise<ApiResponse<Payment>> => {
-
     try {
-
       const response =
         await api.post<ApiResponse<Payment>>(
-          `/cash-payments/${encodeURIComponent(
-            paymentId,
-          )}/post`,
+          `/cash-payments/${encodeURIComponent(paymentId)}/complete`,
         );
 
       return response.data;
-
     } catch (error) {
-
       throw normalizeApiError(error);
     }
   },
@@ -317,20 +385,18 @@ export const paymentService = {
   //
   // POST /bank-transfers
   //
-  // Creates:
+  // Creates a bank-transfer payment in PENDING status.
   //
-  // PENDING_VERIFICATION
+  // Method-specific information is stored in:
   //
-  // The transfer is NOT officially collected yet.
+  // bank_transfer_details
   //
   // ==========================================================
 
   createBankTransfer: async (
     data: CreateBankTransferPaymentRequest,
   ): Promise<ApiResponse<Payment>> => {
-
     try {
-
       const response =
         await api.post<ApiResponse<Payment>>(
           "/bank-transfers",
@@ -338,9 +404,7 @@ export const paymentService = {
         );
 
       return response.data;
-
     } catch (error) {
-
       throw normalizeApiError(error);
     }
   },
@@ -352,7 +416,7 @@ export const paymentService = {
   //
   // GET /bank-transfers/pending
   //
-  // Used by authorized revenue officers.
+  // Returns bank-transfer payments awaiting verification.
   //
   // ==========================================================
 
@@ -362,22 +426,17 @@ export const paymentService = {
       per_page?: number;
     },
   ): Promise<ListResponse<Payment>> => {
-
     try {
-
       const response =
         await api.get<ListResponse<Payment>>(
           "/bank-transfers/pending",
           {
-            params:
-              cleanPaymentParams(params),
+            params: cleanPaymentParams(params),
           },
         );
 
       return response.data;
-
     } catch (error) {
-
       throw normalizeApiError(error);
     }
   },
@@ -389,8 +448,16 @@ export const paymentService = {
   //
   // POST /bank-transfers/{payment}/verify
   //
-  // Verification and posting are handled by the backend
-  // as the controlled bank-transfer operation.
+  // PENDING
+  //    ↓
+  // COMPLETED
+  //
+  // On successful verification the backend:
+  //
+  // - completes the payment
+  // - records verification
+  // - creates the official receipt
+  // - updates the invoice
   //
   // ==========================================================
 
@@ -398,21 +465,15 @@ export const paymentService = {
     paymentId: string,
     data?: VerifyBankTransferRequest,
   ): Promise<ApiResponse<Payment>> => {
-
     try {
-
       const response =
         await api.post<ApiResponse<Payment>>(
-          `/bank-transfers/${encodeURIComponent(
-            paymentId,
-          )}/verify`,
+          `/bank-transfers/${encodeURIComponent(paymentId)}/verify`,
           data ?? {},
         );
 
       return response.data;
-
     } catch (error) {
-
       throw normalizeApiError(error);
     }
   },
@@ -424,7 +485,14 @@ export const paymentService = {
   //
   // POST /bank-transfers/{payment}/reject
   //
-  // A rejection reason is required.
+  // Rejection is a bank-transfer verification operation.
+  //
+  // It does NOT introduce:
+  //
+  // PaymentStatus::REJECTED
+  //
+  // The backend should use the established payment status
+  // model and store the rejection reason appropriately.
   //
   // ==========================================================
 
@@ -432,21 +500,15 @@ export const paymentService = {
     paymentId: string,
     data: RejectBankTransferRequest,
   ): Promise<ApiResponse<Payment>> => {
-
     try {
-
       const response =
         await api.post<ApiResponse<Payment>>(
-          `/bank-transfers/${encodeURIComponent(
-            paymentId,
-          )}/reject`,
+          `/bank-transfers/${encodeURIComponent(paymentId)}/reject`,
           data,
         );
 
       return response.data;
-
     } catch (error) {
-
       throw normalizeApiError(error);
     }
   },

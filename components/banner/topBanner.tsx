@@ -50,7 +50,7 @@ export function Banner({
   return (
     <div
       className={cn(
-        "relative overflow-hidden rounded-xl border p-5 shadow-sm sm:p-6",
+        "relative overflow-hidden rounded-xl border p-5 shadow-none sm:p-6",
         className
       )}
     >

@@ -1,16 +1,129 @@
 import type {
   PaymentMethod,
-  PaymentProvider,
+  PaymentSource,
   PaymentStatus,
 } from "./payment-enums";
 
+// ============================================================
+// COMMON TYPES
+// ============================================================
+
+export interface PaymentUser {
+  id: string;
+  name: string;
+  role: string | null;
+}
+
+export interface PaymentInvoice {
+  id: string;
+  invoice_number: string;
+  status: string;
+}
+
+export interface PaymentCitizen {
+  id: string;
+  name: string;
+  phone: string | null;
+  email: string | null;
+}
+
+export interface PaymentService {
+  id: string;
+  name: string;
+  code: string | null;
+}
+
+// ============================================================
+// CASH PAYMENT DETAILS
+// ============================================================
+
+export interface CashPaymentDetails {
+  payment_id: string;
+
+  received_by: PaymentUser | null;
+
+  cashier_session_id: string | null;
+
+  cash_received_at: string | null;
+
+  notes: string | null;
+}
+
+// ============================================================
+// BANK TRANSFER DETAILS
+// ============================================================
+
+export interface BankTransferDetails {
+  payment_id: string;
+
+  bank_account_id: string;
+
+  transfer_reference: string;
+
+  transfer_date: string;
+
+  sender_name: string | null;
+
+  sender_account: string | null;
+
+  verification_status: string | null;
+
+  verified_by: PaymentUser | null;
+
+  verified_at: string | null;
+
+  notes: string | null;
+}
+
+// ============================================================
+// ONLINE PAYMENT DETAILS
+// ============================================================
+
+export interface OnlinePaymentDetails {
+  payment_id: string;
+
+  payment_provider_id: string;
+
+  checkout_reference: string | null;
+
+  provider_transaction_id: string | null;
+
+  checkout_url: string | null;
+
+  provider_status: string | null;
+
+  callback_received_at: string | null;
+
+  provider_response: Record<string, unknown> | null;
+
+  paid_at: string | null;
+}
+
+// ============================================================
+// RECEIPT
+// ============================================================
+
+export interface PaymentReceipt {
+  id: string;
+
+  receipt_number: string;
+
+  payment_id: string;
+
+  amount: number;
+
+  currency: string;
+
+  issued_at: string;
+
+  issued_by: PaymentUser | null;
+}
 
 // ============================================================
 // PAYMENT
 // ============================================================
 
 export interface Payment {
-
   // ==========================================================
   // IDENTITY
   // ==========================================================
@@ -19,15 +132,13 @@ export interface Payment {
 
   payment_number: string;
 
-
   // ==========================================================
   // REFERENCES
   // ==========================================================
 
   invoice_id: string | null;
 
-  assessment_id: string | null;
-
+  citizen_id: string | null;
 
   // ==========================================================
   // PAYMENT CLASSIFICATION
@@ -35,21 +146,15 @@ export interface Payment {
 
   payment_method: PaymentMethod;
 
-  payment_provider: PaymentProvider;
+  payment_source: PaymentSource;
 
   status: PaymentStatus;
-
 
   // ==========================================================
   // PAYMENT REFERENCES
   // ==========================================================
 
   transaction_reference: string;
-
-  provider_reference: string | null;
-
-  receipt_number: string | null;
-
 
   // ==========================================================
   // MONEY
@@ -59,6 +164,15 @@ export interface Payment {
 
   currency: string;
 
+  // ==========================================================
+  // PROCESSING / VERIFICATION
+  // ==========================================================
+
+  processed_by: PaymentUser | null;
+
+  verified_by: PaymentUser | null;
+
+  verified_at: string | null;
 
   // ==========================================================
   // PAYER
@@ -70,44 +184,33 @@ export interface Payment {
 
   payer_phone: string | null;
 
-
-  // ==========================================================
-  // ONLINE PAYMENT
-  // ==========================================================
-
-  checkout_url: string | null;
-
-
   // ==========================================================
   // FAILURE
   // ==========================================================
 
   failure_reason: string | null;
 
-
   // ==========================================================
-  // PAYMENT DATES
-  // ==========================================================
-
-  payment_date: string | null;
-
-  verified_at: string | null;
-
-
-  // ==========================================================
-  // PROVIDER / AUDIT DATA
+  // METADATA
   // ==========================================================
 
-  metadata: Record<
-    string,
-    unknown
-  > | null;
+  metadata: Record<string, unknown> | null;
 
-  provider_response: Record<
-    string,
-    unknown
-  > | null;
+  // ==========================================================
+  // METHOD-SPECIFIC DETAILS
+  // ==========================================================
 
+  cash_details?: CashPaymentDetails | null;
+
+  bank_transfer_details?: BankTransferDetails | null;
+
+  online_details?: OnlinePaymentDetails | null;
+
+  // ==========================================================
+  // RECEIPT
+  // ==========================================================
+
+  receipt?: PaymentReceipt | null;
 
   // ==========================================================
   // TIMESTAMPS
@@ -118,19 +221,56 @@ export interface Payment {
   updated_at: string;
 }
 
+// ============================================================
+// PAYMENT DETAIL
+// ============================================================
+
+export interface PaymentDetail extends Payment {
+  invoice: PaymentInvoice | null;
+
+  citizen: PaymentCitizen | null;
+
+  service: PaymentService | null;
+
+  cash_details: CashPaymentDetails | null;
+
+  bank_transfer_details: BankTransferDetails | null;
+
+  online_details: OnlinePaymentDetails | null;
+
+  receipt: PaymentReceipt | null;
+
+  files?: PaymentFile[];
+}
+
+// ============================================================
+// PAYMENT FILE
+// ============================================================
+
+export interface PaymentFile {
+  id: string;
+
+  file_name: string;
+
+  original_name: string | null;
+
+  mime_type: string | null;
+
+  size: number | null;
+
+  url?: string | null;
+}
 
 // ============================================================
 // PAYMENT FILTERS
 // ============================================================
 
 export interface PaymentFilters {
-
   // ==========================================================
   // SEARCH
   // ==========================================================
 
   search?: string;
-
 
   // ==========================================================
   // PAYMENT REFERENCES
@@ -138,19 +278,17 @@ export interface PaymentFilters {
 
   transaction_reference?: string;
 
-  provider_reference?: string;
-
-
   // ==========================================================
   // RELATED RECORDS
   // ==========================================================
 
   invoice_id?: string;
 
-  assessment_id?: string;
+  citizen_id?: string;
 
-  user_id?: string;
+  processed_by?: string;
 
+  verified_by?: string;
 
   // ==========================================================
   // PAYMENT CLASSIFICATION
@@ -158,10 +296,9 @@ export interface PaymentFilters {
 
   payment_method?: PaymentMethod;
 
-  payment_provider?: PaymentProvider;
+  payment_source?: PaymentSource;
 
   status?: PaymentStatus;
-
 
   // ==========================================================
   // MONEY
@@ -173,24 +310,17 @@ export interface PaymentFilters {
 
   amount_to?: number;
 
-
   // ==========================================================
-  // PAYMENT DATE FILTERS
+  // DATE FILTERS
   // ==========================================================
 
-  payment_date_from?: string;
+  created_from?: string;
 
-  payment_date_to?: string;
-
-
-  // ==========================================================
-  // VERIFICATION DATE FILTERS
-  // ==========================================================
+  created_to?: string;
 
   verified_from?: string;
 
   verified_to?: string;
-
 
   // ==========================================================
   // PAGINATION
@@ -200,7 +330,6 @@ export interface PaymentFilters {
 
   per_page?: number;
 
-
   // ==========================================================
   // SORTING
   // ==========================================================
@@ -208,54 +337,4 @@ export interface PaymentFilters {
   sort_by?: string;
 
   sort_direction?: "asc" | "desc";
-}
-
-
-export interface PaymentDetail extends Payment {
-  payment_number: string;
-  receipt_number: string | null;
-
-  invoice: {
-    id: string;
-    invoice_number: string;
-    status: string;
-  } | null;
-
-  assessment: {
-    id: string;
-    assessment_number: string;
-  } | null;
-
-  service: {
-    id: string;
-    name: string;
-    code: string | null;
-  } | null;
-
-  citizen: {
-    id: string;
-    name: string;
-    phone: string | null;
-    email: string | null;
-  } | null;
-
-  received_by: {
-    id: string;
-    name: string;
-    role: string | null;
-  } | null;
-
-  verified_by: {
-    id: string;
-    name: string;
-    role: string | null;
-  } | null;
-
-  posted_by: {
-    id: string;
-    name: string;
-    role: string | null;
-  } | null;
-
-  posted_at: string | null;
 }

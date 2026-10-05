@@ -5,15 +5,20 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import {
   ArrowLeft,
+  Building2,
   CalendarDays,
   CheckCircle2,
   Clock3,
+  CreditCard,
   FileText,
   Hash,
   Loader2,
+  Printer,
   ShieldCheck,
+  Smartphone,
   User,
   Wallet,
+  XCircle,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -35,9 +40,10 @@ import {
 } from "@/components/ui/dialog";
 
 import type { PaymentDetail } from "@/types/payment";
+
 import {
+  useCompleteCashPayment,
   usePayment,
-  usePostCashPayment,
 } from "@/hooks/payment/payment.hook";
 
 /*
@@ -53,7 +59,7 @@ function formatCurrency(
   return `${new Intl.NumberFormat("en-US", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  }).format(Number(amount))} ${currency}`;
+  }).format(Number(amount || 0))} ${currency}`;
 }
 
 function formatDateTime(value?: string | null) {
@@ -61,10 +67,16 @@ function formatDateTime(value?: string | null) {
     return "—";
   }
 
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
   return new Intl.DateTimeFormat("en-US", {
     dateStyle: "medium",
     timeStyle: "short",
-  }).format(new Date(value));
+  }).format(date);
 }
 
 function getStatusLabel(status: string) {
@@ -82,6 +94,96 @@ function getErrorMessage(error: unknown) {
   return "Something went wrong. Please try again.";
 }
 
+function getPaymentMethodLabel(
+  method: PaymentDetail["payment_method"],
+) {
+  switch (method) {
+    case "CASH":
+      return "Cash";
+
+    case "BANK_TRANSFER":
+      return "Bank transfer";
+
+    case "ONLINE":
+      return "Online payment";
+
+    default:
+      return method;
+  }
+}
+
+function getPaymentDate(
+  payment: PaymentDetail,
+): string | null {
+  switch (payment.payment_method) {
+    case "CASH":
+      return (
+        payment.cash_details?.cash_received_at ??
+        payment.created_at ??
+        null
+      );
+
+    case "BANK_TRANSFER":
+      return (
+        payment.bank_transfer_details?.transfer_date ??
+        payment.created_at ??
+        null
+      );
+
+    case "ONLINE":
+      return (
+        payment.online_details?.paid_at ??
+        payment.created_at ??
+        null
+      );
+
+    default:
+      return payment.created_at ?? null;
+  }
+}
+
+function getMethodDescription(
+  payment: PaymentDetail,
+) {
+  switch (payment.payment_method) {
+    case "CASH":
+      return "Municipal office collection";
+
+    case "BANK_TRANSFER":
+      return (
+        payment.bank_transfer_details?.bank_account
+          ?.bank_name ?? "Bank transfer"
+      );
+
+    case "ONLINE":
+      return (
+        payment.online_details?.payment_provider
+          ?.name ?? "Online provider"
+      );
+
+    default:
+      return getPaymentMethodLabel(
+        payment.payment_method,
+      );
+  }
+}
+
+/*
+|--------------------------------------------------------------------------
+| RECEIPT URLS
+|--------------------------------------------------------------------------
+*/
+
+function getReceiptPath(paymentId: string) {
+  return `/office/dashboard/payments/${encodeURIComponent(
+    paymentId,
+  )}/receipt`;
+}
+
+function getPrintReceiptPath(paymentId: string) {
+  return `${getReceiptPath(paymentId)}?print=1`;
+}
+
 /*
 |--------------------------------------------------------------------------
 | PAYMENT STATUS
@@ -94,55 +196,11 @@ function PaymentStatus({
   status: string;
 }) {
   switch (status) {
-    case "POSTED":
+    case "COMPLETED":
       return (
         <Badge className="gap-1 bg-emerald-600 text-white hover:bg-emerald-600">
           <CheckCircle2 className="h-3.5 w-3.5" />
-          Posted
-        </Badge>
-      );
-
-    case "RECORDED":
-      return (
-        <Badge
-          variant="secondary"
-          className="gap-1 border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-50"
-        >
-          <Clock3 className="h-3.5 w-3.5" />
-          Recorded
-        </Badge>
-      );
-
-    case "PENDING_VERIFICATION":
-      return (
-        <Badge
-          variant="secondary"
-          className="gap-1 border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-50"
-        >
-          <ShieldCheck className="h-3.5 w-3.5" />
-          Pending verification
-        </Badge>
-      );
-
-    case "VERIFIED":
-      return (
-        <Badge
-          variant="secondary"
-          className="gap-1 border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-50"
-        >
-          <ShieldCheck className="h-3.5 w-3.5" />
-          Verified
-        </Badge>
-      );
-
-    case "INITIATED":
-      return (
-        <Badge
-          variant="secondary"
-          className="gap-1"
-        >
-          <Clock3 className="h-3.5 w-3.5" />
-          Initiated
+          Completed
         </Badge>
       );
 
@@ -150,20 +208,62 @@ function PaymentStatus({
       return (
         <Badge
           variant="secondary"
-          className="gap-1"
+          className="gap-1 border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-50"
         >
           <Clock3 className="h-3.5 w-3.5" />
           Pending
         </Badge>
       );
 
+    case "PROCESSING":
+      return (
+        <Badge
+          variant="secondary"
+          className="gap-1 border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-50"
+        >
+          <Loader2 className="h-3.5 w-3.5" />
+          Processing
+        </Badge>
+      );
+
     case "FAILED":
-    case "REJECTED":
+      return (
+        <Badge
+          variant="destructive"
+          className="gap-1"
+        >
+          <XCircle className="h-3.5 w-3.5" />
+          Failed
+        </Badge>
+      );
+
     case "CANCELLED":
+      return (
+        <Badge
+          variant="secondary"
+          className="gap-1 border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-50"
+        >
+          Cancelled
+        </Badge>
+      );
+
     case "EXPIRED":
       return (
-        <Badge variant="destructive">
-          {getStatusLabel(status)}
+        <Badge
+          variant="secondary"
+          className="gap-1 border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-50"
+        >
+          Expired
+        </Badge>
+      );
+
+    case "REVERSED":
+      return (
+        <Badge
+          variant="secondary"
+          className="gap-1 border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-50"
+        >
+          Reversed
         </Badge>
       );
 
@@ -172,6 +272,92 @@ function PaymentStatus({
         <Badge variant="secondary">
           {getStatusLabel(status)}
         </Badge>
+      );
+  }
+}
+
+/*
+|--------------------------------------------------------------------------
+| PAYMENT STATUS DESCRIPTION
+|--------------------------------------------------------------------------
+*/
+
+function getStatusDescription(
+  payment: PaymentDetail,
+) {
+  switch (payment.status) {
+    case "PENDING":
+      if (payment.payment_method === "CASH") {
+        return "The cash payment has been recorded and is waiting for completion.";
+      }
+
+      if (
+        payment.payment_method ===
+        "BANK_TRANSFER"
+      ) {
+        return "The bank transfer is waiting for municipal verification.";
+      }
+
+      return "The payment is waiting for processing.";
+
+    case "PROCESSING":
+      return "The payment is currently being processed.";
+
+    case "COMPLETED":
+      return "Payment has been completed, applied to the invoice, and the official receipt has been generated.";
+
+    case "FAILED":
+      return (
+        payment.failure_reason ??
+        "The payment attempt failed."
+      );
+
+    case "CANCELLED":
+      return "The payment has been cancelled.";
+
+    case "EXPIRED":
+      return "The payment attempt has expired.";
+
+    case "REVERSED":
+      return "The payment was completed previously but has since been reversed.";
+
+    default:
+      return `Payment is ${getStatusLabel(
+        payment.status,
+      ).toLowerCase()}.`;
+  }
+}
+
+/*
+|--------------------------------------------------------------------------
+| PAYMENT ICON
+|--------------------------------------------------------------------------
+*/
+
+function PaymentMethodIcon({
+  method,
+}: {
+  method: PaymentDetail["payment_method"];
+}) {
+  switch (method) {
+    case "CASH":
+      return (
+        <Wallet className="h-4 w-4" />
+      );
+
+    case "BANK_TRANSFER":
+      return (
+        <Building2 className="h-4 w-4" />
+      );
+
+    case "ONLINE":
+      return (
+        <Smartphone className="h-4 w-4" />
+      );
+
+    default:
+      return (
+        <CreditCard className="h-4 w-4" />
       );
   }
 }
@@ -225,8 +411,8 @@ export default function PaymentDetailPage() {
       : "";
 
   const [
-    postDialogOpen,
-    setPostDialogOpen,
+    completeDialogOpen,
+    setCompleteDialogOpen,
   ] = useState(false);
 
   /*
@@ -248,15 +434,17 @@ export default function PaymentDetailPage() {
 
   /*
   |--------------------------------------------------------------------------
-  | POST CASH PAYMENT
+  | COMPLETE CASH PAYMENT
   |--------------------------------------------------------------------------
   */
 
-  const postCashPayment =
-    usePostCashPayment();
+  const completeCashPayment =
+    useCompleteCashPayment();
 
   const payment =
-    response?.data as PaymentDetail | undefined;
+    response?.data as
+      | PaymentDetail
+      | undefined;
 
   /*
   |--------------------------------------------------------------------------
@@ -267,7 +455,7 @@ export default function PaymentDetailPage() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background">
-        <div className="mx-auto w-full max-w-4xl px-4 py-6 sm:px-6 lg:px-8">
+        <div className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6 lg:px-8">
           <div className="flex min-h-[400px] items-center justify-center">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -288,8 +476,7 @@ export default function PaymentDetailPage() {
   if (isError || !payment) {
     return (
       <div className="min-h-screen bg-background">
-        <div className="mx-auto w-full max-w-4xl px-4 py-6 sm:px-6 lg:px-8">
-
+        <div className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6 lg:px-8">
           <Button
             variant="ghost"
             size="sm"
@@ -304,7 +491,6 @@ export default function PaymentDetailPage() {
 
           <Card>
             <CardContent className="flex min-h-48 flex-col items-center justify-center gap-4 text-center">
-
               <div>
                 <h2 className="text-base font-semibold">
                   Payment not found
@@ -316,7 +502,6 @@ export default function PaymentDetailPage() {
               </div>
 
               <div className="flex gap-2">
-
                 <Button
                   variant="outline"
                   onClick={() => refetch()}
@@ -329,12 +514,9 @@ export default function PaymentDetailPage() {
                     Back to payments
                   </Link>
                 </Button>
-
               </div>
-
             </CardContent>
           </Card>
-
         </div>
       </div>
     );
@@ -346,47 +528,68 @@ export default function PaymentDetailPage() {
   |--------------------------------------------------------------------------
   */
 
-  /**
-   * Cash workflow:
-   *
-   * RECORDED → POSTED
-   */
-  const canPostCash =
+  const canCompleteCash =
     payment.payment_method === "CASH" &&
-    payment.status === "RECORDED";
+    payment.status === "PENDING";
 
-  const isPosted =
-    payment.status === "POSTED";
+  const isCompleted =
+    payment.status === "COMPLETED";
 
-  const isRecorded =
-    payment.status === "RECORDED";
+  const isCompleting =
+    completeCashPayment.isPending;
 
-  const isPosting =
-    postCashPayment.isPending;
+  const paymentDate =
+    getPaymentDate(payment);
+
+  const receiptPath =
+    getReceiptPath(payment.id);
+
+  const printReceiptPath =
+    getPrintReceiptPath(payment.id);
 
   /*
   |--------------------------------------------------------------------------
-  | POST CASH PAYMENT
+  | METHOD-SPECIFIC INFORMATION
   |--------------------------------------------------------------------------
   */
 
-  async function handlePostPayment() {
-    if (!payment?.id) {
+  const bankDetails =
+    payment.payment_method ===
+    "BANK_TRANSFER"
+      ? payment.bank_transfer_details
+      : null;
+
+  const onlineDetails =
+    payment.payment_method === "ONLINE"
+      ? payment.online_details
+      : null;
+
+  const cashDetails =
+    payment.payment_method === "CASH"
+      ? payment.cash_details
+      : null;
+
+  /*
+  |--------------------------------------------------------------------------
+  | COMPLETE CASH PAYMENT
+  |--------------------------------------------------------------------------
+  */
+
+  async function handleCompletePayment() {
+    if (!payment.id) {
       return;
     }
 
     try {
-      await postCashPayment.mutateAsync(
+      await completeCashPayment.mutateAsync(
         payment.id,
       );
 
-      setPostDialogOpen(false);
+      setCompleteDialogOpen(false);
     } catch {
       /*
-       * Keep dialog open.
-       *
-       * The mutation error is displayed
-       * inside the dialog so the user can retry.
+       * Keep dialog open so the user can
+       * review the error and retry.
        */
     }
   }
@@ -399,15 +602,12 @@ export default function PaymentDetailPage() {
 
   return (
     <div className="min-h-screen bg-background">
-
-      <div className="mx-auto w-full max-w-4xl px-4 py-6 sm:px-6 lg:px-8">
-
+      <div className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6 lg:px-8">
         {/* ============================================================
             HEADER
         ============================================================ */}
 
         <div className="mb-6">
-
           <Button
             variant="ghost"
             size="sm"
@@ -421,11 +621,8 @@ export default function PaymentDetailPage() {
           </Button>
 
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-
             <div className="min-w-0">
-
               <div className="flex flex-wrap items-center gap-2">
-
                 <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
                   {payment.payment_number}
                 </h1>
@@ -433,30 +630,68 @@ export default function PaymentDetailPage() {
                 <PaymentStatus
                   status={payment.status}
                 />
-
               </div>
 
               <p className="mt-1 text-sm text-muted-foreground">
-                Payment for{" "}
                 {payment.service?.name ??
-                  "Revenue service"}
+                  "Revenue payment"}
               </p>
 
+              <p className="mt-1 text-xs text-muted-foreground">
+                Transaction{" "}
+                <span className="font-mono">
+                  {payment.transaction_reference}
+                </span>
+              </p>
             </div>
 
-            {canPostCash && (
-              <Button
-                type="button"
-                className="w-full sm:w-auto"
-                onClick={() =>
-                  setPostDialogOpen(true)
-                }
-              >
-                <ShieldCheck className="mr-2 h-4 w-4" />
-                Post Payment
-              </Button>
-            )}
+            <div className="flex flex-col gap-2 sm:flex-row">
+              {/* ======================================================
+                  COMPLETED PAYMENT RECEIPT ACTIONS
+              ====================================================== */}
 
+              {isCompleted && (
+                <>
+                  <Button
+                    variant="outline"
+                    asChild
+                  >
+                    <Link href={receiptPath}>
+                      <FileText className="mr-2 h-4 w-4" />
+                      View Receipt
+                    </Link>
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    asChild
+                  >
+                    <Link
+                      href={printReceiptPath}
+                    >
+                      <Printer className="mr-2 h-4 w-4" />
+                      Print Receipt
+                    </Link>
+                  </Button>
+                </>
+              )}
+
+              {/* ======================================================
+                  COMPLETE CASH PAYMENT
+              ====================================================== */}
+
+              {canCompleteCash && (
+                <Button
+                  type="button"
+                  onClick={() =>
+                    setCompleteDialogOpen(true)
+                  }
+                >
+                  <CheckCircle2 className="mr-2 h-4 w-4" />
+                  Complete Payment
+                </Button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -465,17 +700,13 @@ export default function PaymentDetailPage() {
         ============================================================ */}
 
         <Card className="mb-6 overflow-hidden">
-
           <CardContent className="p-0">
-
             <div className="flex flex-col gap-6 p-6 sm:flex-row sm:items-center sm:justify-between">
-
               {/* Amount */}
 
               <div>
-
                 <p className="text-sm text-muted-foreground">
-                  Amount received
+                  Payment amount
                 </p>
 
                 <p className="mt-1 text-3xl font-semibold tracking-tight sm:text-4xl">
@@ -486,25 +717,33 @@ export default function PaymentDetailPage() {
                 </p>
 
                 <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
+                  <PaymentMethodIcon
+                    method={
+                      payment.payment_method
+                    }
+                  />
 
-                  <Wallet className="h-4 w-4" />
+                  <span>
+                    {getPaymentMethodLabel(
+                      payment.payment_method,
+                    )}
+                  </span>
 
-                  {payment.payment_method ===
-                  "CASH"
-                    ? "Cash payment"
-                    : payment.payment_method ===
-                        "BANK_TRANSFER"
-                      ? "Bank transfer"
-                      : "Online payment"}
+                  <span className="text-muted-foreground/50">
+                    ·
+                  </span>
 
+                  <span>
+                    {getMethodDescription(
+                      payment,
+                    )}
+                  </span>
                 </div>
-
               </div>
 
               {/* Status */}
 
               <div className="sm:text-right">
-
                 <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   Status
                 </p>
@@ -513,26 +752,12 @@ export default function PaymentDetailPage() {
                   status={payment.status}
                 />
 
-                <p className="mt-2 max-w-xs text-xs leading-5 text-muted-foreground sm:ml-auto">
-
-                  {isPosted
-                    ? "Payment has been officially posted and recognized."
-                    : isRecorded
-                      ? "Cash has been recorded and is waiting to be posted."
-                      : payment.status ===
-                          "AWAITING_VERIFICATION"
-                        ? "Payment is waiting for municipal verification."
-                        : payment.status ===
-                            "VERIFIED"
-                          ? "Payment has been verified and is waiting to be posted."
-                          : `Payment is ${getStatusLabel(
-                              payment.status,
-                            ).toLowerCase()}.`}
-
+                <p className="mt-2 max-w-sm text-xs leading-5 text-muted-foreground sm:ml-auto">
+                  {getStatusDescription(
+                    payment,
+                  )}
                 </p>
-
               </div>
-
             </div>
 
             <Separator />
@@ -540,18 +765,18 @@ export default function PaymentDetailPage() {
             {/* Quick facts */}
 
             <div className="grid grid-cols-1 divide-y sm:grid-cols-3 sm:divide-x sm:divide-y-0">
-
               {/* Invoice */}
 
               <div className="p-4 sm:px-6">
-
                 <p className="text-xs text-muted-foreground">
                   Invoice
                 </p>
 
                 {payment.invoice?.id ? (
                   <Link
-                    href={`/office/dashboard/invoices/${payment.invoice.id}`}
+                    href={`/office/dashboard/invoices/${encodeURIComponent(
+                      payment.invoice.id,
+                    )}`}
                     className="mt-1 block text-sm font-medium text-primary hover:underline"
                   >
                     {
@@ -564,42 +789,47 @@ export default function PaymentDetailPage() {
                     —
                   </p>
                 )}
-
               </div>
 
               {/* Payment date */}
 
               <div className="p-4 sm:px-6">
-
                 <p className="text-xs text-muted-foreground">
                   Payment date
                 </p>
 
                 <p className="mt-1 text-sm font-medium">
                   {formatDateTime(
-                    payment.payment_date,
+                    paymentDate,
                   )}
                 </p>
-
               </div>
 
               {/* Receipt */}
 
               <div className="p-4 sm:px-6">
-
                 <p className="text-xs text-muted-foreground">
                   Receipt
                 </p>
 
-                <p className="mt-1 text-sm font-medium">
-                  {payment.receipt_number ??
-                    "Not generated"}
-                </p>
+                {isCompleted ? (
+                  <Link
+                    href={receiptPath}
+                    className="mt-1 inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+                  >
+                    {payment.receipt
+                      ?.receipt_number ??
+                      "View receipt"}
 
+                    <FileText className="h-3.5 w-3.5" />
+                  </Link>
+                ) : (
+                  <p className="mt-1 text-sm font-medium text-muted-foreground">
+                    Not available
+                  </p>
+                )}
               </div>
-
             </div>
-
           </CardContent>
         </Card>
 
@@ -608,25 +838,24 @@ export default function PaymentDetailPage() {
         ============================================================ */}
 
         <div className="grid gap-6 md:grid-cols-2">
-
-          {/* Payment information */}
+          {/* ==========================================================
+              PAYMENT INFORMATION
+          ========================================================== */}
 
           <Card>
-
             <CardHeader className="pb-3">
-
               <CardTitle className="text-base">
                 Payment information
               </CardTitle>
-
             </CardHeader>
 
             <CardContent>
-
               <DetailRow
                 label="Payment number"
                 value={
-                  payment.payment_number
+                  <span className="font-mono text-xs">
+                    {payment.payment_number}
+                  </span>
                 }
                 icon={
                   <Hash className="h-4 w-4" />
@@ -637,26 +866,31 @@ export default function PaymentDetailPage() {
 
               <DetailRow
                 label="Method"
-                value={
-                  payment.payment_method ===
-                  "BANK_TRANSFER"
-                    ? "Bank transfer"
-                    : payment.payment_method ===
-                        "ONLINE"
-                      ? "Online"
-                      : "Cash"
-                }
+                value={getPaymentMethodLabel(
+                  payment.payment_method,
+                )}
                 icon={
-                  <Wallet className="h-4 w-4" />
+                  <PaymentMethodIcon
+                    method={
+                      payment.payment_method
+                    }
+                  />
                 }
               />
 
               <Separator />
 
               <DetailRow
-                label="Provider"
+                label="Source"
                 value={
-                  payment.payment_provider
+                  payment.payment_source
+                    ?.replaceAll("_", " ")
+                    .toLowerCase()
+                    .replace(
+                      /\b\w/g,
+                      (char) =>
+                        char.toUpperCase(),
+                    ) ?? "—"
                 }
               />
 
@@ -665,10 +899,11 @@ export default function PaymentDetailPage() {
               <DetailRow
                 label="Payment date"
                 value={formatDateTime(
-                  payment.payment_date,
+                  paymentDate,
                 )}
                 icon={
-                  <CalendarDays className="h-4 w-4" />
+                  <CalendarDays className="h-4 w-4"
+                />
                 }
               />
 
@@ -677,7 +912,7 @@ export default function PaymentDetailPage() {
               <DetailRow
                 label="Transaction reference"
                 value={
-                  <span className="max-w-48 break-all font-mono text-xs">
+                  <span className="max-w-52 break-all font-mono text-xs">
                     {payment.transaction_reference ||
                       "—"}
                   </span>
@@ -687,40 +922,170 @@ export default function PaymentDetailPage() {
                 }
               />
 
-              {payment.provider_reference && (
+              {/* =====================================================
+                  BANK TRANSFER DETAILS
+              ===================================================== */}
+
+              {bankDetails && (
                 <>
                   <Separator />
 
                   <DetailRow
-                    label="Provider reference"
+                    label="Bank"
                     value={
-                      <span className="max-w-48 break-all font-mono text-xs">
+                      bankDetails
+                        .bank_account
+                        ?.bank_name ??
+                      "—"
+                    }
+                    icon={
+                      <Building2 className="h-4 w-4" />
+                    }
+                  />
+
+                  <Separator />
+
+                  <DetailRow
+                    label="Bank account"
+                    value={
+                      bankDetails
+                        .bank_account
+                        ?.account_name ??
+                      "—"
+                    }
+                  />
+
+                  {bankDetails
+                    .transfer_reference && (
+                    <>
+                      <Separator />
+
+                      <DetailRow
+                        label="Transfer reference"
+                        value={
+                          <span className="max-w-52 break-all font-mono text-xs">
+                            {
+                              bankDetails.transfer_reference
+                            }
+                          </span>
+                        }
+                      />
+                    </>
+                  )}
+
+                  {bankDetails
+                    .sender_name && (
+                    <>
+                      <Separator />
+
+                      <DetailRow
+                        label="Sender"
+                        value={
+                          bankDetails.sender_name
+                        }
+                      />
+                    </>
+                  )}
+                </>
+              )}
+
+              {/* =====================================================
+                  ONLINE PAYMENT DETAILS
+              ===================================================== */}
+
+              {onlineDetails && (
+                <>
+                  <Separator />
+
+                  <DetailRow
+                    label="Provider"
+                    value={
+                      onlineDetails
+                        .payment_provider
+                        ?.name ??
+                      "—"
+                    }
+                    icon={
+                      <Smartphone className="h-4 w-4" />
+                    }
+                  />
+
+                  {onlineDetails
+                    .checkout_reference && (
+                    <>
+                      <Separator />
+
+                      <DetailRow
+                        label="Checkout reference"
+                        value={
+                          <span className="max-w-52 break-all font-mono text-xs">
+                            {
+                              onlineDetails.checkout_reference
+                            }
+                          </span>
+                        }
+                      />
+                    </>
+                  )}
+
+                  {onlineDetails
+                    .provider_transaction_id && (
+                    <>
+                      <Separator />
+
+                      <DetailRow
+                        label="Provider transaction"
+                        value={
+                          <span className="max-w-52 break-all font-mono text-xs">
+                            {
+                              onlineDetails.provider_transaction_id
+                            }
+                          </span>
+                        }
+                      />
+                    </>
+                  )}
+                </>
+              )}
+
+              {/* =====================================================
+                  FAILURE REASON
+              ===================================================== */}
+
+              {payment.failure_reason && (
+                <>
+                  <Separator />
+
+                  <DetailRow
+                    label="Failure reason"
+                    value={
+                      <span className="max-w-56 text-red-600">
                         {
-                          payment.provider_reference
+                          payment.failure_reason
                         }
                       </span>
+                    }
+                    icon={
+                      <XCircle className="h-4 w-4 text-red-600" />
                     }
                   />
                 </>
               )}
-
             </CardContent>
           </Card>
 
-          {/* Taxpayer */}
+          {/* ==========================================================
+              TAXPAYER
+          ========================================================== */}
 
           <Card>
-
             <CardHeader className="pb-3">
-
               <CardTitle className="text-base">
                 Taxpayer
               </CardTitle>
-
             </CardHeader>
 
             <CardContent>
-
               <DetailRow
                 label="Name"
                 value={
@@ -770,50 +1135,75 @@ export default function PaymentDetailPage() {
                 }
               />
 
+              <Separator />
+
+              <DetailRow
+                label="Service code"
+                value={
+                  payment.service?.code ??
+                  "—"
+                }
+              />
+
+              {payment.assessment && (
+                <>
+                  <Separator />
+
+                  <DetailRow
+                    label="Assessment"
+                    value={
+                      <Link
+                        href={`/office/dashboard/assessments/${encodeURIComponent(
+                          payment.assessment.id,
+                        )}`}
+                        className="text-primary hover:underline"
+                      >
+                        {
+                          payment.assessment
+                            .assessment_number
+                        }
+                      </Link>
+                    }
+                  />
+                </>
+              )}
             </CardContent>
           </Card>
-
         </div>
 
         {/* ============================================================
-            COLLECTION
+            COLLECTION & VERIFICATION
         ============================================================ */}
 
         <Card className="mt-6">
-
           <CardHeader className="pb-3">
-
             <CardTitle className="text-base">
-              Collection
+              Processing & verification
             </CardTitle>
-
           </CardHeader>
 
           <CardContent>
-
             <DetailRow
-              label="Collected by"
+              label="Processed by"
               value={
-                payment.received_by ? (
+                payment.processed_by ? (
                   <div>
-
                     <p>
                       {
-                        payment.received_by
+                        payment.processed_by
                           .name
                       }
                     </p>
 
-                    {payment.received_by
+                    {payment.processed_by
                       .role && (
                       <p className="text-xs font-normal text-muted-foreground">
                         {
-                          payment.received_by
+                          payment.processed_by
                             .role
                         }
                       </p>
                     )}
-
                   </div>
                 ) : (
                   "—"
@@ -824,12 +1214,47 @@ export default function PaymentDetailPage() {
               }
             />
 
+            {/* Cash-specific collector */}
+
+            {cashDetails?.received_by && (
+              <>
+                <Separator />
+
+                <DetailRow
+                  label="Cash received by"
+                  value={
+                    <div>
+                      <p>
+                        {
+                          cashDetails
+                            .received_by.name
+                        }
+                      </p>
+
+                      {cashDetails
+                        .received_by.role && (
+                        <p className="text-xs font-normal text-muted-foreground">
+                          {
+                            cashDetails
+                              .received_by.role
+                          }
+                        </p>
+                      )}
+                    </div>
+                  }
+                  icon={
+                    <Wallet className="h-4 w-4" />
+                  }
+                />
+              </>
+            )}
+
             <Separator />
 
             <DetailRow
-              label="Collected at"
+              label="Processed at"
               value={formatDateTime(
-                payment.payment_date,
+                payment.created_at,
               )}
               icon={
                 <CalendarDays className="h-4 w-4" />
@@ -870,34 +1295,131 @@ export default function PaymentDetailPage() {
               }
             />
 
-            {payment.posted_by && (
+            {/* ========================================================
+                CASH RECEIVED TIME
+            ======================================================== */}
+
+            {cashDetails
+              ?.cash_received_at && (
               <>
                 <Separator />
 
                 <DetailRow
-                  label="Posted by"
-                  value={
-                    payment.posted_by.name
+                  label="Cash received at"
+                  value={formatDateTime(
+                    cashDetails.cash_received_at,
+                  )}
+                  icon={
+                    <CalendarDays className="h-4 w-4" />
                   }
                 />
               </>
             )}
 
-            {payment.posted_at && (
+            {/* ========================================================
+                BANK TRANSFER DATE
+            ======================================================== */}
+
+            {bankDetails
+              ?.transfer_date && (
               <>
                 <Separator />
 
                 <DetailRow
-                  label="Posted at"
+                  label="Transfer date"
                   value={formatDateTime(
-                    payment.posted_at,
+                    bankDetails.transfer_date,
                   )}
+                  icon={
+                    <CalendarDays className="h-4 w-4" />
+                  }
                 />
               </>
             )}
 
+            {/* ========================================================
+                ONLINE PAID TIME
+            ======================================================== */}
+
+            {onlineDetails?.paid_at && (
+              <>
+                <Separator />
+
+                <DetailRow
+                  label="Provider paid at"
+                  value={formatDateTime(
+                    onlineDetails.paid_at,
+                  )}
+                  icon={
+                    <CalendarDays className="h-4 w-4"
+                  />
+                  }
+                />
+              </>
+            )}
           </CardContent>
         </Card>
+
+        {/* ============================================================
+            RECEIPT
+        ============================================================ */}
+
+        {isCompleted && (
+          <Card className="mt-6">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">
+                Official receipt
+              </CardTitle>
+            </CardHeader>
+
+            <CardContent>
+              <div className="flex flex-col gap-4 rounded-lg border bg-muted/30 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-background">
+                    <FileText className="h-5 w-5 text-muted-foreground" />
+                  </div>
+
+                  <div>
+                    <p className="text-sm font-medium">
+                      {payment.receipt
+                        ?.receipt_number ??
+                        "Official receipt"}
+                    </p>
+
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Official receipt generated for
+                      this completed payment.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Button
+                    variant="outline"
+                    asChild
+                  >
+                    <Link href={receiptPath}>
+                      <FileText className="mr-2 h-4 w-4" />
+                      View Receipt
+                    </Link>
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    asChild
+                  >
+                    <Link
+                      href={printReceiptPath}
+                    >
+                      <Printer className="mr-2 h-4 w-4" />
+                      Print Receipt
+                    </Link>
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* ============================================================
             NOTES
@@ -905,25 +1427,19 @@ export default function PaymentDetailPage() {
 
         {payment.metadata?.notes != null && (
           <Card className="mt-6">
-
             <CardHeader className="pb-3">
-
               <CardTitle className="text-base">
                 Notes
               </CardTitle>
-
             </CardHeader>
 
             <CardContent>
-
               <p className="text-sm leading-6 text-muted-foreground">
                 {String(
                   payment.metadata.notes,
                 )}
               </p>
-
             </CardContent>
-
           </Card>
         )}
 
@@ -932,69 +1448,59 @@ export default function PaymentDetailPage() {
         ============================================================ */}
 
         <div className="mt-6 border-t pt-5">
-
           <div className="flex flex-col gap-2 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-
             <div className="flex items-center gap-2">
-
               <Hash className="h-3.5 w-3.5" />
 
               <span className="font-mono">
                 {payment.id}
               </span>
-
             </div>
 
             <div>
+              Created{" "}
+              {formatDateTime(
+                payment.created_at,
+              )}
+              {" · "}
               Updated{" "}
               {formatDateTime(
                 payment.updated_at,
               )}
             </div>
-
           </div>
-
         </div>
-
       </div>
 
       {/* ==============================================================
-          POST CASH PAYMENT DIALOG
+          COMPLETE CASH PAYMENT DIALOG
       ============================================================== */}
 
       <Dialog
-        open={postDialogOpen}
+        open={completeDialogOpen}
         onOpenChange={(open) => {
-          if (!isPosting) {
-            setPostDialogOpen(open);
+          if (!isCompleting) {
+            setCompleteDialogOpen(open);
           }
         }}
       >
-
         <DialogContent className="sm:max-w-md">
-
           <DialogHeader>
-
             <DialogTitle>
-              Post cash payment
+              Complete cash payment
             </DialogTitle>
 
             <DialogDescription>
-              Confirm that the physical cash has
-              been received and the recorded
-              amount matches this payment record.
+              Confirm that the cash has been received
+              and the recorded amount is correct.
             </DialogDescription>
-
           </DialogHeader>
 
           <div className="space-y-4 py-2">
-
             {/* Payment summary */}
 
             <div className="rounded-lg border bg-muted/30 p-4">
-
               <div className="flex items-center justify-between gap-4">
-
                 <span className="text-sm text-muted-foreground">
                   Payment
                 </span>
@@ -1002,11 +1508,9 @@ export default function PaymentDetailPage() {
                 <span className="text-sm font-medium">
                   {payment.payment_number}
                 </span>
-
               </div>
 
               <div className="mt-3 flex items-center justify-between gap-4">
-
                 <span className="text-sm text-muted-foreground">
                   Amount
                 </span>
@@ -1017,25 +1521,20 @@ export default function PaymentDetailPage() {
                     payment.currency,
                   )}
                 </span>
-
               </div>
 
               <div className="mt-3 flex items-center justify-between gap-4">
-
                 <span className="text-sm text-muted-foreground">
                   Invoice
                 </span>
 
                 <span className="text-sm font-medium">
                   {payment.invoice
-                    ?.invoice_number ??
-                    "—"}
+                    ?.invoice_number ?? "—"}
                 </span>
-
               </div>
 
               <div className="mt-3 flex items-center justify-between gap-4">
-
                 <span className="text-sm text-muted-foreground">
                   Taxpayer
                 </span>
@@ -1045,70 +1544,59 @@ export default function PaymentDetailPage() {
                     payment.payer_name ||
                     "—"}
                 </span>
-
               </div>
 
-              <div className="mt-3 flex items-center justify-between gap-4">
+              {cashDetails?.received_by && (
+                <div className="mt-3 flex items-center justify-between gap-4">
+                  <span className="text-sm text-muted-foreground">
+                    Cash received by
+                  </span>
 
-                <span className="text-sm text-muted-foreground">
-                  Collected by
-                </span>
-
-                <span className="text-right text-sm font-medium">
-                  {payment.received_by
-                    ?.name ?? "—"}
-                </span>
-
-              </div>
-
+                  <span className="text-right text-sm font-medium">
+                    {
+                      cashDetails
+                        .received_by.name
+                    }
+                  </span>
+                </div>
+              )}
             </div>
 
-            {/* Posting warning */}
+            {/* Completion warning */}
 
             <div className="flex gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-
               <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
 
               <p className="leading-5">
-
-                Posting will change this payment
-                from{" "}
+                Completing this payment will mark
+                it as{" "}
                 <span className="font-semibold">
-                  Recorded
-                </span>{" "}
-                to{" "}
-                <span className="font-semibold">
-                  Posted
+                  Completed
                 </span>
-                . The payment will then be
-                officially recognized by the
-                municipality and applied to the
-                invoice balance.
-
+                , apply the amount to the invoice
+                balance, and generate the official
+                receipt.
               </p>
-
             </div>
 
             {/* Mutation error */}
 
-            {postCashPayment.isError && (
+            {completeCashPayment.isError && (
               <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-3 text-sm text-destructive">
                 {getErrorMessage(
-                  postCashPayment.error,
+                  completeCashPayment.error,
                 )}
               </div>
             )}
-
           </div>
 
           <DialogFooter className="gap-2 sm:gap-0">
-
             <Button
               type="button"
               variant="outline"
-              disabled={isPosting}
+              disabled={isCompleting}
               onClick={() =>
-                setPostDialogOpen(false)
+                setCompleteDialogOpen(false)
               }
             >
               Cancel
@@ -1116,30 +1604,26 @@ export default function PaymentDetailPage() {
 
             <Button
               type="button"
-              disabled={isPosting}
-              onClick={handlePostPayment}
+              disabled={isCompleting}
+              onClick={
+                handleCompletePayment
+              }
             >
-
-              {isPosting ? (
+              {isCompleting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Posting...
+                  Completing...
                 </>
               ) : (
                 <>
                   <CheckCircle2 className="mr-2 h-4 w-4" />
-                  Post Payment
+                  Complete Payment
                 </>
               )}
-
             </Button>
-
           </DialogFooter>
-
         </DialogContent>
-
       </Dialog>
-
     </div>
   );
 }

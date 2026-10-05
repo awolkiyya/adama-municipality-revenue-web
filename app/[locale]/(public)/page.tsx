@@ -881,8 +881,7 @@ export default function LandingPage() {
   const [portal, setPortal] = useState<Portal>("citizen");
   const [activeStep, setActiveStep] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [receiptQuery, setReceiptQuery] = useState("");
-  const [verified, setVerified] = useState(false);
+
 
   const isCitizen = portal === "citizen";
 
@@ -937,6 +936,84 @@ export default function LandingPage() {
     return () => window.clearInterval(timer);
   }, [flow.length]);
 
+
+
+  type PublicReceipt = {
+    verified: boolean;
+    receipt: {
+      receipt_number: string;
+      issued_at: string | null;
+      status: string;
+    };
+    payment: {
+      payment_number: string;
+      payment_date: string | null;
+      payment_method: string;
+      amount: string;
+      currency: string;
+    };
+    invoice: {
+      invoice_number: string;
+    } | null;
+    municipality: {
+      name: string;
+      department: string;
+    };
+  };
+  
+  const [receiptQuery, setReceiptQuery] = useState("");
+  const [receiptLoading, setReceiptLoading] = useState(false);
+  const [receiptResult, setReceiptResult] =
+    useState<PublicReceipt | null>(null);
+  const [receiptError, setReceiptError] = useState<string | null>(null);
+
+
+
+  const verifyReceipt = async () => {
+    const receiptNumber = receiptQuery.trim();
+  
+    if (!receiptNumber) {
+      setReceiptError("Enter a receipt number.");
+      setReceiptResult(null);
+      return;
+    }
+  
+    setReceiptLoading(true);
+    setReceiptError(null);
+    setReceiptResult(null);
+  
+    try {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/public/receipts/verify?receipt_number=${encodeURIComponent(
+          receiptNumber,
+        )}`,
+        {
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+          },
+        },
+      );
+  
+      const data = await response.json();
+  
+      if (!response.ok || !data.verified) {
+        throw new Error(
+          data.message ?? "Receipt could not be verified.",
+        );
+      }
+  
+      setReceiptResult(data);
+    } catch (error) {
+      setReceiptError(
+        error instanceof Error
+          ? error.message
+          : "Unable to verify receipt.",
+      );
+    } finally {
+      setReceiptLoading(false);
+    }
+  };
   /* =======================================================
      RESET FLOW WHEN PORTAL CHANGES
   ======================================================= */
@@ -944,7 +1021,7 @@ export default function LandingPage() {
   useEffect(() => {
     setActiveStep(0);
     setMenuOpen(false);
-    setVerified(false);
+    // setVerified(false);
     setReceiptQuery("");
   }, [portal]);
 
@@ -2059,67 +2136,265 @@ export default function LandingPage() {
       </section>
 
       {/* =====================================================
-          RECEIPT VERIFICATION
-          CITIZEN ONLY
-      ===================================================== */}
+    RECEIPT VERIFICATION
+===================================================== */}
 
-      {isCitizen && (
-        <section className="bg-[#C89116]/5 px-4 py-12 sm:px-6">
-          <div className="mx-auto flex max-w-6xl flex-col gap-6 md:flex-row md:items-center md:justify-between">
-            <div>
-              <div className="flex items-center gap-2 text-[#8A6410]">
-                <Search className="h-4 w-4" />
+{isCitizen && (
+  <section
+    id="receipt-verification"
+    className="bg-[#C89116]/5 px-4 py-12 sm:px-6"
+  >
+    <div className="mx-auto max-w-6xl">
+      <div className="grid gap-8 md:grid-cols-[0.85fr_1.15fr] md:items-center">
 
-                <span className="font-mono text-[9px] font-bold uppercase tracking-widest">
-                  Receipt verification
-                </span>
-              </div>
+        {/* =================================================
+            INFORMATION
+        ================================================= */}
 
-              <h2 className="mt-2 font-serif text-2xl font-bold">
-                Verify a receipt.
-              </h2>
+        <div>
+          <div className="flex items-center gap-2 text-[#8A6410]">
+            <Search className="h-4 w-4" />
 
-              <p className="mt-1 text-xs text-black/45">
-                Check whether a municipal receipt exists
-                in the system.
-              </p>
-            </div>
+            <span className="font-mono text-[9px] font-bold uppercase tracking-widest">
+              Receipt verification
+            </span>
+          </div>
 
-            <div className="w-full max-w-md">
-              <div className="flex rounded-xl border border-black/10 bg-white p-1">
+          <h2 className="mt-2 font-serif text-2xl font-bold">
+            Verify a municipal receipt.
+          </h2>
+
+          <p className="mt-2 max-w-md text-xs leading-5 text-black/50">
+            Enter the receipt number to check whether the
+            payment receipt was officially issued by the
+            Adama City Revenue Office.
+          </p>
+
+          <div className="mt-4 flex flex-wrap gap-3 text-[9px] text-black/40">
+            <span className="flex items-center gap-1.5">
+              <ShieldCheck className="h-3 w-3 text-[#1F5C43]" />
+              Official record
+            </span>
+
+            <span className="flex items-center gap-1.5">
+              <CheckCircle2 className="h-3 w-3 text-[#1F5C43]" />
+              Payment confirmed
+            </span>
+
+            <span className="flex items-center gap-1.5">
+              <Receipt className="h-3 w-3 text-[#1F5C43]" />
+              Digital receipt
+            </span>
+          </div>
+        </div>
+
+        {/* =================================================
+            SEARCH + RESULT
+        ================================================= */}
+
+        <div className="w-full">
+          {/* SEARCH */}
+
+          <div className="rounded-2xl border border-black/10 bg-white p-2 shadow-sm">
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <div className="flex min-w-0 flex-1 items-center">
+                <Search className="ml-3 h-4 w-4 shrink-0 text-black/25" />
+
                 <input
                   value={receiptQuery}
                   onChange={(event) => {
                     setReceiptQuery(event.target.value);
-                    setVerified(false);
+                    setReceiptResult(null);
+                    setReceiptError(null);
                   }}
-                  placeholder="ADR-2026-081934"
-                  className="min-w-0 flex-1 bg-transparent px-3 text-xs outline-none"
-                />
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (receiptQuery.trim()) {
-                      setVerified(true);
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      verifyReceipt();
                     }
                   }}
-                  className="rounded-lg bg-[#0F1B2E] px-4 py-2.5 text-xs font-semibold text-white"
-                >
-                  Verify
-                </button>
+                  placeholder="Enter receipt number"
+                  autoComplete="off"
+                  spellCheck={false}
+                  className="min-w-0 flex-1 bg-transparent px-3 py-3 text-xs outline-none placeholder:text-black/25"
+                />
               </div>
 
-              {verified && (
-                <div className="fade-up mt-2 flex items-center gap-2 text-[10px] font-semibold text-[#1F5C43]">
-                  <CheckCircle2 className="h-3.5 w-3.5" />
-                  Receipt submitted for verification.
-                </div>
-              )}
+              <button
+                type="button"
+                onClick={verifyReceipt}
+                disabled={receiptLoading}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#0F1B2E] px-5 py-3 text-xs font-semibold text-white transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {receiptLoading ? (
+                  <>
+                    <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                    Verifying...
+                  </>
+                ) : (
+                  <>
+                    Verify receipt
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </>
+                )}
+              </button>
             </div>
           </div>
-        </section>
-      )}
+
+          {/* =================================================
+              ERROR
+          ================================================= */}
+
+          {receiptError && (
+            <div className="fade-up mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+              <div className="flex items-start gap-2.5">
+                <X className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
+
+                <div>
+                  <p className="text-[11px] font-semibold text-red-800">
+                    Receipt not verified
+                  </p>
+
+                  <p className="mt-0.5 text-[10px] leading-4 text-red-700/70">
+                    {receiptError}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* =================================================
+              VERIFIED RESULT
+          ================================================= */}
+
+          {receiptResult && (
+            <div className="fade-up mt-3 overflow-hidden rounded-2xl border border-[#1F5C43]/15 bg-white shadow-sm">
+
+              {/* RESULT HEADER */}
+
+              <div className="flex items-center justify-between gap-3 border-b border-black/5 bg-[#1F5C43]/5 px-4 py-3">
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#1F5C43] text-white">
+                    <CheckCircle2 className="h-4 w-4" />
+                  </div>
+
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-bold text-[#1F5C43]">
+                      Receipt verified
+                    </p>
+
+                    <p className="truncate font-mono text-[9px] text-black/40">
+                      {receiptResult.receipt.receipt_number}
+                    </p>
+                  </div>
+                </div>
+
+                <span className="shrink-0 rounded-full bg-[#1F5C43]/10 px-2.5 py-1 text-[8px] font-bold uppercase tracking-wide text-[#1F5C43]">
+                  Official
+                </span>
+              </div>
+
+              {/* RESULT BODY */}
+
+              <div className="p-4">
+                <div className="grid gap-3 sm:grid-cols-2">
+
+                  {/* PAYMENT NUMBER */}
+
+                  <div className="rounded-xl bg-[#F7F5EE] p-3">
+                    <p className="text-[8px] uppercase tracking-wide text-black/30">
+                      Payment number
+                    </p>
+
+                    <p className="mt-1 truncate font-mono text-[10px] font-semibold text-[#0F1B2E]">
+                      {receiptResult.payment.payment_number}
+                    </p>
+                  </div>
+
+                  {/* AMOUNT */}
+
+                  <div className="rounded-xl bg-[#F7F5EE] p-3">
+                    <p className="text-[8px] uppercase tracking-wide text-black/30">
+                      Amount paid
+                    </p>
+
+                    <p className="mt-1 font-mono text-sm font-bold text-[#0F1B2E]">
+                      {receiptResult.payment.currency}{" "}
+                      {receiptResult.payment.amount}
+                    </p>
+                  </div>
+
+                  {/* PAYMENT METHOD */}
+
+                  <div className="rounded-xl bg-[#F7F5EE] p-3">
+                    <p className="text-[8px] uppercase tracking-wide text-black/30">
+                      Payment method
+                    </p>
+
+                    <p className="mt-1 text-[10px] font-semibold text-[#0F1B2E]">
+                      {receiptResult.payment.payment_method}
+                    </p>
+                  </div>
+
+                  {/* PAYMENT DATE */}
+
+                  <div className="rounded-xl bg-[#F7F5EE] p-3">
+                    <p className="text-[8px] uppercase tracking-wide text-black/30">
+                      Payment date
+                    </p>
+
+                    <p className="mt-1 text-[10px] font-semibold text-[#0F1B2E]">
+                      {receiptResult.payment.payment_date
+                        ? new Intl.DateTimeFormat("en-US", {
+                            year: "numeric",
+                            month: "short",
+                            day: "numeric",
+                          }).format(
+                            new Date(
+                              receiptResult.payment.payment_date,
+                            ),
+                          )
+                        : "—"}
+                    </p>
+                  </div>
+                </div>
+
+                {/* MUNICIPAL AUTHORITY */}
+
+                <div className="mt-3 flex items-center gap-2.5 rounded-xl border border-black/5 bg-white px-3 py-2.5">
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#0F1B2E] text-[#E8C468]">
+                    <Stamp className="h-3.5 w-3.5" />
+                  </div>
+
+                  <div className="min-w-0">
+                    <p className="text-[9px] font-bold text-[#0F1B2E]">
+                      {receiptResult.municipality.name}
+                    </p>
+
+                    <p className="text-[8px] text-black/40">
+                      {receiptResult.municipality.department}
+                    </p>
+                  </div>
+
+                  <div className="ml-auto flex items-center gap-1 text-[8px] font-semibold text-[#1F5C43]">
+                    <ShieldCheck className="h-3 w-3" />
+                    Verified
+                  </div>
+                </div>
+
+                {/* FOOTNOTE */}
+
+                <p className="mt-3 text-center text-[8px] leading-4 text-black/30">
+                  This verification confirms that the receipt
+                  exists as an officially issued payment record.
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  </section>
+)}
 
       {/* =====================================================
           CITIZEN APP CTA

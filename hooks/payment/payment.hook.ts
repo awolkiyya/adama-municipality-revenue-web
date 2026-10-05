@@ -11,13 +11,26 @@ import type {
   ListResponse,
 } from "@/types/api";
 
-import { CreateBankTransferPaymentRequest, CreateCashPaymentRequest, InitializeOnlinePaymentRequest, InitializeOnlinePaymentResponse, RejectBankTransferRequest, VerifyBankTransferRequest, VerifyOnlinePaymentResponse } from "@/types/payment/payment-requests";
-
+import type {
+  CreateBankTransferPaymentRequest,
+  CreateCashPaymentRequest,
+  InitializeOnlinePaymentRequest,
+  InitializeOnlinePaymentResponse,
+  RejectBankTransferRequest,
+  VerifyBankTransferRequest,
+  VerifyOnlinePaymentResponse,
+} from "@/types/payment/payment-requests";
 
 import {
   paymentService,
 } from "@/services/payment/payment.service";
-import { Payment, PaymentDetail, PaymentFilters } from "@/types/payment";
+
+import type {
+  Payment,
+  PaymentDetail,
+  PaymentFilters,
+  PaymentReceipt,
+} from "@/types/payment";
 
 
 // =====================================================
@@ -25,79 +38,119 @@ import { Payment, PaymentDetail, PaymentFilters } from "@/types/payment";
 // =====================================================
 
 export const paymentKeys = {
+  all: ["payments"] as const,
 
-  all: [
-    "payments",
-  ] as const,
+  // ---------------------------------------------------
+  // Lists
+  // ---------------------------------------------------
 
-
-  lists: () => [
-    ...paymentKeys.all,
-    "list",
-  ] as const,
-
+  lists: () =>
+    [
+      ...paymentKeys.all,
+      "list",
+    ] as const,
 
   list: (
     params?: PaymentFilters,
-  ) => [
-    ...paymentKeys.lists(),
-    params,
-  ] as const,
+  ) =>
+    [
+      ...paymentKeys.lists(),
+      params,
+    ] as const,
 
 
-  details: () => [
-    ...paymentKeys.all,
-    "detail",
-  ] as const,
+  // ---------------------------------------------------
+  // Details
+  // ---------------------------------------------------
 
+  details: () =>
+    [
+      ...paymentKeys.all,
+      "detail",
+    ] as const,
 
   detail: (
     id: string,
-  ) => [
-    ...paymentKeys.details(),
-    id,
-  ] as const,
+  ) =>
+    [
+      ...paymentKeys.details(),
+      id,
+    ] as const,
 
+
+  // ---------------------------------------------------
+  // Receipts
+  // ---------------------------------------------------
+
+  receipts: () =>
+    [
+      ...paymentKeys.all,
+      "receipt",
+    ] as const,
+
+  receipt: (
+    paymentId: string,
+  ) =>
+    [
+      ...paymentKeys.receipts(),
+      paymentId,
+    ] as const,
+
+
+  // ---------------------------------------------------
+  // Online payment status
+  // ---------------------------------------------------
+
+  onlineStatuses: () =>
+    [
+      ...paymentKeys.all,
+      "online-status",
+    ] as const,
 
   onlineStatus: (
     id: string,
-  ) => [
-    ...paymentKeys.all,
-    "online-status",
-    id,
-  ] as const,
+  ) =>
+    [
+      ...paymentKeys.onlineStatuses(),
+      id,
+    ] as const,
 
 
-  pendingBankTransfers: () => [
-    ...paymentKeys.all,
-    "bank-transfers",
-    "pending",
-  ] as const,
+  // ---------------------------------------------------
+  // Pending bank transfers
+  // ---------------------------------------------------
 
+  pendingBankTransfers: () =>
+    [
+      ...paymentKeys.all,
+      "bank-transfers",
+      "pending",
+    ] as const,
 };
 
 
 // =====================================================
 // GET PAYMENTS
 // =====================================================
+//
+// GET /payments
+//
+// Administrative payment listing.
+//
+// =====================================================
 
 type UsePaymentsOptions = {
   params?: PaymentFilters;
 };
 
-
 export const usePayments = ({
   params,
 }: UsePaymentsOptions = {}) => {
-
   return useQuery<
     ListResponse<Payment>
   >({
-
     queryKey:
-      paymentKeys.list(
-        params,
-      ),
+      paymentKeys.list(params),
 
     queryFn:
       () =>
@@ -106,36 +159,40 @@ export const usePayments = ({
         ),
 
     staleTime:
-      1000 * 60 * 5,
+      1000 * 60 * 2,
 
     placeholderData:
-      (
+      (previousData) =>
         previousData,
-      ) =>
-        previousData,
-
   });
-
 };
 
 
 // =====================================================
 // GET PAYMENT DETAIL
 // =====================================================
+//
+// GET /payments/{payment}
+//
+// Returns:
+// - invoice
+// - citizen
+// - service
+// - method details
+// - receipt
+// - files
+//
+// =====================================================
 
 export const usePayment = (
   id: string,
   enabled = true,
 ) => {
-
   return useQuery<
     ApiResponse<PaymentDetail>
   >({
-
     queryKey:
-      paymentKeys.detail(
-        id,
-      ),
+      paymentKeys.detail(id),
 
     queryFn:
       () =>
@@ -149,31 +206,43 @@ export const usePayment = (
 
     staleTime:
       1000 * 60 * 2,
-
   });
-
 };
 
 
 // =====================================================
 // GET PAYMENT RECEIPT
 // =====================================================
+//
+// GET /payments/{payment}/receipt
+//
+// IMPORTANT:
+//
+// This reads an existing official receipt.
+//
+// It does NOT create a receipt.
+//
+// Receipt lifecycle:
+//
+// Payment PENDING
+//      ↓
+// Payment COMPLETED
+//      ↓
+// Receipt CREATED
+//
+// =====================================================
 
 export const usePaymentReceipt = (
   paymentId: string,
   enabled = true,
 ) => {
-
   return useQuery<
-    ApiResponse<Payment>
+    ApiResponse<PaymentReceipt>
   >({
-
-    queryKey: [
-      ...paymentKeys.detail(
+    queryKey:
+      paymentKeys.receipt(
         paymentId,
       ),
-      "receipt",
-    ],
 
     queryFn:
       () =>
@@ -188,8 +257,64 @@ export const usePaymentReceipt = (
     staleTime:
       1000 * 60 * 5,
 
+    retry: 1,
   });
+};
 
+
+// =====================================================
+// DOWNLOAD PAYMENT RECEIPT PDF
+// =====================================================
+//
+// GET /payments/{payment}/receipt/pdf
+//
+// Returns a Blob.
+//
+// The caller is responsible for creating the browser
+// download URL.
+//
+// =====================================================
+
+export const useDownloadPaymentReceiptPdf = () => {
+  return useMutation<
+    Blob,
+    Error,
+    string
+  >({
+    mutationFn:
+      (paymentId) =>
+        paymentService.downloadPaymentReceiptPdf(
+          paymentId,
+        ),
+  });
+};
+
+
+// =====================================================
+// STREAM PAYMENT RECEIPT PDF
+// =====================================================
+//
+// GET /payments/{payment}/receipt/pdf/stream
+//
+// Returns a Blob.
+//
+// The caller can create an object URL and open the PDF
+// in a new browser tab.
+//
+// =====================================================
+
+export const useStreamPaymentReceiptPdf = () => {
+  return useMutation<
+    Blob,
+    Error,
+    string
+  >({
+    mutationFn:
+      (paymentId) =>
+        paymentService.streamPaymentReceiptPdf(
+          paymentId,
+        ),
+  });
 };
 
 
@@ -203,102 +328,49 @@ export const usePaymentReceipt = (
 //
 // Invoice
 //    ↓
-// Pay Invoice
+// Initialize
 //    ↓
-// Initialize Online Payment
+// Payment created
 //    ↓
-// Laravel creates payment
+// Provider checkout
 //    ↓
-// Chapa / Telebirr / CBE Birr
+// Provider callback/status verification
 //    ↓
-// Checkout
+// COMPLETED / FAILED / CANCELLED / EXPIRED
 //
-// IMPORTANT:
-//
-// Initialization does NOT mean payment success.
-//
-// Laravel MUST:
-//
-// - authenticate the taxpayer
-// - verify invoice ownership
-// - read the current invoice balance
-// - validate the requested amount
-// - create the payment
-// - initialize the external provider
-//
-// The frontend must NEVER update:
-//
-// - invoice.paid_amount
-// - invoice.balance_due
-// - invoice.status
-// - payment.status
+// Initialization itself does NOT complete the payment.
 //
 // =====================================================
 
 export const useInitializeOnlinePayment = () => {
-
   const queryClient =
     useQueryClient();
-
 
   return useMutation<
     InitializeOnlinePaymentResponse,
     Error,
     InitializeOnlinePaymentRequest
   >({
-
     mutationFn:
-      (
-        data,
-      ) =>
+      (data) =>
         paymentService.initializeOnlinePayment(
           data,
         ),
 
-
     onSuccess:
-      (
-        response,
-      ) => {
-
+      () => {
         /*
-         * Initialization does not mean payment success.
+         * The payment list may now contain the newly
+         * initialized payment.
          *
-         * The payment normally remains in an
-         * intermediate state until the provider result
-         * is received and verified by Laravel.
-         *
-         * Therefore we do not modify any financial
-         * state in the frontend.
+         * Do not update financial state manually.
          */
-
-        const paymentReference =
-          response?.data
-            ?.paymentReference;
-
-
-        /*
-         * If the backend returned a payment reference,
-         * refresh the payment list.
-         *
-         * Do NOT construct a fake Payment object from
-         * the initialization response.
-         */
-
-        if (!paymentReference) {
-          return;
-        }
-
-
         queryClient.invalidateQueries({
           queryKey:
             paymentKeys.lists(),
         });
-
       },
-
   });
-
 };
 
 
@@ -308,22 +380,14 @@ export const useInitializeOnlinePayment = () => {
 //
 // GET /online-payments/{payment}/status
 //
-// Returns:
+// Laravel is the source of truth.
 //
-// {
-//   success: true,
-//   message: "...",
-//   data: {
-//     payment: Payment,
-//     verification: {
-//       status: "SUCCESS" | "FAILED" | "PENDING",
-//       is_successful: boolean,
-//       ...
-//     }
-//   }
-// }
+// Poll while:
 //
-// Laravel remains the source of truth.
+// PENDING
+// PROCESSING
+//
+// Stop polling for all terminal states.
 //
 // =====================================================
 
@@ -331,11 +395,9 @@ export const useOnlinePaymentStatus = (
   paymentId: string,
   enabled = true,
 ) => {
-
   return useQuery<
     VerifyOnlinePaymentResponse
   >({
-
     queryKey:
       paymentKeys.onlineStatus(
         paymentId,
@@ -352,52 +414,33 @@ export const useOnlinePaymentStatus = (
       !!paymentId,
 
     staleTime:
-      1000 * 30,
+      1000 * 15,
 
     refetchOnWindowFocus:
       false,
 
-    /*
-     * Poll while the online payment is still being
-     * processed.
-     *
-     * The payment itself is inside:
-     *
-     * response.data.payment
-     */
     refetchInterval:
-      (
-        query,
-      ) => {
-
+      (query) => {
         const payment =
           query.state.data
             ?.data
             ?.payment;
 
-
         if (!payment) {
           return false;
         }
 
-
-        switch (payment.status) {
-
-          case "INITIATED":
-          case "PENDING":
-            return 3000;
-
-          default:
-            return false;
-
+        if (
+          payment.status === "PENDING" ||
+          payment.status === "PROCESSING"
+        ) {
+          return 3000;
         }
 
+        return false;
       },
-
   });
-
 };
-
 
 
 // =====================================================
@@ -406,128 +449,139 @@ export const useOnlinePaymentStatus = (
 //
 // POST /cash-payments
 //
-// Flow:
+// Creates:
 //
-// Invoice
-//    ↓
-// Collector receives cash
-//    ↓
-// Create cash payment
-//    ↓
-// RECORDED
-//    ↓
-// Physical/control confirmation
-//    ↓
-// POSTED
+// PENDING
 //
-// IMPORTANT:
-//
-// Creating a cash payment does NOT automatically mean
-// that it is financially posted.
-//
-// The backend controls the lifecycle.
+// No invoice settlement.
+// No receipt.
 //
 // =====================================================
 
 export const useCreateCashPayment = () => {
-
   const queryClient =
     useQueryClient();
-
 
   return useMutation<
     ApiResponse<Payment>,
     Error,
     CreateCashPaymentRequest
   >({
-
     mutationFn:
-      (
-        data,
-      ) =>
+      (data) =>
         paymentService.createCashPayment(
           data,
         ),
 
-
     onSuccess:
-      () => {
-
+      (response) => {
+        /*
+         * Payment list changed.
+         */
         queryClient.invalidateQueries({
           queryKey:
             paymentKeys.lists(),
         });
 
+        const payment =
+          response?.data;
+
+        if (!payment?.id) {
+          return;
+        }
+
+        /*
+         * Refresh exact payment.
+         */
+        queryClient.invalidateQueries({
+          queryKey:
+            paymentKeys.detail(
+              payment.id,
+            ),
+        });
       },
-
   });
-
 };
 
 
 // =====================================================
-// POST CASH PAYMENT
+// COMPLETE CASH PAYMENT
 // =====================================================
 //
-// POST /cash-payments/{payment}/post
+// POST /cash-payments/{payment}/complete
 //
-// This is the financial posting action.
+// Flow:
 //
-// Only after posting should the backend update the
-// invoice's official paid amount / balance / status.
+// PENDING
+//    ↓
+// COMPLETED
+//    ↓
+// Receipt created
+//    ↓
+// Invoice recalculated
 //
 // =====================================================
 
-export const usePostCashPayment = () => {
-
+export const useCompleteCashPayment = () => {
   const queryClient =
     useQueryClient();
-
 
   return useMutation<
     ApiResponse<Payment>,
     Error,
     string
   >({
-
     mutationFn:
-      (
-        paymentId,
-      ) =>
-        paymentService.postCashPayment(
+      (paymentId) =>
+        paymentService.completeCashPayment(
           paymentId,
         ),
 
-
     onSuccess:
-      (
-        response,
-      ) => {
-
-        const payment =
-          response?.data;
-
+      (response) => {
+        /*
+         * Payment list changed.
+         */
         queryClient.invalidateQueries({
           queryKey:
             paymentKeys.lists(),
         });
 
+        const payment =
+          response?.data;
 
-        if (payment?.id) {
-
-          queryClient.invalidateQueries({
-            queryKey:
-              paymentKeys.detail(
-                payment.id,
-              ),
-          });
-
+        if (!payment?.id) {
+          return;
         }
 
+        /*
+         * Refresh payment detail.
+         */
+        queryClient.invalidateQueries({
+          queryKey:
+            paymentKeys.detail(
+              payment.id,
+            ),
+        });
+
+        /*
+         * Receipt was created by the backend.
+         */
+        queryClient.invalidateQueries({
+          queryKey:
+            paymentKeys.receipt(
+              payment.id,
+            ),
+        });
+
+        /*
+         * Do NOT invent an invoice query key here.
+         *
+         * The invoice module should invalidate its own
+         * invoice queries when necessary.
+         */
       },
-
   });
-
 };
 
 
@@ -537,60 +591,66 @@ export const usePostCashPayment = () => {
 //
 // POST /bank-transfers
 //
-// Flow:
+// Creates:
 //
-// Taxpayer makes bank transfer
-//    ↓
-// Submit transfer + evidence
-//    ↓
-// PENDING_VERIFICATION
-//    ↓
-// Revenue officer verifies
-//    ↓
-// VERIFIED
-//    ↓
-// POSTED
+// PENDING
+//
+// No invoice settlement.
+// No receipt.
 //
 // =====================================================
 
 export const useCreateBankTransfer = () => {
-
   const queryClient =
     useQueryClient();
-
 
   return useMutation<
     ApiResponse<Payment>,
     Error,
     CreateBankTransferPaymentRequest
   >({
-
     mutationFn:
-      (
-        data,
-      ) =>
+      (data) =>
         paymentService.createBankTransfer(
           data,
         ),
 
-
     onSuccess:
-      () => {
-
+      (response) => {
+        /*
+         * General payment list.
+         */
         queryClient.invalidateQueries({
           queryKey:
             paymentKeys.lists(),
         });
 
+        /*
+         * Pending bank transfer queue.
+         */
         queryClient.invalidateQueries({
           queryKey:
             paymentKeys.pendingBankTransfers(),
         });
 
+        const payment =
+          response?.data;
+
+        if (!payment?.id) {
+          return;
+        }
+
+        /*
+         * Exact payment detail.
+         */
+        queryClient.invalidateQueries({
+          queryKey:
+            paymentKeys.detail(
+              payment.id,
+            ),
+        });
       },
-
   });
-
 };
 
 
@@ -600,8 +660,7 @@ export const useCreateBankTransfer = () => {
 //
 // GET /bank-transfers/pending
 //
-// Used by revenue officers / authorized users to review
-// bank transfers awaiting verification.
+// Used by authorized staff to verify/reject transfers.
 //
 // =====================================================
 
@@ -610,15 +669,12 @@ type PendingBankTransferParams = {
   per_page?: number;
 };
 
-
 export const usePendingBankTransfers = (
   params?: PendingBankTransferParams,
 ) => {
-
   return useQuery<
     ListResponse<Payment>
   >({
-
     queryKey: [
       ...paymentKeys.pendingBankTransfers(),
       params,
@@ -633,8 +689,9 @@ export const usePendingBankTransfers = (
     staleTime:
       1000 * 30,
 
+    refetchOnWindowFocus:
+      true,
   });
-
 };
 
 
@@ -644,20 +701,21 @@ export const usePendingBankTransfers = (
 //
 // POST /bank-transfers/{payment}/verify
 //
-// Verification confirms that the submitted transfer
-// is valid.
+// Successful verification:
 //
-// Depending on the backend workflow, posting may occur
-// as part of verification or as a separate financial
-// posting operation.
+// PENDING
+//    ↓
+// COMPLETED
+//    ↓
+// Receipt created
+//    ↓
+// Invoice recalculated
 //
 // =====================================================
 
 export const useVerifyBankTransfer = () => {
-
   const queryClient =
     useQueryClient();
-
 
   return useMutation<
     ApiResponse<Payment>,
@@ -667,7 +725,6 @@ export const useVerifyBankTransfer = () => {
       data?: VerifyBankTransferRequest;
     }
   >({
-
     mutationFn:
       ({
         paymentId,
@@ -678,41 +735,59 @@ export const useVerifyBankTransfer = () => {
           data,
         ),
 
-
     onSuccess:
-      (
-        response,
-      ) => {
-
+      (response) => {
+        /*
+         * Payment list changed.
+         */
         queryClient.invalidateQueries({
           queryKey:
             paymentKeys.lists(),
         });
 
+        /*
+         * Payment should no longer appear in the
+         * pending verification queue.
+         */
         queryClient.invalidateQueries({
           queryKey:
             paymentKeys.pendingBankTransfers(),
         });
 
-
         const payment =
           response?.data;
 
-        if (payment?.id) {
+        if (!payment?.id) {
+          return;
+        }
 
+        /*
+         * Refresh exact payment.
+         */
+        queryClient.invalidateQueries({
+          queryKey:
+            paymentKeys.detail(
+              payment.id,
+            ),
+        });
+
+        /*
+         * If verification completed the payment,
+         * the receipt now exists.
+         */
+        if (
+          payment.status ===
+          "COMPLETED"
+        ) {
           queryClient.invalidateQueries({
             queryKey:
-              paymentKeys.detail(
+              paymentKeys.receipt(
                 payment.id,
               ),
           });
-
         }
-
       },
-
   });
-
 };
 
 
@@ -722,16 +797,25 @@ export const useVerifyBankTransfer = () => {
 //
 // POST /bank-transfers/{payment}/reject
 //
-// A rejected transfer must not affect the invoice's
-// official paid amount.
+// Flow:
+//
+// PENDING
+//    ↓
+// CANCELLED
+//
+// or another backend-approved terminal failure state.
+//
+// IMPORTANT:
+//
+// Rejection does NOT create a receipt.
+//
+// Rejection does NOT increase invoice paid amount.
 //
 // =====================================================
 
 export const useRejectBankTransfer = () => {
-
   const queryClient =
     useQueryClient();
-
 
   return useMutation<
     ApiResponse<Payment>,
@@ -741,7 +825,6 @@ export const useRejectBankTransfer = () => {
       data: RejectBankTransferRequest;
     }
   >({
-
     mutationFn:
       ({
         paymentId,
@@ -752,39 +835,46 @@ export const useRejectBankTransfer = () => {
           data,
         ),
 
-
     onSuccess:
-      (
-        response,
-      ) => {
-
+      (response) => {
+        /*
+         * General payment list changed.
+         */
         queryClient.invalidateQueries({
           queryKey:
             paymentKeys.lists(),
         });
 
+        /*
+         * Rejected transfer should disappear from
+         * the pending verification queue.
+         */
         queryClient.invalidateQueries({
           queryKey:
             paymentKeys.pendingBankTransfers(),
         });
 
-
         const payment =
           response?.data;
 
-        if (payment?.id) {
-
-          queryClient.invalidateQueries({
-            queryKey:
-              paymentKeys.detail(
-                payment.id,
-              ),
-          });
-
+        if (!payment?.id) {
+          return;
         }
 
+        /*
+         * Refresh exact payment detail.
+         */
+        queryClient.invalidateQueries({
+          queryKey:
+            paymentKeys.detail(
+              payment.id,
+            ),
+        });
+
+        /*
+         * No receipt invalidation is required because
+         * rejection cannot produce a receipt.
+         */
       },
-
   });
-
 };

@@ -11,20 +11,27 @@ import type {
 export interface PaymentUser {
   id: string;
   name: string;
-  role: string | null;
+  role?: string | null;
+}
+
+export interface PaymentPayer {
+  name: string | null;
+  email: string | null;
+  phone: string | null;
 }
 
 export interface PaymentInvoice {
   id: string;
   invoice_number: string;
   status: string;
+  total_amount: number | null;
+  paid_amount: number | null;
+  balance_due: number | null;
 }
 
 export interface PaymentCitizen {
   id: string;
-  name: string;
-  phone: string | null;
-  email: string | null;
+  name: string | null;
 }
 
 export interface PaymentService {
@@ -34,17 +41,72 @@ export interface PaymentService {
 }
 
 // ============================================================
+// BANK ACCOUNT
+// ============================================================
+
+export interface PaymentBankAccount {
+  id: string;
+  bank_name: string;
+  account_name: string;
+  account_number: string;
+  currency: string;
+}
+
+// ============================================================
+// PAYMENT FILE
+// ============================================================
+
+export interface PaymentFile {
+  id: string;
+
+  original_name: string | null;
+
+  mime_type: string | null;
+
+  size: number | null;
+
+  category: string | null;
+
+  visibility: string | null;
+
+  /**
+   * Internal storage path.
+   *
+   * Prefer not to expose this from the backend for private files.
+   * Kept optional because production API should preferably return
+   * a controlled download/view URL instead.
+   */
+  storage_path?: string | null;
+
+  /**
+   * Controlled API URL for viewing/downloading the file.
+   *
+   * This should be supplied by the backend once the private-file
+   * download endpoint is implemented.
+   */
+  download_url?: string | null;
+
+  created_at: string | null;
+
+  updated_at: string | null;
+}
+
+// ============================================================
 // CASH PAYMENT DETAILS
 // ============================================================
 
 export interface CashPaymentDetails {
-  payment_id: string;
+  id: string;
 
-  received_by: PaymentUser | null;
+  cash_receipt_number: string | null;
+
+  cash_received_at: string | null;
 
   cashier_session_id: string | null;
 
-  cash_received_at: string | null;
+  received_by: string | null;
+
+  received_by_user: PaymentUser | null;
 
   notes: string | null;
 }
@@ -54,7 +116,7 @@ export interface CashPaymentDetails {
 // ============================================================
 
 export interface BankTransferDetails {
-  payment_id: string;
+  id: string;
 
   bank_account_id: string;
 
@@ -68,11 +130,21 @@ export interface BankTransferDetails {
 
   verification_status: string | null;
 
-  verified_by: PaymentUser | null;
+  /**
+   * Backend currently returns the verifier ID here.
+   */
+  verified_by: string | null;
 
   verified_at: string | null;
 
   notes: string | null;
+
+  bank_account: PaymentBankAccount | null;
+
+  /**
+   * Evidence uploaded for this bank transfer.
+   */
+  files: PaymentFile[];
 }
 
 // ============================================================
@@ -80,7 +152,7 @@ export interface BankTransferDetails {
 // ============================================================
 
 export interface OnlinePaymentDetails {
-  payment_id: string;
+  id: string;
 
   payment_provider_id: string;
 
@@ -97,6 +169,12 @@ export interface OnlinePaymentDetails {
   provider_response: Record<string, unknown> | null;
 
   paid_at: string | null;
+
+  payment_provider: {
+    id: string;
+    code: string;
+    name: string;
+  } | null;
 }
 
 // ============================================================
@@ -165,24 +243,24 @@ export interface Payment {
   currency: string;
 
   // ==========================================================
-  // PROCESSING / VERIFICATION
-  // ==========================================================
-
-  processed_by: PaymentUser | null;
-
-  verified_by: PaymentUser | null;
-
-  verified_at: string | null;
-
-  // ==========================================================
   // PAYER
   // ==========================================================
 
-  payer_name: string | null;
+  payer: PaymentPayer;
 
-  payer_email: string | null;
+  // ==========================================================
+  // PROCESSING / VERIFICATION
+  // ==========================================================
 
-  payer_phone: string | null;
+  processed_by: string | null;
+
+  processed_by_user?: PaymentUser | null;
+
+  verified_by: string | null;
+
+  verified_by_user?: PaymentUser | null;
+
+  verified_at: string | null;
 
   // ==========================================================
   // FAILURE
@@ -240,25 +318,15 @@ export interface PaymentDetail extends Payment {
 
   receipt: PaymentReceipt | null;
 
+  /**
+   * Files directly attached to Payment.
+   *
+   * Bank-transfer evidence is NOT stored here.
+   * It is available through:
+   *
+   * payment.bank_transfer_details.files
+   */
   files?: PaymentFile[];
-}
-
-// ============================================================
-// PAYMENT FILE
-// ============================================================
-
-export interface PaymentFile {
-  id: string;
-
-  file_name: string;
-
-  original_name: string | null;
-
-  mime_type: string | null;
-
-  size: number | null;
-
-  url?: string | null;
 }
 
 // ============================================================
@@ -277,6 +345,8 @@ export interface PaymentFilters {
   // ==========================================================
 
   transaction_reference?: string;
+
+  payment_number?: string;
 
   // ==========================================================
   // RELATED RECORDS

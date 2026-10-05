@@ -50,6 +50,215 @@ const cleanPaymentParams = (
 
 
 // ============================================================
+// FORM DATA VALUE APPENDER
+// ============================================================
+//
+// Converts objects/arrays into Laravel-compatible nested
+// multipart/form-data fields.
+//
+// Example:
+//
+// metadata = {
+//   amount_mode: "FULL",
+//   source: "REVENUE_COLLECTION_PORTAL"
+// }
+//
+// becomes:
+//
+// metadata[amount_mode] = FULL
+// metadata[source] = REVENUE_COLLECTION_PORTAL
+//
+// ============================================================
+
+const appendFormDataValue = (
+  formData: FormData,
+  key: string,
+  value: unknown,
+): void => {
+  // Ignore empty values.
+  if (value === undefined || value === null) {
+    return;
+  }
+
+  // ----------------------------------------------------------
+  // File
+  // ----------------------------------------------------------
+
+  if (value instanceof File) {
+    formData.append(key, value);
+    return;
+  }
+
+  // ----------------------------------------------------------
+  // Blob
+  // ----------------------------------------------------------
+
+  if (value instanceof Blob) {
+    formData.append(key, value);
+    return;
+  }
+
+  // ----------------------------------------------------------
+  // Array
+  // ----------------------------------------------------------
+
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => {
+      appendFormDataValue(
+        formData,
+        `${key}[${index}]`,
+        item,
+      );
+    });
+
+    return;
+  }
+
+  // ----------------------------------------------------------
+  // Object
+  // ----------------------------------------------------------
+
+  if (typeof value === "object") {
+    Object.entries(
+      value as Record<string, unknown>,
+    ).forEach(([childKey, childValue]) => {
+      appendFormDataValue(
+        formData,
+        `${key}[${childKey}]`,
+        childValue,
+      );
+    });
+
+    return;
+  }
+
+  // ----------------------------------------------------------
+  // String / number / boolean
+  // ----------------------------------------------------------
+
+  formData.append(
+    key,
+    String(value),
+  );
+};
+
+
+// ============================================================
+// BANK TRANSFER FORM DATA BUILDER
+// ============================================================
+
+const buildBankTransferFormData = (
+  data: CreateBankTransferPaymentRequest,
+): FormData => {
+  const formData = new FormData();
+
+  // ----------------------------------------------------------
+  // Required fields
+  // ----------------------------------------------------------
+
+  formData.append(
+    "invoice_id",
+    data.invoice_id,
+  );
+
+  formData.append(
+    "amount",
+    String(data.amount),
+  );
+
+  formData.append(
+    "bank_account_id",
+    data.bank_account_id,
+  );
+
+  formData.append(
+    "transfer_reference",
+    data.transfer_reference,
+  );
+
+  formData.append(
+    "transfer_date",
+    data.transfer_date,
+  );
+
+  // ----------------------------------------------------------
+  // Payer
+  // ----------------------------------------------------------
+
+  if (data.payer_name) {
+    formData.append(
+      "payer_name",
+      data.payer_name,
+    );
+  }
+
+  if (data.payer_phone) {
+    formData.append(
+      "payer_phone",
+      data.payer_phone,
+    );
+  }
+
+  // ----------------------------------------------------------
+  // Sender
+  // ----------------------------------------------------------
+
+  if (data.sender_name) {
+    formData.append(
+      "sender_name",
+      data.sender_name,
+    );
+  }
+
+  if (data.sender_account) {
+    formData.append(
+      "sender_account",
+      data.sender_account,
+    );
+  }
+
+  // ----------------------------------------------------------
+  // Notes
+  // ----------------------------------------------------------
+
+  if (data.notes) {
+    formData.append(
+      "notes",
+      data.notes,
+    );
+  }
+
+  // ----------------------------------------------------------
+  // Evidence
+  // ----------------------------------------------------------
+
+  if (data.evidence instanceof File) {
+    formData.append(
+      "evidence",
+      data.evidence,
+    );
+  }
+
+  // ----------------------------------------------------------
+  // Metadata
+  // ----------------------------------------------------------
+
+  if (
+    data.metadata !== undefined &&
+    data.metadata !== null
+  ) {
+    appendFormDataValue(
+      formData,
+      "metadata",
+      data.metadata,
+    );
+  }
+
+  return formData;
+};
+
+
+// ============================================================
 // PAYMENT SERVICE
 // ============================================================
 
@@ -57,33 +266,6 @@ export const paymentService = {
 
   // ==========================================================
   // GET ALL PAYMENTS
-  // ==========================================================
-  //
-  // GET /payments
-  //
-  // Administrative payment listing.
-  //
-  // Supported filters implemented by the backend:
-  //
-  // - search
-  // - transaction_reference
-  // - invoice_id
-  // - citizen_id
-  // - payment_method
-  // - payment_source
-  // - status
-  // - currency
-  // - amount_from
-  // - amount_to
-  // - payment_date_from
-  // - payment_date_to
-  // - verified_from
-  // - verified_to
-  // - page
-  // - per_page
-  // - sort_by
-  // - sort_direction
-  //
   // ==========================================================
 
   getPayments: async (
@@ -108,21 +290,6 @@ export const paymentService = {
   // ==========================================================
   // GET PAYMENT DETAIL
   // ==========================================================
-  //
-  // GET /payments/{payment}
-  //
-  // Administrative payment detail.
-  //
-  // Returns:
-  //
-  // - payment
-  // - invoice
-  // - citizen
-  // - method-specific details
-  // - receipt
-  // - files
-  //
-  // ==========================================================
 
   getPaymentById: async (
     paymentId: string,
@@ -143,19 +310,6 @@ export const paymentService = {
   // ==========================================================
   // GET PAYMENT RECEIPT
   // ==========================================================
-  //
-  // GET /payments/{payment}/receipt
-  //
-  // Returns the existing official receipt.
-  //
-  // IMPORTANT:
-  //
-  // This endpoint does NOT create a receipt.
-  //
-  // A receipt is created automatically when a payment reaches
-  // COMPLETED status.
-  //
-  // ==========================================================
 
   getPaymentReceipt: async (
     paymentId: string,
@@ -175,22 +329,6 @@ export const paymentService = {
 
   // ==========================================================
   // DOWNLOAD PAYMENT RECEIPT PDF
-  // ==========================================================
-  //
-  // GET /payments/{payment}/receipt/pdf
-  //
-  // Downloads the official receipt as a PDF.
-  //
-  // The backend:
-  //
-  // - verifies authentication
-  // - verifies payment access
-  // - verifies payment is completed
-  // - verifies an official receipt exists
-  // - renders the receipt PDF
-  //
-  // The frontend receives a Blob.
-  //
   // ==========================================================
 
   downloadPaymentReceiptPdf: async (
@@ -215,13 +353,6 @@ export const paymentService = {
   // ==========================================================
   // STREAM PAYMENT RECEIPT PDF
   // ==========================================================
-  //
-  // GET /payments/{payment}/receipt/pdf/stream
-  //
-  // Returns the official receipt PDF as a Blob so the frontend
-  // can open it in a browser tab or PDF viewer.
-  //
-  // ==========================================================
 
   streamPaymentReceiptPdf: async (
     paymentId: string,
@@ -245,20 +376,6 @@ export const paymentService = {
   // ==========================================================
   // INITIALIZE ONLINE PAYMENT
   // ==========================================================
-  //
-  // POST /online-payments/initialize
-  //
-  // Online payment processing belongs to the online-payment
-  // controller/module.
-  //
-  // The backend determines:
-  //
-  // payment_method = ONLINE
-  //
-  // Provider-specific information belongs to the online
-  // payment details/configuration.
-  //
-  // ==========================================================
 
   initializeOnlinePayment: async (
     data: InitializeOnlinePaymentRequest,
@@ -280,22 +397,6 @@ export const paymentService = {
   // ==========================================================
   // GET ONLINE PAYMENT STATUS
   // ==========================================================
-  //
-  // GET /online-payments/{payment}/status
-  //
-  // Returns the current LOCAL payment state.
-  //
-  // The backend is responsible for:
-  //
-  // 1. Checking the external provider.
-  // 2. Verifying the transaction.
-  // 3. Updating the local payment.
-  // 4. Returning the current payment state.
-  //
-  // The frontend must NOT treat a browser redirect/return
-  // as proof that the payment was completed.
-  //
-  // ==========================================================
 
   getOnlinePaymentStatus: async (
     paymentId: string,
@@ -315,14 +416,6 @@ export const paymentService = {
 
   // ==========================================================
   // CREATE CASH PAYMENT
-  // ==========================================================
-  //
-  // POST /cash-payments
-  //
-  // Creates a cash payment in PENDING status.
-  //
-  // No receipt is created at this stage.
-  //
   // ==========================================================
 
   createCashPayment: async (
@@ -345,23 +438,6 @@ export const paymentService = {
   // ==========================================================
   // COMPLETE CASH PAYMENT
   // ==========================================================
-  //
-  // POST /cash-payments/{payment}/complete
-  //
-  // PENDING
-  //    ↓
-  // COMPLETED
-  //
-  // On completion the backend:
-  //
-  // - completes the payment
-  // - records verification
-  // - creates the official receipt
-  // - updates invoice paid amount
-  // - updates invoice balance
-  // - updates invoice status
-  //
-  // ==========================================================
 
   completeCashPayment: async (
     paymentId: string,
@@ -383,13 +459,8 @@ export const paymentService = {
   // CREATE BANK TRANSFER
   // ==========================================================
   //
-  // POST /bank-transfers
-  //
-  // Creates a bank-transfer payment in PENDING status.
-  //
-  // Method-specific information is stored in:
-  //
-  // bank_transfer_details
+  // IMPORTANT:
+  // This request MUST use FormData because evidence is a file.
   //
   // ==========================================================
 
@@ -397,42 +468,13 @@ export const paymentService = {
     data: CreateBankTransferPaymentRequest,
   ): Promise<ApiResponse<Payment>> => {
     try {
+      const formData =
+        buildBankTransferFormData(data);
+
       const response =
         await api.post<ApiResponse<Payment>>(
           "/bank-transfers",
-          data,
-        );
-
-      return response.data;
-    } catch (error) {
-      throw normalizeApiError(error);
-    }
-  },
-
-
-  // ==========================================================
-  // GET PENDING BANK TRANSFERS
-  // ==========================================================
-  //
-  // GET /bank-transfers/pending
-  //
-  // Returns bank-transfer payments awaiting verification.
-  //
-  // ==========================================================
-
-  getPendingBankTransfers: async (
-    params?: {
-      page?: number;
-      per_page?: number;
-    },
-  ): Promise<ListResponse<Payment>> => {
-    try {
-      const response =
-        await api.get<ListResponse<Payment>>(
-          "/bank-transfers/pending",
-          {
-            params: cleanPaymentParams(params),
-          },
+          formData,
         );
 
       return response.data;
@@ -444,21 +486,6 @@ export const paymentService = {
 
   // ==========================================================
   // VERIFY BANK TRANSFER
-  // ==========================================================
-  //
-  // POST /bank-transfers/{payment}/verify
-  //
-  // PENDING
-  //    ↓
-  // COMPLETED
-  //
-  // On successful verification the backend:
-  //
-  // - completes the payment
-  // - records verification
-  // - creates the official receipt
-  // - updates the invoice
-  //
   // ==========================================================
 
   verifyBankTransfer: async (
@@ -482,19 +509,6 @@ export const paymentService = {
   // ==========================================================
   // REJECT BANK TRANSFER
   // ==========================================================
-  //
-  // POST /bank-transfers/{payment}/reject
-  //
-  // Rejection is a bank-transfer verification operation.
-  //
-  // It does NOT introduce:
-  //
-  // PaymentStatus::REJECTED
-  //
-  // The backend should use the established payment status
-  // model and store the rejection reason appropriately.
-  //
-  // ==========================================================
 
   rejectBankTransfer: async (
     paymentId: string,
@@ -513,3 +527,4 @@ export const paymentService = {
     }
   },
 };
+

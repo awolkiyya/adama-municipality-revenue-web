@@ -266,12 +266,12 @@ export const NAV_ITEMS: NavItem[] = [
       permission: APP_PERMISSIONS.ASSESSMENT_VIEW,
     },
 
-    // {
-    //   title: "lease_amendments",
-    //   url: "/office/dashboard/lease-amendments",
-    //   icon: FileText,
-    //   permission: APP_PERMISSIONS.LEASE_AMENDMENTS_VIEW,
-    // },
+    {
+      title: "lease_amendments",
+      url: "/office/dashboard/lease-amendments",
+      icon: FileText,
+      permission: APP_PERMISSIONS.LEASE_AMENDMENTS_VIEW,
+    },
 
     {
       title: "invoices",

@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   Clock3,
   CreditCard,
+  ExternalLink,
   FileText,
   Hash,
   Loader2,
@@ -166,6 +167,42 @@ function getMethodDescription(
         payment.payment_method,
       );
   }
+}
+
+function formatFileSize(
+  size?: number | null,
+) {
+  if (!size || size <= 0) {
+    return null;
+  }
+
+  if (size < 1024) {
+    return `${size} B`;
+  }
+
+  if (size < 1024 * 1024) {
+    return `${(size / 1024).toFixed(1)} KB`;
+  }
+
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function getFileTypeLabel(
+  mimeType?: string | null,
+) {
+  if (!mimeType) {
+    return "Document";
+  }
+
+  if (mimeType === "application/pdf") {
+    return "PDF document";
+  }
+
+  if (mimeType.startsWith("image/")) {
+    return "Image";
+  }
+
+  return mimeType;
 }
 
 /*
@@ -902,8 +939,7 @@ export default function PaymentDetailPage() {
                   paymentDate,
                 )}
                 icon={
-                  <CalendarDays className="h-4 w-4"
-                />
+                  <CalendarDays className="h-4 w-4" />
                 }
               />
 
@@ -956,6 +992,27 @@ export default function PaymentDetailPage() {
                   />
 
                   {bankDetails
+                    .bank_account
+                    ?.account_number && (
+                    <>
+                      <Separator />
+
+                      <DetailRow
+                        label="Account number"
+                        value={
+                          <span className="font-mono text-xs">
+                            {
+                              bankDetails
+                                .bank_account
+                                .account_number
+                            }
+                          </span>
+                        }
+                      />
+                    </>
+                  )}
+
+                  {bankDetails
                     .transfer_reference && (
                     <>
                       <Separator />
@@ -982,6 +1039,24 @@ export default function PaymentDetailPage() {
                         label="Sender"
                         value={
                           bankDetails.sender_name
+                        }
+                      />
+                    </>
+                  )}
+
+                  {bankDetails
+                    .sender_account && (
+                    <>
+                      <Separator />
+
+                      <DetailRow
+                        label="Sender account"
+                        value={
+                          <span className="max-w-52 break-all font-mono text-xs">
+                            {
+                              bankDetails.sender_account
+                            }
+                          </span>
                         }
                       />
                     </>
@@ -1172,6 +1247,136 @@ export default function PaymentDetailPage() {
         </div>
 
         {/* ============================================================
+            BANK TRANSFER EVIDENCE
+        ============================================================ */}
+
+        {bankDetails?.files &&
+          bankDetails.files.length > 0 && (
+            <Card className="mt-6">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <FileText className="h-4 w-4" />
+                  Transfer evidence
+                </CardTitle>
+
+                <p className="text-sm text-muted-foreground">
+                  Supporting document submitted with
+                  this bank transfer.
+                </p>
+              </CardHeader>
+
+              <CardContent>
+                <div className="space-y-2">
+                  {bankDetails.files.map(
+                    (file) => {
+                      const fileSize =
+                        formatFileSize(
+                          file.size,
+                        );
+
+                      const fileType =
+                        getFileTypeLabel(
+                          file.mime_type,
+                        );
+
+                      const hasDownloadUrl =
+                        Boolean(
+                          file.download_url,
+                        );
+
+                      return (
+                        <div
+                          key={file.id}
+                          className="flex items-center justify-between gap-4 rounded-lg border bg-muted/20 p-3"
+                        >
+                          <div className="flex min-w-0 items-center gap-3">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border bg-background">
+                              <FileText className="h-5 w-5 text-muted-foreground" />
+                            </div>
+
+                            <div className="min-w-0">
+                              <p
+                                className="truncate text-sm font-medium"
+                                title={
+                                  file.original_name ??
+                                  "Transfer evidence"
+                                }
+                              >
+                                {file.original_name ??
+                                  "Transfer evidence"}
+                              </p>
+
+                              <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                                <span>
+                                  {fileType}
+                                </span>
+
+                                {fileSize && (
+                                  <>
+                                    <span>
+                                      ·
+                                    </span>
+
+                                    <span>
+                                      {
+                                        fileSize
+                                      }
+                                    </span>
+                                  </>
+                                )}
+
+                                {file.created_at && (
+                                  <>
+                                    <span>
+                                      ·
+                                    </span>
+
+                                    <span>
+                                      Uploaded{" "}
+                                      {formatDateTime(
+                                        file.created_at,
+                                      )}
+                                    </span>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          {hasDownloadUrl ? (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              asChild
+                              className="shrink-0"
+                            >
+                              <a
+                                href={
+                                  file.download_url!
+                                }
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                <ExternalLink className="mr-2 h-4 w-4" />
+                                View
+                              </a>
+                            </Button>
+                          ) : (
+                            <span className="shrink-0 text-xs text-muted-foreground">
+                              Link unavailable
+                            </span>
+                          )}
+                        </div>
+                      );
+                    },
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+        {/* ============================================================
             COLLECTION & VERIFICATION
         ============================================================ */}
 
@@ -1338,6 +1543,42 @@ export default function PaymentDetailPage() {
             )}
 
             {/* ========================================================
+                BANK VERIFICATION STATUS
+            ======================================================== */}
+
+            {bankDetails
+              ?.verification_status && (
+              <>
+                <Separator />
+
+                <DetailRow
+                  label="Bank verification"
+                  value={
+                    <Badge
+                      variant="secondary"
+                      className={
+                        bankDetails.verification_status ===
+                        "VERIFIED"
+                          ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50"
+                          : bankDetails.verification_status ===
+                              "REJECTED"
+                            ? "border-red-200 bg-red-50 text-red-700 hover:bg-red-50"
+                            : "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-50"
+                      }
+                    >
+                      {getStatusLabel(
+                        bankDetails.verification_status,
+                      )}
+                    </Badge>
+                  }
+                  icon={
+                    <ShieldCheck className="h-4 w-4" />
+                  }
+                />
+              </>
+            )}
+
+            {/* ========================================================
                 ONLINE PAID TIME
             ======================================================== */}
 
@@ -1351,8 +1592,7 @@ export default function PaymentDetailPage() {
                     onlineDetails.paid_at,
                   )}
                   icon={
-                    <CalendarDays className="h-4 w-4"
-                  />
+                    <CalendarDays className="h-4 w-4" />
                   }
                 />
               </>

@@ -1,7 +1,7 @@
+import { PaymentProvider } from "../revenue/payment-provider";
 import type { Payment } from "./payment";
 
 import type {
-  PaymentProvider,
   PaymentVerificationStatus,
   PaymentResultStatus,
 } from "./payment-enums";
@@ -381,13 +381,20 @@ export interface PostCashPaymentRequest {
 // ============================================================
 
 /**
- * Submits a manual bank transfer for verification.
+ * Creates a manual bank-transfer payment for verification.
  *
  * POST /bank-transfers
  *
- * Initial backend status:
+ * Initial payment status:
  *
- * PENDING_VERIFICATION
+ * PENDING
+ *
+ * Bank-transfer verification status:
+ *
+ * PENDING
+ *
+ * The payment remains PENDING until an authorized officer
+ * verifies or rejects the bank transfer.
  */
 export interface CreateBankTransferPaymentRequest {
 
@@ -395,6 +402,9 @@ export interface CreateBankTransferPaymentRequest {
   // Invoice
   // ----------------------------------------------------------
 
+  /**
+   * Invoice being paid.
+   */
   invoice_id: string;
 
 
@@ -402,26 +412,39 @@ export interface CreateBankTransferPaymentRequest {
   // Payment amount
   // ----------------------------------------------------------
 
+  /**
+   * Amount transferred by the payer.
+   */
   amount: number;
 
 
   // ----------------------------------------------------------
-  // Bank information
+  // Municipal bank account
   // ----------------------------------------------------------
 
-  bank_name: string;
-
-  bank_account_name?: string;
-
-  bank_account_number?: string;
+  /**
+   * Municipal bank account that received the transfer.
+   *
+   * This references the backend bank_accounts.id.
+   */
+  bank_account_id: string;
 
 
   // ----------------------------------------------------------
   // Transfer information
   // ----------------------------------------------------------
 
+  /**
+   * Bank-side transaction/reference number.
+   */
   transfer_reference: string;
 
+  /**
+   * Date/time when the transfer was made.
+   *
+   * Expected backend format:
+   * YYYY-MM-DD or an ISO-compatible date string.
+   */
   transfer_date: string;
 
 
@@ -429,16 +452,37 @@ export interface CreateBankTransferPaymentRequest {
   // Payer information
   // ----------------------------------------------------------
 
+  /**
+   * Name of the person/account holder who made the transfer.
+   */
+  sender_name?: string;
+
+  /**
+   * Sender's bank account number.
+   */
+  sender_account?: string;
+
+  /**
+   * Optional payer/citizen name.
+   *
+   * Used as payment-level payer information.
+   */
   payer_name?: string;
 
+  /**
+   * Optional payer/citizen phone number.
+   */
   payer_phone?: string;
 
 
   // ----------------------------------------------------------
-  // Description
+  // Notes
   // ----------------------------------------------------------
 
-  description?: string;
+  /**
+   * Additional information about the bank transfer.
+   */
+  notes?: string;
 
 
   // ----------------------------------------------------------
@@ -446,9 +490,15 @@ export interface CreateBankTransferPaymentRequest {
   // ----------------------------------------------------------
 
   /**
-   * Bank transfer evidence.
+   * Bank-transfer evidence such as:
    *
-   * The frontend may send this as multipart/form-data.
+   * - bank receipt
+   * - transfer confirmation
+   * - transaction screenshot
+   * - PDF bank advice
+   *
+   * The request should be submitted as multipart/form-data
+   * when evidence is included.
    */
   evidence?: File;
 
@@ -457,8 +507,12 @@ export interface CreateBankTransferPaymentRequest {
   // Additional metadata
   // ----------------------------------------------------------
 
+  /**
+   * Optional additional payment metadata.
+   */
   metadata?: Record<string, unknown>;
 }
+
 
 
 // ============================================================

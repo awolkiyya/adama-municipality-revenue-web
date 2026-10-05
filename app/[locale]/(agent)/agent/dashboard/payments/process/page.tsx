@@ -1,15 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import {
+  AlertCircle,
   ArrowLeft,
   ArrowRight,
   Banknote,
   Check,
   CheckCircle2,
   ClipboardCheck,
+  Clock3,
   Coins,
   CreditCard,
   FileText,
@@ -25,6 +27,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+
 import {
   Card,
   CardContent,
@@ -49,6 +52,11 @@ import { FindInvoiceSection } from "@/components/payment/section/FindInvoiceSect
 
 import { usePaymentOptions } from "@/hooks/revenue/payment-option.hook";
 
+import {
+  useCreateBankTransfer,
+  useInitializeOnlinePayment,
+} from "@/hooks/payment/payment.hook";
+
 import type { BankAccount } from "@/types/revenue/bank-account";
 import type { PaymentProvider } from "@/types/revenue/payment-provider";
 
@@ -56,6 +64,7 @@ import type {
   AgentPendingInvoice,
   AgentPendingInvoiceStatus,
 } from "@/types/agent/agent-invoice";
+
 
 /* =========================================================
    CONSTANTS
@@ -68,12 +77,8 @@ const PAD_X = "px-4 sm:px-6";
 
 const RECEIPT_MAX_MB = 5;
 
-/*
- * Keep the services list compact when an invoice contains
- * many services. The full invoice remains authoritative;
- * this is only a payment-context summary.
- */
 const MAX_VISIBLE_SERVICES = 6;
+
 
 /* =========================================================
    TYPES
@@ -85,8 +90,13 @@ type Step =
   | "review"
   | "done";
 
+type SubmittedStatus =
+  | "COMPLETED"
+  | "PENDING";
+
+
 /* =========================================================
-   STATUS
+   STATUS STYLE
    ========================================================= */
 
 const STATUS_STYLE: Record<
@@ -111,6 +121,7 @@ const STATUS_STYLE: Record<
     dot: "bg-red-600",
   },
 };
+
 
 /* =========================================================
    STEPS
@@ -138,6 +149,7 @@ const STEPS: {
   },
 ];
 
+
 /* =========================================================
    HELPERS
    ========================================================= */
@@ -158,12 +170,21 @@ function etb(amount: string | number): string {
   }).format(value)}`;
 }
 
+
+function getTodayDate(): string {
+  return new Date()
+    .toISOString()
+    .slice(0, 10);
+}
+
+
 /* =========================================================
    PAGE
    ========================================================= */
 
 export default function PaymentProcessPage() {
   const router = useRouter();
+
 
   /* =======================================================
      PAYMENT OPTIONS
@@ -179,26 +200,50 @@ export default function PaymentProcessPage() {
   const paymentOptions =
     paymentOptionsResponse?.data;
 
-  const bankAccounts =
-    paymentOptions?.bank_accounts?.filter(
-      (bank) => bank.is_active,
-    ) ?? [];
+  const bankAccounts = useMemo(
+    () =>
+      paymentOptions?.bank_accounts?.filter(
+        (bank) => bank.is_active,
+      ) ?? [],
+    [paymentOptions?.bank_accounts],
+  );
 
-  const paymentProviders =
-    paymentOptions?.payment_providers?.filter(
-      (provider) => provider.is_active,
-    ) ?? [];
+  const paymentProviders = useMemo(
+    () =>
+      paymentOptions?.payment_providers?.filter(
+        (provider) => provider.is_active,
+      ) ?? [],
+    [paymentOptions?.payment_providers],
+  );
 
-  /*
-   * Cash is intentionally excluded from this page.
-   *
-   * This page is for agent-assisted:
-   *
-   * - online payment
-   * - bank transfer
-   *
-   * Cash collection has its own workflow.
-   */
+
+  /* =======================================================
+     BANK TRANSFER MUTATION
+     ======================================================= */
+
+  const {
+    mutateAsync: createBankTransfer,
+    isPending: isCreatingBankTransfer,
+    error: bankTransferError,
+    reset: resetBankTransferMutation,
+  } = useCreateBankTransfer();
+
+
+  /* =======================================================
+     ONLINE PAYMENT MUTATION
+     ======================================================= */
+
+  const {
+    mutateAsync: initializeOnlinePayment,
+    isPending: isInitializingOnlinePayment,
+    error: onlinePaymentError,
+    reset: resetOnlinePaymentMutation,
+  } = useInitializeOnlinePayment();
+
+
+  /* =======================================================
+     AVAILABLE METHODS
+     ======================================================= */
 
   const hasOnlinePayment =
     paymentOptions?.payment_methods?.includes(
@@ -210,6 +255,7 @@ export default function PaymentProcessPage() {
       "BANK",
     ) ?? false;
 
+
   /* =======================================================
      FLOW STATE
      ======================================================= */
@@ -219,6 +265,7 @@ export default function PaymentProcessPage() {
 
   const [invoice, setInvoice] =
     useState<AgentPendingInvoice | null>(null);
+
 
   /* =======================================================
      PAYMENT AMOUNT
@@ -230,6 +277,7 @@ export default function PaymentProcessPage() {
   const [partAmount, setPartAmount] =
     useState("");
 
+
   /* =======================================================
      PAYMENT METHOD
      ======================================================= */
@@ -239,6 +287,7 @@ export default function PaymentProcessPage() {
 
   const [selectedProvider, setSelectedProvider] =
     useState<PaymentProvider | null>(null);
+
 
   /* =======================================================
      BANK TRANSFER
@@ -250,15 +299,23 @@ export default function PaymentProcessPage() {
   const [bankRef, setBankRef] =
     useState("");
 
+  const [transferDate, setTransferDate] =
+    useState(getTodayDate());
+
   const [receipt, setReceipt] =
     useState<File | null>(null);
 
+
   /* =======================================================
-     SUCCESS
+     SUCCESS / RESULT
      ======================================================= */
 
   const [reference, setReference] =
     useState("");
+
+  const [submittedStatus, setSubmittedStatus] =
+    useState<SubmittedStatus>("PENDING");
+
 
   /* =======================================================
      INITIALIZE PAYMENT OPTIONS
@@ -289,6 +346,7 @@ export default function PaymentProcessPage() {
     selectedBank,
   ]);
 
+
   /* =======================================================
      KEEP PAYMENT METHOD VALID
      ======================================================= */
@@ -316,6 +374,7 @@ export default function PaymentProcessPage() {
     hasBankTransfer,
   ]);
 
+
   /* =======================================================
      DERIVED PAYMENT STATE
      ======================================================= */
@@ -329,7 +388,14 @@ export default function PaymentProcessPage() {
       ? balance
       : Number(partAmount || 0);
 
-  const remaining = Math.max(
+  /*
+   * This is the projected balance if the payment becomes
+   * COMPLETED.
+   *
+   * For a PENDING bank transfer, the actual invoice balance
+   * remains unchanged until verification.
+   */
+  const projectedRemaining = Math.max(
     balance - amount,
     0,
   );
@@ -345,6 +411,16 @@ export default function PaymentProcessPage() {
         }`
       : `Online · ${providerLabel}`;
 
+
+  /* =======================================================
+     SUBMISSION STATE
+     ======================================================= */
+
+  const isSubmitting =
+    isCreatingBankTransfer ||
+    isInitializingOnlinePayment;
+
+
   /* =======================================================
      VALIDATION
      ======================================================= */
@@ -359,40 +435,48 @@ export default function PaymentProcessPage() {
         : "Must be less than the balance. Choose Pay in full instead."
       : null;
 
+
   const amountReady =
     amountMode === "FULL"
       ? balance > 0
       : amount > 0 &&
         amount < balance;
 
+
+  /*
+   * Evidence is intentionally optional because the backend
+   * request defines it as nullable.
+   */
   const methodReady =
     method === "ONLINE"
       ? selectedProvider !== null
       : selectedBank !== null &&
         bankRef.trim().length >= 6 &&
-        receipt !== null;
+        transferDate !== "";
+
 
   const canReview =
     invoice !== null &&
     amountReady &&
-    methodReady;
+    methodReady &&
+    !isSubmitting;
+
 
   /* =======================================================
-     ACTIONS
+     SELECT INVOICE
      ======================================================= */
 
   function selectInvoice(
     selected: AgentPendingInvoice,
   ) {
+    resetBankTransferMutation();
+    resetOnlinePaymentMutation();
+
     setInvoice(selected);
 
     setAmountMode("FULL");
     setPartAmount("");
 
-    /*
-     * Prefer online payment when configured.
-     * Otherwise use bank transfer.
-     */
     if (hasOnlinePayment) {
       setMethod("ONLINE");
     } else if (hasBankTransfer) {
@@ -400,6 +484,9 @@ export default function PaymentProcessPage() {
     }
 
     setBankRef("");
+    setTransferDate(
+      getTodayDate(),
+    );
     setReceipt(null);
 
     setSelectedProvider(
@@ -410,10 +497,21 @@ export default function PaymentProcessPage() {
       bankAccounts[0] ?? null,
     );
 
+    setReference("");
+    setSubmittedStatus("PENDING");
+
     setStep("payment");
   }
 
+
+  /* =======================================================
+     RESET
+     ======================================================= */
+
   function resetAll() {
+    resetBankTransferMutation();
+    resetOnlinePaymentMutation();
+
     setStep("find");
 
     setInvoice(null);
@@ -436,68 +534,251 @@ export default function PaymentProcessPage() {
     );
 
     setBankRef("");
+    setTransferDate(
+      getTodayDate(),
+    );
+    setReceipt(null);
+
+    setReference("");
+    setSubmittedStatus("PENDING");
+  }
+
+
+  /* =======================================================
+     CHANGE INVOICE
+     ======================================================= */
+
+  function changeInvoice() {
+    if (isSubmitting) {
+      return;
+    }
+
+    resetBankTransferMutation();
+    resetOnlinePaymentMutation();
+
+    setInvoice(null);
+    setStep("find");
+
+    setBankRef("");
+    setTransferDate(
+      getTodayDate(),
+    );
     setReceipt(null);
 
     setReference("");
   }
 
-  function confirmPayment() {
-    if (!invoice || !canReview) {
+
+  /* =======================================================
+     CONFIRM PAYMENT
+     ======================================================= */
+
+  async function confirmPayment() {
+    if (
+      !invoice ||
+      !canReview ||
+      isSubmitting
+    ) {
       return;
     }
 
-    /*
-     * Replace this with the real payment API call.
-     *
-     * Backend remains the source of truth and must
-     * revalidate:
-     *
-     * - invoice
-     * - invoice balance
-     * - payment method
-     * - bank account
-     * - payment provider
-     * - amount
-     * - provider fee
-     *
-     * The authenticated agent is recorded on the
-     * payment transaction, NOT on the invoice.
-     */
 
-    console.log({
-      invoice_id: invoice.id,
-      amount_mode: amountMode,
-      amount,
+    /* =====================================================
+       BANK TRANSFER
+       ===================================================== */
 
-      payment_method:
-        method === "BANK_TRANSFER"
-          ? "BANK"
-          : "MOBILE_MONEY",
+    if (method === "BANK_TRANSFER") {
+      if (!selectedBank) {
+        return;
+      }
 
-      ...(method === "BANK_TRANSFER"
-        ? {
+      try {
+        const response =
+          await createBankTransfer({
+            invoice_id:
+              invoice.id,
+
+            amount,
+
             bank_account_id:
-              selectedBank?.id,
+              selectedBank.id,
 
             transfer_reference:
               bankRef.trim(),
 
-            evidence: receipt,
-          }
-        : {
-            payment_provider:
-              selectedProvider?.code,
-          }),
-    });
+            transfer_date:
+              transferDate,
 
-    setReference(
-      `PAY-${Date.now()
-        .toString()
-        .slice(-8)}`,
-    );
+            payer_name:
+              invoice.taxpayer?.name ??
+              undefined,
 
-    setStep("done");
+            evidence:
+              receipt ?? undefined,
+
+            metadata: {
+              amount_mode:
+                amountMode,
+
+              source:
+                "REVENUE_COLLECTION_PORTAL",
+
+              invoice_number:
+                invoice.invoice_number,
+            },
+          });
+
+
+        /*
+         * The backend returns ApiResponse<Payment>.
+         *
+         * response.data may be nullable according to the
+         * TypeScript contract, therefore we explicitly guard
+         * it before accessing payment properties.
+         */
+        const payment =
+          response.data;
+
+        if (!payment) {
+          throw new Error(
+            "Payment was not returned by the server.",
+          );
+        }
+
+
+        /*
+         * Use the backend-generated reference.
+         *
+         * Never generate a fake payment reference in the
+         * frontend.
+         */
+        setReference(
+          payment.transaction_reference ??
+          payment.payment_number ??
+          payment.id,
+        );
+
+
+        /*
+         * Bank transfers are normally PENDING immediately
+         * after submission.
+         *
+         * They only become COMPLETED after verification.
+         */
+        setSubmittedStatus(
+          payment.status ===
+            "COMPLETED"
+            ? "COMPLETED"
+            : "PENDING",
+        );
+
+
+        setStep("done");
+      } catch {
+        /*
+         * The normalized mutation error is displayed above
+         * the payment flow.
+         *
+         * Keep the user on the review page so they can
+         * correct the information and retry.
+         */
+        return;
+      }
+
+      return;
+    }
+
+
+    /* =====================================================
+       ONLINE PAYMENT
+       ===================================================== */
+
+    if (method === "ONLINE") {
+      if (!selectedProvider) {
+        return;
+      }
+
+      /*
+       * IMPORTANT:
+       *
+       * The exact InitializeOnlinePaymentRequest fields must
+       * match your backend request type.
+       *
+       * The request below intentionally uses only fields that
+       * belong to the payment initialization contract.
+       */
+      try {
+        const response =
+          await initializeOnlinePayment({
+            invoice_id:
+              invoice.id,
+
+            amount,
+
+            provider:
+              selectedProvider.code,
+          });
+
+        /*
+         * The online provider flow should be handled using
+         * the response returned by the backend.
+         *
+         * Do not mark the payment COMPLETED simply because
+         * initialization succeeded.
+         */
+        const payment =
+          response.data;
+
+        if (!payment) {
+          throw new Error(
+            "Online payment initialization did not return a payment.",
+          );
+        }
+
+        /*
+         * The exact redirect/checkout field depends on your
+         * InitializeOnlinePaymentResponse contract.
+         *
+         * The page should redirect to the provider checkout
+         * URL returned by the backend here.
+         */
+        if (
+          "checkout_url" in payment &&
+          typeof payment.checkout_url ===
+            "string"
+        ) {
+          window.location.assign(
+            payment.checkout_url,
+          );
+
+          return;
+        }
+
+        if (
+          "payment_url" in payment &&
+          typeof payment.payment_url ===
+            "string"
+        ) {
+          window.location.assign(
+            payment.payment_url,
+          );
+
+          return;
+        }
+
+        /*
+         * If the backend does not return a checkout URL,
+         * do not pretend that the payment was completed.
+         */
+        throw new Error(
+          "Online payment was initialized, but no checkout URL was returned.",
+        );
+      } catch {
+        return;
+      }
+    }
   }
+
 
   /* =======================================================
      STEP
@@ -508,30 +789,35 @@ export default function PaymentProcessPage() {
       (item) => item.key === step,
     );
 
+
   /* =======================================================
      RENDER
      ======================================================= */
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-4 sm:space-y-6">
+
       {/* ===================================================
           HEADER
           =================================================== */}
 
       <header className="overflow-hidden rounded-xl border bg-card text-card-foreground">
+
         <div
           className={`${PAD_X} pb-5 pt-4`}
         >
           <button
             type="button"
             onClick={() => router.back()}
-            className="inline-flex items-center gap-1.5 rounded-md text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            disabled={isSubmitting}
+            className="inline-flex items-center gap-1.5 rounded-md text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
           >
             <ArrowLeft className="h-4 w-4" />
             Back
           </button>
 
           <div className="mt-3 flex items-center gap-3">
+
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border bg-background">
               <Landmark className="h-5 w-5" />
             </div>
@@ -545,6 +831,7 @@ export default function PaymentProcessPage() {
                 Process payment
               </h1>
             </div>
+
           </div>
         </div>
 
@@ -554,21 +841,27 @@ export default function PaymentProcessPage() {
             className="border-t bg-muted/30 px-4 py-3 sm:px-6"
           >
             <ol className="flex items-center gap-3">
+
               {STEPS.map(
                 (item, index) => {
-                  const Icon = item.icon;
+                  const Icon =
+                    item.icon;
 
                   const done =
                     index < stepIndex;
 
                   const active =
-                    index === stepIndex;
+                    index ===
+                    stepIndex;
 
                   return (
                     <li
-                      key={item.key}
+                      key={
+                        item.key
+                      }
                       className="flex flex-1 items-center gap-3 last:flex-none"
                     >
+
                       <div
                         aria-current={
                           active
@@ -576,11 +869,13 @@ export default function PaymentProcessPage() {
                             : undefined
                         }
                         className={`flex items-center gap-2 ${
-                          active || done
+                          active ||
+                          done
                             ? "text-foreground"
                             : "text-muted-foreground"
                         }`}
                       >
+
                         <span
                           className={`flex h-7 w-7 items-center justify-center rounded-full ${
                             active
@@ -598,8 +893,11 @@ export default function PaymentProcessPage() {
                         </span>
 
                         <span className="hidden text-xs font-medium sm:inline">
-                          {item.label}
+                          {
+                            item.label
+                          }
                         </span>
+
                       </div>
 
                       {index <
@@ -614,14 +912,18 @@ export default function PaymentProcessPage() {
                           }`}
                         />
                       )}
+
                     </li>
                   );
                 },
               )}
+
             </ol>
           </nav>
         )}
+
       </header>
+
 
       {/* ===================================================
           PAYMENT OPTIONS LOADING
@@ -630,6 +932,7 @@ export default function PaymentProcessPage() {
       {isPaymentOptionsLoading &&
         step !== "done" && (
           <div className="flex items-center gap-3 rounded-lg border bg-muted/30 p-4 text-sm">
+
             <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
 
             <div>
@@ -641,8 +944,10 @@ export default function PaymentProcessPage() {
                 Checking available banks and online payment providers.
               </p>
             </div>
+
           </div>
         )}
+
 
       {/* ===================================================
           PAYMENT OPTIONS ERROR
@@ -651,6 +956,7 @@ export default function PaymentProcessPage() {
       {isPaymentOptionsError &&
         step !== "done" && (
           <div className="flex items-center justify-between gap-4 rounded-lg border border-destructive/30 bg-destructive/5 p-4">
+
             <div>
               <p className="text-sm font-medium">
                 Payment options unavailable
@@ -668,11 +974,66 @@ export default function PaymentProcessPage() {
               onClick={() =>
                 refetchPaymentOptions()
               }
+              disabled={isSubmitting}
             >
               Try again
             </Button>
+
           </div>
         )}
+
+
+      {/* ===================================================
+          BANK TRANSFER ERROR
+          =================================================== */}
+
+      {bankTransferError &&
+        step !== "done" && (
+          <div className="flex items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-4">
+
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+
+            <div className="min-w-0">
+              <p className="text-sm font-medium">
+                Bank transfer could not be recorded
+              </p>
+
+              <p className="mt-1 text-xs text-muted-foreground">
+                {bankTransferError instanceof Error
+                  ? bankTransferError.message
+                  : "Please review the payment information and try again."}
+              </p>
+            </div>
+
+          </div>
+        )}
+
+
+      {/* ===================================================
+          ONLINE PAYMENT ERROR
+          =================================================== */}
+
+      {onlinePaymentError &&
+        step !== "done" && (
+          <div className="flex items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-4">
+
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+
+            <div className="min-w-0">
+              <p className="text-sm font-medium">
+                Online payment could not be initialized
+              </p>
+
+              <p className="mt-1 text-xs text-muted-foreground">
+                {onlinePaymentError instanceof Error
+                  ? onlinePaymentError.message
+                  : "Please review the payment information and try again."}
+              </p>
+            </div>
+
+          </div>
+        )}
+
 
       {/* ===================================================
           SUCCESS
@@ -681,49 +1042,111 @@ export default function PaymentProcessPage() {
       {step === "done" &&
         invoice && (
           <Card>
+
             <CardContent className="flex flex-col items-center px-4 py-10 text-center sm:px-6">
+
               <div className="flex h-14 w-14 items-center justify-center rounded-full border">
-                <CheckCircle2 className="h-7 w-7 text-primary" />
+                {submittedStatus ===
+                "PENDING" ? (
+                  <Clock3 className="h-7 w-7 text-muted-foreground" />
+                ) : (
+                  <CheckCircle2 className="h-7 w-7 text-primary" />
+                )}
               </div>
 
               <h2 className="mt-4 text-lg font-semibold">
+
                 {method ===
-                "BANK_TRANSFER"
-                  ? "Bank transfer recorded"
+                  "BANK_TRANSFER"
+                  ? submittedStatus ===
+                    "PENDING"
+                    ? "Bank transfer submitted"
+                    : "Bank transfer completed"
                   : "Payment recorded"}
+
               </h2>
 
               <p className="mt-1 max-w-md text-sm text-muted-foreground">
-                {etb(amount)} was applied to{" "}
-                {invoice.invoice_number} for{" "}
-                {invoice.taxpayer?.name ??
-                  "the taxpayer"}
-                .
+
+                {method ===
+                  "BANK_TRANSFER"
+                  ? submittedStatus ===
+                    "PENDING"
+                    ? `${etb(amount)} has been submitted for verification against ${invoice.invoice_number}.`
+                    : `${etb(amount)} was applied to ${invoice.invoice_number}.`
+                  : `${etb(amount)} was applied to ${invoice.invoice_number}.`}
+
               </p>
 
+
+              {/* =============================================
+                  PENDING NOTICE
+                  ============================================= */}
+
+              {method ===
+                "BANK_TRANSFER" &&
+                submittedStatus ===
+                  "PENDING" && (
+                  <div className="mt-4 flex max-w-md items-start gap-2 rounded-lg border bg-muted/30 px-3 py-2 text-left text-xs text-muted-foreground">
+
+                    <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
+
+                    <span>
+                      The payment is pending verification.
+                      It will affect the invoice balance only
+                      after an authorized officer verifies the
+                      bank transfer.
+                    </span>
+
+                  </div>
+                )}
+
+
               <dl className="mt-6 w-full max-w-sm divide-y rounded-lg border px-4 text-left">
+
                 <Row
                   icon={Hash}
                   label="Reference"
-                  value={reference}
+                  value={
+                    reference
+                  }
                   mono
                 />
 
                 <Row
                   icon={CreditCard}
                   label="Method"
-                  value={methodLabel}
+                  value={
+                    methodLabel
+                  }
                 />
 
-                <Row
-                  icon={Wallet}
-                  label="Remaining"
-                  value={etb(remaining)}
-                  strong
-                />
+                {submittedStatus ===
+                  "PENDING" ? (
+                  <Row
+                    icon={Wallet}
+                    label="Current balance"
+                    value={etb(
+                      balance,
+                    )}
+                    strong
+                  />
+                ) : (
+                  <Row
+                    icon={Wallet}
+                    label="Remaining"
+                    value={etb(
+                      projectedRemaining,
+                    )}
+                    strong
+                  />
+                )}
+
               </dl>
 
+
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+
                 <Button
                   variant="outline"
                   onClick={() =>
@@ -734,14 +1157,20 @@ export default function PaymentProcessPage() {
                 </Button>
 
                 <Button
-                  onClick={resetAll}
+                  onClick={
+                    resetAll
+                  }
                 >
                   Process another payment
                 </Button>
+
               </div>
+
             </CardContent>
+
           </Card>
         )}
+
 
       {/* ===================================================
           MAIN FLOW
@@ -749,21 +1178,28 @@ export default function PaymentProcessPage() {
 
       {step !== "done" && (
         <div className="grid gap-4 sm:gap-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
+
           {/* =================================================
               LEFT
               ================================================= */}
 
           <div className="space-y-4 sm:space-y-6">
+
             {/* ===============================================
                 FIND INVOICE
                 =============================================== */}
 
             {step === "find" && (
               <FindInvoiceSection
-                selectedInvoice={invoice}
-                onSelect={selectInvoice}
+                selectedInvoice={
+                  invoice
+                }
+                onSelect={
+                  selectInvoice
+                }
               />
             )}
+
 
             {/* ===============================================
                 SELECTED INVOICE
@@ -772,13 +1208,15 @@ export default function PaymentProcessPage() {
             {invoice &&
               step !== "find" && (
                 <SelectedInvoiceCard
-                  invoice={invoice}
-                  onChangeInvoice={() => {
-                    setInvoice(null);
-                    setStep("find");
-                  }}
+                  invoice={
+                    invoice
+                  }
+                  onChangeInvoice={
+                    changeInvoice
+                  }
                 />
               )}
+
 
             {/* ===============================================
                 FULLY PAID
@@ -787,6 +1225,7 @@ export default function PaymentProcessPage() {
             {invoice &&
               balance === 0 && (
                 <div className="flex items-start gap-3 rounded-lg border bg-muted/30 p-4">
+
                   <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
 
                   <div>
@@ -798,8 +1237,10 @@ export default function PaymentProcessPage() {
                       No balance is outstanding. Search for another invoice.
                     </p>
                   </div>
+
                 </div>
               )}
+
 
             {/* ===============================================
                 PAYMENT
@@ -809,11 +1250,14 @@ export default function PaymentProcessPage() {
               balance > 0 &&
               step === "payment" && (
                 <Card>
+
                   <CardHeader
                     className={`border-b py-4 ${PAD_X}`}
                   >
                     <SectionHeader
-                      icon={CreditCard}
+                      icon={
+                        CreditCard
+                      }
                       title="Payment"
                       hint="Choose the amount and how it is paid"
                     />
@@ -822,11 +1266,18 @@ export default function PaymentProcessPage() {
                   <CardContent
                     className={`space-y-6 sm:space-y-8 ${PAD}`}
                   >
+
                     <PaymentAmountSection
                       currency="ETB"
-                      balanceDue={balance}
-                      mode={amountMode}
-                      amount={partAmount}
+                      balanceDue={
+                        balance
+                      }
+                      mode={
+                        amountMode
+                      }
+                      amount={
+                        partAmount
+                      }
                       onModeChange={(
                         nextMode,
                       ) => {
@@ -850,13 +1301,19 @@ export default function PaymentProcessPage() {
 
                     {amountError && (
                       <p className="text-xs text-destructive">
-                        {amountError}
+                        {
+                          amountError
+                        }
                       </p>
                     )}
 
+
                     <div className="border-t pt-6">
+
                       <PaymentMethodSection
-                        method={method}
+                        method={
+                          method
+                        }
                         onMethodChange={
                           setMethod
                         }
@@ -868,13 +1325,17 @@ export default function PaymentProcessPage() {
                         }
                       />
 
+
                       {method ===
                         "ONLINE" && (
                         <div className="mt-4">
+
                           {paymentProviders.length >
                           0 ? (
                             <OnlinePaymentSection
-                              amount={amount}
+                              amount={
+                                amount
+                              }
                               currency="ETB"
                               providers={
                                 paymentProviders
@@ -892,12 +1353,15 @@ export default function PaymentProcessPage() {
                               description="Online payment is currently unavailable. Please choose another payment method."
                             />
                           )}
+
                         </div>
                       )}
+
 
                       {method ===
                         "BANK_TRANSFER" && (
                         <div className="mt-4">
+
                           {bankAccounts.length >
                           0 ? (
                             <BankTransferSection
@@ -916,6 +1380,12 @@ export default function PaymentProcessPage() {
                               onTransferReferenceChange={
                                 setBankRef
                               }
+                              transferDate={
+                                transferDate
+                              }
+                              onTransferDateChange={
+                                setTransferDate
+                              }
                               evidence={
                                 receipt
                               }
@@ -932,16 +1402,23 @@ export default function PaymentProcessPage() {
                               description="Bank transfer is currently unavailable. Please choose another payment method."
                             />
                           )}
+
                         </div>
                       )}
+
                     </div>
 
+
                     <div className="flex flex-col-reverse gap-3 border-t pt-5 sm:flex-row sm:justify-end">
+
                       <Button
                         type="button"
                         variant="outline"
                         onClick={
                           resetAll
+                        }
+                        disabled={
+                          isSubmitting
                         }
                       >
                         <X className="mr-2 h-4 w-4" />
@@ -963,10 +1440,14 @@ export default function PaymentProcessPage() {
                         Review payment
                         <ArrowRight className="ml-2 h-4 w-4" />
                       </Button>
+
                     </div>
+
                   </CardContent>
+
                 </Card>
               )}
+
 
             {/* ===============================================
                 REVIEW
@@ -975,6 +1456,7 @@ export default function PaymentProcessPage() {
             {invoice &&
               step === "review" && (
                 <Card>
+
                   <CardHeader
                     className={`border-b py-4 ${PAD_X}`}
                   >
@@ -987,16 +1469,24 @@ export default function PaymentProcessPage() {
                     />
                   </CardHeader>
 
-                  <CardContent className={PAD}>
+                  <CardContent
+                    className={PAD}
+                  >
+
                     <dl className="divide-y rounded-lg border px-4">
+
                       <Row
-                        icon={UserRound}
+                        icon={
+                          UserRound
+                        }
                         label="Taxpayer"
                         value={`${invoice.taxpayer?.name ?? "—"} (${invoice.taxpayer?.taxpayer_number ?? "—"})`}
                       />
 
                       <Row
-                        icon={FileText}
+                        icon={
+                          FileText
+                        }
                         label="Invoice"
                         value={
                           invoice.invoice_number
@@ -1004,7 +1494,9 @@ export default function PaymentProcessPage() {
                       />
 
                       <Row
-                        icon={Coins}
+                        icon={
+                          Coins
+                        }
                         label="Payment type"
                         value={
                           amountMode ===
@@ -1015,12 +1507,15 @@ export default function PaymentProcessPage() {
                       />
 
                       <Row
-                        icon={CreditCard}
+                        icon={
+                          CreditCard
+                        }
                         label="Method"
                         value={
                           methodLabel
                         }
                       />
+
 
                       {method ===
                         "ONLINE" &&
@@ -1036,9 +1531,11 @@ export default function PaymentProcessPage() {
                           />
                         )}
 
+
                       {method ===
                         "BANK_TRANSFER" && (
                         <>
+
                           <Row
                             icon={
                               Landmark
@@ -1052,7 +1549,9 @@ export default function PaymentProcessPage() {
                           />
 
                           <Row
-                            icon={Hash}
+                            icon={
+                              Hash
+                            }
                             label="Reference"
                             value={
                               bankRef.trim()
@@ -1061,18 +1560,34 @@ export default function PaymentProcessPage() {
                           />
 
                           <Row
-                            icon={Receipt}
-                            label="Receipt"
+                            icon={
+                              Clock3
+                            }
+                            label="Transfer date"
                             value={
-                              receipt?.name ??
-                              "—"
+                              transferDate
                             }
                           />
+
+                          <Row
+                            icon={
+                              Receipt
+                            }
+                            label="Evidence"
+                            value={
+                              receipt?.name ??
+                              "Not provided"
+                            }
+                          />
+
                         </>
                       )}
 
+
                       <Row
-                        icon={Banknote}
+                        icon={
+                          Banknote
+                        }
                         label="Amount"
                         value={etb(
                           amount,
@@ -1081,23 +1596,49 @@ export default function PaymentProcessPage() {
                       />
 
                       <Row
-                        icon={Wallet}
-                        label="Remaining"
+                        icon={
+                          Wallet
+                        }
+                        label={
+                          method ===
+                          "BANK_TRANSFER"
+                            ? "Projected remaining"
+                            : "Remaining"
+                        }
                         value={etb(
-                          remaining,
+                          projectedRemaining,
                         )}
                       />
+
                     </dl>
+
 
                     {method ===
                       "BANK_TRANSFER" && (
-                      <p className="mt-4 flex items-center gap-2 text-xs text-muted-foreground">
-                        <ShieldCheck className="h-4 w-4 shrink-0" />
-                        Bank transfers may be verified against the bank statement before the balance is cleared.
-                      </p>
+                      <div className="mt-4 rounded-lg border bg-muted/30 p-3">
+
+                        <p className="flex items-start gap-2 text-xs text-muted-foreground">
+
+                          <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
+
+                          <span>
+                            This transfer will be recorded as
+                            <strong className="mx-1 font-medium text-foreground">
+                              pending
+                            </strong>
+                            until an authorized officer verifies it.
+                            The invoice balance will remain unchanged
+                            until verification.
+                          </span>
+
+                        </p>
+
+                      </div>
                     )}
 
+
                     <div className="mt-6 flex flex-col-reverse gap-3 border-t pt-5 sm:flex-row sm:justify-end">
+
                       <Button
                         type="button"
                         variant="outline"
@@ -1105,6 +1646,9 @@ export default function PaymentProcessPage() {
                           setStep(
                             "payment",
                           )
+                        }
+                        disabled={
+                          isSubmitting
                         }
                       >
                         <ArrowLeft className="mr-2 h-4 w-4" />
@@ -1117,34 +1661,70 @@ export default function PaymentProcessPage() {
                           confirmPayment
                         }
                         disabled={
-                          !canReview
+                          !canReview ||
+                          isSubmitting
                         }
                       >
-                        <Check className="mr-2 h-4 w-4" />
-                        Confirm payment
+                        {isSubmitting ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            {method ===
+                            "BANK_TRANSFER"
+                              ? "Recording transfer..."
+                              : "Initializing payment..."}
+                          </>
+                        ) : (
+                          <>
+                            <Check className="mr-2 h-4 w-4" />
+                            Confirm payment
+                          </>
+                        )}
                       </Button>
+
                     </div>
+
                   </CardContent>
+
                 </Card>
               )}
+
           </div>
+
 
           {/* =================================================
               RIGHT — INVOICE SUMMARY
               ================================================= */}
 
           <aside className="lg:sticky lg:top-6">
+
             {invoice ? (
               <InvoiceSummary
-                invoice={invoice}
-                balance={balance}
-                amount={amount}
-                remaining={remaining}
+                invoice={
+                  invoice
+                }
+                balance={
+                  balance
+                }
+                amount={
+                  amount
+                }
+                remaining={
+                  projectedRemaining
+                }
+                pending={
+                  method ===
+                    "BANK_TRANSFER" &&
+                  submittedStatus ===
+                    "PENDING"
+                }
               />
             ) : (
               <div className="flex items-start gap-3 rounded-lg border border-dashed p-5">
+
                 <Tile
-                  icon={FileText}
+                  icon={
+                    FileText
+                  }
                 />
 
                 <div>
@@ -1156,14 +1736,19 @@ export default function PaymentProcessPage() {
                     Select an invoice to see the taxpayer, services, and balance here.
                   </p>
                 </div>
+
               </div>
             )}
+
           </aside>
+
         </div>
       )}
+
     </div>
   );
 }
+
 
 /* =========================================================
    INVOICE SUMMARY
@@ -1174,11 +1759,13 @@ function InvoiceSummary({
   balance,
   amount,
   remaining,
+  pending,
 }: {
   invoice: AgentPendingInvoice;
   balance: number;
   amount: number;
   remaining: number;
+  pending: boolean;
 }) {
   const services =
     invoice.services ?? [];
@@ -1198,15 +1785,22 @@ function InvoiceSummary({
 
   return (
     <Card>
+
       <CardHeader className="border-b px-4 py-4">
+
         <div className="flex items-center justify-between gap-3">
+
           <div className="flex min-w-0 items-center gap-3">
+
             <Tile
-              icon={UserRound}
+              icon={
+                UserRound
+              }
               accent
             />
 
             <div className="min-w-0">
+
               <p className="truncate text-sm font-semibold">
                 {invoice.taxpayer?.name ??
                   "Taxpayer unavailable"}
@@ -1217,35 +1811,44 @@ function InvoiceSummary({
                   ?.taxpayer_number ??
                   "—"}
               </p>
+
             </div>
+
           </div>
 
           <StatusBadge
-            status={invoice.status}
+            status={
+              invoice.status
+            }
           />
+
         </div>
+
       </CardHeader>
 
+
       <CardContent className="px-4 py-2">
-        {/* =================================================
-            INVOICE
-            ================================================= */}
 
         <dl className="divide-y">
+
           <Row
-            icon={FileText}
+            icon={
+              FileText
+            }
             label="Invoice"
-            value={invoice.invoice_number}
+            value={
+              invoice.invoice_number
+            }
           />
+
         </dl>
 
-        {/* =================================================
-            SERVICES
-            ================================================= */}
 
         {services.length > 0 && (
           <div className="border-t py-3">
+
             <div className="mb-2.5 flex items-center justify-between gap-3">
+
               <div>
                 <p className="text-xs font-semibold">
                   Services
@@ -1257,20 +1860,32 @@ function InvoiceSummary({
               </div>
 
               <span className="shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                {services.length}
+                {
+                  services.length
+                }
               </span>
+
             </div>
 
             <div className="space-y-1.5">
+
               {visibleServices.map(
-                (service) => (
+                (
+                  service,
+                ) => (
                   <div
-                    key={service.id}
+                    key={
+                      service.id
+                    }
                     className="flex items-start justify-between gap-3 rounded-md px-2.5 py-2 transition-colors hover:bg-muted/40"
                   >
+
                     <div className="min-w-0">
+
                       <p className="text-xs font-medium leading-4">
-                        {service.name}
+                        {
+                          service.name
+                        }
                       </p>
 
                       {service.description &&
@@ -1282,6 +1897,7 @@ function InvoiceSummary({
                             }
                           </p>
                         )}
+
                     </div>
 
                     <p className="shrink-0 text-xs font-medium tabular-nums">
@@ -1289,44 +1905,60 @@ function InvoiceSummary({
                         service.amount,
                       )}
                     </p>
+
                   </div>
                 ),
               )}
+
             </div>
 
             {hiddenServiceCount > 0 && (
               <div className="mt-2 rounded-md bg-muted/40 px-2.5 py-2 text-center">
+
                 <p className="text-[11px] text-muted-foreground">
-                  + {hiddenServiceCount}{" "}
+                  +{" "}
+                  {
+                    hiddenServiceCount
+                  }{" "}
                   more{" "}
-                  {hiddenServiceCount ===
-                  1
-                    ? "service"
-                    : "services"}
+                  {
+                    hiddenServiceCount ===
+                    1
+                      ? "service"
+                      : "services"
+                  }
                 </p>
+
               </div>
             )}
+
           </div>
         )}
+
 
         {services.length === 0 && (
           <div className="border-t py-3">
+
             <div className="rounded-md border border-dashed px-3 py-2.5">
+
               <p className="text-[11px] text-muted-foreground">
                 Service details are not available for this invoice.
               </p>
+
             </div>
+
           </div>
         )}
 
-        {/* =================================================
-            AMOUNT SUMMARY
-            ================================================= */}
 
         <div className="border-t">
+
           <dl className="divide-y">
+
             <Row
-              icon={Receipt}
+              icon={
+                Receipt
+              }
               label="Total"
               value={etb(
                 invoice.total_amount,
@@ -1334,7 +1966,9 @@ function InvoiceSummary({
             />
 
             <Row
-              icon={CheckCircle2}
+              icon={
+                CheckCircle2
+              }
               label="Paid"
               value={etb(
                 invoice.paid_amount,
@@ -1342,40 +1976,64 @@ function InvoiceSummary({
             />
 
             <Row
-              icon={Wallet}
+              icon={
+                Wallet
+              }
               label="Balance due"
-              value={etb(balance)}
+              value={etb(
+                balance,
+              )}
               strong
             />
+
           </dl>
+
         </div>
 
-        {/* =================================================
-            CURRENT PAYMENT
-            ================================================= */}
 
         {balance > 0 && (
           <div className="-mx-4 mt-2 border-t bg-muted/30 px-4 py-3">
+
             <dl>
+
               <Row
-                icon={Banknote}
+                icon={
+                  Banknote
+                }
                 label="This payment"
-                value={etb(amount)}
+                value={etb(
+                  amount,
+                )}
                 strong
               />
 
               <Row
-                icon={Wallet}
-                label="Remaining"
-                value={etb(remaining)}
+                icon={
+                  Wallet
+                }
+                label={
+                  pending
+                    ? "Current balance"
+                    : "Projected remaining"
+                }
+                value={etb(
+                  pending
+                    ? balance
+                    : remaining,
+                )}
               />
+
             </dl>
+
           </div>
         )}
+
       </CardContent>
+
     </Card>
   );
 }
+
 
 /* =========================================================
    SELECTED INVOICE
@@ -1390,47 +2048,69 @@ function SelectedInvoiceCard({
 }) {
   return (
     <Card>
+
       <CardContent className="flex items-center justify-between gap-4 p-4">
+
         <div className="flex min-w-0 items-center gap-3">
+
           <Tile
-            icon={FileText}
+            icon={
+              FileText
+            }
             accent
           />
 
           <div className="min-w-0">
+
             <div className="flex items-center gap-2">
+
               <p className="truncate text-sm font-semibold">
-                {invoice.invoice_number}
+                {
+                  invoice.invoice_number
+                }
               </p>
 
               <StatusBadge
-                status={invoice.status}
+                status={
+                  invoice.status
+                }
               />
+
             </div>
 
             <p className="mt-1 truncate text-xs text-muted-foreground">
+
               {invoice.taxpayer?.name ??
                 "Taxpayer unavailable"}
+
               {invoice.taxpayer
                 ?.taxpayer_number
                 ? ` · ${invoice.taxpayer.taxpayer_number}`
                 : ""}
+
             </p>
+
           </div>
+
         </div>
 
         <Button
           type="button"
           variant="outline"
           size="sm"
-          onClick={onChangeInvoice}
+          onClick={
+            onChangeInvoice
+          }
         >
           Change
         </Button>
+
       </CardContent>
+
     </Card>
   );
 }
+
 
 /* =========================================================
    UNAVAILABLE PAYMENT METHOD
@@ -1445,6 +2125,7 @@ function UnavailablePaymentMethod({
 }) {
   return (
     <div className="rounded-lg border border-dashed p-4">
+
       <p className="text-sm font-medium">
         {title}
       </p>
@@ -1452,9 +2133,11 @@ function UnavailablePaymentMethod({
       <p className="mt-1 text-xs text-muted-foreground">
         {description}
       </p>
+
     </div>
   );
 }
+
 
 /* =========================================================
    TILE
@@ -1481,6 +2164,7 @@ function Tile({
   );
 }
 
+
 /* =========================================================
    SECTION HEADER
    ========================================================= */
@@ -1496,12 +2180,14 @@ function SectionHeader({
 }) {
   return (
     <div className="flex items-center gap-3">
+
       <Tile
         icon={icon}
         accent
       />
 
       <div>
+
         <h2 className="text-base font-semibold leading-tight">
           {title}
         </h2>
@@ -1509,10 +2195,13 @@ function SectionHeader({
         <p className="text-xs text-muted-foreground">
           {hint}
         </p>
+
       </div>
+
     </div>
   );
 }
+
 
 /* =========================================================
    STATUS BADGE
@@ -1530,15 +2219,18 @@ function StatusBadge({
 
   return (
     <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium">
+
       <span
         aria-hidden="true"
         className={`h-1.5 w-1.5 rounded-full ${dot}`}
       />
 
       {label}
+
     </span>
   );
 }
+
 
 /* =========================================================
    ROW
@@ -1559,13 +2251,17 @@ function Row({
 }) {
   return (
     <div className="flex items-center justify-between gap-4 py-2.5 text-sm">
+
       <dt className="flex shrink-0 items-center gap-2 text-muted-foreground">
+
         <Icon className="h-4 w-4 shrink-0" />
+
         {label}
+
       </dt>
 
       <dd
-        className={`min-w-0 text-right tabular-nums ${
+        className={`min-w-0 max-w-[65%] truncate text-right tabular-nums ${
           strong
             ? "font-semibold"
             : "font-medium"
@@ -1577,6 +2273,7 @@ function Row({
       >
         {value}
       </dd>
+
     </div>
   );
 }

@@ -177,8 +177,7 @@ export const usePayments = ({
 // Returns:
 // - invoice
 // - citizen
-// - service
-// - method details
+// - method-specific details
 // - receipt
 // - files
 //
@@ -270,9 +269,6 @@ export const usePaymentReceipt = (
 //
 // Returns a Blob.
 //
-// The caller is responsible for creating the browser
-// download URL.
-//
 // =====================================================
 
 export const useDownloadPaymentReceiptPdf = () => {
@@ -297,9 +293,6 @@ export const useDownloadPaymentReceiptPdf = () => {
 // GET /payments/{payment}/receipt/pdf/stream
 //
 // Returns a Blob.
-//
-// The caller can create an object URL and open the PDF
-// in a new browser tab.
 //
 // =====================================================
 
@@ -338,7 +331,7 @@ export const useStreamPaymentReceiptPdf = () => {
 //    ↓
 // COMPLETED / FAILED / CANCELLED / EXPIRED
 //
-// Initialization itself does NOT complete the payment.
+// Initialization does NOT complete the payment.
 //
 // =====================================================
 
@@ -359,12 +352,6 @@ export const useInitializeOnlinePayment = () => {
 
     onSuccess:
       () => {
-        /*
-         * The payment list may now contain the newly
-         * initialized payment.
-         *
-         * Do not update financial state manually.
-         */
         queryClient.invalidateQueries({
           queryKey:
             paymentKeys.lists(),
@@ -387,7 +374,7 @@ export const useInitializeOnlinePayment = () => {
 // PENDING
 // PROCESSING
 //
-// Stop polling for all terminal states.
+// Stop polling for terminal states.
 //
 // =====================================================
 
@@ -475,9 +462,6 @@ export const useCreateCashPayment = () => {
 
     onSuccess:
       (response) => {
-        /*
-         * Payment list changed.
-         */
         queryClient.invalidateQueries({
           queryKey:
             paymentKeys.lists(),
@@ -490,9 +474,6 @@ export const useCreateCashPayment = () => {
           return;
         }
 
-        /*
-         * Refresh exact payment.
-         */
         queryClient.invalidateQueries({
           queryKey:
             paymentKeys.detail(
@@ -539,9 +520,6 @@ export const useCompleteCashPayment = () => {
 
     onSuccess:
       (response) => {
-        /*
-         * Payment list changed.
-         */
         queryClient.invalidateQueries({
           queryKey:
             paymentKeys.lists(),
@@ -554,9 +532,6 @@ export const useCompleteCashPayment = () => {
           return;
         }
 
-        /*
-         * Refresh payment detail.
-         */
         queryClient.invalidateQueries({
           queryKey:
             paymentKeys.detail(
@@ -564,22 +539,12 @@ export const useCompleteCashPayment = () => {
             ),
         });
 
-        /*
-         * Receipt was created by the backend.
-         */
         queryClient.invalidateQueries({
           queryKey:
             paymentKeys.receipt(
               payment.id,
             ),
         });
-
-        /*
-         * Do NOT invent an invoice query key here.
-         *
-         * The invoice module should invalidate its own
-         * invoice queries when necessary.
-         */
       },
   });
 };
@@ -594,6 +559,11 @@ export const useCompleteCashPayment = () => {
 // Creates:
 //
 // PENDING
+//
+// Verification state:
+//
+// bank_transfer_details.verification_status
+// = PENDING
 //
 // No invoice settlement.
 // No receipt.
@@ -618,7 +588,7 @@ export const useCreateBankTransfer = () => {
     onSuccess:
       (response) => {
         /*
-         * General payment list.
+         * General payment list changed.
          */
         queryClient.invalidateQueries({
           queryKey:
@@ -626,7 +596,8 @@ export const useCreateBankTransfer = () => {
         });
 
         /*
-         * Pending bank transfer queue.
+         * The new transfer is now part of the
+         * verification queue.
          */
         queryClient.invalidateQueries({
           queryKey:
@@ -641,7 +612,7 @@ export const useCreateBankTransfer = () => {
         }
 
         /*
-         * Exact payment detail.
+         * Refresh exact payment detail.
          */
         queryClient.invalidateQueries({
           queryKey:
@@ -655,61 +626,30 @@ export const useCreateBankTransfer = () => {
 
 
 // =====================================================
-// GET PENDING BANK TRANSFERS
-// =====================================================
-//
-// GET /bank-transfers/pending
-//
-// Used by authorized staff to verify/reject transfers.
-//
-// =====================================================
-
-type PendingBankTransferParams = {
-  page?: number;
-  per_page?: number;
-};
-
-export const usePendingBankTransfers = (
-  params?: PendingBankTransferParams,
-) => {
-  return useQuery<
-    ListResponse<Payment>
-  >({
-    queryKey: [
-      ...paymentKeys.pendingBankTransfers(),
-      params,
-    ] as const,
-
-    queryFn:
-      () =>
-        paymentService.getPendingBankTransfers(
-          params,
-        ),
-
-    staleTime:
-      1000 * 30,
-
-    refetchOnWindowFocus:
-      true,
-  });
-};
-
-
-// =====================================================
 // VERIFY BANK TRANSFER
 // =====================================================
 //
 // POST /bank-transfers/{payment}/verify
 //
-// Successful verification:
+// Flow:
 //
+// Payment:
 // PENDING
 //    ↓
 // COMPLETED
+//
+// Bank-transfer verification:
+//
+// PENDING
 //    ↓
-// Receipt created
-//    ↓
-// Invoice recalculated
+// VERIFIED
+//
+// On successful verification:
+//
+// - payment becomes COMPLETED
+// - bank transfer becomes VERIFIED
+// - official receipt is created
+// - invoice balance is recalculated
 //
 // =====================================================
 
@@ -738,7 +678,7 @@ export const useVerifyBankTransfer = () => {
     onSuccess:
       (response) => {
         /*
-         * Payment list changed.
+         * General payment list changed.
          */
         queryClient.invalidateQueries({
           queryKey:
@@ -746,8 +686,7 @@ export const useVerifyBankTransfer = () => {
         });
 
         /*
-         * Payment should no longer appear in the
-         * pending verification queue.
+         * Verified transfer is no longer pending.
          */
         queryClient.invalidateQueries({
           queryKey:
@@ -762,7 +701,7 @@ export const useVerifyBankTransfer = () => {
         }
 
         /*
-         * Refresh exact payment.
+         * Refresh exact payment detail.
          */
         queryClient.invalidateQueries({
           queryKey:
@@ -772,8 +711,7 @@ export const useVerifyBankTransfer = () => {
         });
 
         /*
-         * If verification completed the payment,
-         * the receipt now exists.
+         * COMPLETED payment has an official receipt.
          */
         if (
           payment.status ===
@@ -799,17 +737,36 @@ export const useVerifyBankTransfer = () => {
 //
 // Flow:
 //
+// Payment:
+//
 // PENDING
 //    ↓
-// CANCELLED
+// FAILED
 //
-// or another backend-approved terminal failure state.
+// Bank-transfer verification:
+//
+// PENDING
+//    ↓
+// REJECTED
 //
 // IMPORTANT:
 //
-// Rejection does NOT create a receipt.
+// Rejection is NOT a PaymentStatus::REJECTED state.
 //
-// Rejection does NOT increase invoice paid amount.
+// The global payment status remains:
+//
+// FAILED
+//
+// The method-specific verification status is:
+//
+// REJECTED
+//
+// Rejection:
+//
+// - does NOT create a receipt
+// - does NOT increase invoice paid amount
+// - does NOT reduce invoice balance
+// - removes the transfer from the pending queue
 //
 // =====================================================
 
@@ -846,8 +803,7 @@ export const useRejectBankTransfer = () => {
         });
 
         /*
-         * Rejected transfer should disappear from
-         * the pending verification queue.
+         * Rejected transfer is no longer pending.
          */
         queryClient.invalidateQueries({
           queryKey:
@@ -872,8 +828,9 @@ export const useRejectBankTransfer = () => {
         });
 
         /*
-         * No receipt invalidation is required because
-         * rejection cannot produce a receipt.
+         * Do NOT invalidate the receipt query.
+         *
+         * A rejected bank transfer has no receipt.
          */
       },
   });

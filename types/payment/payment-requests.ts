@@ -4,6 +4,7 @@ import type { Payment } from "./payment";
 import type {
   PaymentVerificationStatus,
   PaymentResultStatus,
+  PaymentMethod,
 } from "./payment-enums";
 
 
@@ -49,13 +50,13 @@ export interface InitializeOnlinePaymentRequest {
   // Customer / payer information
   // ----------------------------------------------------------
 
-  customer_first_name?: string;
+  // customer_first_name?: string;
 
-  customer_last_name?: string;
+  // customer_last_name?: string;
 
-  customer_email?: string;
+  // customer_email?: string;
 
-  customer_phone?: string;
+  // customer_phone?: string;
 
 
   // ----------------------------------------------------------
@@ -77,6 +78,9 @@ export interface InitializeOnlinePaymentRequest {
   >;
 
 
+  payment_method:PaymentMethod;
+
+
   // ----------------------------------------------------------
   // Description
   // ----------------------------------------------------------
@@ -88,7 +92,7 @@ export interface InitializeOnlinePaymentRequest {
   // Additional metadata
   // ----------------------------------------------------------
 
-  metadata?: Record<string, unknown>;
+  // metadata?: Record<string, unknown>;
 }
 
 

@@ -46,6 +46,7 @@ import {
   useCompleteCashPayment,
   usePayment,
 } from "@/hooks/payment/payment.hook";
+import { useOpenFile } from "@/hooks/use-open-file";
 
 /*
 |--------------------------------------------------------------------------
@@ -477,6 +478,9 @@ export default function PaymentDetailPage() {
 
   const completeCashPayment =
     useCompleteCashPayment();
+
+  const { openFile, isOpening } =
+    useOpenFile();
 
   const payment =
     response?.data as
@@ -1260,121 +1264,95 @@ export default function PaymentDetailPage() {
                 </CardTitle>
 
                 <p className="text-sm text-muted-foreground">
-                  Supporting document submitted with
-                  this bank transfer.
+                  Supporting documents submitted with this bank transfer.
                 </p>
               </CardHeader>
 
               <CardContent>
                 <div className="space-y-2">
-                  {bankDetails.files.map(
-                    (file) => {
-                      const fileSize =
-                        formatFileSize(
-                          file.size,
-                        );
+                  {bankDetails.files.map((file) => {
+                    const fileSize = formatFileSize(file.size);
+                    const fileType = getFileTypeLabel(file.mime_type);
+                    const opening = isOpening(file.id);
 
-                      const fileType =
-                        getFileTypeLabel(
-                          file.mime_type,
-                        );
-
-                      const hasDownloadUrl =
-                        Boolean(
-                          file.download_url,
-                        );
-
-                      return (
-                        <div
-                          key={file.id}
-                          className="flex items-center justify-between gap-4 rounded-lg border bg-muted/20 p-3"
-                        >
-                          <div className="flex min-w-0 items-center gap-3">
-                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border bg-background">
-                              <FileText className="h-5 w-5 text-muted-foreground" />
-                            </div>
-
-                            <div className="min-w-0">
-                              <p
-                                className="truncate text-sm font-medium"
-                                title={
-                                  file.original_name ??
-                                  "Transfer evidence"
-                                }
-                              >
-                                {file.original_name ??
-                                  "Transfer evidence"}
-                              </p>
-
-                              <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                                <span>
-                                  {fileType}
-                                </span>
-
-                                {fileSize && (
-                                  <>
-                                    <span>
-                                      ·
-                                    </span>
-
-                                    <span>
-                                      {
-                                        fileSize
-                                      }
-                                    </span>
-                                  </>
-                                )}
-
-                                {file.created_at && (
-                                  <>
-                                    <span>
-                                      ·
-                                    </span>
-
-                                    <span>
-                                      Uploaded{" "}
-                                      {formatDateTime(
-                                        file.created_at,
-                                      )}
-                                    </span>
-                                  </>
-                                )}
-                              </div>
-                            </div>
+                    return (
+                      <div
+                        key={file.id}
+                        className="flex items-center justify-between gap-4 rounded-lg border bg-muted/20 p-3"
+                      >
+                        {/* File information */}
+                        <div className="flex min-w-0 items-center gap-3">
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border bg-background">
+                            <FileText className="h-5 w-5 text-muted-foreground" />
                           </div>
 
-                          {hasDownloadUrl ? (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              asChild
-                              className="shrink-0"
+                          <div className="min-w-0">
+                            <p
+                              className="truncate text-sm font-medium"
+                              title={
+                                file.original_name ??
+                                "Transfer evidence"
+                              }
                             >
-                              <a
-                                href={
-                                  file.download_url!
-                                }
-                                target="_blank"
-                                rel="noopener noreferrer"
-                              >
-                                <ExternalLink className="mr-2 h-4 w-4" />
-                                View
-                              </a>
-                            </Button>
-                          ) : (
-                            <span className="shrink-0 text-xs text-muted-foreground">
-                              Link unavailable
-                            </span>
-                          )}
+                              {file.original_name ??
+                                "Transfer evidence"}
+                            </p>
+
+                            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                              <span>{fileType}</span>
+
+                              {fileSize && (
+                                <>
+                                  <span>·</span>
+                                  <span>{fileSize}</span>
+                                </>
+                              )}
+
+                              {file.created_at && (
+                                <>
+                                  <span>·</span>
+                                  <span>
+                                    Uploaded{" "}
+                                    {formatDateTime(
+                                      file.created_at,
+                                    )}
+                                  </span>
+                                </>
+                              )}
+                            </div>
+                          </div>
                         </div>
-                      );
-                    },
-                  )}
+
+                        {/* Open file */}
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="shrink-0"
+                          disabled={opening}
+                          onClick={() => openFile(file)}
+                        >
+                          {opening ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Opening...
+                            </>
+                          ) : (
+                            <>
+                              <ExternalLink className="mr-2 h-4 w-4" />
+                              View
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    );
+                  })}
                 </div>
               </CardContent>
             </Card>
           )}
+
+
 
         {/* ============================================================
             COLLECTION & VERIFICATION

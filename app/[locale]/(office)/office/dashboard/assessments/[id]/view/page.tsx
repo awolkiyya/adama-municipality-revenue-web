@@ -79,27 +79,28 @@ import {
 |
 |--------------------------------------------------------------------------
 |
-| IMPORTANT
+| Amendment
 |--------------------------------------------------------------------------
 |
-| Payment schedules belong to AssessmentService.
+| A lease amendment is started from an eligible assessment.
 |
-| One assessment may contain:
+| Create Amendment is available when:
 |
-|   Service A → ONE_TIME
-|   Service B → SCHEDULED
-|   Service C → ONE_TIME
-|   Service D → SCHEDULED
+|   - assessment is APPROVED
+|   - assessment is not SUPERSEDED
+|   - assessment contains at least one scheduled service
+|   - user has lease_amendment.create permission
 |
-| Therefore:
+| The amendment references the current assessment as:
 |
-| Assessment
-|      ↓
-| Services
-|      ↓
-| Specific scheduled service
-|      ↓
-| Payment Schedule
+|   previous_assessment_id
+|
+| The replacement assessment is NOT created by this page.
+|
+| It remains an independent assessment and may later be linked
+| to the amendment through:
+|
+|   new_assessment_id
 |
 |--------------------------------------------------------------------------
 |
@@ -162,6 +163,12 @@ export default function AssessmentViewPage() {
       "return",
     );
 
+  const canCreateLeaseAmendment =
+    !hasPermission(
+      "lease_amendment",
+      "create",
+    );
+
   const canTakeAssessmentDecision =
     canApproveAssessment ||
     canReturnAssessment;
@@ -187,12 +194,6 @@ export default function AssessmentViewPage() {
   |--------------------------------------------------------------------------
   | TAB STATE
   |--------------------------------------------------------------------------
-  |
-  | Default to Overview.
-  |
-  | We intentionally keep tabs local to the page.
-  | The selected tab is UI state, not business state.
-  |
   */
 
   const [
@@ -280,6 +281,36 @@ export default function AssessmentViewPage() {
 
   /*
   |--------------------------------------------------------------------------
+  | SUPERSEDED STATE
+  |--------------------------------------------------------------------------
+  |
+  | The backend should expose the assessment lifecycle state.
+  |
+  | We support both camelCase and snake_case here so the page
+  | remains compatible with either API serialization style.
+  |
+  */
+
+  const assessmentWithLifecycle =
+    assessment as
+      | (Assessment & {
+          lifecycleStatus?: string | null;
+          lifecycle_status?: string | null;
+        })
+      | undefined;
+
+  const assessmentLifecycleStatus =
+    assessmentWithLifecycle
+      ?.lifecycleStatus ??
+    assessmentWithLifecycle
+      ?.lifecycle_status;
+
+  const isSuperseded =
+    assessmentLifecycleStatus?.toUpperCase() ===
+    "SUPERSEDED";
+
+  /*
+  |--------------------------------------------------------------------------
   | SERVICE STATISTICS
   |--------------------------------------------------------------------------
   */
@@ -352,13 +383,11 @@ export default function AssessmentViewPage() {
   | SERVICE PAYMENT TYPE
   |--------------------------------------------------------------------------
   |
-  | The actual payment type should ideally come
-  | from the backend.
+  | Payment type should ideally come from the backend.
   |
-  | The service card also handles the detailed
-  | display logic.
-  |
-  | Here we only use it for page-level statistics.
+  | The service card handles detailed display.
+  | Here we only use this information for page-level
+  | statistics and amendment eligibility.
   |
   */
 
@@ -370,10 +399,12 @@ export default function AssessmentViewPage() {
             service as AssessmentService & {
               paymentType?: string | null;
               payment_type?: string | null;
+
               paymentScheduleRule?: {
                 isEnabled?: boolean | null;
                 is_enabled?: boolean | null;
               } | null;
+
               payment_schedule_rule?: {
                 isEnabled?: boolean | null;
                 is_enabled?: boolean | null;
@@ -430,6 +461,97 @@ export default function AssessmentViewPage() {
       services,
       isExistingLizz,
     ]);
+
+  /*
+  |--------------------------------------------------------------------------
+  | AMENDMENT ELIGIBILITY
+  |--------------------------------------------------------------------------
+  |
+  | Create Amendment is intentionally an assessment-level action.
+  |
+  | It is available only when:
+  |
+  |   1. User has permission
+  |   2. Assessment is approved
+  |   3. Assessment is not superseded
+  |   4. Assessment contains at least one scheduled service
+  |
+  */
+
+  const canCreateAmendment =
+    Boolean(
+      assessment &&
+        canCreateLeaseAmendment &&
+        isApproved &&
+        !isSuperseded &&
+        scheduledServiceCount > 0,
+    );
+
+  /*
+  |--------------------------------------------------------------------------
+  | CREATE AMENDMENT
+  |--------------------------------------------------------------------------
+  */
+
+  const handleCreateAmendment =
+    () => {
+      if (
+        !canCreateLeaseAmendment
+      ) {
+        toast.error(
+          "You do not have permission to create lease amendments.",
+        );
+
+        return;
+      }
+
+      if (!assessment) {
+        toast.error(
+          "Assessment information is unavailable.",
+        );
+
+        return;
+      }
+
+      if (!isApproved) {
+        toast.error(
+          "Only approved assessments can be amended.",
+        );
+
+        return;
+      }
+
+      if (isSuperseded) {
+        toast.error(
+          "A superseded assessment cannot be amended.",
+        );
+
+        return;
+      }
+
+      if (
+        scheduledServiceCount <= 0
+      ) {
+        toast.error(
+          "This assessment does not contain a scheduled service and cannot be amended.",
+        );
+
+        return;
+      }
+
+      /*
+       * Pass the assessment ID to the amendment
+       * creation page.
+       *
+       * The amendment page will use this assessment
+       * as previous_assessment_id.
+       */
+      router.push(
+        `/office/dashboard/lease-amendments/create?assessment_id=${encodeURIComponent(
+          assessment.id,
+        )}`,
+      );
+    };
 
   /*
   |--------------------------------------------------------------------------
@@ -518,10 +640,6 @@ export default function AssessmentViewPage() {
 
         await refreshAfterDecision();
 
-        /*
-         * After approval, keep the officer
-         * on the Overview tab.
-         */
         setActiveTab(
           "overview",
         );
@@ -656,11 +774,6 @@ export default function AssessmentViewPage() {
   |--------------------------------------------------------------------------
   | VIEW SERVICE PAYMENT SCHEDULE
   |--------------------------------------------------------------------------
-  |
-  | The service card does NOT own routing.
-  |
-  | It reports the selected AssessmentService.
-  |
   */
 
   const handleManageScheduledPayments =
@@ -809,17 +922,41 @@ export default function AssessmentViewPage() {
         overlayClassName="bg-gradient-to-r from-primary/95 via-primary/80 to-primary/50"
         className="text-white"
         actions={
-          <Button
-            variant="secondary"
-            onClick={() =>
-              router.back()
-            }
-            className="-ml-2 gap-2"
-          >
-            <ArrowLeft className="h-4 w-4" />
+          <div className="flex flex-wrap items-center gap-2">
+            {/* ========================================================
+                BACK
+                ======================================================== */}
 
-            Back to Assessments
-          </Button>
+            <Button
+              variant="secondary"
+              onClick={() =>
+                router.back()
+              }
+              className="gap-2"
+            >
+              <ArrowLeft className="h-4 w-4" />
+
+              Back to Assessments
+            </Button>
+
+            {/* ========================================================
+                CREATE AMENDMENT
+                ======================================================== */}
+
+            {canCreateAmendment && (
+              <Button
+                variant="secondary"
+                onClick={
+                  handleCreateAmendment
+                }
+                className="gap-2"
+              >
+                <FileText className="h-4 w-4" />
+
+                Create Amendment
+              </Button>
+            )}
+          </div>
         }
       />
 
@@ -933,10 +1070,6 @@ export default function AssessmentViewPage() {
           value="services"
           className="space-y-4"
         >
-          {/* ==========================================================
-              SERVICES HEADER
-              ========================================================== */}
-
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <h2 className="text-xl font-semibold">
@@ -948,10 +1081,6 @@ export default function AssessmentViewPage() {
                 its payment management workflow.
               </p>
             </div>
-
-            {/* ========================================================
-                SERVICE SUMMARY
-                ======================================================== */}
 
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <span>
@@ -978,10 +1107,6 @@ export default function AssessmentViewPage() {
               )}
             </div>
           </div>
-
-          {/* ==========================================================
-              SERVICE CARDS
-              ========================================================== */}
 
           {services.length > 0 ? (
             <div className="space-y-3">
@@ -1032,10 +1157,6 @@ export default function AssessmentViewPage() {
           value="decision"
           className="space-y-5"
         >
-          {/* ==========================================================
-              DECISION HISTORY / NOTES
-              ========================================================== */}
-
           {assessment.decisionNotes ? (
             <DecisionCard
               assessment={
@@ -1064,10 +1185,6 @@ export default function AssessmentViewPage() {
               </CardContent>
             </Card>
           )}
-
-          {/* ==========================================================
-              STATUS SUMMARY
-              ========================================================== */}
 
           <Card>
             <CardContent className="p-5">

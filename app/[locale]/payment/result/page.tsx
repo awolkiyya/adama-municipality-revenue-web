@@ -1,18 +1,25 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   AlertCircle,
+  ArrowLeft,
   CheckCircle2,
   Clock3,
   Copy,
-  CreditCard,
   Loader2,
-  ReceiptText,
   ShieldCheck,
   XCircle,
 } from "lucide-react";
+
+// /payment/result?payment_id=...&tx_ref=...&return_to=/en/invoices/123
+
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+const POLL_INTERVAL = 5000;
+const MAX_POLLING_DURATION = 10 * 60 * 1000;
 
 type PaymentStatus =
   | "PENDING"
@@ -20,99 +27,588 @@ type PaymentStatus =
   | "COMPLETED"
   | "FAILED"
   | "CANCELLED"
+  | "EXPIRED"
   | "REVERSED";
 
 interface PaymentResult {
   id: string;
   payment_number: string;
-  transaction_reference: string;
+  transaction_reference: string | null;
   amount: string;
   currency: string;
   status: PaymentStatus;
-  payment_method: string;
+  payment_method: string | null;
   payment_provider: string | null;
 }
 
-const MOCK_PAYMENT: PaymentResult = {
-  id: "01a11326-2a7c-70e8-ac30-f8c74f274d0a",
-  payment_number: "PAY-2019-000026",
-  transaction_reference: "PAY-01M49JCAKM9PBFV5M6XB1KZZH6",
-  amount: "29,423.05",
-  currency: "ETB",
-  status: "COMPLETED",
-  payment_method: "ONLINE",
-  payment_provider: "CHAPA",
-};
+interface ApiResponse<T> {
+  success?: boolean;
+  message?: string;
+  data?: T;
+}
+
+const PROCESSING_STATUSES: PaymentStatus[] = [
+  "PENDING",
+  "PROCESSING",
+];
+
+function isProcessingStatus(status: PaymentStatus): boolean {
+  return PROCESSING_STATUSES.includes(status);
+}
+
+function formatAmount(
+  amount: string,
+  currency: string
+): string {
+  const numericAmount = Number(amount);
+
+  if (!Number.isFinite(numericAmount)) {
+    return `${amount} ${currency}`;
+  }
+
+  return `${new Intl.NumberFormat(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(numericAmount)} ${currency}`;
+}
+
+function formatLabel(
+  value: string | null | undefined
+): string {
+  if (!value) {
+    return "—";
+  }
+
+  return value
+    .replace(/[_-]/g, " ")
+    .toLowerCase()
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function getProviderLabel(
+  provider: string | null
+): string {
+  if (!provider) {
+    return "—";
+  }
+
+  switch (provider.toUpperCase()) {
+    case "CHAPA":
+      return "Chapa";
+
+    case "TELEBIRR":
+      return "Telebirr";
+
+    case "CBE":
+      return "CBE";
+
+    default:
+      return formatLabel(provider);
+  }
+}
+
+function getStatusConfig(status: PaymentStatus) {
+  switch (status) {
+    case "COMPLETED":
+      return {
+        title: "Payment successful",
+        description:
+          "Your payment has been successfully confirmed.",
+        icon: CheckCircle2,
+        iconClass: "text-emerald-600",
+        iconBackground: "bg-emerald-50",
+      };
+
+    case "PENDING":
+      return {
+        title: "Payment pending",
+        description:
+          "Your payment is being verified. This page will update automatically.",
+        icon: Clock3,
+        iconClass: "text-amber-600",
+        iconBackground: "bg-amber-50",
+      };
+
+    case "PROCESSING":
+      return {
+        title: "Payment processing",
+        description:
+          "We are waiting for confirmation from the payment provider.",
+        icon: Clock3,
+        iconClass: "text-amber-600",
+        iconBackground: "bg-amber-50",
+      };
+
+    case "FAILED":
+      return {
+        title: "Payment failed",
+        description:
+          "The payment could not be completed. Please try again.",
+        icon: XCircle,
+        iconClass: "text-red-600",
+        iconBackground: "bg-red-50",
+      };
+
+    case "CANCELLED":
+      return {
+        title: "Payment cancelled",
+        description:
+          "The payment was cancelled before completion.",
+        icon: XCircle,
+        iconClass: "text-slate-500",
+        iconBackground: "bg-slate-100",
+      };
+
+    case "EXPIRED":
+      return {
+        title: "Payment expired",
+        description:
+          "The payment session expired before the payment was completed.",
+        icon: AlertCircle,
+        iconClass: "text-orange-600",
+        iconBackground: "bg-orange-50",
+      };
+
+    case "REVERSED":
+      return {
+        title: "Payment reversed",
+        description:
+          "The payment was reversed. Please contact the revenue office if you need assistance.",
+        icon: AlertCircle,
+        iconClass: "text-red-600",
+        iconBackground: "bg-red-50",
+      };
+
+    default:
+      return {
+        title: "Payment status",
+        description:
+          "Your payment status has been retrieved.",
+        icon: AlertCircle,
+        iconClass: "text-slate-500",
+        iconBackground: "bg-slate-100",
+      };
+  }
+}
+
+function DetailRow({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-6 py-3">
+      <span className="text-sm text-muted-foreground">
+        {label}
+      </span>
+
+      <span className="max-w-[60%] text-right text-sm font-medium text-foreground">
+        {value}
+      </span>
+    </div>
+  );
+}
+
+function CopyReferenceButton({
+  reference,
+}: {
+  reference: string;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(reference);
+
+      setCopied(true);
+
+      window.setTimeout(() => {
+        setCopied(false);
+      }, 2000);
+    } catch {
+      // Clipboard may not be available.
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      className="inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+      aria-label="Copy transaction reference"
+    >
+      <Copy className="h-3.5 w-3.5" />
+
+      {copied ? "Copied" : "Copy"}
+    </button>
+  );
+}
 
 export default function PaymentResultPage() {
+  const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
 
   const paymentId = searchParams.get("payment_id");
   const txRef = searchParams.get("tx_ref");
 
-  const [payment, setPayment] = useState<PaymentResult | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [copied, setCopied] = useState(false);
+
+
+    const handleBack = () => {
+      router.back();
+    };
+
+  const [payment, setPayment] =
+    useState<PaymentResult | null>(null);
+
+  const [loading, setLoading] =
+    useState(true);
+
+  const [error, setError] =
+    useState<string | null>(null);
+
+  const [isRefreshing, setIsRefreshing] =
+    useState(false);
+
+  const pollingStartedAtRef =
+    useRef<number | null>(null);
 
   /*
-   * ------------------------------------------------------------
-   * MOCK MODE
-   * ------------------------------------------------------------
+   * Browser window.setTimeout() returns a number.
    *
-   * Change this to false when the real API is ready.
+   * Using number here avoids the NodeJS.Timeout
+   * type conflict in Next.js TypeScript projects.
    */
-  const USE_MOCK_DATA = true;
+  const timeoutRef =
+    useRef<number | null>(null);
 
-  useEffect(() => {
-    if (USE_MOCK_DATA) {
-      const timer = setTimeout(() => {
-        setPayment({
-          ...MOCK_PAYMENT,
-          id: paymentId || MOCK_PAYMENT.id,
-          transaction_reference:
-            txRef || MOCK_PAYMENT.transaction_reference,
+  const mountedRef =
+    useRef(true);
+
+  const fetchPaymentResult = useCallback(
+    async (
+      isPolling = false
+    ): Promise<PaymentResult | null> => {
+      if (!paymentId) {
+        setError("Payment reference is missing.");
+        setLoading(false);
+
+        return null;
+      }
+
+      if (isPolling) {
+        setIsRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+
+      try {
+        /*
+         * Laravel backend route:
+         *
+         * GET /api/v1/online-payments/{payment}/result
+         */
+        const url =
+          `${API_BASE_URL}/api/v1/payments/` +
+          `${encodeURIComponent(paymentId)}/result`;
+
+        const response = await fetch(url, {
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+          },
+          cache: "no-store",
         });
 
-        setLoading(false);
-      }, 800);
+        const body:
+          | ApiResponse<PaymentResult>
+          | null =
+          await response.json().catch(() => null);
 
-      return () => clearTimeout(timer);
-    }
+        if (!response.ok) {
+          const message =
+            body?.message ||
+            (response.status === 429
+              ? "Too many requests. Please wait a moment and try again."
+              : "Unable to retrieve the payment status.");
 
-    // Real API implementation will go here later.
-    setLoading(false);
-  }, [paymentId, txRef]);
+          throw new Error(message);
+        }
 
-  const copyReference = async () => {
-    if (!payment) return;
+        const result = body?.data;
 
-    await navigator.clipboard.writeText(
-      payment.transaction_reference
-    );
+        if (!result) {
+          throw new Error(
+            "The payment result was not returned by the server."
+          );
+        }
 
-    setCopied(true);
+        /*
+         * tx_ref is only used as a consistency check.
+         *
+         * The backend/database remains authoritative.
+         */
+        if (
+          txRef &&
+          result.transaction_reference &&
+          txRef !== result.transaction_reference
+        ) {
+          throw new Error(
+            "The payment reference does not match the transaction."
+          );
+        }
 
-    setTimeout(() => {
-      setCopied(false);
-    }, 2000);
-  };
+        if (!mountedRef.current) {
+          return result;
+        }
 
-  if (loading) {
+        setPayment(result);
+        setError(null);
+
+        return result;
+      } catch (err) {
+        if (!mountedRef.current) {
+          return null;
+        }
+
+        const message =
+          err instanceof Error
+            ? err.message
+            : "Unable to retrieve the payment status.";
+
+        setError(message);
+
+        return null;
+      } finally {
+        if (mountedRef.current) {
+          setLoading(false);
+          setIsRefreshing(false);
+        }
+      }
+    },
+    [paymentId, txRef]
+  );
+
+  useEffect(() => {
+    mountedRef.current = true;
+
+    pollingStartedAtRef.current =
+      Date.now();
+
+    const startPolling = async () => {
+      const result =
+        await fetchPaymentResult(false);
+
+      if (
+        !mountedRef.current ||
+        !result
+      ) {
+        return;
+      }
+
+      /*
+       * If payment is already terminal,
+       * there is nothing to poll.
+       */
+      if (
+        !isProcessingStatus(result.status)
+      ) {
+        return;
+      }
+
+      const poll = async () => {
+        if (!mountedRef.current) {
+          return;
+        }
+
+        const startedAt =
+          pollingStartedAtRef.current;
+
+        /*
+         * Stop polling after 10 minutes.
+         */
+        if (
+          startedAt !== null &&
+          Date.now() - startedAt >=
+            MAX_POLLING_DURATION
+        ) {
+          return;
+        }
+
+        const latest =
+          await fetchPaymentResult(true);
+
+        if (
+          !mountedRef.current ||
+          !latest
+        ) {
+          return;
+        }
+
+        /*
+         * Stop immediately when the payment
+         * reaches a terminal state.
+         */
+        if (
+          !isProcessingStatus(
+            latest.status
+          )
+        ) {
+          return;
+        }
+
+        /*
+         * window.setTimeout returns number.
+         */
+        timeoutRef.current =
+          window.setTimeout(
+            poll,
+            POLL_INTERVAL
+          );
+      };
+
+      timeoutRef.current =
+        window.setTimeout(
+          poll,
+          POLL_INTERVAL
+        );
+    };
+
+    startPolling();
+
+    return () => {
+      mountedRef.current = false;
+
+      if (
+        timeoutRef.current !== null
+      ) {
+        window.clearTimeout(
+          timeoutRef.current
+        );
+
+        timeoutRef.current = null;
+      }
+    };
+  }, [fetchPaymentResult]);
+
+  /*
+   * ---------------------------------------------------------
+   * Missing payment ID
+   * ---------------------------------------------------------
+   */
+  if (!paymentId) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-muted/30 p-6">
-        <div className="w-full max-w-md rounded-2xl border bg-background p-8 shadow-sm">
-          <div className="flex flex-col items-center text-center">
-            <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-muted">
-              <Loader2 className="h-7 w-7 animate-spin" />
+      <main className="min-h-screen bg-muted/30 px-4 py-10">
+        <div className="mx-auto flex min-h-[70vh] max-w-md items-center justify-center">
+          <div className="w-full rounded-xl border bg-background p-6 shadow-sm">
+            <div className="flex items-start gap-4">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-50">
+                <AlertCircle className="h-5 w-5 text-red-600" />
+              </div>
+
+              <div>
+                <h1 className="font-semibold">
+                  Payment reference missing
+                </h1>
+
+                <p className="mt-1 text-sm leading-5 text-muted-foreground">
+                  We could not identify the payment
+                  you are trying to view.
+                </p>
+
+                <button
+                  type="button"
+                  onClick={handleBack}
+                  className="mt-4 inline-flex items-center gap-2 rounded-lg border bg-background px-4 py-2 text-sm font-medium transition-colors hover:bg-muted"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  Back to Home
+                </button>
+              </div>
             </div>
+          </div>
+        </div>
+      </main>
+    );
+  }
 
-            <h1 className="text-xl font-semibold">
-              Checking payment status
-            </h1>
+  /*
+   * ---------------------------------------------------------
+   * Initial loading
+   * ---------------------------------------------------------
+   */
+  if (loading && !payment) {
+    return (
+      <main className="min-h-screen bg-muted/30 px-4 py-10">
+        <div className="mx-auto flex min-h-[70vh] max-w-md items-center justify-center">
+          <div className="w-full rounded-xl border bg-background p-6 shadow-sm">
+            <div className="flex items-center gap-3">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
 
-            <p className="mt-2 text-sm text-muted-foreground">
-              Please wait while we confirm your payment.
-            </p>
+              <div>
+                <p className="text-sm font-medium">
+                  Checking payment status
+                </p>
+
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Please wait...
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  /*
+   * ---------------------------------------------------------
+   * Error without payment result
+   * ---------------------------------------------------------
+   */
+  if (error && !payment) {
+    return (
+      <main className="min-h-screen bg-muted/30 px-4 py-10">
+        <div className="mx-auto flex min-h-[70vh] max-w-md items-center justify-center">
+          <div className="w-full rounded-xl border bg-background p-6 shadow-sm">
+            <div className="flex items-start gap-4">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-50">
+                <AlertCircle className="h-5 w-5 text-red-600" />
+              </div>
+
+              <div className="min-w-0">
+                <h1 className="font-semibold">
+                  Unable to load payment
+                </h1>
+
+                <p className="mt-1 text-sm leading-5 text-muted-foreground">
+                  {error}
+                </p>
+
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      fetchPaymentResult(false)
+                    }
+                    className="rounded-lg border px-4 py-2 text-sm font-medium transition-colors hover:bg-muted"
+                  >
+                    Try again
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleBack}
+                    className="inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-colors hover:bg-muted"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                    Back to Home
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </main>
@@ -120,225 +616,173 @@ export default function PaymentResultPage() {
   }
 
   if (!payment) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-muted/30 p-6">
-        <div className="w-full max-w-md rounded-2xl border bg-background p-8 shadow-sm">
-          <div className="flex flex-col items-center text-center">
-            <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-destructive/10">
-              <AlertCircle className="h-7 w-7 text-destructive" />
-            </div>
-
-            <h1 className="text-xl font-semibold">
-              Payment not found
-            </h1>
-
-            <p className="mt-2 text-sm text-muted-foreground">
-              We could not find the requested payment.
-            </p>
-          </div>
-        </div>
-      </main>
-    );
+    return null;
   }
 
-  const isCompleted = payment.status === "COMPLETED";
+  const statusConfig =
+    getStatusConfig(payment.status);
 
-  const isFailed =
-    payment.status === "FAILED" ||
-    payment.status === "CANCELLED" ||
-    payment.status === "REVERSED";
+  const StatusIcon =
+    statusConfig.icon;
 
   const isProcessing =
-    payment.status === "PENDING" ||
-    payment.status === "PROCESSING";
-
-  const statusConfig = isCompleted
-    ? {
-        icon: CheckCircle2,
-        title: "Payment Successful",
-        description:
-          "Your payment has been successfully confirmed.",
-      }
-    : isFailed
-      ? {
-          icon: XCircle,
-          title: "Payment Failed",
-          description:
-            "Your payment was not completed. Please try again.",
-        }
-      : {
-          icon: Clock3,
-          title: "Payment Processing",
-          description:
-            "Your payment is being confirmed. Please wait.",
-        };
-
-  const StatusIcon = statusConfig.icon;
+    isProcessingStatus(
+      payment.status
+    );
 
   return (
-    <main className="min-h-screen bg-muted/30 px-4 py-10 sm:px-6">
-      <div className="mx-auto w-full max-w-2xl">
+    <main className="min-h-screen bg-muted/30 px-4 py-8 sm:py-12">
+      <div className="mx-auto w-full max-w-lg">
         {/* Header */}
-        <div className="mb-8 text-center">
-          <div
-            className={`mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-full ${
-              isCompleted
-                ? "bg-emerald-100 dark:bg-emerald-950/40"
-                : isFailed
-                  ? "bg-destructive/10"
-                  : "bg-amber-100 dark:bg-amber-950/40"
-            }`}
-          >
-            <StatusIcon
-              className={`h-10 w-10 ${
-                isCompleted
-                  ? "text-emerald-600"
-                  : isFailed
-                    ? "text-destructive"
-                    : "text-amber-600"
-              }`}
-            />
-          </div>
-
-          <h1 className="text-3xl font-bold tracking-tight">
-            {statusConfig.title}
-          </h1>
-
-          <p className="mx-auto mt-3 max-w-md text-sm text-muted-foreground">
-            {statusConfig.description}
+        <header className="mb-6 text-center">
+          <p className="text-sm font-semibold tracking-tight">
+            Adama City Administration
           </p>
-        </div>
+
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Municipal Revenue
+          </p>
+        </header>
 
         {/* Payment Card */}
-        <div className="overflow-hidden rounded-2xl border bg-background shadow-sm">
+        <section className="overflow-hidden rounded-2xl border bg-background shadow-sm">
+          {/* Status */}
+          <div className="px-6 pt-8 text-center sm:px-8">
+            <div
+              className={`mx-auto flex h-14 w-14 items-center justify-center rounded-full ${statusConfig.iconBackground}`}
+            >
+              <StatusIcon
+                className={`h-7 w-7 ${statusConfig.iconClass}`}
+                strokeWidth={2}
+              />
+            </div>
+
+            <h1 className="mt-4 text-xl font-semibold tracking-tight">
+              {statusConfig.title}
+            </h1>
+
+            <p className="mx-auto mt-1.5 max-w-sm text-sm leading-5 text-muted-foreground">
+              {statusConfig.description}
+            </p>
+          </div>
+
           {/* Amount */}
-          <div className="border-b px-6 py-8 text-center sm:px-8">
-            <p className="text-sm text-muted-foreground">
-              Amount Paid
+          <div className="px-6 py-8 text-center sm:px-8">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              {payment.status === "COMPLETED"
+                ? "Amount paid"
+                : "Payment amount"}
             </p>
 
-            <div className="mt-2 text-4xl font-bold tracking-tight">
-              {payment.amount}
-              <span className="ml-2 text-xl font-medium text-muted-foreground">
-                {payment.currency}
-              </span>
-            </div>
+            <p className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">
+              {formatAmount(
+                payment.amount,
+                payment.currency
+              )}
+            </p>
 
-            <div className="mt-4 inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium">
-              <CreditCard className="h-3.5 w-3.5" />
-              {payment.payment_provider ?? payment.payment_method}
-            </div>
+            {isProcessing && (
+              <div className="mt-3 inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+
+                Updating automatically
+              </div>
+            )}
           </div>
 
           {/* Details */}
-          <div className="px-6 py-6 sm:px-8">
-            <h2 className="mb-5 flex items-center gap-2 text-sm font-semibold">
-              <ReceiptText className="h-4 w-4" />
-              Payment Details
-            </h2>
-
-            <div className="space-y-4">
+          <div className="border-t px-6 sm:px-8">
+            <div className="py-2">
               <DetailRow
-                label="Payment Number"
-                value={payment.payment_number}
+                label="Payment number"
+                value={
+                  payment.payment_number
+                }
               />
 
               <DetailRow
-                label="Payment Method"
-                value={payment.payment_method}
+                label="Payment method"
+                value={formatLabel(
+                  payment.payment_method
+                )}
               />
 
               <DetailRow
-                label="Payment Provider"
-                value={payment.payment_provider ?? "-"}
+                label="Provider"
+                value={getProviderLabel(
+                  payment.payment_provider
+                )}
               />
 
               <DetailRow
                 label="Status"
-                value={payment.status}
-                valueClassName={
-                  isCompleted
-                    ? "text-emerald-600"
-                    : isFailed
-                      ? "text-destructive"
-                      : "text-amber-600"
-                }
+                value={formatLabel(
+                  payment.status
+                )}
               />
 
-              <div className="flex flex-col gap-2 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
-                <span className="text-sm text-muted-foreground">
-                  Transaction Reference
-                </span>
+              {payment.transaction_reference && (
+                <div className="flex items-center justify-between gap-4 border-t py-3">
+                  <span className="text-sm text-muted-foreground">
+                    Transaction reference
+                  </span>
 
-                <div className="flex items-center gap-2">
-                  <code className="max-w-[250px] truncate rounded-md bg-muted px-2 py-1 text-xs">
-                    {payment.transaction_reference}
-                  </code>
+                  <div className="flex max-w-[65%] items-center gap-1">
+                    <span className="break-all text-right font-mono text-xs font-medium text-foreground sm:text-sm">
+                      {
+                        payment.transaction_reference
+                      }
+                    </span>
 
-                  <button
-                    type="button"
-                    onClick={copyReference}
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-md border transition-colors hover:bg-muted"
-                    title="Copy transaction reference"
-                  >
-                    <Copy className="h-3.5 w-3.5" />
-                  </button>
+                    <CopyReferenceButton
+                      reference={
+                        payment.transaction_reference
+                      }
+                    />
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           </div>
 
           {/* Verification */}
-          <div className="border-t bg-muted/30 px-6 py-5 sm:px-8">
-            <div className="flex gap-3">
-              <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0" />
+          <div className="border-t bg-muted/20 px-6 py-4 sm:px-8">
+            <div className="flex items-start gap-3">
+              <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
 
-              <div>
-                <p className="text-sm font-medium">
-                  Payment verification
-                </p>
-
-                <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                  {isCompleted
-                    ? "This payment has been confirmed by the municipal payment system."
-                    : isProcessing
-                      ? "The payment is waiting for confirmation from the payment provider."
-                      : "This payment was not successfully completed."}
-                </p>
-              </div>
+              <p className="text-xs leading-5 text-muted-foreground">
+                Payment status is confirmed against
+                the municipal payment system. The
+                provider redirect alone is not proof of
+                payment.
+              </p>
             </div>
           </div>
-        </div>
+        </section>
 
         {/* Footer */}
-        <p className="mt-6 text-center text-xs text-muted-foreground">
-          Adama City Administration • Municipal Revenue Payment
-        </p>
+        <footer className="px-4 py-6 text-center">
+          <button
+            type="button"
+            onClick={handleBack}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-lg border bg-background px-5 py-2.5 text-sm font-medium text-foreground shadow-sm transition-colors hover:bg-muted sm:w-auto"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to Home
+          </button>
+
+          <p className="mt-4 text-xs text-muted-foreground">
+            Keep your payment number and transaction
+            reference for your records.
+          </p>
+
+          {isRefreshing && (
+            <p className="mt-1 text-[11px] text-muted-foreground/70">
+              Checking for updates...
+            </p>
+          )}
+        </footer>
       </div>
     </main>
-  );
-}
-
-function DetailRow({
-  label,
-  value,
-  valueClassName = "",
-}: {
-  label: string;
-  value: string;
-  valueClassName?: string;
-}) {
-  return (
-    <div className="flex flex-col gap-1 border-b pb-4 last:border-b-0 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-      <span className="text-sm text-muted-foreground">
-        {label}
-      </span>
-
-      <span
-        className={`text-sm font-medium sm:text-right ${valueClassName}`}
-      >
-        {value}
-      </span>
-    </div>
   );
 }

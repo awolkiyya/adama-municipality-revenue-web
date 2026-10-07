@@ -1,15 +1,15 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
+import Link from "next/link";
 import {
   CheckCircle2,
   Clock3,
+  Eye,
   FileText,
   History,
   MoreHorizontal,
   Search,
-  Upload,
-  X,
   XCircle,
 } from "lucide-react";
 
@@ -33,11 +33,10 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -46,13 +45,21 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+/* =========================================================
+ * TYPES
+ * ======================================================= */
+
 type PenaltyDiscountStatus =
   | "DRAFT"
   | "SUBMITTED"
   | "DECIDED"
+  | "APPLIED"
   | "CANCELLED";
 
-type PenaltyDiscountDecision = "APPROVED" | "REJECTED" | null;
+type PenaltyDiscountDecision =
+  | "APPROVED"
+  | "REJECTED"
+  | null;
 
 type InvoiceStatus =
   | "ISSUED"
@@ -62,18 +69,24 @@ type InvoiceStatus =
 
 type PenaltyDiscountRequest = {
   id: string;
+  request_number: string;
 
   invoice: {
     id: string;
     invoice_number: string;
     status: InvoiceStatus;
+
     subtotal: number;
+
     penalty_amount: number;
     penalty_discount_amount: number;
+
     interest_amount: number;
+
     total_amount: number;
     paid_amount: number;
     balance_due: number;
+
     due_date: string;
   };
 
@@ -84,6 +97,7 @@ type PenaltyDiscountRequest = {
   };
 
   requested_amount: number;
+
   reason: string;
 
   status: PenaltyDiscountStatus;
@@ -91,13 +105,21 @@ type PenaltyDiscountRequest = {
   submitted_at: string | null;
 
   decision: PenaltyDiscountDecision;
+
   approved_amount: number | null;
+
   decision_reason: string | null;
 
   decided_at: string | null;
 
   applied_to_invoice: boolean;
+
   applied_at: string | null;
+
+  applied_by: {
+    id: string;
+    name: string;
+  } | null;
 
   created_by: {
     id: string;
@@ -113,272 +135,341 @@ type PenaltyDiscountRequest = {
   updated_at: string;
 };
 
+/* =========================================================
+ * MOCK DATA
+ * ======================================================= */
+
 const MOCK_REQUESTS: PenaltyDiscountRequest[] = [
   {
     id: "pdr-001",
+    request_number: "PDR-2026-000001",
+
     invoice: {
       id: "inv-001",
       invoice_number: "INV-2018-000124",
       status: "OVERDUE",
+
       subtotal: 10000,
+
       penalty_amount: 2000,
       penalty_discount_amount: 800,
+
       interest_amount: 200,
+
       total_amount: 11400,
       paid_amount: 4000,
       balance_due: 7400,
+
       due_date: "2026-08-30",
     },
+
     citizen: {
       id: "cit-001",
       name: "Abdisa Gemechu",
       phone: "+251911234567",
     },
+
     requested_amount: 1000,
+
     reason:
       "The taxpayer requested a reduction of the accumulated penalty due to financial hardship and delayed business activity.",
-    status: "DECIDED",
+
+    status: "APPLIED",
+
     submitted_at: "2026-09-02T09:15:00",
+
     decision: "APPROVED",
+
     approved_amount: 800,
+
     decision_reason:
       "The request was reviewed and an 800 ETB penalty reduction was approved based on the submitted justification.",
+
     decided_at: "2026-09-03T14:20:00",
+
     applied_to_invoice: true,
-    applied_at: "2026-09-03T14:20:00",
+
+    applied_at: "2026-09-03T15:00:00",
+
+    applied_by: {
+      id: "usr-020",
+      name: "Finance Officer",
+    },
+
     created_by: {
       id: "usr-001",
       name: "Kebede Tadesse",
     },
+
     decided_by: {
       id: "usr-011",
       name: "Meron Bekele",
     },
+
     created_at: "2026-09-02T09:10:00",
-    updated_at: "2026-09-03T14:20:00",
+    updated_at: "2026-09-03T15:00:00",
   },
 
   {
     id: "pdr-002",
+    request_number: "PDR-2026-000002",
+
     invoice: {
       id: "inv-002",
       invoice_number: "INV-2018-000125",
       status: "PARTIALLY_PAID",
+
       subtotal: 7500,
+
       penalty_amount: 1200,
       penalty_discount_amount: 0,
+
       interest_amount: 150,
+
       total_amount: 8850,
       paid_amount: 3000,
       balance_due: 5850,
+
       due_date: "2026-08-25",
     },
+
     citizen: {
       id: "cit-002",
       name: "Fatuma Ali",
       phone: "+251922345678",
     },
+
     requested_amount: 600,
+
     reason:
       "The taxpayer submitted a request for penalty reduction because the payment delay was caused by temporary business closure.",
+
     status: "SUBMITTED",
+
     submitted_at: "2026-09-05T11:30:00",
+
     decision: null,
+
     approved_amount: null,
+
     decision_reason: null,
+
     decided_at: null,
+
     applied_to_invoice: false,
+
     applied_at: null,
+
+    applied_by: null,
+
     created_by: {
       id: "usr-002",
       name: "Hassan Mohammed",
     },
+
     decided_by: null,
+
     created_at: "2026-09-05T10:45:00",
     updated_at: "2026-09-05T11:30:00",
   },
 
   {
     id: "pdr-003",
+    request_number: "PDR-2026-000003",
+
     invoice: {
       id: "inv-003",
       invoice_number: "INV-2018-000126",
       status: "OVERDUE",
+
       subtotal: 15000,
+
       penalty_amount: 3500,
       penalty_discount_amount: 0,
+
       interest_amount: 350,
+
       total_amount: 18850,
       paid_amount: 0,
       balance_due: 18850,
+
       due_date: "2026-08-15",
     },
+
     citizen: {
       id: "cit-003",
       name: "Desta Girma",
       phone: "+251933456789",
     },
+
     requested_amount: 1500,
+
     reason:
       "The taxpayer requested penalty relief following a prolonged interruption of business operations.",
+
     status: "DECIDED",
+
     submitted_at: "2026-08-28T08:45:00",
+
     decision: "REJECTED",
+
     approved_amount: null,
+
     decision_reason:
       "The submitted justification did not satisfy the applicable penalty relief requirements.",
+
     decided_at: "2026-08-30T15:10:00",
+
     applied_to_invoice: false,
+
     applied_at: null,
+
+    applied_by: null,
+
     created_by: {
       id: "usr-003",
       name: "Sara Worku",
     },
+
     decided_by: {
       id: "usr-012",
       name: "Daniel Kebede",
     },
+
     created_at: "2026-08-28T08:40:00",
     updated_at: "2026-08-30T15:10:00",
   },
 
   {
     id: "pdr-004",
+    request_number: "PDR-2026-000004",
+
     invoice: {
       id: "inv-004",
       invoice_number: "INV-2018-000127",
       status: "OVERDUE",
+
       subtotal: 22000,
+
       penalty_amount: 4200,
       penalty_discount_amount: 0,
+
       interest_amount: 420,
+
       total_amount: 26620,
       paid_amount: 5000,
       balance_due: 21620,
+
       due_date: "2026-08-10",
     },
+
     citizen: {
       id: "cit-004",
       name: "Mohammed Ibrahim",
       phone: "+251944567890",
     },
+
     requested_amount: 2000,
+
     reason:
       "The taxpayer requested a penalty reduction and provided supporting documentation for review.",
+
     status: "DRAFT",
+
     submitted_at: null,
+
     decision: null,
+
     approved_amount: null,
+
     decision_reason: null,
+
     decided_at: null,
+
     applied_to_invoice: false,
+
     applied_at: null,
+
+    applied_by: null,
+
     created_by: {
       id: "usr-004",
       name: "Aster Gemechu",
     },
+
     decided_by: null,
+
     created_at: "2026-09-10T13:25:00",
     updated_at: "2026-09-10T13:25:00",
   },
 
   {
     id: "pdr-005",
+    request_number: "PDR-2026-000005",
+
     invoice: {
       id: "inv-005",
       invoice_number: "INV-2018-000128",
       status: "OVERDUE",
+
       subtotal: 12500,
+
       penalty_amount: 1800,
       penalty_discount_amount: 0,
+
       interest_amount: 180,
+
       total_amount: 14480,
       paid_amount: 2000,
       balance_due: 12480,
+
       due_date: "2026-08-20",
     },
+
     citizen: {
       id: "cit-005",
       name: "Hana Tesfaye",
       phone: "+251955678901",
     },
+
     requested_amount: 500,
+
     reason:
       "The taxpayer requested a partial reduction of the penalty due to delayed payment caused by temporary financial difficulties.",
+
     status: "CANCELLED",
+
     submitted_at: "2026-09-01T09:20:00",
+
     decision: null,
+
     approved_amount: null,
+
     decision_reason: null,
+
     decided_at: null,
+
     applied_to_invoice: false,
+
     applied_at: null,
+
+    applied_by: null,
+
     created_by: {
       id: "usr-005",
       name: "Yonas Alemu",
     },
+
     decided_by: null,
+
     created_at: "2026-09-01T09:00:00",
     updated_at: "2026-09-04T16:30:00",
   },
 ];
 
-const AVAILABLE_INVOICES = [
-  {
-    id: "inv-new-001",
-    invoice_number: "INV-2018-000129",
-    status: "OVERDUE" as InvoiceStatus,
-    citizen: {
-      id: "cit-new-001",
-      name: "Ahmed Hussein",
-      phone: "+251911987654",
-    },
-    subtotal: 9000,
-    penalty_amount: 1600,
-    penalty_discount_amount: 0,
-    interest_amount: 160,
-    total_amount: 10760,
-    paid_amount: 1500,
-    balance_due: 9260,
-    due_date: "2026-08-18",
-  },
-  {
-    id: "inv-new-002",
-    invoice_number: "INV-2018-000130",
-    status: "OVERDUE" as InvoiceStatus,
-    citizen: {
-      id: "cit-new-002",
-      name: "Amina Yusuf",
-      phone: "+251922876543",
-    },
-    subtotal: 12000,
-    penalty_amount: 2400,
-    penalty_discount_amount: 0,
-    interest_amount: 240,
-    total_amount: 14640,
-    paid_amount: 4000,
-    balance_due: 10640,
-    due_date: "2026-08-12",
-  },
-  {
-    id: "inv-new-003",
-    invoice_number: "INV-2018-000131",
-    status: "PARTIALLY_PAID" as InvoiceStatus,
-    citizen: {
-      id: "cit-new-003",
-      name: "Mulugeta Bekele",
-      phone: "+251933765432",
-    },
-    subtotal: 18000,
-    penalty_amount: 2800,
-    penalty_discount_amount: 0,
-    interest_amount: 280,
-    total_amount: 21080,
-    paid_amount: 5000,
-    balance_due: 16080,
-    due_date: "2026-08-22",
-  },
-];
+/* =========================================================
+ * HELPERS
+ * ======================================================= */
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat("en-US", {
@@ -396,36 +487,67 @@ const formatDate = (value: string | null) => {
   }).format(new Date(value));
 };
 
+const formatDateTime = (value: string | null) => {
+  if (!value) return "—";
+
+  return new Intl.DateTimeFormat("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
+};
+
+/* =========================================================
+ * BADGES
+ * ======================================================= */
+
 function StatusBadge({
   status,
 }: {
   status: PenaltyDiscountStatus;
 }) {
-  const config = {
+  const config: Record<
+    PenaltyDiscountStatus,
+    {
+      label: string;
+      icon: React.ElementType;
+    }
+  > = {
     DRAFT: {
       label: "Draft",
       icon: FileText,
     },
+
     SUBMITTED: {
-      label: "Submitted",
+      label: "Pending Decision",
       icon: Clock3,
     },
+
     DECIDED: {
       label: "Decided",
       icon: CheckCircle2,
     },
+
+    APPLIED: {
+      label: "Applied",
+      icon: CheckCircle2,
+    },
+
     CANCELLED: {
       label: "Cancelled",
       icon: XCircle,
     },
-  }[status];
+  };
 
-  const Icon = config.icon;
+  const current = config[status];
+  const Icon = current.icon;
 
   return (
-    <Badge variant="outline" className="gap-1">
+    <Badge variant="outline" className="gap-1.5">
       <Icon className="h-3.5 w-3.5" />
-      {config.label}
+      {current.label}
     </Badge>
   );
 }
@@ -436,12 +558,16 @@ function DecisionBadge({
   decision: PenaltyDiscountDecision;
 }) {
   if (!decision) {
-    return <span className="text-muted-foreground">—</span>;
+    return (
+      <span className="text-sm text-muted-foreground">
+        Pending
+      </span>
+    );
   }
 
   if (decision === "APPROVED") {
     return (
-      <Badge variant="outline" className="gap-1">
+      <Badge variant="outline" className="gap-1.5">
         <CheckCircle2 className="h-3.5 w-3.5" />
         Approved
       </Badge>
@@ -449,7 +575,7 @@ function DecisionBadge({
   }
 
   return (
-    <Badge variant="outline" className="gap-1">
+    <Badge variant="outline" className="gap-1.5">
       <XCircle className="h-3.5 w-3.5" />
       Rejected
     </Badge>
@@ -461,14 +587,23 @@ function InvoiceStatusBadge({
 }: {
   status: InvoiceStatus;
 }) {
+  const labels: Record<InvoiceStatus, string> = {
+    ISSUED: "Issued",
+    PARTIALLY_PAID: "Partially Paid",
+    PAID: "Paid",
+    OVERDUE: "Overdue",
+  };
+
   return (
     <Badge variant="outline">
-      {status === "PARTIALLY_PAID"
-        ? "Partially Paid"
-        : status.charAt(0) + status.slice(1).toLowerCase()}
+      {labels[status]}
     </Badge>
   );
 }
+
+/* =========================================================
+ * PAGE
+ * ======================================================= */
 
 function Page() {
   const [requests, setRequests] =
@@ -480,13 +615,8 @@ function Page() {
     "ALL" | PenaltyDiscountStatus
   >("ALL");
 
-  const [invoiceSearch, setInvoiceSearch] = useState("");
-
-  const [invoiceDialogOpen, setInvoiceDialogOpen] =
-    useState(false);
-
-  const [requestDialogOpen, setRequestDialogOpen] =
-    useState(false);
+  const [selectedRequest, setSelectedRequest] =
+    useState<PenaltyDiscountRequest | null>(null);
 
   const [detailsDialogOpen, setDetailsDialogOpen] =
     useState(false);
@@ -497,28 +627,24 @@ function Page() {
   const [historyDialogOpen, setHistoryDialogOpen] =
     useState(false);
 
-  const [selectedInvoice, setSelectedInvoice] = useState<
-    (typeof AVAILABLE_INVOICES)[number] | null
-  >(null);
-
-  const [selectedRequest, setSelectedRequest] =
-    useState<PenaltyDiscountRequest | null>(null);
-
-  const [requestedAmount, setRequestedAmount] = useState("");
-
-  const [reason, setReason] = useState("");
-
   const [decision, setDecision] = useState<
     "APPROVED" | "REJECTED" | ""
   >("");
 
-  const [approvedAmount, setApprovedAmount] = useState("");
+  const [approvedAmount, setApprovedAmount] =
+    useState("");
 
   const [decisionReason, setDecisionReason] =
     useState("");
 
+  /* =======================================================
+   * FILTER
+   * ===================================================== */
+
   const filteredRequests = useMemo(() => {
-    const normalizedSearch = search.toLowerCase().trim();
+    const normalizedSearch = search
+      .toLowerCase()
+      .trim();
 
     return requests.filter((request) => {
       const matchesStatus =
@@ -527,6 +653,9 @@ function Page() {
 
       const matchesSearch =
         !normalizedSearch ||
+        request.request_number
+          .toLowerCase()
+          .includes(normalizedSearch) ||
         request.invoice.invoice_number
           .toLowerCase()
           .includes(normalizedSearch) ||
@@ -544,41 +673,29 @@ function Page() {
     });
   }, [requests, search, statusFilter]);
 
-  const filteredInvoices = useMemo(() => {
-    const normalizedSearch = invoiceSearch
-      .toLowerCase()
-      .trim();
-
-    return AVAILABLE_INVOICES.filter((invoice) => {
-      if (!normalizedSearch) return true;
-
-      return (
-        invoice.invoice_number
-          .toLowerCase()
-          .includes(normalizedSearch) ||
-        invoice.citizen.name
-          .toLowerCase()
-          .includes(normalizedSearch) ||
-        invoice.citizen.phone
-          .toLowerCase()
-          .includes(normalizedSearch)
-      );
-    });
-  }, [invoiceSearch]);
+  /* =======================================================
+   * STATISTICS
+   * ===================================================== */
 
   const statistics = useMemo(() => {
     const total = requests.length;
 
-    const submitted = requests.filter(
+    const pending = requests.filter(
       (request) => request.status === "SUBMITTED",
     ).length;
 
     const approved = requests.filter(
-      (request) => request.decision === "APPROVED",
+      (request) =>
+        request.decision === "APPROVED",
     ).length;
 
     const rejected = requests.filter(
-      (request) => request.decision === "REJECTED",
+      (request) =>
+        request.decision === "REJECTED",
+    ).length;
+
+    const applied = requests.filter(
+      (request) => request.status === "APPLIED",
     ).length;
 
     const approvedAmount = requests.reduce(
@@ -589,207 +706,17 @@ function Page() {
 
     return {
       total,
-      submitted,
+      pending,
       approved,
       rejected,
+      applied,
       approvedAmount,
     };
   }, [requests]);
 
-  const resetRequestForm = () => {
-    setSelectedInvoice(null);
-    setRequestedAmount("");
-    setReason("");
-    setInvoiceSearch("");
-  };
-
-  const handleSelectInvoice = (
-    invoice: (typeof AVAILABLE_INVOICES)[number],
-  ) => {
-    setSelectedInvoice(invoice);
-    setInvoiceDialogOpen(false);
-    setRequestedAmount("");
-    setReason("");
-    setRequestDialogOpen(true);
-  };
-
-  const handleSaveDraft = () => {
-    if (!selectedInvoice) return;
-
-    const amount = Number(requestedAmount);
-
-    if (!amount || amount <= 0 || amount > selectedInvoice.penalty_amount) {
-      return;
-    }
-
-    if (!reason.trim()) {
-      return;
-    }
-
-    const now = new Date().toISOString();
-
-    const newRequest: PenaltyDiscountRequest = {
-      id: `pdr-${Date.now()}`,
-
-      invoice: {
-        id: selectedInvoice.id,
-        invoice_number: selectedInvoice.invoice_number,
-        status: selectedInvoice.status,
-        subtotal: selectedInvoice.subtotal,
-        penalty_amount: selectedInvoice.penalty_amount,
-        penalty_discount_amount:
-          selectedInvoice.penalty_discount_amount,
-        interest_amount: selectedInvoice.interest_amount,
-        total_amount: selectedInvoice.total_amount,
-        paid_amount: selectedInvoice.paid_amount,
-        balance_due: selectedInvoice.balance_due,
-        due_date: selectedInvoice.due_date,
-      },
-
-      citizen: selectedInvoice.citizen,
-
-      requested_amount: amount,
-      reason: reason.trim(),
-
-      status: "DRAFT",
-
-      submitted_at: null,
-
-      decision: null,
-      approved_amount: null,
-      decision_reason: null,
-
-      decided_at: null,
-
-      applied_to_invoice: false,
-      applied_at: null,
-
-      created_by: {
-        id: "current-user",
-        name: "Current Officer",
-      },
-
-      decided_by: null,
-
-      created_at: now,
-      updated_at: now,
-    };
-
-    setRequests((current) => [
-      newRequest,
-      ...current,
-    ]);
-
-    setRequestDialogOpen(false);
-    resetRequestForm();
-  };
-
-  const handleSubmitRequest = () => {
-    if (!selectedInvoice) return;
-
-    const amount = Number(requestedAmount);
-
-    if (!amount || amount <= 0 || amount > selectedInvoice.penalty_amount) {
-      return;
-    }
-
-    if (!reason.trim()) {
-      return;
-    }
-
-    const now = new Date().toISOString();
-
-    const newRequest: PenaltyDiscountRequest = {
-      id: `pdr-${Date.now()}`,
-
-      invoice: {
-        id: selectedInvoice.id,
-        invoice_number: selectedInvoice.invoice_number,
-        status: selectedInvoice.status,
-        subtotal: selectedInvoice.subtotal,
-        penalty_amount: selectedInvoice.penalty_amount,
-        penalty_discount_amount:
-          selectedInvoice.penalty_discount_amount,
-        interest_amount: selectedInvoice.interest_amount,
-        total_amount: selectedInvoice.total_amount,
-        paid_amount: selectedInvoice.paid_amount,
-        balance_due: selectedInvoice.balance_due,
-        due_date: selectedInvoice.due_date,
-      },
-
-      citizen: selectedInvoice.citizen,
-
-      requested_amount: amount,
-      reason: reason.trim(),
-
-      status: "SUBMITTED",
-
-      submitted_at: now,
-
-      decision: null,
-      approved_amount: null,
-      decision_reason: null,
-
-      decided_at: null,
-
-      applied_to_invoice: false,
-      applied_at: null,
-
-      created_by: {
-        id: "current-user",
-        name: "Current Officer",
-      },
-
-      decided_by: null,
-
-      created_at: now,
-      updated_at: now,
-    };
-
-    setRequests((current) => [
-      newRequest,
-      ...current,
-    ]);
-
-    setRequestDialogOpen(false);
-    resetRequestForm();
-  };
-
-  const handleSubmitDraft = (
-    request: PenaltyDiscountRequest,
-  ) => {
-    setRequests((current) =>
-      current.map((item) =>
-        item.id === request.id
-          ? {
-              ...item,
-              status: "SUBMITTED",
-              submitted_at:
-                new Date().toISOString(),
-              updated_at:
-                new Date().toISOString(),
-            }
-          : item,
-      ),
-    );
-  };
-
-  const handleCancelRequest = (
-    request: PenaltyDiscountRequest,
-  ) => {
-    setRequests((current) =>
-      current.map((item) =>
-        item.id === request.id
-          ? {
-              ...item,
-              status: "CANCELLED",
-              updated_at:
-                new Date().toISOString(),
-            }
-          : item,
-      ),
-    );
-  };
+  /* =======================================================
+   * ACTIONS
+   * ===================================================== */
 
   const openDetails = (
     request: PenaltyDiscountRequest,
@@ -829,7 +756,10 @@ function Page() {
         !amount ||
         amount <= 0 ||
         amount > selectedRequest.requested_amount ||
-        amount > selectedRequest.invoice.penalty_amount
+        amount >
+          selectedRequest.invoice.penalty_amount -
+            selectedRequest.invoice
+              .penalty_discount_amount
       ) {
         return;
       }
@@ -839,15 +769,31 @@ function Page() {
           item.id === selectedRequest.id
             ? {
                 ...item,
+
+                /*
+                 * Important:
+                 * Decision and financial application
+                 * are separate events.
+                 */
                 status: "DECIDED",
+
                 decision: "APPROVED",
+
                 approved_amount: amount,
+
                 decision_reason:
                   decisionReason.trim(),
+
                 decided_at: now,
-                applied_to_invoice: true,
-                applied_at: now,
+
+                applied_to_invoice: false,
+
+                applied_at: null,
+
+                applied_by: null,
+
                 updated_at: now,
+
                 decided_by: {
                   id: "current-admin",
                   name: "Current Administrator",
@@ -862,15 +808,26 @@ function Page() {
           item.id === selectedRequest.id
             ? {
                 ...item,
+
                 status: "DECIDED",
+
                 decision: "REJECTED",
+
                 approved_amount: null,
+
                 decision_reason:
                   decisionReason.trim(),
+
                 decided_at: now,
+
                 applied_to_invoice: false,
+
                 applied_at: null,
+
+                applied_by: null,
+
                 updated_at: now,
+
                 decided_by: {
                   id: "current-admin",
                   name: "Current Administrator",
@@ -885,30 +842,148 @@ function Page() {
     setSelectedRequest(null);
   };
 
-  const requestAmountNumber = Number(
-    requestedAmount || 0,
-  );
+  const handleApplyDiscount = (
+    request: PenaltyDiscountRequest,
+  ) => {
+    if (
+      request.status !== "DECIDED" ||
+      request.decision !== "APPROVED" ||
+      !request.approved_amount
+    ) {
+      return;
+    }
 
-  const requestedAmountError =
-    selectedInvoice &&
-    requestAmountNumber > selectedInvoice.penalty_amount;
+    const now = new Date().toISOString();
+
+    setRequests((current) =>
+      current.map((item) => {
+        if (item.id !== request.id) {
+          return item;
+        }
+
+        const newPenaltyDiscount =
+          item.invoice.penalty_discount_amount +
+          (item.approved_amount ?? 0);
+
+        const newTotal =
+          item.invoice.subtotal +
+          item.invoice.penalty_amount +
+          item.invoice.interest_amount -
+          newPenaltyDiscount;
+
+        const newBalance =
+          newTotal - item.invoice.paid_amount;
+
+        return {
+          ...item,
+
+          status: "APPLIED",
+
+          applied_to_invoice: true,
+
+          applied_at: now,
+
+          applied_by: {
+            id: "current-finance",
+            name: "Current Finance Officer",
+          },
+
+          invoice: {
+            ...item.invoice,
+
+            penalty_discount_amount:
+              newPenaltyDiscount,
+
+            total_amount: newTotal,
+
+            balance_due: newBalance,
+          },
+
+          updated_at: now,
+        };
+      }),
+    );
+  };
+
+  const handleSubmitDraft = (
+    request: PenaltyDiscountRequest,
+  ) => {
+    const now = new Date().toISOString();
+
+    setRequests((current) =>
+      current.map((item) =>
+        item.id === request.id
+          ? {
+              ...item,
+              status: "SUBMITTED",
+              submitted_at: now,
+              updated_at: now,
+            }
+          : item,
+      ),
+    );
+  };
+
+  const handleCancelRequest = (
+    request: PenaltyDiscountRequest,
+  ) => {
+    if (
+      request.status !== "DRAFT" &&
+      request.status !== "SUBMITTED"
+    ) {
+      return;
+    }
+
+    const now = new Date().toISOString();
+
+    setRequests((current) =>
+      current.map((item) =>
+        item.id === request.id
+          ? {
+              ...item,
+              status: "CANCELLED",
+              updated_at: now,
+            }
+          : item,
+      ),
+    );
+  };
+
+  /* =======================================================
+   * UI
+   * ===================================================== */
 
   return (
     <div className="flex flex-col gap-6 p-6">
-      {/* Header */}
-      <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold tracking-tight">
-          Penalty Discount Requests
-        </h1>
+      {/* ===================================================
+       * HEADER
+       * ================================================= */}
 
-        <p className="text-sm text-muted-foreground">
-          Manage penalty discount requests, administrative
-          decisions, and approved penalty reductions.
-        </p>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            Penalty Discount Requests
+          </h1>
+
+          <p className="mt-1 text-sm text-muted-foreground">
+            Review, decide, and apply taxpayer penalty
+            discount requests.
+          </p>
+        </div>
+
+        <Button asChild>
+          <Link href="./penalty-discount-requests/create">
+            <FileText className="mr-2 h-4 w-4" />
+            New Request
+          </Link>
+        </Button>
       </div>
 
-      {/* Statistics */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+      {/* ===================================================
+       * SUMMARY CARDS
+       * ================================================= */}
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">
@@ -920,6 +995,10 @@ function Page() {
             <div className="text-2xl font-semibold">
               {statistics.total}
             </div>
+
+            <p className="mt-1 text-xs text-muted-foreground">
+              All requests
+            </p>
           </CardContent>
         </Card>
 
@@ -932,8 +1011,12 @@ function Page() {
 
           <CardContent>
             <div className="text-2xl font-semibold">
-              {statistics.submitted}
+              {statistics.pending}
             </div>
+
+            <p className="mt-1 text-xs text-muted-foreground">
+              Awaiting review
+            </p>
           </CardContent>
         </Card>
 
@@ -948,20 +1031,28 @@ function Page() {
             <div className="text-2xl font-semibold">
               {statistics.approved}
             </div>
+
+            <p className="mt-1 text-xs text-muted-foreground">
+              Approved requests
+            </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">
-              Rejected
+              Applied
             </CardTitle>
           </CardHeader>
 
           <CardContent>
             <div className="text-2xl font-semibold">
-              {statistics.rejected}
+              {statistics.applied}
             </div>
+
+            <p className="mt-1 text-xs text-muted-foreground">
+              Posted to invoices
+            </p>
           </CardContent>
         </Card>
 
@@ -973,45 +1064,43 @@ function Page() {
           </CardHeader>
 
           <CardContent>
-            <div className="text-2xl font-semibold">
+            <div className="text-xl font-semibold">
               {formatCurrency(
                 statistics.approvedAmount,
               )}{" "}
               ETB
             </div>
+
+            <p className="mt-1 text-xs text-muted-foreground">
+              Total approved discounts
+            </p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Main Card */}
+      {/* ===================================================
+       * MAIN TABLE
+       * ================================================= */}
+
       <Card>
         <CardHeader>
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <CardTitle>
-                Penalty Discount Requests
+                Request Register
               </CardTitle>
 
               <p className="mt-1 text-sm text-muted-foreground">
-                Review taxpayer requests and
-                administrative decisions.
+                Search and manage penalty discount
+                requests.
               </p>
             </div>
-
-            <Button
-              onClick={() => {
-                setInvoiceSearch("");
-                setInvoiceDialogOpen(true);
-              }}
-            >
-              <FileText className="mr-2 h-4 w-4" />
-              New Request
-            </Button>
           </div>
         </CardHeader>
 
         <CardContent>
           {/* Filters */}
+
           <div className="mb-6 flex flex-col gap-3 lg:flex-row">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -1021,78 +1110,88 @@ function Page() {
                 onChange={(event) =>
                   setSearch(event.target.value)
                 }
-                placeholder="Search invoice, citizen, phone, or creator..."
+                placeholder="Search request, invoice, citizen, phone, or creator..."
                 className="pl-9"
               />
             </div>
 
-            <div className="flex flex-wrap gap-2">
-              {(
-                [
-                  "ALL",
-                  "DRAFT",
-                  "SUBMITTED",
-                  "DECIDED",
-                  "CANCELLED",
-                ] as const
-              ).map((status) => (
-                <Button
-                  key={status}
-                  variant={
-                    statusFilter === status
-                      ? "default"
-                      : "outline"
-                  }
-                  size="sm"
-                  onClick={() =>
-                    setStatusFilter(status)
-                  }
-                >
-                  {status === "ALL"
-                    ? "All"
-                    : status.charAt(0) +
-                      status
-                        .slice(1)
-                        .toLowerCase()}
-                </Button>
-              ))}
-            </div>
+            <Select
+              value={statusFilter}
+              onValueChange={(value) =>
+                setStatusFilter(
+                  value as
+                    | "ALL"
+                    | PenaltyDiscountStatus,
+                )
+              }
+            >
+              <SelectTrigger className="w-full lg:w-[190px]">
+                <SelectValue placeholder="Filter status" />
+              </SelectTrigger>
+
+              <SelectContent>
+                <SelectItem value="ALL">
+                  All Statuses
+                </SelectItem>
+
+                <SelectItem value="DRAFT">
+                  Draft
+                </SelectItem>
+
+                <SelectItem value="SUBMITTED">
+                  Pending Decision
+                </SelectItem>
+
+                <SelectItem value="DECIDED">
+                  Decided
+                </SelectItem>
+
+                <SelectItem value="APPLIED">
+                  Applied
+                </SelectItem>
+
+                <SelectItem value="CANCELLED">
+                  Cancelled
+                </SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Table */}
-          <div className="overflow-x-auto rounded-md border">
+
+          <div className="overflow-x-auto rounded-lg border">
             <table className="w-full text-sm">
               <thead className="bg-muted/50">
                 <tr className="border-b">
-                  <th className="px-4 py-3 text-left font-medium">
+                  <th className="whitespace-nowrap px-4 py-3 text-left font-medium">
+                    Request
+                  </th>
+
+                  <th className="whitespace-nowrap px-4 py-3 text-left font-medium">
                     Invoice
                   </th>
 
-                  <th className="px-4 py-3 text-left font-medium">
+                  <th className="whitespace-nowrap px-4 py-3 text-left font-medium">
                     Citizen
                   </th>
 
-                  <th className="px-4 py-3 text-right font-medium">
+                  <th className="whitespace-nowrap px-4 py-3 text-right font-medium">
                     Penalty
                   </th>
 
-                  <th className="px-4 py-3 text-right font-medium">
+                  <th className="whitespace-nowrap px-4 py-3 text-right font-medium">
                     Requested
                   </th>
 
-                  <th className="px-4 py-3 text-right font-medium">
+                  <th className="whitespace-nowrap px-4 py-3 text-right font-medium">
                     Approved
                   </th>
 
-                  <th className="px-4 py-3 text-left font-medium">
+                  <th className="whitespace-nowrap px-4 py-3 text-left font-medium">
                     Status
                   </th>
 
-                  <th className="px-4 py-3 text-left font-medium">
-                    Decision
-                  </th>
-
-                  <th className="px-4 py-3 text-left font-medium">
+                  <th className="whitespace-nowrap px-4 py-3 text-left font-medium">
                     Created
                   </th>
 
@@ -1106,8 +1205,24 @@ function Page() {
                 {filteredRequests.map((request) => (
                   <tr
                     key={request.id}
-                    className="border-b last:border-0"
+                    className="border-b last:border-0 hover:bg-muted/20"
                   >
+                    {/* Request */}
+
+                    <td className="px-4 py-4">
+                      <div className="font-medium">
+                        {request.request_number}
+                      </div>
+
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        {formatDate(
+                          request.created_at,
+                        )}
+                      </div>
+                    </td>
+
+                    {/* Invoice */}
+
                     <td className="px-4 py-4">
                       <div className="font-medium">
                         {
@@ -1134,6 +1249,8 @@ function Page() {
                       </div>
                     </td>
 
+                    {/* Citizen */}
+
                     <td className="px-4 py-4">
                       <div className="font-medium">
                         {request.citizen.name}
@@ -1143,6 +1260,8 @@ function Page() {
                         {request.citizen.phone}
                       </div>
                     </td>
+
+                    {/* Penalty */}
 
                     <td className="px-4 py-4 text-right">
                       <div className="font-medium">
@@ -1156,8 +1275,8 @@ function Page() {
                       {request.invoice
                         .penalty_discount_amount >
                         0 && (
-                        <div className="text-xs text-muted-foreground">
-                          Applied{" "}
+                        <div className="mt-1 text-xs text-muted-foreground">
+                          Discounted{" "}
                           {formatCurrency(
                             request.invoice
                               .penalty_discount_amount,
@@ -1167,6 +1286,8 @@ function Page() {
                       )}
                     </td>
 
+                    {/* Requested */}
+
                     <td className="px-4 py-4 text-right font-medium">
                       {formatCurrency(
                         request.requested_amount,
@@ -1174,39 +1295,53 @@ function Page() {
                       ETB
                     </td>
 
+                    {/* Approved */}
+
                     <td className="px-4 py-4 text-right">
                       {request.approved_amount !==
                       null ? (
-                        <span className="font-medium">
+                        <div className="font-medium">
                           {formatCurrency(
                             request.approved_amount,
                           )}{" "}
                           ETB
-                        </span>
+                        </div>
                       ) : (
                         <span className="text-muted-foreground">
                           —
                         </span>
                       )}
+
+                      {request.decision && (
+                        <div className="mt-1">
+                          <DecisionBadge
+                            decision={
+                              request.decision
+                            }
+                          />
+                        </div>
+                      )}
                     </td>
+
+                    {/* Status */}
 
                     <td className="px-4 py-4">
                       <StatusBadge
                         status={request.status}
                       />
 
-                      {request.applied_to_invoice && (
+                      {request.status ===
+                        "APPLIED" && (
                         <div className="mt-1 text-xs text-muted-foreground">
-                          Applied to invoice
+                          Applied{" "}
+                          {formatDate(
+                            request.applied_at,
+                          )}
                         </div>
                       )}
                     </td>
 
-                    <td className="px-4 py-4">
-                      <DecisionBadge
-                        decision={request.decision}
-                      />
-                    </td>
+                    {/* Created */}
 
                     <td className="px-4 py-4">
                       <div>
@@ -1215,18 +1350,22 @@ function Page() {
                         )}
                       </div>
 
-                      <div className="text-xs text-muted-foreground">
+                      <div className="mt-1 text-xs text-muted-foreground">
                         {request.created_by.name}
                       </div>
                     </td>
 
+                    {/* Actions */}
+
                     <td className="px-4 py-4 text-right">
                       <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
+                        <DropdownMenuTrigger
+                          asChild
+                        >
                           <Button
                             variant="ghost"
                             size="icon"
-                            aria-label="Actions"
+                            aria-label={`Actions for ${request.request_number}`}
                           >
                             <MoreHorizontal className="h-4 w-4" />
                           </Button>
@@ -1238,49 +1377,96 @@ function Page() {
                               openDetails(request)
                             }
                           >
+                            <Eye className="mr-2 h-4 w-4" />
                             View Details
                           </DropdownMenuItem>
 
                           {request.status ===
                             "DRAFT" && (
-                            <DropdownMenuItem
-                              onClick={() =>
-                                handleSubmitDraft(
-                                  request,
-                                )
-                              }
-                            >
-                              Submit Request
-                            </DropdownMenuItem>
+                            <>
+                              <DropdownMenuSeparator />
+
+                              <DropdownMenuItem
+                                asChild
+                              >
+                                <Link
+                                  href={`./penalty-discount-requests/${request.id}/edit`}
+                                >
+                                  Edit Request
+                                </Link>
+                              </DropdownMenuItem>
+
+                              <DropdownMenuItem
+                                onClick={() =>
+                                  handleSubmitDraft(
+                                    request,
+                                  )
+                                }
+                              >
+                                Submit Request
+                              </DropdownMenuItem>
+
+                              <DropdownMenuItem
+                                onClick={() =>
+                                  handleCancelRequest(
+                                    request,
+                                  )
+                                }
+                              >
+                                Cancel Request
+                              </DropdownMenuItem>
+                            </>
                           )}
 
                           {request.status ===
                             "SUBMITTED" && (
-                            <DropdownMenuItem
-                              onClick={() =>
-                                openDecision(
-                                  request,
-                                )
-                              }
-                            >
-                              Make Decision
-                            </DropdownMenuItem>
+                            <>
+                              <DropdownMenuSeparator />
+
+                              <DropdownMenuItem
+                                onClick={() =>
+                                  openDecision(
+                                    request,
+                                  )
+                                }
+                              >
+                                <CheckCircle2 className="mr-2 h-4 w-4" />
+                                Make Decision
+                              </DropdownMenuItem>
+
+                              <DropdownMenuItem
+                                onClick={() =>
+                                  handleCancelRequest(
+                                    request,
+                                  )
+                                }
+                              >
+                                Cancel Request
+                              </DropdownMenuItem>
+                            </>
                           )}
 
-                          {(request.status ===
-                            "DRAFT" ||
-                            request.status ===
-                              "SUBMITTED") && (
-                            <DropdownMenuItem
-                              onClick={() =>
-                                handleCancelRequest(
-                                  request,
-                                )
-                              }
-                            >
-                              Cancel Request
-                            </DropdownMenuItem>
-                          )}
+                          {request.status ===
+                            "DECIDED" &&
+                            request.decision ===
+                              "APPROVED" && (
+                              <>
+                                <DropdownMenuSeparator />
+
+                                <DropdownMenuItem
+                                  onClick={() =>
+                                    handleApplyDiscount(
+                                      request,
+                                    )
+                                  }
+                                >
+                                  <CheckCircle2 className="mr-2 h-4 w-4" />
+                                  Apply Discount
+                                </DropdownMenuItem>
+                              </>
+                            )}
+
+                          <DropdownMenuSeparator />
 
                           <DropdownMenuItem
                             onClick={() =>
@@ -1300,10 +1486,22 @@ function Page() {
                   <tr>
                     <td
                       colSpan={9}
-                      className="px-4 py-12 text-center text-muted-foreground"
+                      className="px-4 py-16 text-center"
                     >
-                      No penalty discount requests
-                      found.
+                      <div className="mx-auto flex max-w-sm flex-col items-center">
+                        <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-muted">
+                          <Search className="h-5 w-5 text-muted-foreground" />
+                        </div>
+
+                        <div className="font-medium">
+                          No requests found
+                        </div>
+
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          Try changing your search or
+                          status filter.
+                        </p>
+                      </div>
                     </td>
                   </tr>
                 )}
@@ -1318,172 +1516,139 @@ function Page() {
         </CardContent>
       </Card>
 
-      {/* ========================================================= */}
-      {/* SELECT INVOICE DIALOG                                    */}
-      {/* ========================================================= */}
+      {/* ===================================================
+       * DETAILS DIALOG
+       * ================================================= */}
 
       <Dialog
-        open={invoiceDialogOpen}
-        onOpenChange={setInvoiceDialogOpen}
+        open={detailsDialogOpen}
+        onOpenChange={setDetailsDialogOpen}
       >
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>
-              Select Invoice
+              Penalty Discount Request
             </DialogTitle>
 
             <DialogDescription>
-              Select an existing invoice to create the
-              penalty discount request.
+              Complete information about this penalty
+              discount request.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          {selectedRequest && (
+            <div className="space-y-6">
+              {/* Header */}
 
-              <Input
-                value={invoiceSearch}
-                onChange={(event) =>
-                  setInvoiceSearch(event.target.value)
-                }
-                placeholder="Search invoice, citizen, or phone..."
-                className="pl-9"
-              />
-            </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <StatusBadge
+                  status={selectedRequest.status}
+                />
 
-            <div className="max-h-[400px] space-y-2 overflow-y-auto">
-              {filteredInvoices.map((invoice) => (
-                <button
-                  key={invoice.id}
-                  type="button"
-                  onClick={() =>
-                    handleSelectInvoice(invoice)
+                <DecisionBadge
+                  decision={
+                    selectedRequest.decision
                   }
-                  className="w-full rounded-lg border p-4 text-left transition-colors hover:bg-muted/50"
-                >
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <div className="font-medium">
-                        {invoice.invoice_number}
-                      </div>
+                />
 
-                      <div className="text-sm text-muted-foreground">
-                        {invoice.citizen.name} ·{" "}
-                        {invoice.citizen.phone}
-                      </div>
+                {selectedRequest.applied_to_invoice && (
+                  <Badge variant="outline">
+                    Applied to Invoice
+                  </Badge>
+                )}
+              </div>
 
-                      <div className="mt-2 text-xs text-muted-foreground">
-                        Due{" "}
-                        {formatDate(
-                          invoice.due_date,
-                        )}
-                      </div>
+              {/* Request / invoice */}
+
+              <div className="rounded-lg border">
+                <div className="border-b px-4 py-3">
+                  <h3 className="font-medium">
+                    Request Information
+                  </h3>
+                </div>
+
+                <div className="grid gap-4 p-4 sm:grid-cols-2">
+                  <div>
+                    <div className="text-xs text-muted-foreground">
+                      Request Number
                     </div>
 
-                    <div className="text-left sm:text-right">
-                      <InvoiceStatusBadge
-                        status={invoice.status}
-                      />
-
-                      <div className="mt-2 font-medium">
-                        {formatCurrency(
-                          invoice.penalty_amount,
-                        )}{" "}
-                        ETB
-                      </div>
-
-                      <div className="text-xs text-muted-foreground">
-                        Available penalty
-                      </div>
+                    <div className="mt-1 font-medium">
+                      {
+                        selectedRequest.request_number
+                      }
                     </div>
                   </div>
-                </button>
-              ))}
 
-              {filteredInvoices.length === 0 && (
-                <div className="py-10 text-center text-sm text-muted-foreground">
-                  No eligible invoices found.
-                </div>
-              )}
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() =>
-                setInvoiceDialogOpen(false)
-              }
-            >
-              Cancel
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ========================================================= */}
-      {/* REQUEST FORM DIALOG                                      */}
-      {/* ========================================================= */}
-
-      <Dialog
-        open={requestDialogOpen}
-        onOpenChange={(open) => {
-          setRequestDialogOpen(open);
-
-          if (!open) {
-            resetRequestForm();
-          }
-        }}
-      >
-        <DialogContent className="sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>
-              Request Penalty Discount
-            </DialogTitle>
-
-            <DialogDescription>
-              Create a penalty discount request for the
-              selected invoice.
-            </DialogDescription>
-          </DialogHeader>
-
-          {selectedInvoice && (
-            <div className="space-y-6">
-              {/* Invoice summary */}
-              <div className="rounded-lg border bg-muted/30 p-4">
-                <div className="flex items-start justify-between gap-4">
                   <div>
                     <div className="text-xs text-muted-foreground">
                       Invoice
                     </div>
 
-                    <div className="font-semibold">
+                    <div className="mt-1 font-medium">
                       {
-                        selectedInvoice.invoice_number
+                        selectedRequest.invoice
+                          .invoice_number
                       }
-                    </div>
-
-                    <div className="mt-1 text-sm text-muted-foreground">
-                      {selectedInvoice.citizen.name} ·{" "}
-                      {selectedInvoice.citizen.phone}
                     </div>
                   </div>
 
-                  <InvoiceStatusBadge
-                    status={selectedInvoice.status}
-                  />
+                  <div>
+                    <div className="text-xs text-muted-foreground">
+                      Citizen
+                    </div>
+
+                    <div className="mt-1 font-medium">
+                      {
+                        selectedRequest.citizen
+                          .name
+                      }
+                    </div>
+
+                    <div className="text-xs text-muted-foreground">
+                      {
+                        selectedRequest.citizen
+                          .phone
+                      }
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="text-xs text-muted-foreground">
+                      Invoice Status
+                    </div>
+
+                    <div className="mt-1">
+                      <InvoiceStatusBadge
+                        status={
+                          selectedRequest
+                            .invoice.status
+                        }
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Financial information */}
+
+              <div className="rounded-lg border">
+                <div className="border-b px-4 py-3">
+                  <h3 className="font-medium">
+                    Financial Information
+                  </h3>
                 </div>
 
-                <div className="mt-4 grid gap-4 sm:grid-cols-3">
+                <div className="grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-3">
                   <div>
                     <div className="text-xs text-muted-foreground">
                       Principal
                     </div>
 
-                    <div className="font-medium">
+                    <div className="mt-1 font-medium">
                       {formatCurrency(
-                        selectedInvoice.subtotal,
+                        selectedRequest.invoice
+                          .subtotal,
                       )}{" "}
                       ETB
                     </div>
@@ -1491,12 +1656,55 @@ function Page() {
 
                   <div>
                     <div className="text-xs text-muted-foreground">
-                      Current Penalty
+                      Penalty
                     </div>
 
-                    <div className="font-medium">
+                    <div className="mt-1 font-medium">
                       {formatCurrency(
-                        selectedInvoice.penalty_amount,
+                        selectedRequest.invoice
+                          .penalty_amount,
+                      )}{" "}
+                      ETB
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="text-xs text-muted-foreground">
+                      Existing Discount
+                    </div>
+
+                    <div className="mt-1 font-medium">
+                      {formatCurrency(
+                        selectedRequest.invoice
+                          .penalty_discount_amount,
+                      )}{" "}
+                      ETB
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="text-xs text-muted-foreground">
+                      Interest
+                    </div>
+
+                    <div className="mt-1 font-medium">
+                      {formatCurrency(
+                        selectedRequest.invoice
+                          .interest_amount,
+                      )}{" "}
+                      ETB
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="text-xs text-muted-foreground">
+                      Invoice Total
+                    </div>
+
+                    <div className="mt-1 font-medium">
+                      {formatCurrency(
+                        selectedRequest.invoice
+                          .total_amount,
                       )}{" "}
                       ETB
                     </div>
@@ -1507,9 +1715,10 @@ function Page() {
                       Balance Due
                     </div>
 
-                    <div className="font-medium">
+                    <div className="mt-1 font-semibold">
                       {formatCurrency(
-                        selectedInvoice.balance_due,
+                        selectedRequest.invoice
+                          .balance_due,
                       )}{" "}
                       ETB
                     </div>
@@ -1517,283 +1726,59 @@ function Page() {
                 </div>
               </div>
 
-              {/* Requested amount */}
-              <div className="space-y-2">
-                <Label htmlFor="requested-amount">
-                  Requested Discount Amount{" "}
-                  <span className="text-destructive">
-                    *
-                  </span>
-                </Label>
+              {/* Discount information */}
 
-                <div className="relative">
-                  <Input
-                    id="requested-amount"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={requestedAmount}
-                    onChange={(event) =>
-                      setRequestedAmount(
-                        event.target.value,
-                      )
-                    }
-                    placeholder="0.00"
-                    className="pr-14"
-                  />
-
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-                    ETB
-                  </span>
+              <div className="rounded-lg border">
+                <div className="border-b px-4 py-3">
+                  <h3 className="font-medium">
+                    Discount Request
+                  </h3>
                 </div>
 
-                <div className="flex justify-between text-xs text-muted-foreground">
-                  <span>
-                    Maximum available penalty
-                  </span>
+                <div className="grid gap-4 p-4 sm:grid-cols-2">
+                  <div>
+                    <div className="text-xs text-muted-foreground">
+                      Requested Amount
+                    </div>
 
-                  <span>
-                    {formatCurrency(
-                      selectedInvoice.penalty_amount,
-                    )}{" "}
-                    ETB
-                  </span>
+                    <div className="mt-1 text-lg font-semibold">
+                      {formatCurrency(
+                        selectedRequest.requested_amount,
+                      )}{" "}
+                      ETB
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="text-xs text-muted-foreground">
+                      Approved Amount
+                    </div>
+
+                    <div className="mt-1 text-lg font-semibold">
+                      {selectedRequest.approved_amount !==
+                      null
+                        ? `${formatCurrency(
+                            selectedRequest.approved_amount,
+                          )} ETB`
+                        : "—"}
+                    </div>
+                  </div>
                 </div>
-
-                {requestedAmountError && (
-                  <p className="text-sm text-destructive">
-                    Requested amount cannot exceed the
-                    current penalty amount.
-                  </p>
-                )}
               </div>
 
               {/* Reason */}
-              <div className="space-y-2">
-                <Label htmlFor="reason">
-                  Reason{" "}
-                  <span className="text-destructive">
-                    *
-                  </span>
-                </Label>
-
-                <Textarea
-                  id="reason"
-                  value={reason}
-                  onChange={(event) =>
-                    setReason(event.target.value)
-                  }
-                  placeholder="Explain why the penalty discount is being requested..."
-                  className="min-h-[120px]"
-                />
-
-                <p className="text-xs text-muted-foreground">
-                  Provide a clear administrative
-                  justification for the request.
-                </p>
-              </div>
-
-              {/* Supporting document */}
-              <div className="space-y-2">
-                <Label>
-                  Supporting Documents
-                </Label>
-
-                <div className="rounded-lg border border-dashed p-5">
-                  <div className="flex flex-col items-center justify-center gap-2 text-center">
-                    <Upload className="h-5 w-5 text-muted-foreground" />
-
-                    <div className="text-sm font-medium">
-                      Upload supporting document
-                    </div>
-
-                    <div className="text-xs text-muted-foreground">
-                      PDF, JPG, or PNG
-                    </div>
-
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                    >
-                      Select File
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() =>
-                setRequestDialogOpen(false)
-              }
-            >
-              Cancel
-            </Button>
-
-            <Button
-              variant="outline"
-              disabled={
-                !selectedInvoice ||
-                !requestAmountNumber ||
-                requestAmountNumber <= 0 ||
-                !!requestedAmountError ||
-                !reason.trim()
-              }
-              onClick={handleSaveDraft}
-            >
-              Save Draft
-            </Button>
-
-            <Button
-              disabled={
-                !selectedInvoice ||
-                !requestAmountNumber ||
-                requestAmountNumber <= 0 ||
-                !!requestedAmountError ||
-                !reason.trim()
-              }
-              onClick={handleSubmitRequest}
-            >
-              Submit Request
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ========================================================= */}
-      {/* DETAILS DIALOG                                           */}
-      {/* ========================================================= */}
-
-      <Dialog
-        open={detailsDialogOpen}
-        onOpenChange={setDetailsDialogOpen}
-      >
-        <DialogContent className="sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>
-              Penalty Discount Request
-            </DialogTitle>
-
-            <DialogDescription>
-              Review the complete request and its current
-              decision state.
-            </DialogDescription>
-          </DialogHeader>
-
-          {selectedRequest && (
-            <div className="space-y-6">
-              <div className="flex flex-wrap items-center gap-2">
-                <StatusBadge
-                  status={selectedRequest.status}
-                />
-
-                <DecisionBadge
-                  decision={selectedRequest.decision}
-                />
-
-                {selectedRequest.applied_to_invoice && (
-                  <Badge variant="outline">
-                    Applied to Invoice
-                  </Badge>
-                )}
-              </div>
-
-              <div className="grid gap-4 rounded-lg border p-4 sm:grid-cols-2">
-                <div>
-                  <div className="text-xs text-muted-foreground">
-                    Invoice
-                  </div>
-
-                  <div className="font-medium">
-                    {
-                      selectedRequest.invoice
-                        .invoice_number
-                    }
-                  </div>
-                </div>
-
-                <div>
-                  <div className="text-xs text-muted-foreground">
-                    Citizen
-                  </div>
-
-                  <div className="font-medium">
-                    {selectedRequest.citizen.name}
-                  </div>
-
-                  <div className="text-xs text-muted-foreground">
-                    {selectedRequest.citizen.phone}
-                  </div>
-                </div>
-
-                <div>
-                  <div className="text-xs text-muted-foreground">
-                    Current Penalty
-                  </div>
-
-                  <div className="font-medium">
-                    {formatCurrency(
-                      selectedRequest.invoice
-                        .penalty_amount,
-                    )}{" "}
-                    ETB
-                  </div>
-                </div>
-
-                <div>
-                  <div className="text-xs text-muted-foreground">
-                    Requested Amount
-                  </div>
-
-                  <div className="font-medium">
-                    {formatCurrency(
-                      selectedRequest.requested_amount,
-                    )}{" "}
-                    ETB
-                  </div>
-                </div>
-
-                <div>
-                  <div className="text-xs text-muted-foreground">
-                    Approved Amount
-                  </div>
-
-                  <div className="font-medium">
-                    {selectedRequest.approved_amount !==
-                    null
-                      ? `${formatCurrency(
-                          selectedRequest.approved_amount,
-                        )} ETB`
-                      : "—"}
-                  </div>
-                </div>
-
-                <div>
-                  <div className="text-xs text-muted-foreground">
-                    Created
-                  </div>
-
-                  <div className="font-medium">
-                    {formatDate(
-                      selectedRequest.created_at,
-                    )}
-                  </div>
-                </div>
-              </div>
 
               <div className="space-y-2">
                 <div className="text-sm font-medium">
-                  Reason
+                  Request Reason
                 </div>
 
                 <div className="rounded-lg border bg-muted/30 p-4 text-sm leading-6">
                   {selectedRequest.reason}
                 </div>
               </div>
+
+              {/* Decision */}
 
               {selectedRequest.decision_reason && (
                 <div className="space-y-2">
@@ -1809,52 +1794,83 @@ function Page() {
                 </div>
               )}
 
-              <div className="grid gap-4 text-sm sm:grid-cols-2">
-                <div>
-                  <div className="text-xs text-muted-foreground">
-                    Created By
-                  </div>
+              {/* Audit */}
 
-                  <div className="font-medium">
-                    {
-                      selectedRequest.created_by
-                        .name
-                    }
-                  </div>
+              <div className="rounded-lg border">
+                <div className="border-b px-4 py-3">
+                  <h3 className="font-medium">
+                    Processing Information
+                  </h3>
                 </div>
 
-                <div>
-                  <div className="text-xs text-muted-foreground">
-                    Decided By
+                <div className="grid gap-4 p-4 sm:grid-cols-2">
+                  <div>
+                    <div className="text-xs text-muted-foreground">
+                      Created By
+                    </div>
+
+                    <div className="mt-1 font-medium">
+                      {
+                        selectedRequest.created_by
+                          .name
+                      }
+                    </div>
+
+                    <div className="text-xs text-muted-foreground">
+                      {formatDateTime(
+                        selectedRequest.created_at,
+                      )}
+                    </div>
                   </div>
 
-                  <div className="font-medium">
-                    {selectedRequest.decided_by
-                      ?.name ?? "—"}
-                  </div>
-                </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">
+                      Submitted
+                    </div>
 
-                <div>
-                  <div className="text-xs text-muted-foreground">
-                    Submitted
-                  </div>
-
-                  <div className="font-medium">
-                    {formatDate(
-                      selectedRequest.submitted_at,
-                    )}
-                  </div>
-                </div>
-
-                <div>
-                  <div className="text-xs text-muted-foreground">
-                    Decided
+                    <div className="mt-1 font-medium">
+                      {formatDateTime(
+                        selectedRequest.submitted_at,
+                      )}
+                    </div>
                   </div>
 
-                  <div className="font-medium">
-                    {formatDate(
-                      selectedRequest.decided_at,
-                    )}
+                  <div>
+                    <div className="text-xs text-muted-foreground">
+                      Decided By
+                    </div>
+
+                    <div className="mt-1 font-medium">
+                      {
+                        selectedRequest
+                          .decided_by?.name
+                      }
+                    </div>
+
+                    <div className="text-xs text-muted-foreground">
+                      {formatDateTime(
+                        selectedRequest.decided_at,
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="text-xs text-muted-foreground">
+                      Applied By
+                    </div>
+
+                    <div className="mt-1 font-medium">
+                      {
+                        selectedRequest
+                          .applied_by?.name ?? "—"
+                      }
+                    </div>
+
+                    <div className="text-xs text-muted-foreground">
+                      {formatDateTime(
+                        selectedRequest.applied_at,
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1874,9 +1890,9 @@ function Page() {
         </DialogContent>
       </Dialog>
 
-      {/* ========================================================= */}
-      {/* DECISION DIALOG                                          */}
-      {/* ========================================================= */}
+      {/* ===================================================
+       * DECISION DIALOG
+       * ================================================= */}
 
       <Dialog
         open={decisionDialogOpen}
@@ -1885,7 +1901,7 @@ function Page() {
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>
-              Make Penalty Discount Decision
+              Make Decision
             </DialogTitle>
 
             <DialogDescription>
@@ -1897,24 +1913,27 @@ function Page() {
           {selectedRequest && (
             <div className="space-y-5">
               <div className="rounded-lg border bg-muted/30 p-4">
-                <div className="text-sm font-medium">
+                <div className="font-medium">
                   {
-                    selectedRequest.invoice
-                      .invoice_number
+                    selectedRequest.request_number
                   }
                 </div>
 
                 <div className="mt-1 text-sm text-muted-foreground">
-                  {selectedRequest.citizen.name}
+                  {
+                    selectedRequest.invoice
+                      .invoice_number
+                  }{" "}
+                  · {selectedRequest.citizen.name}
                 </div>
 
-                <div className="mt-3 grid grid-cols-2 gap-4">
+                <div className="mt-4 grid grid-cols-2 gap-4">
                   <div>
                     <div className="text-xs text-muted-foreground">
-                      Penalty
+                      Current Penalty
                     </div>
 
-                    <div className="font-medium">
+                    <div className="mt-1 font-medium">
                       {formatCurrency(
                         selectedRequest.invoice
                           .penalty_amount,
@@ -1928,7 +1947,7 @@ function Page() {
                       Requested
                     </div>
 
-                    <div className="font-medium">
+                    <div className="mt-1 font-medium">
                       {formatCurrency(
                         selectedRequest.requested_amount,
                       )}{" "}
@@ -1939,15 +1958,19 @@ function Page() {
               </div>
 
               <div className="space-y-2">
-                <Label>Decision</Label>
+                <label className="text-sm font-medium">
+                  Decision
+                </label>
 
                 <Select
                   value={decision}
-                  onValueChange={(
-                    value:
-                      | "APPROVED"
-                      | "REJECTED",
-                  ) => setDecision(value)}
+                  onValueChange={(value) =>
+                    setDecision(
+                      value as
+                        | "APPROVED"
+                        | "REJECTED",
+                    )
+                  }
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select decision" />
@@ -1967,9 +1990,12 @@ function Page() {
 
               {decision === "APPROVED" && (
                 <div className="space-y-2">
-                  <Label htmlFor="approved-amount">
+                  <label
+                    htmlFor="approved-amount"
+                    className="text-sm font-medium"
+                  >
                     Approved Amount
-                  </Label>
+                  </label>
 
                   <div className="relative">
                     <Input
@@ -1993,7 +2019,7 @@ function Page() {
                   </div>
 
                   <p className="text-xs text-muted-foreground">
-                    Maximum approved amount:{" "}
+                    Maximum requested amount:{" "}
                     {formatCurrency(
                       selectedRequest.requested_amount,
                     )}{" "}
@@ -2003,11 +2029,14 @@ function Page() {
               )}
 
               <div className="space-y-2">
-                <Label htmlFor="decision-reason">
+                <label
+                  htmlFor="decision-reason"
+                  className="text-sm font-medium"
+                >
                   Decision Reason
-                </Label>
+                </label>
 
-                <Textarea
+                <textarea
                   id="decision-reason"
                   value={decisionReason}
                   onChange={(event) =>
@@ -2020,7 +2049,7 @@ function Page() {
                       ? "Explain the approval decision..."
                       : "Explain the rejection decision..."
                   }
-                  className="min-h-[110px]"
+                  className="min-h-[120px] w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
                 />
               </div>
             </div>
@@ -2055,9 +2084,9 @@ function Page() {
         </DialogContent>
       </Dialog>
 
-      {/* ========================================================= */}
-      {/* HISTORY DIALOG                                           */}
-      {/* ========================================================= */}
+      {/* ===================================================
+       * HISTORY DIALOG
+       * ================================================= */}
 
       <Dialog
         open={historyDialogOpen}
@@ -2076,32 +2105,37 @@ function Page() {
           </DialogHeader>
 
           {selectedRequest && (
-            <div className="space-y-5">
+            <div className="space-y-6">
               <div>
                 <div className="font-medium">
                   {
-                    selectedRequest.invoice
-                      .invoice_number
+                    selectedRequest.request_number
                   }
                 </div>
 
                 <div className="text-sm text-muted-foreground">
-                  {selectedRequest.citizen.name}
+                  {
+                    selectedRequest.invoice
+                      .invoice_number
+                  }{" "}
+                  · {selectedRequest.citizen.name}
                 </div>
               </div>
 
-              <div className="relative space-y-6 pl-6">
+              <div className="relative space-y-7 pl-7">
                 <div className="absolute bottom-2 left-[7px] top-2 w-px bg-border" />
 
+                {/* Created */}
+
                 <div className="relative">
-                  <div className="absolute -left-6 top-1 h-3.5 w-3.5 rounded-full border-2 border-background bg-foreground" />
+                  <div className="absolute -left-7 top-1 h-3.5 w-3.5 rounded-full border-2 border-background bg-foreground" />
 
                   <div className="text-sm font-medium">
                     Request Created
                   </div>
 
-                  <div className="text-xs text-muted-foreground">
-                    {formatDate(
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    {formatDateTime(
                       selectedRequest.created_at,
                     )}{" "}
                     ·{" "}
@@ -2112,72 +2146,101 @@ function Page() {
                   </div>
                 </div>
 
+                {/* Submitted */}
+
                 {selectedRequest.submitted_at && (
                   <div className="relative">
-                    <div className="absolute -left-6 top-1 h-3.5 w-3.5 rounded-full border-2 border-background bg-foreground" />
+                    <div className="absolute -left-7 top-1 h-3.5 w-3.5 rounded-full border-2 border-background bg-foreground" />
 
                     <div className="text-sm font-medium">
                       Request Submitted
                     </div>
 
-                    <div className="text-xs text-muted-foreground">
-                      {formatDate(
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {formatDateTime(
                         selectedRequest.submitted_at,
                       )}
                     </div>
                   </div>
                 )}
 
+                {/* Decision */}
+
                 {selectedRequest.decided_at && (
                   <div className="relative">
-                    <div className="absolute -left-6 top-1 h-3.5 w-3.5 rounded-full border-2 border-background bg-foreground" />
+                    <div className="absolute -left-7 top-1 h-3.5 w-3.5 rounded-full border-2 border-background bg-foreground" />
 
                     <div className="text-sm font-medium">
                       Decision Recorded
                     </div>
 
-                    <div className="text-xs text-muted-foreground">
+                    <div className="mt-1 text-xs text-muted-foreground">
                       {
                         selectedRequest
                           .decision
                       }{" "}
                       ·{" "}
-                      {formatDate(
+                      {formatDateTime(
                         selectedRequest.decided_at,
                       )}
                     </div>
+
+                    {selectedRequest
+                      .approved_amount !==
+                      null && (
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        Approved amount:{" "}
+                        {formatCurrency(
+                          selectedRequest.approved_amount,
+                        )}{" "}
+                        ETB
+                      </div>
+                    )}
                   </div>
                 )}
 
-                {selectedRequest.applied_to_invoice &&
-                  selectedRequest.applied_at && (
-                    <div className="relative">
-                      <div className="absolute -left-6 top-1 h-3.5 w-3.5 rounded-full border-2 border-background bg-foreground" />
+                {/* Applied */}
 
-                      <div className="text-sm font-medium">
-                        Discount Applied to
-                        Invoice
-                      </div>
+                {selectedRequest.applied_at && (
+                  <div className="relative">
+                    <div className="absolute -left-7 top-1 h-3.5 w-3.5 rounded-full border-2 border-background bg-foreground" />
 
-                      <div className="text-xs text-muted-foreground">
-                        {formatDate(
-                          selectedRequest.applied_at,
-                        )}
-                      </div>
+                    <div className="text-sm font-medium">
+                      Discount Applied
                     </div>
-                  )}
+
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {formatDateTime(
+                        selectedRequest.applied_at,
+                      )}
+                    </div>
+
+                    {selectedRequest
+                      .applied_by && (
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        By{" "}
+                        {
+                          selectedRequest
+                            .applied_by.name
+                        }
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Cancelled */}
 
                 {selectedRequest.status ===
                   "CANCELLED" && (
                   <div className="relative">
-                    <div className="absolute -left-6 top-1 h-3.5 w-3.5 rounded-full border-2 border-background bg-foreground" />
+                    <div className="absolute -left-7 top-1 h-3.5 w-3.5 rounded-full border-2 border-background bg-foreground" />
 
                     <div className="text-sm font-medium">
                       Request Cancelled
                     </div>
 
-                    <div className="text-xs text-muted-foreground">
-                      {formatDate(
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {formatDateTime(
                         selectedRequest.updated_at,
                       )}
                     </div>

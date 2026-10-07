@@ -266,12 +266,12 @@ export const NAV_ITEMS: NavItem[] = [
       permission: APP_PERMISSIONS.ASSESSMENT_VIEW,
     },
 
-    {
-      title: "lease_amendments",
-      url: "/office/dashboard/lease-amendments",
-      icon: FileText,
-      permission: APP_PERMISSIONS.LEASE_AMENDMENTS_VIEW,
-    },
+    // {
+    //   title: "lease_amendments",
+    //   url: "/office/dashboard/lease-amendments",
+    //   icon: FileText,
+    //   permission: APP_PERMISSIONS.LEASE_AMENDMENTS_VIEW,
+    // },
 
     {
       title: "invoices",
@@ -286,12 +286,12 @@ export const NAV_ITEMS: NavItem[] = [
       permission: APP_PERMISSIONS.PAYMENTS_VIEW,
     },
 
-    {
-      title: "field_collection",
-      url: "/office/dashboard/field-collections",
-      icon: Wallet,
-      permission: APP_PERMISSIONS.FIELD_COLLECTION_VIEW,
-    },
+    // {
+    //   title: "field_collection",
+    //   url: "/office/dashboard/field-collections",
+    //   icon: Wallet,
+    //   permission: APP_PERMISSIONS.FIELD_COLLECTION_VIEW,
+    // },
 
     {
       title: "penalties",
@@ -371,49 +371,49 @@ export const NAV_ITEMS: NavItem[] = [
 // REPORTS
 // =========================================================
 
-{
-  title: "reports",
-  url: "#",
-  icon: FileText,
+// {
+//   title: "reports",
+//   url: "#",
+//   icon: FileText,
 
-  items: [
-    {
-      title: "revenue_collection_report",
-      url: "/office/dashboard/reports/revenue-collection",
-      permission: APP_PERMISSIONS.REPORTS_REVENUE_COLLECTION_VIEW,
-    },
+//   items: [
+//     {
+//       title: "revenue_collection_report",
+//       url: "/office/dashboard/reports/revenue-collection",
+//       permission: APP_PERMISSIONS.REPORTS_REVENUE_COLLECTION_VIEW,
+//     },
 
-    {
-      title: "payment_report",
-      url: "/office/dashboard/reports/payments",
-      permission: APP_PERMISSIONS.REPORTS_PAYMENTS_VIEW,
-    },
+//     {
+//       title: "payment_report",
+//       url: "/office/dashboard/reports/payments",
+//       permission: APP_PERMISSIONS.REPORTS_PAYMENTS_VIEW,
+//     },
 
-    {
-      title: "invoice_report",
-      url: "/office/dashboard/reports/invoices",
-      permission: APP_PERMISSIONS.REPORTS_INVOICES_VIEW,
-    },
+//     {
+//       title: "invoice_report",
+//       url: "/office/dashboard/reports/invoices",
+//       permission: APP_PERMISSIONS.REPORTS_INVOICES_VIEW,
+//     },
 
-    {
-      title: "assessment_report",
-      url: "/office/dashboard/reports/assessments",
-      permission: APP_PERMISSIONS.REPORTS_ASSESSMENTS_VIEW,
-    },
+//     {
+//       title: "assessment_report",
+//       url: "/office/dashboard/reports/assessments",
+//       permission: APP_PERMISSIONS.REPORTS_ASSESSMENTS_VIEW,
+//     },
 
-    {
-      title: "outstanding_revenue",
-      url: "/office/dashboard/reports/outstanding-revenue",
-      permission: APP_PERMISSIONS.REPORTS_OUTSTANDING_REVENUE_VIEW,
-    },
+//     {
+//       title: "outstanding_revenue",
+//       url: "/office/dashboard/reports/outstanding-revenue",
+//       permission: APP_PERMISSIONS.REPORTS_OUTSTANDING_REVENUE_VIEW,
+//     },
 
-    {
-      title: "cash_reconciliation",
-      url: "/office/dashboard/reports/cash-reconciliation",
-      permission: APP_PERMISSIONS.REPORTS_CASH_RECONCILIATION_VIEW,
-    },
-  ],
-},
+//     {
+//       title: "cash_reconciliation",
+//       url: "/office/dashboard/reports/cash-reconciliation",
+//       permission: APP_PERMISSIONS.REPORTS_CASH_RECONCILIATION_VIEW,
+//     },
+//   ],
+// },
 
 
 

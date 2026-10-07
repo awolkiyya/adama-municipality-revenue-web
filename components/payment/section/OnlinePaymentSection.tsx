@@ -4,16 +4,7 @@ import React from "react";
 import { CheckCircle2, CreditCard, Info } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
-
-export interface PaymentProvider {
-  id: string;
-  code: string;
-  name: string;
-  fee_percentage: number | string;
-  is_active: boolean;
-  created_at?: string;
-  updated_at?: string;
-}
+import type { PaymentProvider } from "@/types/revenue/payment-provider";
 
 interface OnlinePaymentSectionProps {
   currency: string;
@@ -71,6 +62,7 @@ function ProviderOption({
     <button
       type="button"
       onClick={onClick}
+      aria-pressed={selected}
       className={[
         "w-full rounded-xl border p-4 text-left transition-colors",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
@@ -93,8 +85,8 @@ function ProviderOption({
 
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-medium">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium">
                 {provider.name}
               </p>
 
@@ -316,7 +308,7 @@ export function OnlinePaymentSection({
                 </p>
 
                 <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                  You will be redirected to the provider's
+                  You will be redirected to the provider&apos;s
                   secure checkout to complete the payment.
                 </p>
               </div>

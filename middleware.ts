@@ -136,6 +136,7 @@ function isPublicRoute(path: string): boolean {
     path.startsWith("/office/auth/login") ||
     path.startsWith("/citizen/auth/login") ||
     path.startsWith("/citizen/auth/verify-otp") ||
+    path.startsWith("/payment/result") ||
     path.startsWith("/unauthorized")
   );
 }

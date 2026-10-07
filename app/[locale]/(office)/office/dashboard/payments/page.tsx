@@ -885,7 +885,7 @@ function PaymentsPage() {
           </p>
         </div>
 
-        <button
+        {/* <button
           type="button"
           onClick={() =>
             router.push(
@@ -896,7 +896,7 @@ function PaymentsPage() {
         >
           <Plus className="h-4 w-4" />
           Record Payment
-        </button>
+        </button> */}
       </div>
 
       {/* =================================================

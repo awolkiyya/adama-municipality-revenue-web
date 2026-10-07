@@ -113,3 +113,16 @@ export type PaymentResultStatus =
   | "SUCCESS"
   | "FAILED"
   | "PENDING";
+
+
+/* ============================================================
+   ONLINE PAYMENT PROVIDER
+============================================================ */
+
+/**
+ * External providers supported by the online payment flow.
+ */
+export type OnlinePaymentProviderCode =
+  | "CHAPA"
+  | "TELEBIRR"
+  | "CBE_BIRR";

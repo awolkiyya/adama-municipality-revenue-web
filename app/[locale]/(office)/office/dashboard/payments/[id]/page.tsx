@@ -400,6 +400,25 @@ function PaymentMethodIcon({
   }
 }
 
+
+function getPaymentProviderLabel(
+  provider: PaymentDetail["payment_provider"],
+) {
+  switch (provider) {
+    case "TELEBIRR":
+      return "Telebirr";
+
+    case "CHAPA":
+      return "Chapa";
+
+    case "CBE_BIRR":
+      return "CBE Birr";
+
+    default:
+      return "—";
+  }
+}
+
 /*
 |--------------------------------------------------------------------------
 | DETAIL ROW
@@ -918,6 +937,26 @@ export default function PaymentDetailPage() {
                   />
                 }
               />
+              
+
+          {payment.payment_provider && (
+            <>
+              <Separator />
+
+              <DetailRow
+                label="Provider"
+                value={getPaymentProviderLabel(
+                  payment.payment_provider,
+                )}
+                icon={
+                  <Smartphone className="h-4 w-4"
+                  />
+                }
+              />
+            </>
+          )}
+
+          
 
               <Separator />
 

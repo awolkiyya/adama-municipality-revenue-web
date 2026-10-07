@@ -1,6 +1,8 @@
+import { OnlinePaymentProviderCode } from "../payment";
+
 export interface PaymentProvider {
     id: string;
-    code: string;
+    code: OnlinePaymentProviderCode;
     name: string;
     fee_percentage: number;
     is_active: boolean;

@@ -4,7 +4,7 @@ import type { Payment } from "./payment";
 import type {
   PaymentVerificationStatus,
   PaymentResultStatus,
-  PaymentMethod,
+  OnlinePaymentProviderCode,
 } from "./payment-enums";
 
 
@@ -15,15 +15,15 @@ import type {
 /**
  * Starts an online payment through an external provider.
  *
- * Payment method is automatically ONLINE because this request
- * belongs to the online-payment endpoint.
+ * POST /online-payments
  *
- * The backend controls:
+ * The backend automatically determines:
  *
- * - payment method
- * - payment status
- * - transaction reference
+ * - payment method = ONLINE
+ * - payment status = PENDING
+ * - payment reference
  * - payment ID
+ * - transaction reference
  * - provider reference
  * - checkout URL
  */
@@ -41,44 +41,24 @@ export interface InitializeOnlinePaymentRequest {
   // ----------------------------------------------------------
 
   /**
-   * Optional if the backend determines the outstanding amount.
+   * Optional payment amount.
+   *
+   * If omitted, the backend may use the invoice's
+   * current outstanding balance.
    */
   amount?: number;
 
 
-  // ----------------------------------------------------------
-  // Customer / payer information
-  // ----------------------------------------------------------
-
-  // customer_first_name?: string;
-
-  // customer_last_name?: string;
-
-  // customer_email?: string;
-
-  // customer_phone?: string;
-
-
-  // ----------------------------------------------------------
-  // Online payment provider
-  // ----------------------------------------------------------
-
   /**
-   * External online payment provider.
-   *
-   * Examples:
-   *
-   * CHAPA
-   * TELEBIRR
-   * CBE_BIRR
-   */
-  payment_provider: Extract<
-    PaymentProvider,
-    "CHAPA" | "TELEBIRR" | "CBE_BIRR"
-  >;
-
-
-  payment_method:PaymentMethod;
+ * External online payment provider.
+ *
+ * Supported providers:
+ *
+ * CHAPA
+ * TELEBIRR
+ * CBE_BIRR
+ */
+ payment_provider: OnlinePaymentProviderCode;
 
 
   // ----------------------------------------------------------
@@ -109,7 +89,6 @@ export interface InitializeOnlinePaymentResponse {
   data: {
 
     success: boolean;
-
 
     // --------------------------------------------------------
     // Operation result
@@ -171,10 +150,7 @@ export interface InitializeOnlinePaymentResponse {
     // Additional metadata
     // --------------------------------------------------------
 
-    metadata?: Record<
-      string,
-      unknown
-    >;
+    metadata?: Record<string, unknown>;
   };
 
 
@@ -182,10 +158,7 @@ export interface InitializeOnlinePaymentResponse {
   // Validation / operation errors
   // ----------------------------------------------------------
 
-  errors?: Record<
-    string,
-    unknown
-  > | null;
+  errors?: Record<string, unknown> | null;
 
 
   // ----------------------------------------------------------
@@ -202,7 +175,6 @@ export interface InitializeOnlinePaymentResponse {
 
   } | null;
 }
-
 
 // ============================================================
 // VERIFY ONLINE PAYMENT REQUEST

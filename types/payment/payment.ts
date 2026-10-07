@@ -1,3 +1,4 @@
+import { PaymentProvider } from "../revenue/payment-provider";
 import type {
   PaymentMethod,
   PaymentSource,
@@ -223,6 +224,8 @@ export interface Payment {
   // ==========================================================
 
   payment_method: PaymentMethod;
+
+  payment_provider: PaymentProvider | null;
 
   payment_source: PaymentSource;
 

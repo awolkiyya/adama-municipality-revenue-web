@@ -689,94 +689,88 @@ export default function PaymentProcessPage() {
     }
 
 
-    /* =====================================================
-       ONLINE PAYMENT
-       ===================================================== */
+   /* =====================================================
+   ONLINE PAYMENT
+   ===================================================== */
 
-    if (method === "ONLINE") {
-      if (!selectedProvider) {
-        return;
-      }
+if (method === "ONLINE") {
+  if (!selectedProvider) {
+    return;
+  }
 
-      /*
-       * IMPORTANT:
-       *
-       * The exact InitializeOnlinePaymentRequest fields must
-       * match your backend request type.
-       *
-       * The request below intentionally uses only fields that
-       * belong to the payment initialization contract.
-       */
-      try {
-        const response =
-          await initializeOnlinePayment({
-            invoice_id:
-              invoice.id,
+  /*
+   * Online payment initialization.
+   *
+   * The backend automatically determines:
+   *
+   * - payment_method = ONLINE
+   * - payment status = PENDING
+   * - payment reference
+   * - transaction/reference values
+   *
+   * The frontend only provides:
+   *
+   * - invoice
+   * - amount
+   * - online provider
+   */
+  try {
+    const response =
+      await initializeOnlinePayment({
+        invoice_id: invoice.id,
 
-            amount,
+        amount,
 
-            provider:
-              selectedProvider.code,
-          });
+        payment_provider:
+          selectedProvider.code,
+      });
 
-        /*
-         * The online provider flow should be handled using
-         * the response returned by the backend.
-         *
-         * Do not mark the payment COMPLETED simply because
-         * initialization succeeded.
-         */
-        const payment =
-          response.data;
+    /*
+     * The backend should return the initialized payment
+     * together with the provider checkout URL.
+     */
+    const payment =
+      response.data;
 
-        if (!payment) {
-          throw new Error(
-            "Online payment initialization did not return a payment.",
-          );
-        }
-
-        /*
-         * The exact redirect/checkout field depends on your
-         * InitializeOnlinePaymentResponse contract.
-         *
-         * The page should redirect to the provider checkout
-         * URL returned by the backend here.
-         */
-        if (
-          "checkout_url" in payment &&
-          typeof payment.checkout_url ===
-            "string"
-        ) {
-          window.location.assign(
-            payment.checkout_url,
-          );
-
-          return;
-        }
-
-        if (
-          "payment_url" in payment &&
-          typeof payment.payment_url ===
-            "string"
-        ) {
-          window.location.assign(
-            payment.payment_url,
-          );
-
-          return;
-        }
-
-        /*
-         * If the backend does not return a checkout URL,
-         * do not pretend that the payment was completed.
-         */
-        throw new Error(
-          "Online payment was initialized, but no checkout URL was returned.",
-        );
-      } catch {
-        return;
-      }
+    if (!payment) {
+      throw new Error(
+        "Online payment initialization did not return a payment.",
+      );
     }
+
+    /*
+     * Redirect the taxpayer/agent to the provider checkout.
+     *
+     * The frontend must NOT mark the payment as COMPLETED.
+     *
+     * Completion must happen after the backend receives and
+     * verifies the provider callback/webhook.
+     */
+    if (payment.checkoutUrl) {
+      window.location.assign(
+        payment.checkoutUrl,
+      );
+
+      return;
+    }
+
+    /*
+     * Initialization succeeded but the provider did not
+     * return a checkout URL.
+     */
+    throw new Error(
+      "Online payment was initialized, but no checkout URL was returned.",
+    );
+  } catch {
+    /*
+     * Keep the user on the review page.
+     *
+     * The mutation error is displayed by the online-payment
+     * error section above.
+     */
+    return;
+  }
+}
   }
 
 

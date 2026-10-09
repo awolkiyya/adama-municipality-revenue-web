@@ -15,6 +15,7 @@ import {
   Wallet,
   CreditCard,
   CalendarClock,
+  Smartphone,
 } from "lucide-react";
 
 import { NavItem } from "@/types/commen";
@@ -286,12 +287,12 @@ export const NAV_ITEMS: NavItem[] = [
       permission: APP_PERMISSIONS.PAYMENTS_VIEW,
     },
 
-    // {
-    //   title: "field_collection",
-    //   url: "/office/dashboard/field-collections",
-    //   icon: Wallet,
-    //   permission: APP_PERMISSIONS.FIELD_COLLECTION_VIEW,
-    // },
+    {
+      title: "field_collection",
+      url: "/office/dashboard/field-collections",
+      icon: Wallet,
+      permission: APP_PERMISSIONS.FIELD_COLLECTION_VIEW,
+    },
 
     {
       title: "penalties",
@@ -365,6 +366,25 @@ export const NAV_ITEMS: NavItem[] = [
       },
     ]
     
+  },
+
+
+  // =========================================================
+  // MOBILE APP MANAGEMENT
+  // =========================================================
+
+  {
+    title: "mobile_app_management",
+    url: "#",
+    icon: Smartphone,
+
+    items: [
+      {
+        title: "mobile_app_releases",
+        url: "/office/dashboard/mobile-app/releases",
+        permission: APP_PERMISSIONS.MOBILE_APP_RELEASES_VIEW,
+      },
+    ],
   },
 
 // =========================================================

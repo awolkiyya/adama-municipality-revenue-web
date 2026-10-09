@@ -58,6 +58,29 @@ export default function EditLeaseAmendmentPage() {
       amendmentId={amendmentId}
       onSubmit={handleSubmit}
       onCancel={() => router.back()}
-    />
+      assessment={{
+        id: "",
+        assessmentNumber: "",
+        sourceType: "NEW",
+        citizenId: "",
+        assessmentDate: null,
+        status: "DRAFT",
+        notes: null,
+        submittedAt: null,
+        decision: null,
+        decisionNotes: null,
+        decidedBy: null,
+        decidedAt: null,
+        approvedAt: null,
+        rejectedAt: null,
+        decisionMetadata: null,
+        administrativeUnitId: null,
+        taxpayer: null,
+        services: [],
+        createdBy: null,
+        updatedBy: null,
+        createdAt: "",
+        updatedAt: ""
+      }}    />
   );
 }

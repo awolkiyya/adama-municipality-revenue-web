@@ -220,7 +220,11 @@
   
     "taxpayer_services": "Taxpayer Services",
   
-    "payment_operations": "Payment Operations"
+    "payment_operations": "Payment Operations",
+
+    "mobile_app_management": "Mobile App Management",
+    "mobile_app_releases": "Mobile App Releases",
+    "mobile_app_update_settings": "Mobile App Update Settings"
   },
 
   "taxpayer": {

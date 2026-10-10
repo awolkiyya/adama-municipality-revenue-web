@@ -369,71 +369,25 @@ export const NAV_ITEMS: NavItem[] = [
   },
 
 
-  // =========================================================
-  // MOBILE APP MANAGEMENT
-  // =========================================================
-
   {
     title: "mobile_app_management",
-    url: "#",
+    url: "/office/dashboard/mobile-app-releases",
     icon: Smartphone,
-
-    items: [
-      {
-        title: "mobile_app_releases",
-        url: "/office/dashboard/mobile-app-releases",
-        permission: APP_PERMISSIONS.MOBILE_APP_RELEASES_VIEW,
-      },
-    ],
-  },
+    permission: APP_PERMISSIONS.MOBILE_APP_RELEASES_VIEW,
+    },
+    
 
 // =========================================================
 // REPORTS
 // =========================================================
 
-// {
-//   title: "reports",
-//   url: "#",
-//   icon: FileText,
-
-//   items: [
-//     {
-//       title: "revenue_collection_report",
-//       url: "/office/dashboard/reports/revenue-collection",
-//       permission: APP_PERMISSIONS.REPORTS_REVENUE_COLLECTION_VIEW,
-//     },
-
-//     {
-//       title: "payment_report",
-//       url: "/office/dashboard/reports/payments",
-//       permission: APP_PERMISSIONS.REPORTS_PAYMENTS_VIEW,
-//     },
-
-//     {
-//       title: "invoice_report",
-//       url: "/office/dashboard/reports/invoices",
-//       permission: APP_PERMISSIONS.REPORTS_INVOICES_VIEW,
-//     },
-
-//     {
-//       title: "assessment_report",
-//       url: "/office/dashboard/reports/assessments",
-//       permission: APP_PERMISSIONS.REPORTS_ASSESSMENTS_VIEW,
-//     },
-
-//     {
-//       title: "outstanding_revenue",
-//       url: "/office/dashboard/reports/outstanding-revenue",
-//       permission: APP_PERMISSIONS.REPORTS_OUTSTANDING_REVENUE_VIEW,
-//     },
-
-//     {
-//       title: "cash_reconciliation",
-//       url: "/office/dashboard/reports/cash-reconciliation",
-//       permission: APP_PERMISSIONS.REPORTS_CASH_RECONCILIATION_VIEW,
-//     },
-//   ],
-// },
+{
+  title: "reports",
+  url: "/office/dashboard/reports",
+  icon: FileText,
+  permission: APP_PERMISSIONS.MOBILE_APP_RELEASES_VIEW,
+},
+  
 
 
 

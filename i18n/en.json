@@ -1,273 +1,373 @@
 {
   "system": {
-    "title": "GMQ Revenue System",
-    "full_title": "Government Revenue Management System"
+  "title": "GMQ Revenue System",
+  "full_title": "Government Revenue Management System"
   },
-
+  
   "landing": {
-    "banner": {
-      "message": "This is a new digital service and still being built. Some features are in beta.",
-      "feedback": "Share feedback"
-    },
-
-    "navbar": {
-      "logo": "Galii Mana Qopheessaa",
-      "services": "Services",
-      "about": "About",
-      "contact": "Contact",
-      "sign_in": "Sign In",
-      "citizen_portal": "Citizen Portal",
-      "office_system": "Office System"
-    },
-
-    "hero": {
-      "badge": "Now serving Adama citizens online",
-      "title": "Mosajii Tejajila GMQ",
-      "description": "Access public services, manage payments, and handle government operations in one secure system.",
-      "citizen_button": "Citizen Portal",
-      "office_button": "Office System"
-    },
-
-    "features": {
-      "title": "Available Services",
-      "description": "Services are being introduced gradually based on readiness.",
-
-      "citizen": {
-        "title": "Citizen Services",
-        "description": "Pay taxes, view bills, and track payments in real time."
-      },
-
-      "revenue": {
-        "title": "Revenue Management",
-        "description": "Manage taxes, fees, penalties, and government revenue operations."
-      },
-
-      "sector": {
-        "title": "Sector Operations",
-        "description": "Land, construction, and inspection workflows integrated."
-      },
-
-      "soon": "Rolling out to more sectors soon"
-    },
-
-    "about": {
-      "title": "Modern Digital Government System",
-      "description": "This platform connects citizens and government offices in one unified system with secure authentication, billing, and payment integration."
-    },
-
-    "footer": {
-      "copyright": "Adama GovService Portal. All rights reserved.",
-      "report_issue": "Report an issue or suggest a feature"
-    }
+  "banner": {
+  "message": "This is a new digital service and still being built. Some features are in beta.",
+  "feedback": "Share feedback"
   },
-
-  "auth": {
-    "welcome": "Welcome Back",
-
-    "fields": {
-      "email": "Email Address",
-      "password": "Password"
-    },
-
-    "actions": {
-      "login": "Login Securely",
-      "logging_in": "Logging in..."
-    }
+  "navbar": {
+  "logo": "Galii Mana Qopheessaa",
+  "services": "Services",
+  "about": "About",
+  "contact": "Contact",
+  "sign_in": "Sign In",
+  "citizen_portal": "Citizen Portal",
+  "office_system": "Office System"
   },
-
-  "navigation": {
-    "dashboard": "Dashboard",
-  
-    "roles": "Roles",
-  
-    "user_access": "User & Access Management",
-  
-    "users": "Users",
-  
-    "taxpayers": "Taxpayers",
-  
-    "access_managements": "Access Management",
-  
-    "administrative_structure": "Administrative Structure",
-  
-    "administrative_units": "Administrative Units",
-  
-    "sectors": "Sectors",
-  
-    "workflow_configuration": "Workflow Configuration",
-  
-    "service_sector_access": "Service Sector Access",
-  
-    "system_settings": "System Settings",
-  
-    "audit_logs": "Audit Logs",
-  
-    "revenue_configuration": "Revenue Configuration",
-  
-    "revenue_categories": "Revenue Categories",
-  
-    "revenue_codes": "Revenue Codes",
-  
-    "revenue_services": "Revenue Services",
-  
-    "interest_rates": "Interest Rates",
-  
-    "penalty_rules": "Penalty Rules",
-  
-    "payment_schedule_rules": "Payment Schedule Rules",
-  
-    "calculation_setup": "Calculation Setup",
-  
-    "measurement_units": "Measurement Units",
-  
-    "base_fields": "Base Fields",
-  
-    "formula_variables": "Formula Variables",
-  
-    "tariff_management": "Tariff Management",
-  
-    "tariff_versions": "Tariff Versions",
-  
-    "tariff_rules": "Tariff Rules",
-  
-    "data_validation": "Data Validation",
-  
-    "data_reports": "Data Reports",
-  
-    "executive_dashboard": "Executive Dashboard",
-  
-    "revenue_overview": "Revenue Overview",
-  
-    "performance_reports": "Performance Reports",
-  
-    "sector_dashboard": "Sector Dashboard",
-  
-    "revenue_operations": "Revenue Operations",
-  
-    "revenue_data": "Revenue Data",
-  
-    "assessments": "Assessments",
-  
-    "lease_amendments": "Lease Amendments",
-  
-    "invoices": "Invoices",
-  
-    "field_collection": "Field Collection",
-  
-    "penalty_discount_requests": "Penalty Discount Requests",
-  
-    "workflow": "Workflow",
-  
-    "drafts": "Drafts",
-  
-    "pending_approval": "Pending Approval",
-  
-    "submitted": "Submitted",
-  
-    "returned": "Returned",
-  
-    "reports": "Reports",
-  
-    "revenue_collection_report": "Revenue Collection",
-  
-    "payment_report": "Payment Report",
-  
-    "invoice_report": "Invoice Report",
-  
-    "assessment_report": "Assessment Report",
-  
-    "outstanding_revenue": "Outstanding Revenue",
-  
-    "cash_reconciliation": "Cash Reconciliation",
-  
-    "decision_dashboard": "Decision Dashboard",
-  
-    "assessment_decisions": "Assessment Decisions",
-  
-    "pending_assessments": "Pending Assessments",
-  
-    "decision_history": "Decision History",
-  
-    "collections": "Collections",
-  
-    "pending_collections": "Pending Collections",
-  
-    "completed_collections": "Completed Collections",
-  
-    "payments": "Payments",
-  
-    "create_payment": "Create Payment",
-  
-    "payment_history": "Payment History",
-  
-    "receipts": "Receipts",
-  
-    "collection_reports": "Collection Reports",
-  
-    "registration_dashboard": "Registration Dashboard",
-  
-    "taxpayer_registration": "Taxpayer Registration",
-  
-    "registration_reports": "Registration Reports",
-  
-    "paymentSchedules": "Payment Schedules",
-  
-    "notifications": "Notifications",
-  
-    "profile": "Profile",
-  
-    "taxpayerPortal": "Taxpayer Portal",
-  
-    "taxpayer_services": "Taxpayer Services",
-  
-    "payment_operations": "Payment Operations",
-
-    "mobile_app_management": "Mobile App Management",
-    "mobile_app_releases": "Mobile App Releases",
-    "mobile_app_update_settings": "Mobile App Update Settings"
+  "hero": {
+  "badge": "Now serving Adama citizens online",
+  "title": "Mosajii Tejajila GMQ",
+  "description": "Access public services, manage payments, and handle government operations in one secure system.",
+  "citizen_button": "Citizen Portal",
+  "office_button": "Office System"
   },
-
-  "taxpayer": {
-    "dashboard": {
-      "welcome": "Welcome",
-      "title": "Taxpayer Dashboard",
-      "description": "View your municipal invoices, payments, and upcoming obligations.",
-      "viewInvoices": "View Invoices",
-      "viewAll": "View All",
-
-      "balance": {
-        "title": "Outstanding Balance",
-        "description": "Total amount currently due across your invoices.",
-        "payNow": "Pay Now",
-        "viewSchedule": "View Schedule",
-        "unpaidInvoices": "{count, plural, =1 {1 unpaid invoice} other {# unpaid invoices}}",
-        "nextDue": "Next payment due {date}"
-      },
-
-      "cards": {
-        "totalInvoices": "Total Invoices",
-        "totalInvoicesDescription": "All invoices issued to you",
-
-        "upcomingPayments": "Upcoming Payments",
-        "upcomingPaymentsDescription": "Scheduled payments due soon",
-
-        "totalPaid": "Total Paid",
-        "totalPaidDescription": "Payments completed"
-      },
-
-      "upcomingPayments": {
-        "title": "Upcoming Payments",
-        "description": "Your next scheduled payment obligations.",
-        "emptyTitle": "No upcoming payments",
-        "emptyDescription": "Your scheduled payments will appear here."
-      },
-
-      "recentInvoices": {
-        "title": "Recent Invoices",
-        "description": "Your latest municipal invoices.",
-        "emptyTitle": "No recent invoices",
-        "emptyDescription": "Your latest invoices will appear here."
-      }
-    }
+  "features": {
+  "title": "Available Services",
+  "description": "Services are being introduced gradually based on readiness.",
+  "citizen": {
+  "title": "Citizen Services",
+  "description": "Pay taxes, view bills, and track payments in real time."
+  },
+  "revenue": {
+  "title": "Revenue Management",
+  "description": "Manage taxes, fees, penalties, and government revenue operations."
+  },
+  "sector": {
+  "title": "Sector Operations",
+  "description": "Land, construction, and inspection workflows integrated."
+  },
+  "soon": "Rolling out to more sectors soon"
+  },
+  "about": {
+  "title": "Modern Digital Government System",
+  "description": "This platform connects citizens and government offices in one unified system with secure authentication, billing, and payment integration."
+  },
+  "footer": {
+  "copyright": "Adama GovService Portal. All rights reserved.",
+  "report_issue": "Report an issue or suggest a feature"
   }
+  },
+  
+  "auth": {
+  "welcome": "Welcome Back",
+  "fields": {
+  "email": "Email Address",
+  "password": "Password"
+  },
+  "actions": {
+  "login": "Login Securely",
+  "logging_in": "Logging in..."
+  }
+  },
+  
+  "navigation": {
+  "dashboard": "Dashboard",
+  "roles": "Roles",
+  "user_access": "User & Access Management",
+  "users": "Users",
+  "taxpayers": "Taxpayers",
+  "access_managements": "Access Management",
+  "administrative_structure": "Administrative Structure",
+  "administrative_units": "Administrative Units",
+  "sectors": "Sectors",
+  "workflow_configuration": "Workflow Configuration",
+  "service_sector_access": "Service Sector Access",
+  "system_settings": "System Settings",
+  "audit_logs": "Audit Logs",
+  "revenue_configuration": "Revenue Configuration",
+  "revenue_categories": "Revenue Categories",
+  "revenue_codes": "Revenue Codes",
+  "revenue_services": "Revenue Services",
+  "interest_rates": "Interest Rates",
+  "penalty_rules": "Penalty Rules",
+  "payment_schedule_rules": "Payment Schedule Rules",
+  "calculation_setup": "Calculation Setup",
+  "measurement_units": "Measurement Units",
+  "base_fields": "Base Fields",
+  "formula_variables": "Formula Variables",
+  "tariff_management": "Tariff Management",
+  "tariff_versions": "Tariff Versions",
+  "tariff_rules": "Tariff Rules",
+  "data_validation": "Data Validation",
+  "data_reports": "Data Reports",
+  "executive_dashboard": "Executive Dashboard",
+  "revenue_overview": "Revenue Overview",
+  "performance_reports": "Performance Reports",
+  "sector_dashboard": "Sector Dashboard",
+  "revenue_operations": "Revenue Operations",
+  "revenue_data": "Revenue Data",
+  "assessments": "Assessments",
+  "lease_amendments": "Lease Amendments",
+  "invoices": "Invoices",
+  "field_collection": "Field Collection",
+  "penalty_discount_requests": "Penalty Discount Requests",
+  "workflow": "Workflow",
+  "drafts": "Drafts",
+  "pending_approval": "Pending Approval",
+  "submitted": "Submitted",
+  "returned": "Returned",
+  "reports": "Reports",
+  "revenue_collection_report": "Revenue Collection",
+  "payment_report": "Payment Report",
+  "invoice_report": "Invoice Report",
+  "assessment_report": "Assessment Report",
+  "outstanding_revenue": "Outstanding Revenue",
+  "cash_reconciliation": "Cash Reconciliation",
+  "decision_dashboard": "Decision Dashboard",
+  "assessment_decisions": "Assessment Decisions",
+  "pending_assessments": "Pending Assessments",
+  "decision_history": "Decision History",
+  "collections": "Collections",
+  "pending_collections": "Pending Collections",
+  "completed_collections": "Completed Collections",
+  "payments": "Payments",
+  "create_payment": "Create Payment",
+  "payment_history": "Payment History",
+  "receipts": "Receipts",
+  "collection_reports": "Collection Reports",
+  "registration_dashboard": "Registration Dashboard",
+  "taxpayer_registration": "Taxpayer Registration",
+  "registration_reports": "Registration Reports",
+  "paymentSchedules": "Payment Schedules",
+  "notifications": "Notifications",
+  "profile": "Profile",
+  "taxpayerPortal": "Taxpayer Portal",
+  "taxpayer_services": "Taxpayer Services",
+  "payment_operations": "Payment Operations",
+  "mobile_app_management": "Mobile App Management",
+  "mobile_app_releases": "Mobile App Releases",
+  "mobile_app_update_settings": "Mobile App Update Settings"
+  },
+  
+    "reports": {
+    "title": "Reports",
+    "description": "Access, review, and analyze municipal revenue, payments, invoices, assessments, and financial reconciliation.",
+    "report_directory": "Report Directory",
+    "search_reports": "Search reports...",
+    "clear_filters": "Clear Filters",
+    "view_report": "View Report",
+    
+    "all_reports": "All Reports",
+    "revenue": "Revenue",
+    "transactions": "Transactions",
+    "assessment": "Assessments",
+    "financial_control": "Financial Control",
+    
+    "revenue_collection_report": "Revenue Collection Report",
+    "revenue_collection_report_description": "Analyze revenue collected over a selected period, collection totals, and collection performance.",
+    
+    "payment_report": "Payment Report",
+    "payment_report_description": "Review payment transactions, payment methods, payment statuses, and amounts collected.",
+    
+    "invoice_report": "Invoice Report",
+    "invoice_report_description": "Track issued invoices, paid invoices, outstanding balances, and overdue obligations.",
+    
+    "assessment_report": "Assessment Report",
+    "assessment_report_description": "Review revenue assessments, assessed amounts, approval statuses, and assessment outcomes.",
+    
+    "outstanding_revenue": "Outstanding Revenue",
+    "outstanding_revenue_description": "Identify unpaid invoices, outstanding balances, overdue obligations, and collection priorities.",
+    
+    "cash_reconciliation": "Cash Reconciliation",
+    "cash_reconciliation_description": "Compare recorded cash collections with reconciled totals and identify financial discrepancies.",
+    
+    "no_reports_found": "No Reports Found",
+    "no_reports_found_description": "No reports match your search or selected category. Try another search term or clear the filters."
+    
+    },
+    
+  "taxpayer": {
+  "dashboard": {
+  "welcome": "Welcome",
+  "title": "Taxpayer Dashboard",
+  "description": "View your municipal invoices, payments, and upcoming obligations.",
+  "viewInvoices": "View Invoices",
+  "viewAll": "View All",
+  "balance": {
+  "title": "Outstanding Balance",
+  "description": "Total amount currently due across your invoices.",
+  "payNow": "Pay Now",
+  "viewSchedule": "View Schedule",
+  "unpaidInvoices": "{count, plural, =1 {1 unpaid invoice} other {# unpaid invoices}}",
+  "nextDue": "Next payment due {date}"
+  },
+  "cards": {
+  "totalInvoices": "Total Invoices",
+  "totalInvoicesDescription": "All invoices issued to you",
+  "upcomingPayments": "Upcoming Payments",
+  "upcomingPaymentsDescription": "Scheduled payments due soon",
+  "totalPaid": "Total Paid",
+  "totalPaidDescription": "Payments completed"
+  },
+  "upcomingPayments": {
+  "title": "Upcoming Payments",
+  "description": "Your next scheduled payment obligations.",
+  "emptyTitle": "No upcoming payments",
+  "emptyDescription": "Your scheduled payments will appear here."
+  },
+  "recentInvoices": {
+  "title": "Recent Invoices",
+  "description": "Your latest municipal invoices.",
+  "emptyTitle": "No recent invoices",
+  "emptyDescription": "Your latest invoices will appear here."
+  }
+  }
+  },
+"revenueCollectionReport": {
+  "title": "Revenue Collection Report",
+  "description": "Monitor municipal revenue collections, compare performance, and review collection trends.",
+
+  "export_csv": "Export CSV",
+  "print_report": "Print Report",
+  "back_to_reports": "Back to Reports",
+  "demo_data": "Demonstration Data",
+  "demo_disclaimer": "This report uses simulated data for demonstration. Figures are not actual municipal financial records.",
+  "based_on_selected_filters": "Based on selected filters",
+  "successfully_completed": "Successfully completed collections",
+  "monthly_chart_demo_note": "Monthly figures are simulated for demonstration purposes.",
+  "no_chart_data": "No chart data available",
+  "adjust_filters_for_chart": "Adjust the selected filters to view collection data.",
+
+  "total_collected": "Total Collected",
+  "completed_transactions": "Completed Transactions",
+  "average_collection": "Average Collection",
+  "per_transaction": "Per completed transaction",
+  "pending_collection": "Pending Collection",
+  "awaiting_confirmation": "Awaiting confirmation",
+  "compared_to_previous": "vs. previous period",
+  "total_transactions": "Total Transactions",
+
+  "filters": "Report Filters",
+  "filters_description": "Filter collection performance by date, payment method, status, revenue domain, category, or administrative unit.",
+  "search": "Search",
+  "search_placeholder": "Search taxpayer, receipt, service, or administrative unit...",
+  "start_date": "Start Date",
+  "end_date": "End Date",
+
+  "payment_method": "Payment Method",
+  "all_methods": "All Methods",
+  "cash": "Cash",
+  "bank_transfer": "Bank Transfer",
+  "digital": "Digital Payment",
+  "telebirr": "Telebirr",
+  "cbe_birr": "CBE Birr",
+
+  "status": "Status",
+  "all_statuses": "All Statuses",
+  "completed": "Completed",
+  "pending": "Pending",
+  "failed": "Failed",
+
+  "revenue_domain": "Revenue Domain",
+  "all_domains": "All Revenue Domains",
+  "tax": "Tax",
+  "rent": "Rent",
+  "investment": "Investment",
+  "service": "Service",
+  "sale": "Sale",
+  "capital": "Capital",
+
+  "revenue_category": "Revenue Category",
+  "all_categories": "All Categories",
+  "property_tax": "Property Tax",
+  "land_lease": "Land Lease",
+  "business_license": "Business License",
+  "service_fees": "Service Fees",
+  "market_rent": "Market Rent",
+  "investment_dividend": "Investment Dividend",
+  "municipal_property_sale": "Municipal Property Sale",
+  "capital_asset_disposal": "Capital Asset Disposal",
+  "construction_permit": "Construction Permit",
+  "other_revenue": "Other Revenue",
+
+  "revenue_service": "Revenue Service",
+  "all_services": "All Services",
+  "service_name": "Service Name",
+  "collection_mode": "Collection Mode",
+  "assessment_only": "Assessment Only",
+  "field_collection": "Field Collection",
+  "both_collection_modes": "Assessment and Field Collection",
+
+  "administrative_unit": "Administrative Unit",
+  "all_administrative_units": "All Administrative Units",
+  "administrative_level": "Administrative Level",
+  "all_administrative_levels": "All Administrative Levels",
+  "city": "City",
+  "subcity": "Subcity",
+  "wereda": "Wereda",
+  "administrative_unit_name": "Administrative Unit Name",
+
+  "clear_filters": "Clear Filters",
+
+  "collection_trend": "Collection Trend",
+  "collection_trend_description": "Compare monthly collected revenue with collection targets.",
+  "collected": "Collected",
+  "target": "Target",
+  "monthly_collection": "Monthly Collection",
+  "collection_growth": "Collection Growth",
+
+  "collection_by_method": "Collection by Method",
+  "collection_by_method_description": "Distribution of collected revenue across payment channels.",
+
+  "revenue_by_category": "Revenue by Category",
+  "revenue_by_category_description": "Compare collections across municipal revenue categories.",
+
+  "collection_by_domain": "Collection by Revenue Domain",
+  "collection_by_domain_description": "Compare collection performance across tax, rent, investment, service, sale, and capital revenue domains.",
+
+  "collection_by_administrative_unit": "Collection by Administrative Unit",
+  "collection_by_administrative_unit_description": "Compare collection performance across city, subcity, and wereda administrative units.",
+
+  "collection_summary": "Collection Summary",
+  "collection_summary_description": "Overview of cash, bank transfer, and digital collection channels.",
+
+  "cash_collections": "Cash Collections",
+  "in_person_payments": "In-person payments",
+  "bank_collections": "Bank Collections",
+  "bank_transfers": "Bank transfers",
+  "digital_collections": "Digital Collections",
+  "mobile_and_digital_payments": "Mobile and digital payments",
+
+  "monthly_target": "October Collection Target",
+  "target_achievement": "Target Achievement",
+  "target_amount": "Target Amount",
+  "achievement_rate": "Achievement Rate",
+
+  "collection_performance_summary": "Collection Performance Summary",
+  "collection_performance_summary_description": "Aggregated collection performance by revenue domain, category, and service. Individual payment records are not displayed in this report.",
+  "categories_found": "{count, plural, =0 {No categories found} =1 {1 category found} other {# categories found}}",
+  "view_payment_report": "View Payment Report",
+  "collection_share": "Collection Share",
+  "details": "Details",
+  "transactions": "Transactions",
+  "no_collection_data": "No collection data found",
+  "no_collection_data_description": "Try adjusting your search or report filters.",
+  "total": "Total",
+  "collection_summary_footer": "Totals reflect the selected filters and the simulated collection records.",
+
+  "collection_transactions": "Collection Transactions",
+  "collection_transactions_description": "Collection records matching your selected filters.",
+
+  "records_found": "{count, plural, =0 {No records found} =1 {1 record found} other {# records found}}",
+
+  "receipt_number": "Receipt Number",
+  "taxpayer": "Taxpayer",
+  "amount": "Amount",
+  "date": "Date",
+  "sector": "Sector",
+  "category": "Category",
+  "method": "Method",
+
+  "no_transactions": "No transactions found",
+  "no_transactions_description": "Try adjusting your search or report filters.",
+
+  "showing_records": "Showing {from}–{to} of {total} records",
+  "previous": "Previous",
+  "next": "Next"
 }
+  }
+  

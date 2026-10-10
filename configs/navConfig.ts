@@ -381,7 +381,7 @@ export const NAV_ITEMS: NavItem[] = [
     items: [
       {
         title: "mobile_app_releases",
-        url: "/office/dashboard/mobile-app/releases",
+        url: "/office/dashboard/mobile-app-releases",
         permission: APP_PERMISSIONS.MOBILE_APP_RELEASES_VIEW,
       },
     ],

@@ -1,14 +1,15 @@
 "use client";
 
-import React, { useMemo, useRef, useState } from "react";
+import React, { useState } from "react";
+
 import {
   AlertCircle,
   ArrowLeft,
   CheckCircle2,
   FileText,
   Search,
-  Upload,
   X,
+  Loader2,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -31,6 +32,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
+import { FileUpload } from "@/components/file-upload";
+
+import type { Invoice } from "@/types/invoice/invoice";
+import InvoiceSelectorDialog from "../dialogs/InvoiceSelectorDialog";
+
 /* =========================================================
  * TYPES
  * ======================================================= */
@@ -40,28 +46,7 @@ export type InvoiceStatus =
   | "PARTIALLY_PAID"
   | "OVERDUE";
 
-export type EligibleInvoice = {
-  id: string;
-  invoice_number: string;
-  status: InvoiceStatus;
-
-  citizen: {
-    id: string;
-    name: string;
-    phone: string;
-  };
-
-  subtotal: number;
-  penalty_amount: number;
-  penalty_discount_amount: number;
-  interest_amount: number;
-
-  total_amount: number;
-  paid_amount: number;
-  balance_due: number;
-
-  due_date: string;
-};
+export type EligibleInvoice = Invoice;
 
 export type PenaltyDiscountFormValues = {
   invoice_id: string;
@@ -70,9 +55,7 @@ export type PenaltyDiscountFormValues = {
   supporting_file: File | null;
 };
 
-export type PenaltyDiscountFormMode =
-  | "create"
-  | "edit";
+export type PenaltyDiscountFormMode = "create" | "edit";
 
 export type PenaltyDiscountInitialData = {
   invoice: EligibleInvoice;
@@ -81,61 +64,43 @@ export type PenaltyDiscountInitialData = {
   supporting_file_name?: string | null;
 };
 
-/* =========================================================
- * PROPS
- * ======================================================= */
-
 export type PenaltyDiscountFormProps = {
   mode?: PenaltyDiscountFormMode;
-
-  /**
-   * Eligible invoices supplied by the parent page.
-   */
-  invoices: EligibleInvoice[];
-
-  /**
-   * Invoice IDs that already have an active/pending
-   * penalty discount request.
-   *
-   * In edit mode, the currently selected invoice is still
-   * allowed.
-   */
   blockedInvoiceIds?: string[];
-
-  /**
-   * Existing request data when editing.
-   */
   initialData?: PenaltyDiscountInitialData | null;
 
-  /**
-   * Called when the user clicks Save Draft.
-   */
   onSaveDraft?: (
     values: PenaltyDiscountFormValues,
   ) => Promise<void> | void;
 
-  /**
-   * Called when the user confirms Submit for Approval.
-   */
   onSubmit?: (
     values: PenaltyDiscountFormValues,
   ) => Promise<void> | void;
 
-  /**
-   * Called when the user clicks Back/Cancel.
-   */
   onCancel?: () => void;
-
-  /**
-   * Optional text override for the cancel button.
-   */
   cancelLabel?: string;
-
-  /**
-   * Optional external loading state.
-   */
   loading?: boolean;
 };
+
+/* =========================================================
+ * CONSTANTS
+ * ======================================================= */
+
+const MIN_REASON_LENGTH = 10;
+const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
+
+const ALLOWED_FILE_EXTENSIONS = [
+  "pdf",
+  "jpg",
+  "jpeg",
+  "png",
+] as const;
+
+const ALLOWED_FILE_TYPES = new Set([
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+]);
 
 /* =========================================================
  * HELPERS
@@ -143,44 +108,136 @@ export type PenaltyDiscountFormProps = {
 
 export const getAvailablePenalty = (
   invoice: EligibleInvoice,
-) =>
-  Math.max(
-    invoice.penalty_amount -
-      invoice.penalty_discount_amount,
-    0,
+): number => {
+  const penalty = Number(
+    invoice.financial.penalty_amount ?? 0,
   );
 
-const formatCurrency = (value: number) =>
-  new Intl.NumberFormat("en-US", {
+  const existingDiscount = Number(
+    invoice.financial.discount_amount ?? 0,
+  );
+
+  if (
+    !Number.isFinite(penalty) ||
+    !Number.isFinite(existingDiscount)
+  ) {
+    return 0;
+  }
+
+  return Math.max(penalty - existingDiscount, 0);
+};
+
+const formatCurrency = (
+  value: number | string | null | undefined,
+): string => {
+  const amount = Number(value ?? 0);
+
+  if (!Number.isFinite(amount)) {
+    return "—";
+  }
+
+  return new Intl.NumberFormat("en-ET", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  }).format(value);
+  }).format(amount);
+};
 
-const formatDate = (value: string) =>
-  new Intl.DateTimeFormat("en-US", {
+const formatDate = (
+  value: string | null | undefined,
+): string => {
+  if (!value) {
+    return "—";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("en-ET", {
     year: "numeric",
     month: "short",
     day: "2-digit",
-  }).format(new Date(value));
+  }).format(date);
+};
+
+const validateSupportingFile = (
+  file: File,
+): string | null => {
+  const extension = file.name
+    .split(".")
+    .pop()
+    ?.toLowerCase();
+
+  if (
+    !extension ||
+    !ALLOWED_FILE_EXTENSIONS.includes(
+      extension as (typeof ALLOWED_FILE_EXTENSIONS)[number],
+    )
+  ) {
+    return "The supporting document must be a PDF, JPG, JPEG, or PNG file.";
+  }
+
+  if (file.size <= 0) {
+    return "The selected supporting document is empty.";
+  }
+
+  if (file.size > MAX_FILE_SIZE_BYTES) {
+    return "The supporting document must not exceed 5 MB.";
+  }
+
+  if (
+    file.type &&
+    !ALLOWED_FILE_TYPES.has(file.type)
+  ) {
+    return "The selected file type is not supported.";
+  }
+
+  return null;
+};
 
 /* =========================================================
- * STATUS BADGE
+ * INVOICE STATUS BADGE
  * ======================================================= */
 
 function InvoiceStatusBadge({
   status,
 }: {
-  status: InvoiceStatus;
+  status: string;
 }) {
-  const labels: Record<InvoiceStatus, string> = {
+  const normalizedStatus = status.toUpperCase();
+
+  const labels: Record<string, string> = {
     ISSUED: "Issued",
     PARTIALLY_PAID: "Partially Paid",
     OVERDUE: "Overdue",
+    PAID: "Paid",
+    DRAFT: "Draft",
+    CANCELLED: "Cancelled",
+    VOID: "Void",
+  };
+
+  const styles: Record<string, string> = {
+    ISSUED:
+      "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-300",
+
+    PARTIALLY_PAID:
+      "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300",
+
+    OVERDUE:
+      "border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300",
+
+    PAID:
+      "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300",
   };
 
   return (
-    <Badge variant="outline">
-      {labels[status]}
+    <Badge
+      variant="outline"
+      className={styles[normalizedStatus] ?? ""}
+    >
+      {labels[normalizedStatus] ?? normalizedStatus}
     </Badge>
   );
 }
@@ -191,7 +248,6 @@ function InvoiceStatusBadge({
 
 export default function PenaltyDiscountRequestForm({
   mode = "create",
-  invoices,
   blockedInvoiceIds = [],
   initialData = null,
   onSaveDraft,
@@ -214,11 +270,8 @@ export default function PenaltyDiscountRequestForm({
   const [invoiceDialogOpen, setInvoiceDialogOpen] =
     useState(false);
 
-  const [invoiceSearch, setInvoiceSearch] =
-    useState("");
-
   /* =======================================================
-   * FORM
+   * FORM FIELDS
    * ===================================================== */
 
   const [requestedAmount, setRequestedAmount] =
@@ -233,27 +286,20 @@ export default function PenaltyDiscountRequestForm({
   );
 
   /* =======================================================
-   * FILE
+   * SUPPORTING DOCUMENT
    * ===================================================== */
 
-  const [supportingFile, setSupportingFile] =
-    useState<File | null>(null);
+  const [supportingFiles, setSupportingFiles] =
+    useState<File[]>([]);
 
-  const [existingFileName] = useState<
-    string | null
-  >(
-    initialData?.supporting_file_name ?? null,
-  );
-
-  const fileInputRef =
-    useRef<HTMLInputElement>(null);
+  const existingFileName =
+    initialData?.supporting_file_name ?? null;
 
   /* =======================================================
-   * UI
-   * ======================================================= */
+   * UI STATE
+   * ===================================================== */
 
   const [saving, setSaving] = useState(false);
-
   const [error, setError] = useState("");
 
   const [submitDialogOpen, setSubmitDialogOpen] =
@@ -262,69 +308,17 @@ export default function PenaltyDiscountRequestForm({
   const isBusy = saving || loading;
 
   /* =======================================================
-   * FILTER INVOICES
-   * ======================================================= */
-
-  const filteredInvoices = useMemo(() => {
-    const query = invoiceSearch
-      .trim()
-      .toLowerCase();
-
-    return invoices.filter((invoice) => {
-      const isCurrentInvoice =
-        invoice.id === selectedInvoice?.id;
-
-      const availablePenalty =
-        getAvailablePenalty(invoice);
-
-      const isBlocked =
-        blockedInvoiceIds.includes(invoice.id);
-
-      /*
-       * The current invoice is allowed in edit mode even
-       * if it is in blockedInvoiceIds.
-       */
-      if (
-        availablePenalty <= 0 ||
-        (isBlocked && !isCurrentInvoice)
-      ) {
-        return false;
-      }
-
-      if (!query) {
-        return true;
-      }
-
-      return (
-        invoice.invoice_number
-          .toLowerCase()
-          .includes(query) ||
-        invoice.citizen.name
-          .toLowerCase()
-          .includes(query) ||
-        invoice.citizen.phone
-          .toLowerCase()
-          .includes(query)
-      );
-    });
-  }, [
-    invoices,
-    blockedInvoiceIds,
-    invoiceSearch,
-    selectedInvoice,
-  ]);
-
-  /* =======================================================
    * FINANCIAL VALUES
-   * ======================================================= */
+   * ===================================================== */
 
   const availablePenalty = selectedInvoice
     ? getAvailablePenalty(selectedInvoice)
     : 0;
 
-  const amount = Number(
-    requestedAmount || 0,
-  );
+  const amount =
+    requestedAmount.trim() === ""
+      ? 0
+      : Number(requestedAmount);
 
   const amountTooHigh =
     !!selectedInvoice &&
@@ -338,7 +332,7 @@ export default function PenaltyDiscountRequestForm({
     amountTooHigh;
 
   const reasonInvalid =
-    reason.trim().length < 10;
+    reason.trim().length < MIN_REASON_LENGTH;
 
   const formValid =
     !!selectedInvoice &&
@@ -347,20 +341,41 @@ export default function PenaltyDiscountRequestForm({
 
   /* =======================================================
    * SELECT INVOICE
-   * ======================================================= */
+   * ===================================================== */
 
   const handleSelectInvoice = (
     invoice: EligibleInvoice,
   ) => {
+    const isBlocked = blockedInvoiceIds.includes(
+      invoice.id,
+    );
+
+    const isCurrentInvoice =
+      invoice.id === selectedInvoice?.id;
+
+    if (isBlocked && !isCurrentInvoice) {
+      setError(
+        "This invoice already has an active or pending penalty discount request.",
+      );
+
+      return;
+    }
+
+    const available = getAvailablePenalty(invoice);
+
+    if (available <= 0) {
+      setError(
+        "This invoice has no available penalty for a discount request.",
+      );
+
+      return;
+    }
+
     const changed =
       invoice.id !== selectedInvoice?.id;
 
     setSelectedInvoice(invoice);
 
-    /*
-     * When changing the invoice, the previous amount
-     * should not be carried to the new invoice.
-     */
     if (changed) {
       setRequestedAmount("");
     }
@@ -370,60 +385,10 @@ export default function PenaltyDiscountRequestForm({
   };
 
   /* =======================================================
-   * FILE
-   * ======================================================= */
-
-  const handleFileChange = (
-    event: React.ChangeEvent<HTMLInputElement>,
-  ) => {
-    setError("");
-
-    const file = event.target.files?.[0];
-
-    if (!file) {
-      return;
-    }
-
-    const allowedTypes = [
-      "application/pdf",
-      "image/jpeg",
-      "image/png",
-    ];
-
-    if (!allowedTypes.includes(file.type)) {
-      setError(
-        "Only PDF, JPG, and PNG files are allowed.",
-      );
-
-      event.target.value = "";
-      return;
-    }
-
-    if (file.size > 5 * 1024 * 1024) {
-      setError(
-        "The supporting document must be 5 MB or smaller.",
-      );
-
-      event.target.value = "";
-      return;
-    }
-
-    setSupportingFile(file);
-  };
-
-  const removeFile = () => {
-    setSupportingFile(null);
-
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
-  };
-
-  /* =======================================================
    * VALIDATION
-   * ======================================================= */
+   * ===================================================== */
 
-  const validateForm = () => {
+  const validateForm = (): boolean => {
     setError("");
 
     if (!selectedInvoice) {
@@ -431,28 +396,69 @@ export default function PenaltyDiscountRequestForm({
       return false;
     }
 
+    const isBlocked = blockedInvoiceIds.includes(
+      selectedInvoice.id,
+    );
+
+    const isCurrentInvoice =
+      selectedInvoice.id === initialData?.invoice.id;
+
+    if (isBlocked && !isCurrentInvoice) {
+      setError(
+        "This invoice already has an active or pending penalty discount request.",
+      );
+
+      return false;
+    }
+
+    const currentAvailablePenalty =
+      getAvailablePenalty(selectedInvoice);
+
     if (
       !Number.isFinite(amount) ||
       amount <= 0
     ) {
       setError(
-        "Please enter a valid discount amount.",
+        "Please enter a valid discount amount greater than zero.",
       );
+
       return false;
     }
 
-    if (amount > availablePenalty) {
+    if (amount > currentAvailablePenalty) {
       setError(
         "The requested discount cannot exceed the available penalty.",
       );
+
       return false;
     }
 
-    if (reason.trim().length < 10) {
+    if (reason.trim().length < MIN_REASON_LENGTH) {
       setError(
         "Please provide a justification of at least 10 characters.",
       );
+
       return false;
+    }
+
+    if (supportingFiles.length > 1) {
+      setError(
+        "Only one supporting document can be uploaded.",
+      );
+
+      return false;
+    }
+
+    const supportingFile = supportingFiles[0];
+
+    if (supportingFile) {
+      const fileError =
+        validateSupportingFile(supportingFile);
+
+      if (fileError) {
+        setError(fileError);
+        return false;
+      }
     }
 
     return true;
@@ -460,49 +466,55 @@ export default function PenaltyDiscountRequestForm({
 
   /* =======================================================
    * FORM VALUES
-   * ======================================================= */
+   * ===================================================== */
 
   const getFormValues =
-    (): PenaltyDiscountFormValues => ({
-      invoice_id: selectedInvoice!.id,
-      requested_amount: amount,
-      reason: reason.trim(),
-      supporting_file: supportingFile,
-    });
+    (): PenaltyDiscountFormValues => {
+      if (!selectedInvoice) {
+        throw new Error(
+          "An invoice must be selected before continuing.",
+        );
+      }
+
+      return {
+        invoice_id: selectedInvoice.id,
+        requested_amount: amount,
+        reason: reason.trim(),
+        supporting_file: supportingFiles[0] ?? null,
+      };
+    };
 
   /* =======================================================
    * SAVE DRAFT
-   * ======================================================= */
+   * ===================================================== */
 
   const handleSaveDraft = async () => {
-    if (!validateForm()) {
+    if (isBusy || !validateForm()) {
+      return;
+    }
+
+    if (!onSaveDraft) {
+      setError(
+        "Draft saving is not configured. Please contact your administrator.",
+      );
+
       return;
     }
 
     setSaving(true);
 
     try {
-      const values = getFormValues();
-
-      if (onSaveDraft) {
-        await onSaveDraft(values);
-      } else {
-        /*
-         * No handler supplied.
-         *
-         * This is intentionally not navigating anywhere.
-         * The parent page owns navigation.
-         */
-        console.log(
-          "Penalty Discount Draft",
-          values,
-        );
-      }
-    } catch (error) {
-      console.error(error);
+      await onSaveDraft(getFormValues());
+    } catch (caughtError: unknown) {
+      console.error(
+        "Unable to save penalty discount draft:",
+        caughtError,
+      );
 
       setError(
-        "Unable to save the request. Please try again.",
+        caughtError instanceof Error
+          ? caughtError.message
+          : "Unable to save the request. Please try again.",
       );
     } finally {
       setSaving(false);
@@ -510,11 +522,19 @@ export default function PenaltyDiscountRequestForm({
   };
 
   /* =======================================================
-   * OPEN SUBMIT
-   * ======================================================= */
+   * OPEN SUBMIT CONFIRMATION
+   * ===================================================== */
 
   const handleOpenSubmit = () => {
-    if (!validateForm()) {
+    if (isBusy || !validateForm()) {
+      return;
+    }
+
+    if (!onSubmit) {
+      setError(
+        "Request submission is not configured. Please contact your administrator.",
+      );
+
       return;
     }
 
@@ -523,33 +543,38 @@ export default function PenaltyDiscountRequestForm({
 
   /* =======================================================
    * CONFIRM SUBMIT
-   * ======================================================= */
+   * ===================================================== */
 
   const handleConfirmSubmit = async () => {
-    if (!validateForm()) {
+    if (isBusy || !validateForm()) {
+      return;
+    }
+
+    if (!onSubmit) {
+      setSubmitDialogOpen(false);
+
+      setError(
+        "Request submission is not configured. Please contact your administrator.",
+      );
+
       return;
     }
 
     setSaving(true);
 
     try {
-      const values = getFormValues();
-
-      if (onSubmit) {
-        await onSubmit(values);
-      } else {
-        console.log(
-          "Penalty Discount Request Submitted",
-          values,
-        );
-      }
-
+      await onSubmit(getFormValues());
       setSubmitDialogOpen(false);
-    } catch (error) {
-      console.error(error);
+    } catch (caughtError: unknown) {
+      console.error(
+        "Unable to submit penalty discount request:",
+        caughtError,
+      );
 
       setError(
-        "Unable to submit the request. Please try again.",
+        caughtError instanceof Error
+          ? caughtError.message
+          : "Unable to submit the request. Please try again.",
       );
     } finally {
       setSaving(false);
@@ -558,7 +583,7 @@ export default function PenaltyDiscountRequestForm({
 
   /* =======================================================
    * CANCEL
-   * ======================================================= */
+   * ===================================================== */
 
   const handleCancel = () => {
     if (isBusy) {
@@ -570,14 +595,12 @@ export default function PenaltyDiscountRequestForm({
 
   /* =======================================================
    * RENDER
-   * ======================================================= */
+   * ===================================================== */
 
   return (
-    <div className="min-h-full p-6">
+    <div className="min-h-full p-4 sm:p-6">
       <div className="mx-auto max-w-7xl space-y-6">
-        {/* =================================================
-         * HEADER
-         * =============================================== */}
+        {/* HEADER */}
 
         <div className="space-y-4">
           <Button
@@ -593,42 +616,55 @@ export default function PenaltyDiscountRequestForm({
           </Button>
 
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">
-              {isEdit
-                ? "Edit Penalty Discount Request"
-                : "Create Penalty Discount Request"}
-            </h1>
+            <div className="flex flex-wrap items-center gap-3">
+              <h1 className="text-2xl font-semibold tracking-tight">
+                {isEdit
+                  ? "Edit Penalty Discount Request"
+                  : "Create Penalty Discount Request"}
+              </h1>
+
+              <Badge variant="outline">
+                {isEdit ? "Edit mode" : "New request"}
+              </Badge>
+            </div>
 
             <p className="mt-1 text-sm text-muted-foreground">
               {isEdit
                 ? "Update the request details before submitting it for review."
-                : "Request a reduction of the penalty on an outstanding invoice."}
+                : "Request a reduction of the penalty on an outstanding municipal invoice."}
             </p>
           </div>
         </div>
 
-        {/* =================================================
-         * ERROR
-         * =============================================== */}
+        {/* ERROR */}
 
         {error && (
-          <div className="flex items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm">
+          <div
+            role="alert"
+            aria-live="polite"
+            className="flex items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm"
+          >
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
 
-            <span className="text-destructive">
+            <span className="flex-1 text-destructive">
               {error}
             </span>
+
+            <button
+              type="button"
+              onClick={() => setError("")}
+              className="text-destructive/70 hover:text-destructive"
+              aria-label="Dismiss error"
+            >
+              <X className="h-4 w-4" />
+            </button>
           </div>
         )}
 
-        {/* =================================================
-         * CONTENT
-         * =============================================== */}
+        {/* MAIN CONTENT */}
 
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
-          {/* =================================================
-           * FORM CARD
-           * =============================================== */}
+          {/* REQUEST DETAILS */}
 
           <Card>
             <CardHeader>
@@ -638,9 +674,7 @@ export default function PenaltyDiscountRequestForm({
             </CardHeader>
 
             <CardContent className="space-y-6">
-              {/* ---------------------------------------------
-               * INVOICE
-               * ------------------------------------------- */}
+              {/* INVOICE */}
 
               <div className="space-y-2">
                 <Label>
@@ -655,14 +689,14 @@ export default function PenaltyDiscountRequestForm({
                     type="button"
                     disabled={isBusy}
                     onClick={() => {
-                      setInvoiceSearch("");
+                      setError("");
                       setInvoiceDialogOpen(true);
                     }}
-                    className="flex w-full items-center justify-between rounded-md border px-3 py-3 text-left transition-colors hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="flex w-full items-center justify-between gap-3 rounded-lg border border-dashed px-4 py-4 text-left transition-colors hover:border-primary/50 hover:bg-muted/40 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-md bg-muted">
-                        <FileText className="h-4 w-4 text-muted-foreground" />
+                    <div className="flex min-w-0 items-center gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
+                        <FileText className="h-5 w-5 text-muted-foreground" />
                       </div>
 
                       <div>
@@ -670,34 +704,30 @@ export default function PenaltyDiscountRequestForm({
                           Select an invoice
                         </div>
 
-                        <div className="text-xs text-muted-foreground">
-                          Choose an eligible invoice
+                        <div className="mt-1 text-xs text-muted-foreground">
+                          Search and choose an eligible invoice
                         </div>
                       </div>
                     </div>
 
-                    <Search className="h-4 w-4 text-muted-foreground" />
+                    <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
                   </button>
                 ) : (
-                  <div className="rounded-md border">
-                    <div className="flex items-center justify-between gap-4 p-4">
+                  <div className="rounded-lg border">
+                    <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
                       <div className="flex min-w-0 items-center gap-3">
-                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-muted">
-                          <FileText className="h-4 w-4" />
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/5 text-primary">
+                          <FileText className="h-5 w-5" />
                         </div>
 
                         <div className="min-w-0">
-                          <div className="font-medium">
-                            {
-                              selectedInvoice.invoice_number
-                            }
+                          <div className="break-all font-semibold">
+                            {selectedInvoice.invoice_number}
                           </div>
 
-                          <div className="truncate text-sm text-muted-foreground">
-                            {
-                              selectedInvoice.citizen
-                                .name
-                            }
+                          <div className="mt-1 truncate text-sm text-muted-foreground">
+                            {selectedInvoice.citizen?.name ??
+                              "Taxpayer information unavailable"}
                           </div>
                         </div>
                       </div>
@@ -706,22 +736,22 @@ export default function PenaltyDiscountRequestForm({
                         type="button"
                         variant="outline"
                         size="sm"
+                        className="shrink-0"
                         disabled={isBusy}
                         onClick={() => {
-                          setInvoiceSearch("");
+                          setError("");
                           setInvoiceDialogOpen(true);
                         }}
                       >
-                        Change
+                        <Search className="mr-2 h-4 w-4" />
+                        Change invoice
                       </Button>
                     </div>
                   </div>
                 )}
               </div>
 
-              {/* ---------------------------------------------
-               * INVOICE INFORMATION
-               * ------------------------------------------- */}
+              {/* INVOICE INFORMATION */}
 
               {selectedInvoice && (
                 <div className="overflow-hidden rounded-lg border bg-muted/20">
@@ -732,30 +762,30 @@ export default function PenaltyDiscountRequestForm({
                       </div>
 
                       <div className="mt-2 font-medium">
-                        {selectedInvoice.citizen.name}
+                        {selectedInvoice.citizen?.name ??
+                          "Not available"}
                       </div>
 
                       <div className="text-sm text-muted-foreground">
-                        {selectedInvoice.citizen.phone}
+                        {selectedInvoice.citizen?.phone ??
+                          "No phone number"}
                       </div>
                     </div>
 
                     <div className="border-t p-4 sm:border-t-0">
                       <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                        Invoice Status
+                        Invoice status
                       </div>
 
-                      <div className="mt-2 flex items-center justify-between gap-3">
+                      <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
                         <InvoiceStatusBadge
-                          status={
-                            selectedInvoice.status
-                          }
+                          status={String(selectedInvoice.status)}
                         />
 
                         <span className="text-xs text-muted-foreground">
                           Due{" "}
                           {formatDate(
-                            selectedInvoice.due_date,
+                            selectedInvoice.dates.due_date,
                           )}
                         </span>
                       </div>
@@ -768,9 +798,9 @@ export default function PenaltyDiscountRequestForm({
                         Penalty
                       </div>
 
-                      <div className="mt-1 font-semibold">
+                      <div className="mt-1 font-semibold tabular-nums">
                         {formatCurrency(
-                          selectedInvoice.penalty_amount,
+                          selectedInvoice.financial.penalty_amount,
                         )}{" "}
                         ETB
                       </div>
@@ -778,12 +808,12 @@ export default function PenaltyDiscountRequestForm({
 
                     <div className="border-t p-4 sm:border-t-0 sm:border-r">
                       <div className="text-xs text-muted-foreground">
-                        Existing Discount
+                        Existing discount
                       </div>
 
-                      <div className="mt-1 font-semibold">
+                      <div className="mt-1 font-semibold tabular-nums">
                         {formatCurrency(
-                          selectedInvoice.penalty_discount_amount,
+                          selectedInvoice.financial.discount_amount,
                         )}{" "}
                         ETB
                       </div>
@@ -791,23 +821,18 @@ export default function PenaltyDiscountRequestForm({
 
                     <div className="border-t p-4 sm:border-t-0">
                       <div className="text-xs text-muted-foreground">
-                        Available Penalty
+                        Available penalty
                       </div>
 
-                      <div className="mt-1 font-semibold">
-                        {formatCurrency(
-                          availablePenalty,
-                        )}{" "}
-                        ETB
+                      <div className="mt-1 font-semibold tabular-nums">
+                        {formatCurrency(availablePenalty)} ETB
                       </div>
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* ---------------------------------------------
-               * REQUESTED AMOUNT
-               * ------------------------------------------- */}
+              {/* REQUESTED AMOUNT */}
 
               <div className="space-y-2">
                 <Label htmlFor="requested-amount">
@@ -828,16 +853,18 @@ export default function PenaltyDiscountRequestForm({
                         : undefined
                     }
                     step="0.01"
+                    inputMode="decimal"
                     placeholder="0.00"
                     disabled={!selectedInvoice || isBusy}
                     value={requestedAmount}
+                    aria-invalid={
+                      requestedAmount !== "" && amountInvalid
+                    }
                     onChange={(event) => {
-                      setRequestedAmount(
-                        event.target.value,
-                      );
+                      setRequestedAmount(event.target.value);
                       setError("");
                     }}
-                    className="pr-14"
+                    className="pr-14 py-5"
                   />
 
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
@@ -846,32 +873,32 @@ export default function PenaltyDiscountRequestForm({
                 </div>
 
                 {selectedInvoice && (
-                  <div className="flex justify-between text-xs text-muted-foreground">
-                    <span>
-                      Maximum available
-                    </span>
+                  <div className="flex flex-wrap justify-between gap-2 text-xs text-muted-foreground">
+                    <span>Maximum available</span>
 
-                    <span>
-                      {formatCurrency(
-                        availablePenalty,
-                      )}{" "}
-                      ETB
+                    <span className="font-medium tabular-nums">
+                      {formatCurrency(availablePenalty)} ETB
                     </span>
                   </div>
                 )}
 
                 {amountTooHigh && (
                   <p className="flex items-center gap-1.5 text-sm text-destructive">
-                    <AlertCircle className="h-4 w-4" />
-                    Amount cannot exceed the available
-                    penalty.
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                    Amount cannot exceed the available penalty.
                   </p>
                 )}
+
+                {requestedAmount !== "" &&
+                  Number.isFinite(amount) &&
+                  amount <= 0 && (
+                    <p className="text-sm text-destructive">
+                      Enter an amount greater than zero.
+                    </p>
+                  )}
               </div>
 
-              {/* ---------------------------------------------
-               * REASON
-               * ------------------------------------------- */}
+              {/* REASON */}
 
               <div className="space-y-2">
                 <Label htmlFor="reason">
@@ -889,139 +916,82 @@ export default function PenaltyDiscountRequestForm({
                     setReason(event.target.value);
                     setError("");
                   }}
-                  placeholder="Enter the reason for requesting the penalty discount..."
-                  className="min-h-[130px] resize-none"
+                  placeholder="Explain why a penalty discount is being requested..."
+                  className="min-h-[130px] resize-y"
+                  aria-invalid={
+                    reason.length > 0 && reasonInvalid
+                  }
                 />
 
-                <div className="flex justify-between text-xs text-muted-foreground">
+                <div className="flex flex-wrap justify-between gap-2 text-xs text-muted-foreground">
                   <span>
-                    Provide a clear administrative
-                    justification.
+                    Provide a clear administrative justification.
                   </span>
 
                   <span>
                     {reason.trim().length} characters
                   </span>
                 </div>
+
+                {reason.length > 0 && reasonInvalid && (
+                  <p className="text-sm text-destructive">
+                    Please provide at least 10 characters.
+                  </p>
+                )}
               </div>
 
-              {/* ---------------------------------------------
-               * SUPPORTING DOCUMENT
-               * ------------------------------------------- */}
+              {/* SUPPORTING DOCUMENT */}
 
-              <div className="space-y-2">
-                <Label>
-                  Supporting Document{" "}
-                  <span className="text-muted-foreground">
-                    (Optional)
-                  </span>
-                </Label>
+              <div className="space-y-3">
+                {existingFileName && (
+                  <div className="flex items-center gap-3 rounded-lg border bg-muted/20 p-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
+                      <FileText className="h-5 w-5 text-muted-foreground" />
+                    </div>
 
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".pdf,.jpg,.jpeg,.png"
-                  className="hidden"
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium">
+                        {existingFileName}
+                      </p>
+
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Existing supporting document
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                <FileUpload
+                  value={supportingFiles}
+                  onChange={(files) => {
+                    setSupportingFiles(files.slice(0, 1));
+                    setError("");
+                  }}
+                  multiple={false}
+                  accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+                  maxSizeMB={5}
+                  maxFiles={1}
+                  label="Supporting document"
+                  description="Optional. Upload PDF, JPG, or PNG. Maximum 5 MB."
+                  placeholder={
+                    existingFileName
+                      ? "Choose a replacement document"
+                      : "Upload supporting document"
+                  }
                   disabled={isBusy}
-                  onChange={handleFileChange}
                 />
 
-                {supportingFile ? (
-                  <div className="flex items-center justify-between gap-4 rounded-md border px-4 py-3">
-                    <div className="flex min-w-0 items-center gap-3">
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-muted">
-                        <FileText className="h-4 w-4" />
-                      </div>
-
-                      <div className="min-w-0">
-                        <div className="truncate text-sm font-medium">
-                          {supportingFile.name}
-                        </div>
-
-                        <div className="text-xs text-muted-foreground">
-                          {(
-                            supportingFile.size /
-                            1024 /
-                            1024
-                          ).toFixed(2)}{" "}
-                          MB
-                        </div>
-                      </div>
-                    </div>
-
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      disabled={isBusy}
-                      onClick={removeFile}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ) : existingFileName ? (
-                  <div className="flex items-center justify-between gap-4 rounded-md border px-4 py-3">
-                    <div className="flex min-w-0 items-center gap-3">
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-muted">
-                        <FileText className="h-4 w-4" />
-                      </div>
-
-                      <div className="min-w-0">
-                        <div className="truncate text-sm font-medium">
-                          {existingFileName}
-                        </div>
-
-                        <div className="text-xs text-muted-foreground">
-                          Existing supporting document
-                        </div>
-                      </div>
-                    </div>
-
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={isBusy}
-                      onClick={() =>
-                        fileInputRef.current?.click()
-                      }
-                    >
-                      Replace
-                    </Button>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    disabled={
-                      !selectedInvoice || isBusy
-                    }
-                    onClick={() =>
-                      fileInputRef.current?.click()
-                    }
-                    className="flex w-full items-center gap-3 rounded-md border border-dashed px-4 py-4 text-left transition-colors hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <div className="flex h-9 w-9 items-center justify-center rounded-md bg-muted">
-                      <Upload className="h-4 w-4 text-muted-foreground" />
-                    </div>
-
-                    <div>
-                      <div className="text-sm font-medium">
-                        Upload document
-                      </div>
-
-                      <div className="text-xs text-muted-foreground">
-                        PDF, JPG or PNG · Maximum 5 MB
-                      </div>
-                    </div>
-                  </button>
+                {supportingFiles[0] && (
+                  <p className="text-xs text-muted-foreground">
+                    Selected: {supportingFiles[0].name} (
+                    {(supportingFiles[0].size / (1024 * 1024)).toFixed(2)} MB)
+                  </p>
                 )}
               </div>
             </CardContent>
           </Card>
 
-          {/* =================================================
-           * SUMMARY
-           * =============================================== */}
+          {/* REQUEST SUMMARY */}
 
           <Card className="h-fit lg:sticky lg:top-6">
             <CardHeader>
@@ -1032,9 +1002,28 @@ export default function PenaltyDiscountRequestForm({
 
             <CardContent>
               {!selectedInvoice ? (
-                <div className="rounded-md bg-muted/40 p-4 text-sm text-muted-foreground">
-                  Select an invoice to review the
-                  request.
+                <div className="rounded-lg border border-dashed bg-muted/30 p-5 text-center">
+                  <FileText className="mx-auto h-8 w-8 text-muted-foreground" />
+
+                  <p className="mt-3 text-sm font-medium">
+                    No invoice selected
+                  </p>
+
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                    Select an invoice to review its penalty and request details.
+                  </p>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="mt-4"
+                    disabled={isBusy}
+                    onClick={() => setInvoiceDialogOpen(true)}
+                  >
+                    <Search className="mr-2 h-4 w-4" />
+                    Select invoice
+                  </Button>
                 </div>
               ) : (
                 <div className="space-y-5">
@@ -1043,41 +1032,36 @@ export default function PenaltyDiscountRequestForm({
                       Invoice
                     </div>
 
-                    <div className="mt-1 font-semibold">
-                      {
-                        selectedInvoice.invoice_number
-                      }
+                    <div className="mt-1 break-all font-semibold">
+                      {selectedInvoice.invoice_number}
                     </div>
 
                     <div className="mt-1 text-sm text-muted-foreground">
-                      {selectedInvoice.citizen.name}
+                      {selectedInvoice.citizen?.name ??
+                        "Taxpayer information unavailable"}
                     </div>
                   </div>
 
                   <div className="space-y-3 border-t pt-4">
-                    <div className="flex justify-between gap-4 text-sm">
+                    <div className="flex items-start justify-between gap-4 text-sm">
                       <span className="text-muted-foreground">
-                        Invoice balance
+                        Due date
                       </span>
 
-                      <span className="font-medium">
-                        {formatCurrency(
-                          selectedInvoice.balance_due,
-                        )}{" "}
-                        ETB
+                      <span className="text-right font-medium">
+                        {formatDate(
+                          selectedInvoice.dates.due_date,
+                        )}
                       </span>
                     </div>
 
-                    <div className="flex justify-between gap-4 text-sm">
+                    <div className="flex items-start justify-between gap-4 text-sm">
                       <span className="text-muted-foreground">
                         Available penalty
                       </span>
 
-                      <span className="font-medium">
-                        {formatCurrency(
-                          availablePenalty,
-                        )}{" "}
-                        ETB
+                      <span className="text-right font-medium tabular-nums">
+                        {formatCurrency(availablePenalty)} ETB
                       </span>
                     </div>
                   </div>
@@ -1087,18 +1071,27 @@ export default function PenaltyDiscountRequestForm({
                       Requested discount
                     </div>
 
-                    <div className="mt-1 text-xl font-semibold">
-                      {formatCurrency(amount)} ETB
+                    <div className="mt-1 break-words text-2xl font-semibold tracking-tight">
+                      {formatCurrency(amount)}{" "}
+                      <span className="text-sm font-medium">
+                        ETB
+                      </span>
                     </div>
+
+                    {amount > 0 &&
+                      amount <= availablePenalty && (
+                        <div className="mt-2 flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-400">
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          Within available penalty
+                        </div>
+                      )}
                   </div>
 
-                  <div className="flex items-start gap-2 text-xs leading-5 text-muted-foreground">
+                  <div className="flex items-start gap-2 rounded-lg bg-muted/40 p-3 text-xs leading-5 text-muted-foreground">
                     <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
 
                     <span>
-                      The requested discount must be
-                      approved before it can be applied to
-                      the invoice.
+                      The requested discount must be approved before it can be applied to the invoice.
                     </span>
                   </div>
                 </div>
@@ -1107,9 +1100,7 @@ export default function PenaltyDiscountRequestForm({
           </Card>
         </div>
 
-        {/* =================================================
-         * ACTIONS
-         * =============================================== */}
+        {/* FORM ACTIONS */}
 
         <div className="flex flex-col-reverse gap-3 border-t pt-6 sm:flex-row sm:justify-end">
           <Button
@@ -1127,6 +1118,10 @@ export default function PenaltyDiscountRequestForm({
             disabled={!formValid || isBusy}
             onClick={handleSaveDraft}
           >
+            {saving && (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            )}
+
             {saving
               ? "Saving..."
               : isEdit
@@ -1139,6 +1134,10 @@ export default function PenaltyDiscountRequestForm({
             disabled={!formValid || isBusy}
             onClick={handleOpenSubmit}
           >
+            {saving && (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            )}
+
             {isEdit
               ? "Submit Changes"
               : "Submit for Approval"}
@@ -1146,137 +1145,39 @@ export default function PenaltyDiscountRequestForm({
         </div>
       </div>
 
-      {/* ===================================================
-       * INVOICE SELECTOR
-       * ================================================= */}
+      {/* INVOICE SELECTOR */}
 
-      <Dialog
+      <InvoiceSelectorDialog
         open={invoiceDialogOpen}
         onOpenChange={setInvoiceDialogOpen}
-      >
-        <DialogContent className="sm:max-w-xl">
-          <DialogHeader>
-            <DialogTitle>
-              Select Invoice
-            </DialogTitle>
+        selectedInvoice={selectedInvoice}
+        onSelect={handleSelectInvoice}
+        getAvailablePenalty={(invoice) => {
+          const blocked = blockedInvoiceIds.includes(
+            invoice.id,
+          );
 
-            <DialogDescription>
-              Choose an invoice with an available penalty.
-            </DialogDescription>
-          </DialogHeader>
+          const isCurrentInvoice =
+            invoice.id === selectedInvoice?.id;
 
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          if (blocked && !isCurrentInvoice) {
+            return 0;
+          }
 
-            <Input
-              autoFocus
-              value={invoiceSearch}
-              onChange={(event) =>
-                setInvoiceSearch(event.target.value)
-              }
-              placeholder="Search invoice, taxpayer, or phone..."
-              className="pl-9"
-            />
-          </div>
+          return getAvailablePenalty(invoice);
+        }}
+        isBusy={isBusy}
+      />
 
-          <div className="max-h-[420px] space-y-2 overflow-y-auto">
-            {filteredInvoices.map((invoice) => {
-              const available =
-                getAvailablePenalty(invoice);
-
-              const isSelected =
-                invoice.id === selectedInvoice?.id;
-
-              return (
-                <button
-                  key={invoice.id}
-                  type="button"
-                  disabled={isBusy}
-                  onClick={() =>
-                    handleSelectInvoice(invoice)
-                  }
-                  className={`w-full rounded-md border p-4 text-left transition-colors hover:bg-muted/50 ${
-                    isSelected
-                      ? "border-primary bg-muted/40"
-                      : ""
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="min-w-0">
-                      <div className="font-medium">
-                        {invoice.invoice_number}
-                      </div>
-
-                      <div className="mt-1 text-sm text-muted-foreground">
-                        {invoice.citizen.name}
-                      </div>
-
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        Due{" "}
-                        {formatDate(
-                          invoice.due_date,
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="shrink-0 text-right">
-                      <InvoiceStatusBadge
-                        status={invoice.status}
-                      />
-
-                      <div className="mt-2 font-semibold">
-                        {formatCurrency(
-                          available,
-                        )}{" "}
-                        ETB
-                      </div>
-
-                      <div className="text-xs text-muted-foreground">
-                        Available penalty
-                      </div>
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
-
-            {filteredInvoices.length === 0 && (
-              <div className="py-10 text-center">
-                <Search className="mx-auto mb-3 h-5 w-5 text-muted-foreground" />
-
-                <p className="font-medium">
-                  No eligible invoices found
-                </p>
-
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Try another invoice number, taxpayer,
-                  or phone number.
-                </p>
-              </div>
-            )}
-          </div>
-
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() =>
-                setInvoiceDialogOpen(false)
-              }
-            >
-              Cancel
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ===================================================
-       * SUBMIT CONFIRMATION
-       * ================================================= */}
+      {/* SUBMIT CONFIRMATION */}
 
       <Dialog
         open={submitDialogOpen}
-        onOpenChange={setSubmitDialogOpen}
+        onOpenChange={(open) => {
+          if (!isBusy) {
+            setSubmitDialogOpen(open);
+          }
+        }}
       >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -1288,7 +1189,7 @@ export default function PenaltyDiscountRequestForm({
 
             <DialogDescription>
               {isEdit
-                ? "The updated request will be sent for administrative review."
+                ? "Confirm that the updated request is ready for administrative review."
                 : "Review the details before sending this request for administrative approval."}
             </DialogDescription>
           </DialogHeader>
@@ -1300,27 +1201,41 @@ export default function PenaltyDiscountRequestForm({
                   Invoice
                 </div>
 
-                <div className="mt-1 font-medium">
+                <div className="mt-1 break-all font-medium">
                   {selectedInvoice.invoice_number}
+                </div>
+
+                <div className="mt-1 text-sm text-muted-foreground">
+                  {selectedInvoice.citizen?.name ??
+                    "Taxpayer information unavailable"}
                 </div>
               </div>
 
-              <div className="flex items-center justify-between border-t pt-3">
+              <div className="flex items-center justify-between gap-4 border-t pt-3">
                 <span className="text-sm text-muted-foreground">
                   Requested discount
                 </span>
 
-                <span className="font-semibold">
+                <span className="text-right font-semibold tabular-nums">
                   {formatCurrency(amount)} ETB
                 </span>
               </div>
 
+              {supportingFiles[0] && (
+                <div className="flex items-start gap-2 border-t pt-3 text-sm">
+                  <FileText className="mt-0.5 h-4 w-4 shrink-0" />
+
+                  <span className="break-all">
+                    {supportingFiles[0].name}
+                  </span>
+                </div>
+              )}
+
               <div className="flex items-start gap-2 border-t pt-3">
-                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
 
                 <p className="text-xs leading-5 text-muted-foreground">
-                  The request will require approval before
-                  the discount can be applied.
+                  The request will require approval before the discount can be applied to the invoice.
                 </p>
               </div>
             </div>
@@ -1330,19 +1245,21 @@ export default function PenaltyDiscountRequestForm({
             <Button
               type="button"
               variant="outline"
-              disabled={saving}
-              onClick={() =>
-                setSubmitDialogOpen(false)
-              }
+              disabled={isBusy}
+              onClick={() => setSubmitDialogOpen(false)}
             >
               Review
             </Button>
 
             <Button
               type="button"
-              disabled={saving}
+              disabled={isBusy}
               onClick={handleConfirmSubmit}
             >
+              {saving && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              )}
+
               {saving
                 ? "Submitting..."
                 : "Confirm & Submit"}

@@ -106,42 +106,23 @@ export const invoiceKeys = {
 
 type UseInvoicesOptions = {
   params?: InvoiceFilters;
+  enabled?: boolean;
 };
 
 export const useInvoices = ({
   params,
+  enabled = true,
 }: UseInvoicesOptions = {}) => {
-
-  return useQuery<
-    ListResponse<
-      Invoice,
-      InvoiceSummary
-    >
-  >({
-
-    queryKey:
-      invoiceKeys.list(
-        params,
-      ),
-
-    queryFn:
-      () =>
-        invoiceService.getInvoices(
-          params,
-        ),
-
-    staleTime:
-      1000 * 60 * 5,
-
-    placeholderData:
-      (
-        previousData,
-      ) =>
-        previousData,
-
+  return useQuery<ListResponse<Invoice, InvoiceSummary>>({
+    queryKey: invoiceKeys.list(params),
+    queryFn: () => invoiceService.getInvoices(params),
+    enabled,
+    staleTime: 1000 * 60 * 5,
+    placeholderData: (previousData) => previousData,
   });
-
 };
+
+
 
 
 // =====================================================

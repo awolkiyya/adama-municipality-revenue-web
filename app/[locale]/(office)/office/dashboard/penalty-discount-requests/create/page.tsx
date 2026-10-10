@@ -1,114 +1,147 @@
 "use client";
 
-import PenaltyDiscountForm from "@/components/forms/penalty-discount-form";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+
+import PenaltyDiscountForm from "@/components/forms/penalty-discount-form";
+import {
+  useCreatePenaltyDiscountRequest,
+  useSubmitPenaltyDiscountRequest,
+} from "@/hooks/revenue/use-penalty-discount-requests";
+
+import type { PenaltyDiscountFormValues } from "@/components/forms/penalty-discount-form";
+
+type CreatedRequestResponse = {
+  id?: string;
+  data?: {
+    id?: string;
+    data?: {
+      id?: string;
+    };
+  };
+};
+
+/**
+ * Extract the newly created request ID from common API response shapes.
+ */
+function getCreatedRequestId(
+  response: unknown,
+): string | null {
+  if (!response || typeof response !== "object") {
+    return null;
+  }
+
+  const result = response as CreatedRequestResponse;
+
+  return (
+    result.id ??
+    result.data?.id ??
+    result.data?.data?.id ??
+    null
+  );
+}
+
+/**
+ * Convert form values into multipart/form-data.
+ *
+ * Important:
+ * - Append the actual File object.
+ * - Do not JSON.stringify this payload.
+ * - Do not append an empty object when no file is selected.
+ */
+function toFormData(
+  values: PenaltyDiscountFormValues,
+): FormData {
+  const formData = new FormData();
+
+  formData.append("invoice_id", values.invoice_id);
+  formData.append(
+    "requested_amount",
+    String(values.requested_amount),
+  );
+  formData.append("reason", values.reason.trim());
+
+  if (values.supporting_file instanceof File) {
+    formData.append(
+      "supporting_file",
+      values.supporting_file,
+      values.supporting_file.name,
+    );
+  }
+
+  return formData;
+}
 
 export default function CreatePenaltyDiscountRequestPage() {
   const router = useRouter();
 
-  const invoices = [
-    {
-      id: "inv-new-001",
-      invoice_number: "INV-2018-000129",
-      status: "OVERDUE" as const,
-      citizen: {
-        id: "cit-001",
-        name: "Ahmed Hussein",
-        phone: "+251911987654",
-      },
-      subtotal: 9000,
-      penalty_amount: 1600,
-      penalty_discount_amount: 0,
-      interest_amount: 160,
-      total_amount: 10760,
-      paid_amount: 1500,
-      balance_due: 9260,
-      due_date: "2026-08-18",
-    },
+  const createMutation = useCreatePenaltyDiscountRequest();
+  const submitMutation = useSubmitPenaltyDiscountRequest();
 
-    {
-      id: "inv-new-002",
-      invoice_number: "INV-2018-000130",
-      status: "OVERDUE" as const,
-      citizen: {
-        id: "cit-002",
-        name: "Amina Yusuf",
-        phone: "+251922876543",
-      },
-      subtotal: 12000,
-      penalty_amount: 2400,
-      penalty_discount_amount: 0,
-      interest_amount: 240,
-      total_amount: 14640,
-      paid_amount: 4000,
-      balance_due: 10640,
-      due_date: "2026-08-12",
-    },
+  const isLoading =
+    createMutation.isPending ||
+    submitMutation.isPending;
 
-    {
-      id: "inv-new-003",
-      invoice_number: "INV-2018-000131",
-      status: "PARTIALLY_PAID" as const,
-      citizen: {
-        id: "cit-003",
-        name: "Mulugeta Bekele",
-        phone: "+251933765432",
-      },
-      subtotal: 18000,
-      penalty_amount: 2800,
-      penalty_discount_amount: 0,
-      interest_amount: 280,
-      total_amount: 21080,
-      paid_amount: 5000,
-      balance_due: 16080,
-      due_date: "2026-08-22",
-    },
+  /**
+   * Save the request as a draft.
+   */
+  const handleSaveDraft = async (
+    values: PenaltyDiscountFormValues,
+  ) => {
+    try {
+      const formData = toFormData(values);
 
-    {
-      id: "inv-new-004",
-      invoice_number: "INV-2018-000132",
-      status: "OVERDUE" as const,
-      citizen: {
-        id: "cit-004",
-        name: "Khalid Omar",
-        phone: "+251944321987",
-      },
-      subtotal: 15000,
-      penalty_amount: 3000,
-      penalty_discount_amount: 500,
-      interest_amount: 300,
-      total_amount: 17800,
-      paid_amount: 2500,
-      balance_due: 15300,
-      due_date: "2026-08-05",
-    },
-  ];
+      await createMutation.mutateAsync(formData);
 
-  const handleSaveDraft = async (data: any) => {
-    console.log("CREATE DRAFT", data);
+      toast.success("Penalty discount draft saved successfully.");
 
-    // API:
-    // await api.post("/penalty-discount-requests", data);
-
-    router.push("../");
+      router.push("../");
+    } catch {
+      // The mutation hook should display the API error.
+      // Keep the form open so the user can correct the request.
+    }
   };
 
-  const handleSubmit = async (data: any) => {
-    console.log("CREATE + SUBMIT", data);
+  /**
+   * Create the request, then submit it for approval.
+   */
+  const handleSubmit = async (
+    values: PenaltyDiscountFormValues,
+  ) => {
+    try {
+      const formData = toFormData(values);
 
-    // API:
-    // await api.post("/penalty-discount-requests", {
-    //   ...data,
-    //   status: "SUBMITTED",
-    // });
+      const response =
+        await createMutation.mutateAsync(formData);
 
-    router.push("../");
+      const requestId = getCreatedRequestId(response);
+
+      if (!requestId) {
+        toast.error(
+          "The request was created, but its ID could not be read. " +
+            "Please open the request list and submit it from there.",
+        );
+
+        return;
+      }
+
+      await submitMutation.mutateAsync(requestId);
+
+      toast.success(
+        "Penalty discount request submitted for approval.",
+      );
+
+      router.push("../");
+    } catch {
+      // Mutation hooks should display API errors.
+      // Keep the form open if creation or submission fails.
+    }
   };
 
   return (
     <PenaltyDiscountForm
       mode="create"
-      invoices={invoices}
+      loading={isLoading}
       onCancel={() => router.back()}
       onSaveDraft={handleSaveDraft}
       onSubmit={handleSubmit}

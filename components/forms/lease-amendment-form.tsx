@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -27,72 +26,22 @@ import { Separator } from "@/components/ui/separator";
 
 import { FileUpload } from "@/components/file-upload";
 import { TaxpayerSelector } from "../revenue/assessment/taxpayer-selector";
+
 import type { Assessment } from "@/types/revenue/assessment";
 
-/* -------------------------------------------------------------------------- */
-/* Types                                                                      */
-/* -------------------------------------------------------------------------- */
+import {
+  AMENDMENT_TYPE_DESCRIPTIONS,
+  AMENDMENT_TYPE_LABELS,
+  LAND_AREA_FIELD_CODES,
+  LAND_AREA_UNIT,
+  MIN_REASON_LENGTH,
+} from "@/types/assessment/lease-amendment";
 
-export type AmendmentType =
-  | "LAND_AREA_CHANGE"
-  | "NAME_TRANSFER"
-  | "PARTIAL_TRANSFER"
-  | "MERGE";
-
-export type LeaseAmendmentMode = "create" | "edit";
-
-export type LeaseAmendmentFormValues = {
-  amendmentType: AmendmentType | null;
-  newTaxpayerId: string | null;
-  newLandArea: string;
-  transferArea: string;
-  mergedLandArea: string;
-  reason: string;
-  supportingDocuments: File[];
-};
-
-export type LeaseAmendmentFormProps = {
-  mode: LeaseAmendmentMode;
-  assessment: Assessment;
-  initialValues?: Partial<LeaseAmendmentFormValues>;
-  amendmentId?: string;
-  onSubmit?: (
-    values: LeaseAmendmentFormValues,
-  ) => Promise<void> | void;
-  onCancel?: () => void;
-};
-
-/* -------------------------------------------------------------------------- */
-/* Configuration                                                              */
-/* -------------------------------------------------------------------------- */
-
-/**
- * Replace these with the actual land-area fieldCode values returned
- * by your Laravel assessment API.
- */
-const LAND_AREA_FIELD_CODES = [
-  "LAND_AREA",
-  "land_area",
-  "LAND_AREA_M2",
-  "LAND_AREA_SQM",
-];
-
-const LAND_AREA_UNIT = "m²";
-const MIN_REASON_LENGTH = 5;
-
-const AMENDMENT_TYPE_LABELS: Record<AmendmentType, string> = {
-  LAND_AREA_CHANGE: "Land Area Change",
-  NAME_TRANSFER: "Ownership Transfer",
-  PARTIAL_TRANSFER: "Partial Land Transfer",
-  MERGE: "Land Merge",
-};
-
-const AMENDMENT_TYPE_DESCRIPTIONS: Record<AmendmentType, string> = {
-  LAND_AREA_CHANGE: "Correct or update the registered land area.",
-  NAME_TRANSFER: "Transfer ownership to another registered taxpayer.",
-  PARTIAL_TRANSFER: "Transfer part of the land to another taxpayer.",
-  MERGE: "Combine this land with another verified land parcel.",
-};
+import type {
+  AmendmentType,
+  LeaseAmendmentFormProps,
+  LeaseAmendmentFormValues,
+} from "@/types/assessment/lease-amendment";
 
 /* -------------------------------------------------------------------------- */
 /* Helpers                                                                    */
@@ -118,6 +67,9 @@ function parseNumericValue(value: unknown): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+/**
+ * Reads a land-area value from the assessment's service values.
+ */
 function getAssessmentLandArea(
   assessment: Assessment,
 ): number | null {
@@ -154,11 +106,52 @@ function getCurrentTaxpayerName(
   return assessment.taxpayer?.fullName?.trim() || "Not available";
 }
 
+/**
+ * Supports camelCase and snake_case API properties.
+ */
+function getCurrentTaxpayerId(
+  assessment: Assessment,
+): string | null {
+  const record = assessment as unknown as Record<string, unknown>;
+
+  const value =
+    record.citizenId ??
+    record.citizen_id ??
+    record.taxpayerId ??
+    record.taxpayer_id ??
+    null;
+
+  return typeof value === "string" && value.trim()
+    ? value.trim()
+    : null;
+}
+
 function getStatusLabel(status: string): string {
   return status
     .replace(/[_-]+/g, " ")
     .toLowerCase()
     .replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+function isAmendmentType(value: string): value is AmendmentType {
+  return Object.prototype.hasOwnProperty.call(
+    AMENDMENT_TYPE_LABELS,
+    value,
+  );
+}
+
+/**
+ * Land area is required only for amendment types that use it.
+ * Generic amendments and ownership transfers do not inherently require it.
+ */
+function amendmentRequiresLandArea(
+  type: AmendmentType | null,
+): boolean {
+  return (
+    type === "LAND_AREA_CHANGE" ||
+    type === "PARTIAL_TRANSFER" ||
+    type === "LAND_MERGE"
+  );
 }
 
 /* -------------------------------------------------------------------------- */
@@ -210,7 +203,7 @@ function LandAreaNotice() {
   return (
     <p className="text-sm text-destructive">
       The registered land area is unavailable. Verify the land-area field
-      configuration before continuing.
+      configuration before continuing with this amendment.
     </p>
   );
 }
@@ -283,10 +276,12 @@ function LandAreaChangeFields({
   currentLandArea,
   newLandArea,
   onChange,
+  disabled,
 }: {
   currentLandArea: number | null;
   newLandArea: string;
   onChange: (value: string) => void;
+  disabled: boolean;
 }) {
   const parsedValue = parseNumericValue(newLandArea);
 
@@ -320,6 +315,7 @@ function LandAreaChangeFields({
           value={newLandArea}
           onChange={onChange}
           placeholder="Enter new area"
+          disabled={disabled}
         />
       </div>
 
@@ -342,20 +338,23 @@ function LandAreaChangeFields({
 /* Ownership transfer                                                         */
 /* -------------------------------------------------------------------------- */
 
-function NameTransferFields({
+function OwnershipTransferFields({
   assessment,
   newTaxpayerId,
   onChange,
+  disabled,
 }: {
   assessment: Assessment;
   newTaxpayerId: string | null;
   onChange: (value: string | null) => void;
+  disabled: boolean;
 }) {
   return (
     <div className="flex flex-col gap-5">
       <div className="space-y-2">
-        <Label>Current Taxpayer</Label>
+        <Label htmlFor="currentTaxpayer">Current Taxpayer</Label>
         <Input
+          id="currentTaxpayer"
           value={getCurrentTaxpayerName(assessment)}
           readOnly
           disabled
@@ -371,7 +370,12 @@ function NameTransferFields({
         <TaxpayerSelector
           value={newTaxpayerId ?? ""}
           onChange={(taxpayerId) => onChange(taxpayerId || null)}
+          disabled={disabled}
         />
+
+        <p className="text-xs text-muted-foreground">
+          Select the registered taxpayer who will receive ownership.
+        </p>
       </div>
     </div>
   );
@@ -387,12 +391,14 @@ function PartialTransferFields({
   newTaxpayerId,
   onTransferAreaChange,
   onTaxpayerChange,
+  disabled,
 }: {
   currentLandArea: number | null;
   transferArea: string;
   newTaxpayerId: string | null;
   onTransferAreaChange: (value: string) => void;
   onTaxpayerChange: (value: string | null) => void;
+  disabled: boolean;
 }) {
   const parsedTransferArea = parseNumericValue(transferArea);
 
@@ -427,6 +433,7 @@ function PartialTransferFields({
           value={transferArea}
           onChange={onTransferAreaChange}
           placeholder="Enter transfer area"
+          disabled={disabled}
         />
       </div>
 
@@ -440,12 +447,16 @@ function PartialTransferFields({
           onChange={(taxpayerId) =>
             onTaxpayerChange(taxpayerId || null)
           }
+          disabled={disabled}
         />
       </div>
 
       <div className="rounded-md bg-muted/40 p-3 text-sm">
         <div className="flex flex-wrap justify-between gap-2">
-          <span className="text-muted-foreground">Remaining Land Area</span>
+          <span className="text-muted-foreground">
+            Remaining Land Area
+          </span>
+
           <span className="font-medium">
             {remainingArea !== null
               ? `${formatNumber(remainingArea)} ${LAND_AREA_UNIT}`
@@ -472,10 +483,12 @@ function LandMergeFields({
   currentLandArea,
   mergedLandArea,
   onChange,
+  disabled,
 }: {
   currentLandArea: number | null;
   mergedLandArea: string;
   onChange: (value: string) => void;
+  disabled: boolean;
 }) {
   const parsedOtherLand = parseNumericValue(mergedLandArea);
 
@@ -509,12 +522,16 @@ function LandMergeFields({
           value={mergedLandArea}
           onChange={onChange}
           placeholder="Enter other land area"
+          disabled={disabled}
         />
       </div>
 
       <div className="rounded-md bg-muted/40 p-3 text-sm">
         <div className="flex flex-wrap justify-between gap-2">
-          <span className="text-muted-foreground">Combined Land Area</span>
+          <span className="text-muted-foreground">
+            Combined Land Area
+          </span>
+
           <span className="font-semibold">
             {combinedArea !== null
               ? `${formatNumber(combinedArea)} ${LAND_AREA_UNIT}`
@@ -526,6 +543,45 @@ function LandMergeFields({
       <p className="text-xs text-muted-foreground">
         The other land parcel must be identified and verified before the merge
         is approved. This form records the additional area only.
+      </p>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Other amendment                                                            */
+/* -------------------------------------------------------------------------- */
+
+function OtherAmendmentFields({
+  description,
+  onChange,
+  disabled,
+}: {
+  description: string;
+  onChange: (value: string) => void;
+  disabled: boolean;
+}) {
+  return (
+    <div className="space-y-2">
+      <Label htmlFor="otherAmendmentDescription">
+        Amendment Description <span className="text-destructive">*</span>
+      </Label>
+
+      <Textarea
+        id="otherAmendmentDescription"
+        value={description}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder="Describe the amendment and the specific record that needs to change..."
+        rows={4}
+        disabled={disabled}
+        aria-invalid={
+          description.trim().length > 0 &&
+          description.trim().length < 5
+        }
+      />
+
+      <p className="text-xs text-muted-foreground">
+        Provide at least 5 characters describing the amendment.
       </p>
     </div>
   );
@@ -553,7 +609,7 @@ function ReasonAndDocumentsSection({
       <CardHeader>
         <CardTitle>Reason & Supporting Documents</CardTitle>
         <CardDescription>
-          Explain the amendment and attach the relevant supporting evidence.
+          Explain why the amendment is required and attach supporting evidence.
         </CardDescription>
       </CardHeader>
 
@@ -577,7 +633,8 @@ function ReasonAndDocumentsSection({
           />
 
           <p className="text-xs text-muted-foreground">
-            Minimum {MIN_REASON_LENGTH} characters. {reason.length} entered.
+            Minimum {MIN_REASON_LENGTH} characters.{" "}
+            {reason.trim().length} entered.
           </p>
         </div>
 
@@ -618,12 +675,19 @@ export function LeaseAmendmentForm({
     [assessment],
   );
 
+  const currentTaxpayerId = useMemo(
+    () => getCurrentTaxpayerId(assessment),
+    [assessment],
+  );
+
   const [values, setValues] = useState<LeaseAmendmentFormValues>({
     amendmentType: initialValues?.amendmentType ?? null,
     newTaxpayerId: initialValues?.newTaxpayerId ?? null,
     newLandArea: initialValues?.newLandArea ?? "",
     transferArea: initialValues?.transferArea ?? "",
     mergedLandArea: initialValues?.mergedLandArea ?? "",
+    otherAmendmentDescription:
+      initialValues?.otherAmendmentDescription ?? "",
     reason: initialValues?.reason ?? "",
     supportingDocuments: initialValues?.supportingDocuments ?? [],
   });
@@ -645,7 +709,7 @@ export function LeaseAmendmentForm({
   }, [initialValues]);
 
   /* ---------------------------------------------------------------------- */
-  /* Validation                                                             */
+  /* Validation                                                              */
   /* ---------------------------------------------------------------------- */
 
   const parsedNewLandArea = parseNumericValue(values.newLandArea);
@@ -668,8 +732,7 @@ export function LeaseAmendmentForm({
 
   const newTaxpayerIsValid =
     Boolean(values.newTaxpayerId) &&
-    String(values.newTaxpayerId) !==
-      String(assessment.citizenId ?? "");
+    values.newTaxpayerId !== currentTaxpayerId;
 
   const partialTransferIsValid =
     transferAreaIsValid && newTaxpayerIsValid;
@@ -682,28 +745,37 @@ export function LeaseAmendmentForm({
     values.mergedLandArea.trim() !== "" &&
     parsedMergedLandArea > 0;
 
+  const otherDescriptionIsValid =
+    values.otherAmendmentDescription.trim().length >= 5;
+
   const reasonIsValid =
     values.reason.trim().length >= MIN_REASON_LENGTH;
 
-  const typeSpecificValid =
+  const typeSpecificValid: boolean =
     values.amendmentType === "LAND_AREA_CHANGE"
       ? newLandAreaIsValid
-      : values.amendmentType === "NAME_TRANSFER"
+      : values.amendmentType === "OWNERSHIP_TRANSFER"
         ? newTaxpayerIsValid
         : values.amendmentType === "PARTIAL_TRANSFER"
           ? partialTransferIsValid
-          : values.amendmentType === "MERGE"
+          : values.amendmentType === "LAND_MERGE"
             ? mergeIsValid
-            : false;
+            : values.amendmentType === "OTHER"
+              ? otherDescriptionIsValid
+              : false;
+
+  const landAreaIsAvailable =
+    !amendmentRequiresLandArea(values.amendmentType) ||
+    currentLandArea !== null;
 
   const canSubmit =
-    currentLandArea !== null &&
-    Boolean(values.amendmentType) &&
+    values.amendmentType !== null &&
+    landAreaIsAvailable &&
     typeSpecificValid &&
     reasonIsValid;
 
   /* ---------------------------------------------------------------------- */
-  /* Update values                                                          */
+  /* Update values                                                           */
   /* ---------------------------------------------------------------------- */
 
   const updateValue = <K extends keyof LeaseAmendmentFormValues>(
@@ -717,33 +789,92 @@ export function LeaseAmendmentForm({
   };
 
   /* ---------------------------------------------------------------------- */
-  /* Amendment type                                                         */
+  /* Amendment type                                                          */
   /* ---------------------------------------------------------------------- */
 
-  const handleTypeChange = (type: AmendmentType) => {
+  const handleTypeChange = (value: string) => {
+    if (!isAmendmentType(value)) {
+      toast.error("The selected amendment type is not supported.");
+      return;
+    }
+
+    const type = value;
+
     setValues((current) => ({
       ...current,
       amendmentType: type,
+
       newTaxpayerId:
-        type === "NAME_TRANSFER" || type === "PARTIAL_TRANSFER"
+        type === "OWNERSHIP_TRANSFER" ||
+        type === "PARTIAL_TRANSFER"
           ? current.newTaxpayerId
           : null,
+
       newLandArea:
-        type === "LAND_AREA_CHANGE" ? current.newLandArea : "",
+        type === "LAND_AREA_CHANGE"
+          ? current.newLandArea
+          : "",
+
       transferArea:
-        type === "PARTIAL_TRANSFER" ? current.transferArea : "",
-      mergedLandArea: type === "MERGE" ? current.mergedLandArea : "",
+        type === "PARTIAL_TRANSFER"
+          ? current.transferArea
+          : "",
+
+      mergedLandArea:
+        type === "LAND_MERGE"
+          ? current.mergedLandArea
+          : "",
+
+      otherAmendmentDescription:
+        type === "OTHER"
+          ? current.otherAmendmentDescription
+          : "",
     }));
   };
 
   /* ---------------------------------------------------------------------- */
-  /* Submit                                                                 */
+  /* Submit                                                                  */
   /* ---------------------------------------------------------------------- */
 
   const handleSubmit = async () => {
-    if (currentLandArea === null) {
+    if (!values.amendmentType) {
+      toast.error("Please select an amendment type.");
+      return;
+    }
+
+    if (
+      amendmentRequiresLandArea(values.amendmentType) &&
+      currentLandArea === null
+    ) {
       toast.error(
         "The source assessment's land area is unavailable. Verify the land-area field configuration.",
+      );
+      return;
+    }
+
+    if (
+      values.amendmentType === "OWNERSHIP_TRANSFER" &&
+      !currentTaxpayerId
+    ) {
+      toast.error(
+        "The current taxpayer ID could not be determined. Reload the assessment before continuing.",
+      );
+      return;
+    }
+
+    if (
+      values.amendmentType === "OTHER" &&
+      !otherDescriptionIsValid
+    ) {
+      toast.error(
+        "Enter an amendment description of at least 5 characters.",
+      );
+      return;
+    }
+
+    if (!reasonIsValid) {
+      toast.error(
+        `The reason must contain at least ${MIN_REASON_LENGTH} characters.`,
       );
       return;
     }
@@ -760,23 +891,27 @@ export function LeaseAmendmentForm({
       return;
     }
 
+    if (isSaving) {
+      return;
+    }
+
     try {
       setIsSaving(true);
       await onSubmit(values);
     } catch (error) {
       console.error("Lease amendment submission failed:", error);
-      toast.error("Unable to save the amendment. Please try again.");
+      // The page-level handler is responsible for displaying the API error.
     } finally {
       setIsSaving(false);
     }
   };
 
   /* ---------------------------------------------------------------------- */
-  /* Render                                                                 */
+  /* Render                                                                  */
   /* ---------------------------------------------------------------------- */
 
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-6">
+    <div className="mx-auto w-full max-w-4xl space-y-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">
           {mode === "create" ? "Create Amendment" : "Edit Amendment"}
@@ -809,9 +944,7 @@ export function LeaseAmendmentForm({
 
                 <Select
                   value={values.amendmentType ?? undefined}
-                  onValueChange={(value) =>
-                    handleTypeChange(value as AmendmentType)
-                  }
+                  onValueChange={handleTypeChange}
                   disabled={isSaving}
                 >
                   <SelectTrigger
@@ -852,16 +985,18 @@ export function LeaseAmendmentForm({
                       onChange={(value) =>
                         updateValue("newLandArea", value)
                       }
+                      disabled={isSaving}
                     />
                   )}
 
-                  {values.amendmentType === "NAME_TRANSFER" && (
-                    <NameTransferFields
+                  {values.amendmentType === "OWNERSHIP_TRANSFER" && (
+                    <OwnershipTransferFields
                       assessment={assessment}
                       newTaxpayerId={values.newTaxpayerId}
                       onChange={(value) =>
                         updateValue("newTaxpayerId", value)
                       }
+                      disabled={isSaving}
                     />
                   )}
 
@@ -876,16 +1011,28 @@ export function LeaseAmendmentForm({
                       onTaxpayerChange={(value) =>
                         updateValue("newTaxpayerId", value)
                       }
+                      disabled={isSaving}
                     />
                   )}
 
-                  {values.amendmentType === "MERGE" && (
+                  {values.amendmentType === "LAND_MERGE" && (
                     <LandMergeFields
                       currentLandArea={currentLandArea}
                       mergedLandArea={values.mergedLandArea}
                       onChange={(value) =>
                         updateValue("mergedLandArea", value)
                       }
+                      disabled={isSaving}
+                    />
+                  )}
+
+                  {values.amendmentType === "OTHER" && (
+                    <OtherAmendmentFields
+                      description={values.otherAmendmentDescription}
+                      onChange={(value) =>
+                        updateValue("otherAmendmentDescription", value)
+                      }
+                      disabled={isSaving}
                     />
                   )}
                 </>
@@ -919,6 +1066,7 @@ export function LeaseAmendmentForm({
               onClick={handleSubmit}
             >
               <Save className="mr-2 h-4 w-4" />
+
               {isSaving
                 ? "Saving..."
                 : mode === "create"

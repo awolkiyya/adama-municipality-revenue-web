@@ -1,42 +1,28 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useLocale } from "next-intl";
 import {
+  AlertCircle,
   CheckCircle2,
-  Clock3,
+  Clock,
+  ClipboardCheck,
+  ExternalLink,
   Eye,
   FileText,
-  History,
+  Loader2,
   MoreHorizontal,
-  Search,
+  RefreshCw,
   XCircle,
+  CircleDollarSign,
+  Send,
+  Ban,
+  Scale,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Badge } from "@/components/ui/badge";
+
 import {
   Select,
   SelectContent,
@@ -45,2225 +31,1087 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-/* =========================================================
- * TYPES
- * ======================================================= */
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
-type PenaltyDiscountStatus =
-  | "DRAFT"
-  | "SUBMITTED"
-  | "DECIDED"
-  | "APPLIED"
-  | "CANCELLED";
+import Can from "@/components/access/Can";
+import { usePermission } from "@/hooks/usePermission";
 
-type PenaltyDiscountDecision =
-  | "APPROVED"
-  | "REJECTED"
-  | null;
+import SummaryCard from "@/components/cards/summary-card";
+import AppFilterBar from "@/components/app-filter-bar";
+import AppDataTableLayout from "@/components/app-data-table-layout";
+import { Banner } from "@/components/banner/topBanner";
+import { FloatingParticles } from "@/components/design/FloatingParticles";
 
-type InvoiceStatus =
-  | "ISSUED"
-  | "PARTIALLY_PAID"
-  | "PAID"
-  | "OVERDUE";
+import {
+  usePenaltyDiscountRequests,
+  useSubmitPenaltyDiscountRequest,
+  useApplyPenaltyDiscountRequest,
+  useCancelPenaltyDiscountRequest,
+} from "@/hooks/revenue/use-penalty-discount-requests";
 
-type PenaltyDiscountRequest = {
-  id: string;
-  request_number: string;
+import type {
+  PenaltyDiscountRequest,
+  PenaltyDiscountRequestFilters,
+  PenaltyDiscountRequestStatus,
+  PenaltyDiscountRequestSummary,
+  PenaltyDiscountDecision,
+} from "@/types/revenue/penalty-discount-request";
 
-  invoice: {
-    id: string;
-    invoice_number: string;
-    status: InvoiceStatus;
+/* -------------------------------------------------------------------------- */
+/* Types                                                                      */
+/* -------------------------------------------------------------------------- */
 
-    subtotal: number;
-
-    penalty_amount: number;
-    penalty_discount_amount: number;
-
-    interest_amount: number;
-
-    total_amount: number;
-    paid_amount: number;
-    balance_due: number;
-
-    due_date: string;
-  };
-
-  citizen: {
-    id: string;
-    name: string;
-    phone: string;
-  };
-
-  requested_amount: number;
-
-  reason: string;
-
-  status: PenaltyDiscountStatus;
-
-  submitted_at: string | null;
-
-  decision: PenaltyDiscountDecision;
-
-  approved_amount: number | null;
-
-  decision_reason: string | null;
-
-  decided_at: string | null;
-
-  applied_to_invoice: boolean;
-
-  applied_at: string | null;
-
-  applied_by: {
-    id: string;
-    name: string;
-  } | null;
-
-  created_by: {
-    id: string;
-    name: string;
-  };
-
-  decided_by: {
-    id: string;
-    name: string;
-  } | null;
-
-  created_at: string;
-  updated_at: string;
+type PaginationInfo = {
+  current_page?: number;
+  last_page?: number;
+  per_page?: number;
+  total?: number;
 };
 
-/* =========================================================
- * MOCK DATA
- * ======================================================= */
-
-const MOCK_REQUESTS: PenaltyDiscountRequest[] = [
-  {
-    id: "pdr-001",
-    request_number: "PDR-2026-000001",
-
-    invoice: {
-      id: "inv-001",
-      invoice_number: "INV-2018-000124",
-      status: "OVERDUE",
-
-      subtotal: 10000,
-
-      penalty_amount: 2000,
-      penalty_discount_amount: 800,
-
-      interest_amount: 200,
-
-      total_amount: 11400,
-      paid_amount: 4000,
-      balance_due: 7400,
-
-      due_date: "2026-08-30",
-    },
-
-    citizen: {
-      id: "cit-001",
-      name: "Abdisa Gemechu",
-      phone: "+251911234567",
-    },
-
-    requested_amount: 1000,
-
-    reason:
-      "The taxpayer requested a reduction of the accumulated penalty due to financial hardship and delayed business activity.",
-
-    status: "APPLIED",
-
-    submitted_at: "2026-09-02T09:15:00",
-
-    decision: "APPROVED",
-
-    approved_amount: 800,
-
-    decision_reason:
-      "The request was reviewed and an 800 ETB penalty reduction was approved based on the submitted justification.",
-
-    decided_at: "2026-09-03T14:20:00",
-
-    applied_to_invoice: true,
-
-    applied_at: "2026-09-03T15:00:00",
-
-    applied_by: {
-      id: "usr-020",
-      name: "Finance Officer",
-    },
-
-    created_by: {
-      id: "usr-001",
-      name: "Kebede Tadesse",
-    },
-
-    decided_by: {
-      id: "usr-011",
-      name: "Meron Bekele",
-    },
-
-    created_at: "2026-09-02T09:10:00",
-    updated_at: "2026-09-03T15:00:00",
-  },
-
-  {
-    id: "pdr-002",
-    request_number: "PDR-2026-000002",
-
-    invoice: {
-      id: "inv-002",
-      invoice_number: "INV-2018-000125",
-      status: "PARTIALLY_PAID",
-
-      subtotal: 7500,
-
-      penalty_amount: 1200,
-      penalty_discount_amount: 0,
-
-      interest_amount: 150,
-
-      total_amount: 8850,
-      paid_amount: 3000,
-      balance_due: 5850,
-
-      due_date: "2026-08-25",
-    },
-
-    citizen: {
-      id: "cit-002",
-      name: "Fatuma Ali",
-      phone: "+251922345678",
-    },
-
-    requested_amount: 600,
-
-    reason:
-      "The taxpayer submitted a request for penalty reduction because the payment delay was caused by temporary business closure.",
-
-    status: "SUBMITTED",
-
-    submitted_at: "2026-09-05T11:30:00",
-
-    decision: null,
-
-    approved_amount: null,
-
-    decision_reason: null,
-
-    decided_at: null,
-
-    applied_to_invoice: false,
-
-    applied_at: null,
-
-    applied_by: null,
-
-    created_by: {
-      id: "usr-002",
-      name: "Hassan Mohammed",
-    },
-
-    decided_by: null,
-
-    created_at: "2026-09-05T10:45:00",
-    updated_at: "2026-09-05T11:30:00",
-  },
-
-  {
-    id: "pdr-003",
-    request_number: "PDR-2026-000003",
-
-    invoice: {
-      id: "inv-003",
-      invoice_number: "INV-2018-000126",
-      status: "OVERDUE",
-
-      subtotal: 15000,
-
-      penalty_amount: 3500,
-      penalty_discount_amount: 0,
-
-      interest_amount: 350,
-
-      total_amount: 18850,
-      paid_amount: 0,
-      balance_due: 18850,
-
-      due_date: "2026-08-15",
-    },
-
-    citizen: {
-      id: "cit-003",
-      name: "Desta Girma",
-      phone: "+251933456789",
-    },
-
-    requested_amount: 1500,
-
-    reason:
-      "The taxpayer requested penalty relief following a prolonged interruption of business operations.",
-
-    status: "DECIDED",
-
-    submitted_at: "2026-08-28T08:45:00",
-
-    decision: "REJECTED",
-
-    approved_amount: null,
-
-    decision_reason:
-      "The submitted justification did not satisfy the applicable penalty relief requirements.",
-
-    decided_at: "2026-08-30T15:10:00",
-
-    applied_to_invoice: false,
-
-    applied_at: null,
-
-    applied_by: null,
-
-    created_by: {
-      id: "usr-003",
-      name: "Sara Worku",
-    },
-
-    decided_by: {
-      id: "usr-012",
-      name: "Daniel Kebede",
-    },
-
-    created_at: "2026-08-28T08:40:00",
-    updated_at: "2026-08-30T15:10:00",
-  },
-
-  {
-    id: "pdr-004",
-    request_number: "PDR-2026-000004",
-
-    invoice: {
-      id: "inv-004",
-      invoice_number: "INV-2018-000127",
-      status: "OVERDUE",
-
-      subtotal: 22000,
-
-      penalty_amount: 4200,
-      penalty_discount_amount: 0,
-
-      interest_amount: 420,
-
-      total_amount: 26620,
-      paid_amount: 5000,
-      balance_due: 21620,
-
-      due_date: "2026-08-10",
-    },
-
-    citizen: {
-      id: "cit-004",
-      name: "Mohammed Ibrahim",
-      phone: "+251944567890",
-    },
-
-    requested_amount: 2000,
-
-    reason:
-      "The taxpayer requested a penalty reduction and provided supporting documentation for review.",
-
-    status: "DRAFT",
-
-    submitted_at: null,
-
-    decision: null,
-
-    approved_amount: null,
-
-    decision_reason: null,
-
-    decided_at: null,
-
-    applied_to_invoice: false,
-
-    applied_at: null,
-
-    applied_by: null,
-
-    created_by: {
-      id: "usr-004",
-      name: "Aster Gemechu",
-    },
-
-    decided_by: null,
-
-    created_at: "2026-09-10T13:25:00",
-    updated_at: "2026-09-10T13:25:00",
-  },
-
-  {
-    id: "pdr-005",
-    request_number: "PDR-2026-000005",
-
-    invoice: {
-      id: "inv-005",
-      invoice_number: "INV-2018-000128",
-      status: "OVERDUE",
-
-      subtotal: 12500,
-
-      penalty_amount: 1800,
-      penalty_discount_amount: 0,
-
-      interest_amount: 180,
-
-      total_amount: 14480,
-      paid_amount: 2000,
-      balance_due: 12480,
-
-      due_date: "2026-08-20",
-    },
-
-    citizen: {
-      id: "cit-005",
-      name: "Hana Tesfaye",
-      phone: "+251955678901",
-    },
-
-    requested_amount: 500,
-
-    reason:
-      "The taxpayer requested a partial reduction of the penalty due to delayed payment caused by temporary financial difficulties.",
-
-    status: "CANCELLED",
-
-    submitted_at: "2026-09-01T09:20:00",
-
-    decision: null,
-
-    approved_amount: null,
-
-    decision_reason: null,
-
-    decided_at: null,
-
-    applied_to_invoice: false,
-
-    applied_at: null,
-
-    applied_by: null,
-
-    created_by: {
-      id: "usr-005",
-      name: "Yonas Alemu",
-    },
-
-    decided_by: null,
-
-    created_at: "2026-09-01T09:00:00",
-    updated_at: "2026-09-04T16:30:00",
-  },
+type RequestPageData = {
+  data?: PenaltyDiscountRequest[];
+  summary?: PenaltyDiscountRequestSummary;
+  requests?: {
+    data?: PenaltyDiscountRequest[];
+    current_page?: number;
+    last_page?: number;
+    per_page?: number;
+    total?: number;
+    meta?: PaginationInfo;
+  };
+  meta?: PaginationInfo & {
+    summary?: PenaltyDiscountRequestSummary;
+    pagination?: PaginationInfo;
+  };
+  current_page?: number;
+  last_page?: number;
+  per_page?: number;
+  total?: number;
+};
+
+type RequestApiResult = RequestPageData & {
+  success?: boolean;
+  message?: string;
+  data?: PenaltyDiscountRequest[] | RequestPageData;
+};
+
+/* -------------------------------------------------------------------------- */
+/* Constants                                                                  */
+/* -------------------------------------------------------------------------- */
+
+const RESOURCE = "penalty_discount_requests";
+
+const EMPTY_FILTERS: PenaltyDiscountRequestFilters = {
+  status: "",
+  decision: "",
+};
+
+const EMPTY_SUMMARY: PenaltyDiscountRequestSummary = {
+  total_requests: 0,
+  pending_decision: 0,
+  approved_requests: 0,
+  applied_requests: 0,
+  approved_amount: 0,
+};
+
+const STATUS_STYLES: Record<
+  PenaltyDiscountRequestStatus,
+  string
+> = {
+  DRAFT:
+    "border-slate-200 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200",
+
+  SUBMITTED:
+    "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950/50 dark:text-amber-300",
+
+  APPROVED:
+    "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-300",
+
+  APPLIED:
+    "border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-900 dark:bg-blue-950/50 dark:text-blue-300",
+
+  REJECTED:
+    "border-red-200 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950/50 dark:text-red-300",
+
+  CANCELLED:
+    "border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300",
+};
+
+const STATUS_DOT_STYLES: Record<
+  PenaltyDiscountRequestStatus,
+  string
+> = {
+  DRAFT: "bg-slate-500",
+  SUBMITTED: "bg-amber-500",
+  APPROVED: "bg-emerald-500",
+  APPLIED: "bg-blue-500",
+  REJECTED: "bg-red-500",
+  CANCELLED: "bg-slate-400",
+};
+
+const STATUS_OPTIONS: PenaltyDiscountRequestStatus[] = [
+  "DRAFT",
+  "SUBMITTED",
+  "APPROVED",
+  "APPLIED",
+  "REJECTED",
+  "CANCELLED",
 ];
 
-/* =========================================================
- * HELPERS
- * ======================================================= */
+/* -------------------------------------------------------------------------- */
+/* Helpers                                                                    */
+/* -------------------------------------------------------------------------- */
 
-const formatCurrency = (value: number) =>
-  new Intl.NumberFormat("en-US", {
+const formatLabel = (value: string): string =>
+  value
+    .toLowerCase()
+    .split("_")
+    .map(
+      (word) =>
+        word.charAt(0).toUpperCase() + word.slice(1),
+    )
+    .join(" ");
+
+const formatDate = (
+  value: string | null | undefined,
+): string => {
+  if (!value) return "—";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) return value;
+
+  return new Intl.DateTimeFormat(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+  }).format(date);
+};
+
+const formatCurrency = (
+  value: number | string | null | undefined,
+): string => {
+  const amount = Number(value ?? 0);
+
+  if (!Number.isFinite(amount)) return "—";
+
+  return new Intl.NumberFormat(undefined, {
+    style: "currency",
+    currency: "ETB",
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  }).format(value);
-
-const formatDate = (value: string | null) => {
-  if (!value) return "—";
-
-  return new Intl.DateTimeFormat("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "2-digit",
-  }).format(new Date(value));
+  }).format(amount);
 };
 
-const formatDateTime = (value: string | null) => {
-  if (!value) return "—";
-
-  return new Intl.DateTimeFormat("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(value));
+const getErrorMessage = (
+  error: unknown,
+  fallback: string,
+): string => {
+  return error instanceof Error ? error.message : fallback;
 };
 
-/* =========================================================
- * BADGES
- * ======================================================= */
+const isRequestPageData = (
+  value: unknown,
+): value is RequestPageData => {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value)
+  );
+};
 
-function StatusBadge({
-  status,
-}: {
-  status: PenaltyDiscountStatus;
-}) {
-  const config: Record<
-    PenaltyDiscountStatus,
+/**
+ * Supports both the nested Laravel response:
+ *
+ * data: {
+ *   summary: {...},
+ *   requests: {data: [...], ...}
+ * }
+ *
+ * and a directly returned paginated resource.
+ */
+function normalizeListResult(
+  input: unknown,
+): {
+  requests: PenaltyDiscountRequest[];
+  summary: PenaltyDiscountRequestSummary;
+  pagination: PaginationInfo;
+} {
+  const root = isRequestPageData(input) ? input : {};
+
+  const outerData = isRequestPageData(root.data)
+    ? root.data
+    : undefined;
+
+  const result = outerData ?? root;
+
+  const nestedRequests = isRequestPageData(result.requests)
+    ? result.requests
+    : undefined;
+
+  const directRequests = Array.isArray(result.data)
+    ? (result.data as PenaltyDiscountRequest[])
+    : [];
+
+  const requests =
+    nestedRequests?.data ??
+    directRequests;
+
+  const summary =
+    result.summary ??
+    result.meta?.summary ??
+    root.meta?.summary ??
+    EMPTY_SUMMARY;
+
+  const pagination =
+    nestedRequests?.meta ??
     {
-      label: string;
-      icon: React.ElementType;
-    }
-  > = {
-    DRAFT: {
-      label: "Draft",
-      icon: FileText,
-    },
+      current_page:
+        nestedRequests?.current_page ??
+        result.meta?.pagination?.current_page ??
+        result.meta?.current_page ??
+        result.current_page,
 
-    SUBMITTED: {
-      label: "Pending Decision",
-      icon: Clock3,
-    },
+      last_page:
+        nestedRequests?.last_page ??
+        result.meta?.pagination?.last_page ??
+        result.meta?.last_page ??
+        result.last_page,
 
-    DECIDED: {
-      label: "Decided",
-      icon: CheckCircle2,
-    },
+      per_page:
+        nestedRequests?.per_page ??
+        result.meta?.pagination?.per_page ??
+        result.meta?.per_page ??
+        result.per_page,
 
-    APPLIED: {
-      label: "Applied",
-      icon: CheckCircle2,
-    },
+      total:
+        nestedRequests?.total ??
+        result.meta?.pagination?.total ??
+        result.meta?.total ??
+        result.total,
+    };
 
-    CANCELLED: {
-      label: "Cancelled",
-      icon: XCircle,
-    },
+  return {
+    requests,
+    summary,
+    pagination,
   };
-
-  const current = config[status];
-  const Icon = current.icon;
-
-  return (
-    <Badge variant="outline" className="gap-1.5">
-      <Icon className="h-3.5 w-3.5" />
-      {current.label}
-    </Badge>
-  );
 }
 
-function DecisionBadge({
-  decision,
-}: {
-  decision: PenaltyDiscountDecision;
-}) {
-  if (!decision) {
-    return (
-      <span className="text-sm text-muted-foreground">
-        Pending
-      </span>
-    );
-  }
+/* -------------------------------------------------------------------------- */
+/* Page                                                                       */
+/* -------------------------------------------------------------------------- */
 
-  if (decision === "APPROVED") {
-    return (
-      <Badge variant="outline" className="gap-1.5">
-        <CheckCircle2 className="h-3.5 w-3.5" />
-        Approved
-      </Badge>
-    );
-  }
+export default function PenaltyDiscountRequestsPage() {
+  const locale = useLocale();
+  const { can } = usePermission();
 
-  return (
-    <Badge variant="outline" className="gap-1.5">
-      <XCircle className="h-3.5 w-3.5" />
-      Rejected
-    </Badge>
-  );
-}
-
-function InvoiceStatusBadge({
-  status,
-}: {
-  status: InvoiceStatus;
-}) {
-  const labels: Record<InvoiceStatus, string> = {
-    ISSUED: "Issued",
-    PARTIALLY_PAID: "Partially Paid",
-    PAID: "Paid",
-    OVERDUE: "Overdue",
-  };
-
-  return (
-    <Badge variant="outline">
-      {labels[status]}
-    </Badge>
-  );
-}
-
-/* =========================================================
- * PAGE
- * ======================================================= */
-
-function Page() {
-  const [requests, setRequests] =
-    useState<PenaltyDiscountRequest[]>(MOCK_REQUESTS);
+  /* ------------------------------------------------------------------------ */
+  /* Search and filters                                                       */
+  /* ------------------------------------------------------------------------ */
 
   const [search, setSearch] = useState("");
+  const [appliedSearch, setAppliedSearch] = useState("");
 
-  const [statusFilter, setStatusFilter] = useState<
-    "ALL" | PenaltyDiscountStatus
-  >("ALL");
+  const [draftFilters, setDraftFilters] =
+    useState<PenaltyDiscountRequestFilters>(EMPTY_FILTERS);
 
-  const [selectedRequest, setSelectedRequest] =
-    useState<PenaltyDiscountRequest | null>(null);
+  const [appliedFilters, setAppliedFilters] =
+    useState<PenaltyDiscountRequestFilters>(EMPTY_FILTERS);
 
-  const [detailsDialogOpen, setDetailsDialogOpen] =
-    useState(false);
+  /* ------------------------------------------------------------------------ */
+  /* Pagination                                                               */
+  /* ------------------------------------------------------------------------ */
 
-  const [decisionDialogOpen, setDecisionDialogOpen] =
-    useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
-  const [historyDialogOpen, setHistoryDialogOpen] =
-    useState(false);
+  /* ------------------------------------------------------------------------ */
+  /* Permissions                                                              */
+  /* ------------------------------------------------------------------------ */
 
-  const [decision, setDecision] = useState<
-    "APPROVED" | "REJECTED" | ""
-  >("");
+  const canRead = can(RESOURCE, "read");
+  const canSubmit = can(RESOURCE, "submit");
+  const canDecide = can(RESOURCE, "decide");
+  const canApply = can(RESOURCE, "apply");
+  const canCancel = can(RESOURCE, "cancel");
 
-  const [approvedAmount, setApprovedAmount] =
-    useState("");
+  /* ------------------------------------------------------------------------ */
+  /* Mutations                                                                */
+  /* ------------------------------------------------------------------------ */
 
-  const [decisionReason, setDecisionReason] =
-    useState("");
+  const submitMutation = useSubmitPenaltyDiscountRequest();
+  const applyMutation = useApplyPenaltyDiscountRequest();
+  const cancelMutation = useCancelPenaltyDiscountRequest();
 
-  /* =======================================================
-   * FILTER
-   * ===================================================== */
+  const isActionPending =
+    submitMutation.isPending ||
+    applyMutation.isPending ||
+    cancelMutation.isPending;
 
-  const filteredRequests = useMemo(() => {
-    const normalizedSearch = search
-      .toLowerCase()
-      .trim();
+  /* ------------------------------------------------------------------------ */
+  /* Query                                                                    */
+  /* ------------------------------------------------------------------------ */
 
-    return requests.filter((request) => {
-      const matchesStatus =
-        statusFilter === "ALL" ||
-        request.status === statusFilter;
+  const {
+    data,
+    isLoading,
+    isError,
+    error,
+    refetch,
+    isFetching,
+  } = usePenaltyDiscountRequests({
+    search: appliedSearch || undefined,
+    status: appliedFilters.status || undefined,
+    decision: appliedFilters.decision || undefined,
+    page,
+    per_page: pageSize,
+  });
 
-      const matchesSearch =
-        !normalizedSearch ||
-        request.request_number
-          .toLowerCase()
-          .includes(normalizedSearch) ||
-        request.invoice.invoice_number
-          .toLowerCase()
-          .includes(normalizedSearch) ||
-        request.citizen.name
-          .toLowerCase()
-          .includes(normalizedSearch) ||
-        request.citizen.phone
-          .toLowerCase()
-          .includes(normalizedSearch) ||
-        request.created_by.name
-          .toLowerCase()
-          .includes(normalizedSearch);
+  const normalized = useMemo(
+    () => normalizeListResult(data),
+    [data],
+  );
 
-      return matchesStatus && matchesSearch;
-    });
-  }, [requests, search, statusFilter]);
+  const requests = normalized.requests;
+  const summary = normalized.summary;
+  const pagination = normalized.pagination;
 
-  /* =======================================================
-   * STATISTICS
-   * ===================================================== */
+  const total =
+    pagination.total ??
+    requests.length;
 
-  const statistics = useMemo(() => {
-    const total = requests.length;
+  /* ------------------------------------------------------------------------ */
+  /* Filter helpers                                                           */
+  /* ------------------------------------------------------------------------ */
 
-    const pending = requests.filter(
-      (request) => request.status === "SUBMITTED",
-    ).length;
+  const hasAppliedFilters = Boolean(
+    appliedSearch ||
+      appliedFilters.status ||
+      appliedFilters.decision,
+  );
 
-    const approved = requests.filter(
-      (request) =>
-        request.decision === "APPROVED",
-    ).length;
+  const activeFilterCount =
+    Number(Boolean(appliedFilters.status)) +
+    Number(Boolean(appliedFilters.decision));
 
-    const rejected = requests.filter(
-      (request) =>
-        request.decision === "REJECTED",
-    ).length;
+  const hasPendingChanges =
+    search !== appliedSearch ||
+    draftFilters.status !== appliedFilters.status ||
+    draftFilters.decision !== appliedFilters.decision;
 
-    const applied = requests.filter(
-      (request) => request.status === "APPLIED",
-    ).length;
+  /* ------------------------------------------------------------------------ */
+  /* Routes                                                                   */
+  /* ------------------------------------------------------------------------ */
 
-    const approvedAmount = requests.reduce(
-      (sum, request) =>
-        sum + (request.approved_amount ?? 0),
-      0,
+  const getViewUrl = (id: string) =>
+    `/${locale}/office/dashboard/penalty-discount-requests/${encodeURIComponent(id)}`;
+
+  const getInvoiceUrl = (id: string) =>
+    `/${locale}/office/dashboard/invoices/${encodeURIComponent(id)}`;
+
+  /* ------------------------------------------------------------------------ */
+  /* Filter handlers                                                          */
+  /* ------------------------------------------------------------------------ */
+
+  const applyFilters = () => {
+    setPage(1);
+    setAppliedSearch(search.trim());
+    setAppliedFilters({ ...draftFilters });
+  };
+
+  const clearFilters = () => {
+    setSearch("");
+    setAppliedSearch("");
+    setDraftFilters({ ...EMPTY_FILTERS });
+    setAppliedFilters({ ...EMPTY_FILTERS });
+    setPage(1);
+  };
+
+  /* ------------------------------------------------------------------------ */
+  /* Loading state                                                            */
+  /* ------------------------------------------------------------------------ */
+
+  if (isLoading) {
+    return (
+      <div
+        className="flex min-h-[320px] flex-col items-center justify-center gap-4"
+        role="status"
+        aria-live="polite"
+      >
+        <div className="flex h-12 w-12 items-center justify-center rounded-full border bg-muted/50">
+          <Loader2 className="h-6 w-6 animate-spin text-primary" />
+        </div>
+
+        <div className="space-y-1 text-center">
+          <p className="font-medium">
+            Loading penalty discount requests
+          </p>
+
+          <p className="text-sm text-muted-foreground">
+            Retrieving requests, invoice information, and workflow status.
+          </p>
+        </div>
+      </div>
     );
+  }
 
-    return {
-      total,
-      pending,
-      approved,
-      rejected,
-      applied,
-      approvedAmount,
-    };
-  }, [requests]);
+  /* ------------------------------------------------------------------------ */
+  /* Error state                                                              */
+  /* ------------------------------------------------------------------------ */
 
-  /* =======================================================
-   * ACTIONS
-   * ===================================================== */
+  if (isError) {
+    return (
+      <div className="flex min-h-[320px] flex-col items-center justify-center gap-4 rounded-xl border border-dashed p-6 text-center">
+        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10">
+          <AlertCircle className="h-6 w-6 text-destructive" />
+        </div>
 
-  const openDetails = (
-    request: PenaltyDiscountRequest,
-  ) => {
-    setSelectedRequest(request);
-    setDetailsDialogOpen(true);
-  };
+        <div className="space-y-1">
+          <h2 className="font-semibold">
+            Unable to load penalty discount requests
+          </h2>
 
-  const openDecision = (
-    request: PenaltyDiscountRequest,
-  ) => {
-    setSelectedRequest(request);
-    setDecision("");
-    setApprovedAmount("");
-    setDecisionReason("");
-    setDecisionDialogOpen(true);
-  };
-
-  const openHistory = (
-    request: PenaltyDiscountRequest,
-  ) => {
-    setSelectedRequest(request);
-    setHistoryDialogOpen(true);
-  };
-
-  const handleDecision = () => {
-    if (!selectedRequest || !decision) return;
-
-    if (!decisionReason.trim()) return;
-
-    const now = new Date().toISOString();
-
-    if (decision === "APPROVED") {
-      const amount = Number(approvedAmount);
-
-      if (
-        !amount ||
-        amount <= 0 ||
-        amount > selectedRequest.requested_amount ||
-        amount >
-          selectedRequest.invoice.penalty_amount -
-            selectedRequest.invoice
-              .penalty_discount_amount
-      ) {
-        return;
-      }
-
-      setRequests((current) =>
-        current.map((item) =>
-          item.id === selectedRequest.id
-            ? {
-                ...item,
-
-                /*
-                 * Important:
-                 * Decision and financial application
-                 * are separate events.
-                 */
-                status: "DECIDED",
-
-                decision: "APPROVED",
-
-                approved_amount: amount,
-
-                decision_reason:
-                  decisionReason.trim(),
-
-                decided_at: now,
-
-                applied_to_invoice: false,
-
-                applied_at: null,
-
-                applied_by: null,
-
-                updated_at: now,
-
-                decided_by: {
-                  id: "current-admin",
-                  name: "Current Administrator",
-                },
-              }
-            : item,
-        ),
-      );
-    } else {
-      setRequests((current) =>
-        current.map((item) =>
-          item.id === selectedRequest.id
-            ? {
-                ...item,
-
-                status: "DECIDED",
-
-                decision: "REJECTED",
-
-                approved_amount: null,
-
-                decision_reason:
-                  decisionReason.trim(),
-
-                decided_at: now,
-
-                applied_to_invoice: false,
-
-                applied_at: null,
-
-                applied_by: null,
-
-                updated_at: now,
-
-                decided_by: {
-                  id: "current-admin",
-                  name: "Current Administrator",
-                },
-              }
-            : item,
-        ),
-      );
-    }
-
-    setDecisionDialogOpen(false);
-    setSelectedRequest(null);
-  };
-
-  const handleApplyDiscount = (
-    request: PenaltyDiscountRequest,
-  ) => {
-    if (
-      request.status !== "DECIDED" ||
-      request.decision !== "APPROVED" ||
-      !request.approved_amount
-    ) {
-      return;
-    }
-
-    const now = new Date().toISOString();
-
-    setRequests((current) =>
-      current.map((item) => {
-        if (item.id !== request.id) {
-          return item;
-        }
-
-        const newPenaltyDiscount =
-          item.invoice.penalty_discount_amount +
-          (item.approved_amount ?? 0);
-
-        const newTotal =
-          item.invoice.subtotal +
-          item.invoice.penalty_amount +
-          item.invoice.interest_amount -
-          newPenaltyDiscount;
-
-        const newBalance =
-          newTotal - item.invoice.paid_amount;
-
-        return {
-          ...item,
-
-          status: "APPLIED",
-
-          applied_to_invoice: true,
-
-          applied_at: now,
-
-          applied_by: {
-            id: "current-finance",
-            name: "Current Finance Officer",
-          },
-
-          invoice: {
-            ...item.invoice,
-
-            penalty_discount_amount:
-              newPenaltyDiscount,
-
-            total_amount: newTotal,
-
-            balance_due: newBalance,
-          },
-
-          updated_at: now,
-        };
-      }),
-    );
-  };
-
-  const handleSubmitDraft = (
-    request: PenaltyDiscountRequest,
-  ) => {
-    const now = new Date().toISOString();
-
-    setRequests((current) =>
-      current.map((item) =>
-        item.id === request.id
-          ? {
-              ...item,
-              status: "SUBMITTED",
-              submitted_at: now,
-              updated_at: now,
-            }
-          : item,
-      ),
-    );
-  };
-
-  const handleCancelRequest = (
-    request: PenaltyDiscountRequest,
-  ) => {
-    if (
-      request.status !== "DRAFT" &&
-      request.status !== "SUBMITTED"
-    ) {
-      return;
-    }
-
-    const now = new Date().toISOString();
-
-    setRequests((current) =>
-      current.map((item) =>
-        item.id === request.id
-          ? {
-              ...item,
-              status: "CANCELLED",
-              updated_at: now,
-            }
-          : item,
-      ),
-    );
-  };
-
-  /* =======================================================
-   * UI
-   * ===================================================== */
-
-  return (
-    <div className="flex flex-col gap-6 p-6">
-      {/* ===================================================
-       * HEADER
-       * ================================================= */}
-
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Penalty Discount Requests
-          </h1>
-
-          <p className="mt-1 text-sm text-muted-foreground">
-            Review, decide, and apply taxpayer penalty
-            discount requests.
+          <p className="max-w-md text-sm text-muted-foreground">
+            {getErrorMessage(
+              error,
+              "An unexpected error occurred. Please try again.",
+            )}
           </p>
         </div>
 
-        <Button asChild>
-          <Link href="./penalty-discount-requests/create">
-            <FileText className="mr-2 h-4 w-4" />
-            New Request
-          </Link>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => void refetch()}
+          disabled={isFetching}
+        >
+          {isFetching ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <RefreshCw className="mr-2 h-4 w-4" />
+          )}
+          Try again
         </Button>
       </div>
+    );
+  }
 
-      {/* ===================================================
-       * SUMMARY CARDS
-       * ================================================= */}
+  /* ------------------------------------------------------------------------ */
+  /* Main UI                                                                  */
+  /* ------------------------------------------------------------------------ */
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">
-              Total Requests
-            </CardTitle>
-          </CardHeader>
-
-          <CardContent>
-            <div className="text-2xl font-semibold">
-              {statistics.total}
-            </div>
-
-            <p className="mt-1 text-xs text-muted-foreground">
-              All requests
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">
-              Pending Decision
-            </CardTitle>
-          </CardHeader>
-
-          <CardContent>
-            <div className="text-2xl font-semibold">
-              {statistics.pending}
-            </div>
-
-            <p className="mt-1 text-xs text-muted-foreground">
-              Awaiting review
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">
-              Approved
-            </CardTitle>
-          </CardHeader>
-
-          <CardContent>
-            <div className="text-2xl font-semibold">
-              {statistics.approved}
-            </div>
-
-            <p className="mt-1 text-xs text-muted-foreground">
-              Approved requests
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">
-              Applied
-            </CardTitle>
-          </CardHeader>
-
-          <CardContent>
-            <div className="text-2xl font-semibold">
-              {statistics.applied}
-            </div>
-
-            <p className="mt-1 text-xs text-muted-foreground">
-              Posted to invoices
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">
-              Approved Amount
-            </CardTitle>
-          </CardHeader>
-
-          <CardContent>
-            <div className="text-xl font-semibold">
-              {formatCurrency(
-                statistics.approvedAmount,
-              )}{" "}
-              ETB
-            </div>
-
-            <p className="mt-1 text-xs text-muted-foreground">
-              Total approved discounts
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* ===================================================
-       * MAIN TABLE
-       * ================================================= */}
-
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <CardTitle>
-                Request Register
-              </CardTitle>
-
-              <p className="mt-1 text-sm text-muted-foreground">
-                Search and manage penalty discount
-                requests.
-              </p>
-            </div>
-          </div>
-        </CardHeader>
-
-        <CardContent>
-          {/* Filters */}
-
-          <div className="mb-6 flex flex-col gap-3 lg:flex-row">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-
-              <Input
-                value={search}
-                onChange={(event) =>
-                  setSearch(event.target.value)
-                }
-                placeholder="Search request, invoice, citizen, phone, or creator..."
-                className="pl-9"
-              />
-            </div>
-
-            <Select
-              value={statusFilter}
-              onValueChange={(value) =>
-                setStatusFilter(
-                  value as
-                    | "ALL"
-                    | PenaltyDiscountStatus,
-                )
-              }
+  return (
+    <div className="mx-auto w-full max-w-[1800px] space-y-6">
+      {/* Page header */}
+      <Banner
+        title="Penalty Discount Requests"
+        description="Monitor penalty discount requests, review approval decisions, and track discounts applied to municipal invoices."
+        icon={<Scale className="h-4 w-4" />}
+        background={
+          <FloatingParticles
+            color="#0B3784"
+            count={35}
+            speed={0.2}
+            connectDistance={100}
+            position="bottom-right"
+          />
+        }
+        overlayClassName="bg-transparent"
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Create New Request */}
+            <Can
+              resource={RESOURCE}
+              action="create"
             >
-              <SelectTrigger className="w-full lg:w-[190px]">
-                <SelectValue placeholder="Filter status" />
-              </SelectTrigger>
+              <Button asChild size="sm">
+                <Link
+                  href={`/${locale}/office/dashboard/penalty-discount-requests/create`}
+                >
+                  <FileText className="mr-2 h-4 w-4" />
+                  Create New Request
+                </Link>
+              </Button>
+            </Can>
 
-              <SelectContent>
-                <SelectItem value="ALL">
-                  All Statuses
-                </SelectItem>
+            {/* Refresh */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void refetch()}
+              disabled={isFetching}
+            >
+              <RefreshCw
+                className={`mr-2 h-4 w-4 ${
+                  isFetching ? "animate-spin" : ""
+                }`}
+              />
+              Refresh
+            </Button>
+          </div>
+        }
+      />
 
-                <SelectItem value="DRAFT">
-                  Draft
-                </SelectItem>
 
-                <SelectItem value="SUBMITTED">
-                  Pending Decision
-                </SelectItem>
+      {/* Summary cards */}
+      <section
+        aria-label="Penalty discount request summary"
+        className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5"
+      >
+        <SummaryCard
+          label="Total Requests"
+          value={summary.total_requests}
+          description="All discount requests"
+          icon={FileText}
+          tone="primary"
+          loading={isFetching}
+        />
 
-                <SelectItem value="DECIDED">
-                  Decided
-                </SelectItem>
+        <SummaryCard
+          label="Pending Decision"
+          value={summary.pending_decision}
+          description="Awaiting approval or rejection"
+          icon={Clock}
+          tone="warning"
+          attention={summary.pending_decision > 0}
+          loading={isFetching}
+        />
 
-                <SelectItem value="APPLIED">
-                  Applied
-                </SelectItem>
+        <SummaryCard
+          label="Approved"
+          value={summary.approved_requests}
+          description="Approved requests"
+          icon={CheckCircle2}
+          tone="success"
+          loading={isFetching}
+        />
 
-                <SelectItem value="CANCELLED">
-                  Cancelled
+        <SummaryCard
+          label="Applied"
+          value={summary.applied_requests}
+          description="Discounts applied to invoices"
+          icon={ClipboardCheck}
+          tone="info"
+          loading={isFetching}
+        />
+
+        <SummaryCard
+          label="Approved Amount"
+          value={formatCurrency(summary.approved_amount)}
+          description="Total approved discount amount"
+          icon={CircleDollarSign}
+          tone="primary"
+          loading={isFetching}
+        />
+      </section>
+
+      {/* Search and filters */}
+      <AppFilterBar
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search by invoice, citizen, or reason..."
+        searchLabel="Search penalty discount requests"
+        title="Find discount requests"
+        description="Filter requests by workflow status or decision."
+        activeFilterCount={activeFilterCount}
+        hasFilters={hasAppliedFilters || hasPendingChanges}
+        onApply={applyFilters}
+        onClear={clearFilters}
+      >
+        <div className="space-y-2">
+          <label className="text-sm font-medium">
+            Request status
+          </label>
+
+          <Select
+            value={draftFilters.status || "ALL"}
+            onValueChange={(value) => {
+              setDraftFilters((current) => ({
+                ...current,
+                status:
+                  value === "ALL"
+                    ? ""
+                    : (value as PenaltyDiscountRequestStatus),
+              }));
+            }}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="All statuses" />
+            </SelectTrigger>
+
+            <SelectContent>
+              <SelectItem value="ALL">All statuses</SelectItem>
+
+              {STATUS_OPTIONS.map((status) => (
+                <SelectItem key={status} value={status}>
+                  {formatLabel(status)}
                 </SelectItem>
-              </SelectContent>
-            </Select>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-sm font-medium">
+            Decision
+          </label>
+
+          <Select
+            value={draftFilters.decision || "ALL"}
+            onValueChange={(value) => {
+              setDraftFilters((current) => ({
+                ...current,
+                decision:
+                  value === "ALL"
+                    ? ""
+                    : (value as PenaltyDiscountDecision),
+              }));
+            }}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="All decisions" />
+            </SelectTrigger>
+
+            <SelectContent>
+              <SelectItem value="ALL">All decisions</SelectItem>
+              <SelectItem value="APPROVED">Approved</SelectItem>
+              <SelectItem value="REJECTED">Rejected</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </AppFilterBar>
+
+      {/* Results */}
+      <section
+        aria-label="Penalty discount request records"
+        className="min-w-0 space-y-3"
+      >
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-base font-semibold tracking-tight">
+              Penalty discount register
+            </h2>
+
+            <p className="text-sm text-muted-foreground">
+              {total.toLocaleString()}{" "}
+              {total === 1 ? "request" : "requests"} found
+            </p>
           </div>
 
-          {/* Table */}
+          {isFetching && (
+            <span
+              className="inline-flex items-center gap-2 text-xs text-muted-foreground"
+              role="status"
+            >
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Updating records…
+            </span>
+          )}
+        </div>
 
-          <div className="overflow-x-auto rounded-lg border">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/50">
-                <tr className="border-b">
-                  <th className="whitespace-nowrap px-4 py-3 text-left font-medium">
-                    Request
-                  </th>
+        <AppDataTableLayout
+          isEmpty={requests.length === 0}
+          hasFilters={hasAppliedFilters}
+          onClearFilters={clearFilters}
+          emptyTitle="No penalty discount requests found"
+          emptyDescription="Penalty discount requests will appear here when records are created."
+          filteredEmptyDescription="Try changing your search terms or filters."
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          onPageChange={setPage}
+          onPageSizeChange={(nextPageSize) => {
+            setPageSize(nextPageSize);
+            setPage(1);
+          }}
+        >
+          <div className="w-full overflow-hidden rounded-xl border bg-card">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[1250px] border-collapse text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/40">
+                    <th
+                      scope="col"
+                      className="h-12 w-16 px-4 text-center text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+                    >
+                      No.
+                    </th>
 
-                  <th className="whitespace-nowrap px-4 py-3 text-left font-medium">
-                    Invoice
-                  </th>
+                    <th
+                      scope="col"
+                      className="h-12 px-5 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+                    >
+                      Request / Invoice
+                    </th>
 
-                  <th className="whitespace-nowrap px-4 py-3 text-left font-medium">
-                    Citizen
-                  </th>
 
-                  <th className="whitespace-nowrap px-4 py-3 text-right font-medium">
-                    Penalty
-                  </th>
+                    <th
+                      scope="col"
+                      className="h-12 px-5 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+                    >
+                      Requested
+                    </th>
 
-                  <th className="whitespace-nowrap px-4 py-3 text-right font-medium">
-                    Requested
-                  </th>
+                    <th
+                      scope="col"
+                      className="h-12 px-5 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+                    >
+                      Approved
+                    </th>
 
-                  <th className="whitespace-nowrap px-4 py-3 text-right font-medium">
-                    Approved
-                  </th>
+                    <th
+                      scope="col"
+                      className="h-12 px-5 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+                    >
+                      Submitted
+                    </th>
 
-                  <th className="whitespace-nowrap px-4 py-3 text-left font-medium">
-                    Status
-                  </th>
+                    <th
+                      scope="col"
+                      className="h-12 px-5 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+                    >
+                      Status
+                    </th>
 
-                  <th className="whitespace-nowrap px-4 py-3 text-left font-medium">
-                    Created
-                  </th>
+                    <th
+                      scope="col"
+                      className="h-12 w-20 px-5 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+                    >
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
 
-                  <th className="px-4 py-3 text-right font-medium">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
+                <tbody className="divide-y divide-border">
+                  {requests.map((request, index) => {
+                    const status = request.status;
 
-              <tbody>
-                {filteredRequests.map((request) => (
-                  <tr
-                    key={request.id}
-                    className="border-b last:border-0 hover:bg-muted/20"
-                  >
-                    {/* Request */}
+                    const submittedDate =
+                      request.submitted_at ??
+                      request.created_at;
 
-                    <td className="px-4 py-4">
-                      <div className="font-medium">
-                        {request.request_number}
-                      </div>
+                    const rowNumber =
+                      (page - 1) * pageSize + index + 1;
 
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        {formatDate(
-                          request.created_at,
-                        )}
-                      </div>
-                    </td>
+                    const isDraft = status === "DRAFT";
+                    const isSubmitted = status === "SUBMITTED";
+                    const isApproved = status === "APPROVED";
 
-                    {/* Invoice */}
+                    const canCancelRequest =
+                      canCancel &&
+                      ["DRAFT", "SUBMITTED", "APPROVED"].includes(
+                        status,
+                      ) &&
+                      !request.applied_to_invoice &&
+                      !request.applied_at;
 
-                    <td className="px-4 py-4">
-                      <div className="font-medium">
-                        {
-                          request.invoice
-                            .invoice_number
-                        }
-                      </div>
+                    const canSubmitRequest =
+                      canSubmit && isDraft;
 
-                      <div className="mt-1">
-                        <InvoiceStatusBadge
-                          status={
-                            request.invoice
-                              .status
-                          }
-                        />
-                      </div>
+                    const canReviewRequest =
+                      canDecide && isSubmitted;
 
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        Due{" "}
-                        {formatDate(
-                          request.invoice
-                            .due_date,
-                        )}
-                      </div>
-                    </td>
+                    const canApplyRequest =
+                      canApply &&
+                      isApproved &&
+                      Number(request.approved_amount ?? 0) > 0 &&
+                      !request.applied_to_invoice &&
+                      !request.applied_at;
 
-                    {/* Citizen */}
+                    const hasActions =
+                      canRead ||
+                      canSubmitRequest ||
+                      canReviewRequest ||
+                      canApplyRequest ||
+                      canCancelRequest;
 
-                    <td className="px-4 py-4">
-                      <div className="font-medium">
-                        {request.citizen.name}
-                      </div>
+                    return (
+                      <tr
+                        key={request.id}
+                        className="transition-colors hover:bg-muted/30"
+                      >
+                        {/* Row number */}
+                        <td className="px-4 py-4 text-center align-middle">
+                          <span className="inline-flex h-7 min-w-7 items-center justify-center rounded-md bg-muted px-2 text-xs font-medium tabular-nums text-muted-foreground">
+                            {rowNumber}
+                          </span>
+                        </td>
 
-                      <div className="text-xs text-muted-foreground">
-                        {request.citizen.phone}
-                      </div>
-                    </td>
+                        {/* Request and invoice */}
+                        <td className="px-5 py-4 align-middle">
+                          <div className="flex items-start gap-3">
+                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border bg-background text-muted-foreground">
+                              <FileText className="h-4 w-4" />
+                            </div>
 
-                    {/* Penalty */}
-
-                    <td className="px-4 py-4 text-right">
-                      <div className="font-medium">
-                        {formatCurrency(
-                          request.invoice
-                            .penalty_amount,
-                        )}{" "}
-                        ETB
-                      </div>
-
-                      {request.invoice
-                        .penalty_discount_amount >
-                        0 && (
-                        <div className="mt-1 text-xs text-muted-foreground">
-                          Discounted{" "}
-                          {formatCurrency(
-                            request.invoice
-                              .penalty_discount_amount,
-                          )}{" "}
-                          ETB
-                        </div>
-                      )}
-                    </td>
-
-                    {/* Requested */}
-
-                    <td className="px-4 py-4 text-right font-medium">
-                      {formatCurrency(
-                        request.requested_amount,
-                      )}{" "}
-                      ETB
-                    </td>
-
-                    {/* Approved */}
-
-                    <td className="px-4 py-4 text-right">
-                      {request.approved_amount !==
-                      null ? (
-                        <div className="font-medium">
-                          {formatCurrency(
-                            request.approved_amount,
-                          )}{" "}
-                          ETB
-                        </div>
-                      ) : (
-                        <span className="text-muted-foreground">
-                          —
-                        </span>
-                      )}
-
-                      {request.decision && (
-                        <div className="mt-1">
-                          <DecisionBadge
-                            decision={
-                              request.decision
-                            }
-                          />
-                        </div>
-                      )}
-                    </td>
-
-                    {/* Status */}
-
-                    <td className="px-4 py-4">
-                      <StatusBadge
-                        status={request.status}
-                      />
-
-                      {request.status ===
-                        "APPLIED" && (
-                        <div className="mt-1 text-xs text-muted-foreground">
-                          Applied{" "}
-                          {formatDate(
-                            request.applied_at,
-                          )}
-                        </div>
-                      )}
-                    </td>
-
-                    {/* Created */}
-
-                    <td className="px-4 py-4">
-                      <div>
-                        {formatDate(
-                          request.created_at,
-                        )}
-                      </div>
-
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        {request.created_by.name}
-                      </div>
-                    </td>
-
-                    {/* Actions */}
-
-                    <td className="px-4 py-4 text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger
-                          asChild
-                        >
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            aria-label={`Actions for ${request.request_number}`}
-                          >
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem
-                            onClick={() =>
-                              openDetails(request)
-                            }
-                          >
-                            <Eye className="mr-2 h-4 w-4" />
-                            View Details
-                          </DropdownMenuItem>
-
-                          {request.status ===
-                            "DRAFT" && (
-                            <>
-                              <DropdownMenuSeparator />
-
-                              <DropdownMenuItem
-                                asChild
+                            <div className="min-w-0 space-y-1.5">
+                              <Link
+                                href={getViewUrl(request.id)}
+                                className="font-semibold tracking-tight text-foreground hover:text-primary hover:underline"
                               >
+                                {request.id}
+                              </Link>
+
+                              {request.invoice ? (
                                 <Link
-                                  href={`./penalty-discount-requests/${request.id}/edit`}
+                                  href={getInvoiceUrl(
+                                    request.invoice.id,
+                                  )}
+                                  className="flex max-w-[220px] items-center gap-1.5 text-xs text-primary hover:underline"
+                                  title="View invoice"
                                 >
-                                  Edit Request
+                                  <ClipboardCheck className="h-3.5 w-3.5 shrink-0" />
+
+                                  <span className="truncate">
+                                    {request.invoice.invoice_number ??
+                                      request.invoice.id}
+                                  </span>
+
+                                  <ExternalLink className="h-3 w-3 shrink-0" />
                                 </Link>
-                              </DropdownMenuItem>
+                              ) : (
+                                <p className="text-xs text-muted-foreground">
+                                  Invoice: {request.invoice_id}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </td>
 
-                              <DropdownMenuItem
-                                onClick={() =>
-                                  handleSubmitDraft(
-                                    request,
-                                  )
-                                }
-                              >
-                                Submit Request
-                              </DropdownMenuItem>
+                        {/* Requested amount */}
+                        <td className="whitespace-nowrap px-5 py-4 text-right align-middle">
+                          <span className="font-semibold tabular-nums text-foreground">
+                            {formatCurrency(request.requested_amount)}
+                          </span>
+                        </td>
 
-                              <DropdownMenuItem
-                                onClick={() =>
-                                  handleCancelRequest(
-                                    request,
-                                  )
-                                }
-                              >
-                                Cancel Request
-                              </DropdownMenuItem>
-                            </>
+                        {/* Approved amount */}
+                        <td className="whitespace-nowrap px-5 py-4 text-right align-middle">
+                          {request.approved_amount != null ? (
+                            <span className="font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">
+                              {formatCurrency(request.approved_amount)}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">
+                              —
+                            </span>
                           )}
+                        </td>
 
-                          {request.status ===
-                            "SUBMITTED" && (
-                            <>
-                              <DropdownMenuSeparator />
+                        {/* Submission date */}
+                        <td className="whitespace-nowrap px-5 py-4 align-middle">
+                          <div className="flex items-start gap-2">
+                            <Clock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
 
-                              <DropdownMenuItem
-                                onClick={() =>
-                                  openDecision(
-                                    request,
-                                  )
-                                }
-                              >
-                                <CheckCircle2 className="mr-2 h-4 w-4" />
-                                Make Decision
-                              </DropdownMenuItem>
+                            <div>
+                              <p className="font-medium text-foreground">
+                                {formatDate(submittedDate)}
+                              </p>
 
-                              <DropdownMenuItem
-                                onClick={() =>
-                                  handleCancelRequest(
-                                    request,
-                                  )
-                                }
-                              >
-                                Cancel Request
-                              </DropdownMenuItem>
-                            </>
-                          )}
+                              <p className="mt-0.5 text-xs text-muted-foreground">
+                                {request.submitted_at
+                                  ? "Submitted for review"
+                                  : "Creation date"}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
 
-                          {request.status ===
-                            "DECIDED" &&
-                            request.decision ===
-                              "APPROVED" && (
-                              <>
-                                <DropdownMenuSeparator />
+                        {/* Status */}
+                        <td className="px-5 py-4 align-middle">
+                          <div className="flex flex-col items-start gap-1.5">
+                            <span
+                              className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${
+                                STATUS_STYLES[status]
+                              }`}
+                            >
+                              <span
+                                className={`h-1.5 w-1.5 rounded-full ${
+                                  STATUS_DOT_STYLES[status]
+                                }`}
+                              />
 
-                                <DropdownMenuItem
-                                  onClick={() =>
-                                    handleApplyDiscount(
-                                      request,
-                                    )
-                                  }
-                                >
-                                  <CheckCircle2 className="mr-2 h-4 w-4" />
-                                  Apply Discount
-                                </DropdownMenuItem>
-                              </>
+                              {formatLabel(status)}
+                            </span>
+
+                            {status === "SUBMITTED" && (
+                              <span className="text-xs text-muted-foreground">
+                                Awaiting decision
+                              </span>
                             )}
 
-                          <DropdownMenuSeparator />
+                            {status === "APPROVED" && (
+                              <span className="text-xs text-muted-foreground">
+                                Ready to apply
+                              </span>
+                            )}
 
-                          <DropdownMenuItem
-                            onClick={() =>
-                              openHistory(request)
-                            }
-                          >
-                            <History className="mr-2 h-4 w-4" />
-                            View History
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </td>
-                  </tr>
-                ))}
+                            {status === "APPLIED" && (
+                              <span className="text-xs text-muted-foreground">
+                                Discount applied
+                              </span>
+                            )}
 
-                {filteredRequests.length === 0 && (
-                  <tr>
-                    <td
-                      colSpan={9}
-                      className="px-4 py-16 text-center"
-                    >
-                      <div className="mx-auto flex max-w-sm flex-col items-center">
-                        <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-muted">
-                          <Search className="h-5 w-5 text-muted-foreground" />
-                        </div>
+                            {status === "REJECTED" &&
+                              request.decision_reason && (
+                                <span
+                                  className="max-w-[160px] truncate text-xs text-muted-foreground"
+                                  title={request.decision_reason}
+                                >
+                                  {request.decision_reason}
+                                </span>
+                              )}
+                          </div>
+                        </td>
 
-                        <div className="font-medium">
-                          No requests found
-                        </div>
+                        {/* Actions */}
+                        <td className="px-5 py-4 text-right align-middle">
+                          {hasActions ? (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  size="icon"
+                                  className="h-9 w-9"
+                                  aria-label={`Actions for request ${request.id}`}
+                                  disabled={isActionPending}
+                                >
+                                  {isActionPending ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <MoreHorizontal className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              </DropdownMenuTrigger>
 
-                        <p className="mt-1 text-sm text-muted-foreground">
-                          Try changing your search or
-                          status filter.
-                        </p>
-                      </div>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+                              <DropdownMenuContent
+                                align="end"
+                                className="w-56"
+                              >
+                                {canRead && (
+                                  <Can
+                                    resource={RESOURCE}
+                                    action="read"
+                                  >
+                                    <DropdownMenuItem asChild>
+                                      <Link
+                                        href={getViewUrl(request.id)}
+                                        className="flex w-full cursor-pointer items-center"
+                                      >
+                                        <Eye className="mr-2 h-4 w-4 text-muted-foreground" />
+                                        View request
+                                      </Link>
+                                    </DropdownMenuItem>
+                                  </Can>
+                                )}
+
+                                {canSubmitRequest && (
+                                  <>
+                                    <DropdownMenuSeparator />
+
+                                    <DropdownMenuItem
+                                      disabled={isActionPending}
+                                      onSelect={() =>
+                                        submitMutation.mutate(
+                                          request.id,
+                                        )
+                                      }
+                                    >
+                                      <Send className="mr-2 h-4 w-4 text-muted-foreground" />
+                                      Submit for approval
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
+
+                                {canReviewRequest && (
+                                  <>
+                                    <DropdownMenuSeparator />
+
+                                    <Can
+                                      resource={RESOURCE}
+                                      action="decide"
+                                    >
+                                      <DropdownMenuItem asChild>
+                                        <Link
+                                          href={getViewUrl(request.id)}
+                                          className="flex w-full cursor-pointer items-center"
+                                        >
+                                          <Scale className="mr-2 h-4 w-4 text-muted-foreground" />
+                                          Review decision
+                                        </Link>
+                                      </DropdownMenuItem>
+                                    </Can>
+                                  </>
+                                )}
+
+                                {canApplyRequest && (
+                                  <>
+                                    <DropdownMenuSeparator />
+
+                                    <DropdownMenuItem
+                                      disabled={isActionPending}
+                                      onSelect={() =>
+                                        applyMutation.mutate(
+                                          request.id,
+                                        )
+                                      }
+                                    >
+                                      <CheckCircle2 className="mr-2 h-4 w-4 text-emerald-600" />
+                                      Apply discount
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
+
+                                {canCancelRequest && (
+                                  <>
+                                    <DropdownMenuSeparator />
+
+                                    <DropdownMenuItem
+                                      disabled={isActionPending}
+                                      className="text-destructive focus:text-destructive"
+                                      onSelect={() =>
+                                        cancelMutation.mutate(
+                                          request.id,
+                                        )
+                                      }
+                                    >
+                                      <Ban className="mr-2 h-4 w-4" />
+                                      Cancel request
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">
+                              No available actions
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {isFetching && !isLoading && (
+              <div className="flex items-center justify-center gap-2 border-t bg-muted/20 px-4 py-3 text-xs text-muted-foreground">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Updating penalty discount requests…
+              </div>
+            )}
           </div>
-
-          <div className="mt-4 text-sm text-muted-foreground">
-            Showing {filteredRequests.length} of{" "}
-            {requests.length} requests
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* ===================================================
-       * DETAILS DIALOG
-       * ================================================= */}
-
-      <Dialog
-        open={detailsDialogOpen}
-        onOpenChange={setDetailsDialogOpen}
-      >
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>
-              Penalty Discount Request
-            </DialogTitle>
-
-            <DialogDescription>
-              Complete information about this penalty
-              discount request.
-            </DialogDescription>
-          </DialogHeader>
-
-          {selectedRequest && (
-            <div className="space-y-6">
-              {/* Header */}
-
-              <div className="flex flex-wrap items-center gap-2">
-                <StatusBadge
-                  status={selectedRequest.status}
-                />
-
-                <DecisionBadge
-                  decision={
-                    selectedRequest.decision
-                  }
-                />
-
-                {selectedRequest.applied_to_invoice && (
-                  <Badge variant="outline">
-                    Applied to Invoice
-                  </Badge>
-                )}
-              </div>
-
-              {/* Request / invoice */}
-
-              <div className="rounded-lg border">
-                <div className="border-b px-4 py-3">
-                  <h3 className="font-medium">
-                    Request Information
-                  </h3>
-                </div>
-
-                <div className="grid gap-4 p-4 sm:grid-cols-2">
-                  <div>
-                    <div className="text-xs text-muted-foreground">
-                      Request Number
-                    </div>
-
-                    <div className="mt-1 font-medium">
-                      {
-                        selectedRequest.request_number
-                      }
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="text-xs text-muted-foreground">
-                      Invoice
-                    </div>
-
-                    <div className="mt-1 font-medium">
-                      {
-                        selectedRequest.invoice
-                          .invoice_number
-                      }
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="text-xs text-muted-foreground">
-                      Citizen
-                    </div>
-
-                    <div className="mt-1 font-medium">
-                      {
-                        selectedRequest.citizen
-                          .name
-                      }
-                    </div>
-
-                    <div className="text-xs text-muted-foreground">
-                      {
-                        selectedRequest.citizen
-                          .phone
-                      }
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="text-xs text-muted-foreground">
-                      Invoice Status
-                    </div>
-
-                    <div className="mt-1">
-                      <InvoiceStatusBadge
-                        status={
-                          selectedRequest
-                            .invoice.status
-                        }
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Financial information */}
-
-              <div className="rounded-lg border">
-                <div className="border-b px-4 py-3">
-                  <h3 className="font-medium">
-                    Financial Information
-                  </h3>
-                </div>
-
-                <div className="grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-3">
-                  <div>
-                    <div className="text-xs text-muted-foreground">
-                      Principal
-                    </div>
-
-                    <div className="mt-1 font-medium">
-                      {formatCurrency(
-                        selectedRequest.invoice
-                          .subtotal,
-                      )}{" "}
-                      ETB
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="text-xs text-muted-foreground">
-                      Penalty
-                    </div>
-
-                    <div className="mt-1 font-medium">
-                      {formatCurrency(
-                        selectedRequest.invoice
-                          .penalty_amount,
-                      )}{" "}
-                      ETB
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="text-xs text-muted-foreground">
-                      Existing Discount
-                    </div>
-
-                    <div className="mt-1 font-medium">
-                      {formatCurrency(
-                        selectedRequest.invoice
-                          .penalty_discount_amount,
-                      )}{" "}
-                      ETB
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="text-xs text-muted-foreground">
-                      Interest
-                    </div>
-
-                    <div className="mt-1 font-medium">
-                      {formatCurrency(
-                        selectedRequest.invoice
-                          .interest_amount,
-                      )}{" "}
-                      ETB
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="text-xs text-muted-foreground">
-                      Invoice Total
-                    </div>
-
-                    <div className="mt-1 font-medium">
-                      {formatCurrency(
-                        selectedRequest.invoice
-                          .total_amount,
-                      )}{" "}
-                      ETB
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="text-xs text-muted-foreground">
-                      Balance Due
-                    </div>
-
-                    <div className="mt-1 font-semibold">
-                      {formatCurrency(
-                        selectedRequest.invoice
-                          .balance_due,
-                      )}{" "}
-                      ETB
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Discount information */}
-
-              <div className="rounded-lg border">
-                <div className="border-b px-4 py-3">
-                  <h3 className="font-medium">
-                    Discount Request
-                  </h3>
-                </div>
-
-                <div className="grid gap-4 p-4 sm:grid-cols-2">
-                  <div>
-                    <div className="text-xs text-muted-foreground">
-                      Requested Amount
-                    </div>
-
-                    <div className="mt-1 text-lg font-semibold">
-                      {formatCurrency(
-                        selectedRequest.requested_amount,
-                      )}{" "}
-                      ETB
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="text-xs text-muted-foreground">
-                      Approved Amount
-                    </div>
-
-                    <div className="mt-1 text-lg font-semibold">
-                      {selectedRequest.approved_amount !==
-                      null
-                        ? `${formatCurrency(
-                            selectedRequest.approved_amount,
-                          )} ETB`
-                        : "—"}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Reason */}
-
-              <div className="space-y-2">
-                <div className="text-sm font-medium">
-                  Request Reason
-                </div>
-
-                <div className="rounded-lg border bg-muted/30 p-4 text-sm leading-6">
-                  {selectedRequest.reason}
-                </div>
-              </div>
-
-              {/* Decision */}
-
-              {selectedRequest.decision_reason && (
-                <div className="space-y-2">
-                  <div className="text-sm font-medium">
-                    Decision Reason
-                  </div>
-
-                  <div className="rounded-lg border bg-muted/30 p-4 text-sm leading-6">
-                    {
-                      selectedRequest.decision_reason
-                    }
-                  </div>
-                </div>
-              )}
-
-              {/* Audit */}
-
-              <div className="rounded-lg border">
-                <div className="border-b px-4 py-3">
-                  <h3 className="font-medium">
-                    Processing Information
-                  </h3>
-                </div>
-
-                <div className="grid gap-4 p-4 sm:grid-cols-2">
-                  <div>
-                    <div className="text-xs text-muted-foreground">
-                      Created By
-                    </div>
-
-                    <div className="mt-1 font-medium">
-                      {
-                        selectedRequest.created_by
-                          .name
-                      }
-                    </div>
-
-                    <div className="text-xs text-muted-foreground">
-                      {formatDateTime(
-                        selectedRequest.created_at,
-                      )}
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="text-xs text-muted-foreground">
-                      Submitted
-                    </div>
-
-                    <div className="mt-1 font-medium">
-                      {formatDateTime(
-                        selectedRequest.submitted_at,
-                      )}
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="text-xs text-muted-foreground">
-                      Decided By
-                    </div>
-
-                    <div className="mt-1 font-medium">
-                      {
-                        selectedRequest
-                          .decided_by?.name
-                      }
-                    </div>
-
-                    <div className="text-xs text-muted-foreground">
-                      {formatDateTime(
-                        selectedRequest.decided_at,
-                      )}
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="text-xs text-muted-foreground">
-                      Applied By
-                    </div>
-
-                    <div className="mt-1 font-medium">
-                      {
-                        selectedRequest
-                          .applied_by?.name ?? "—"
-                      }
-                    </div>
-
-                    <div className="text-xs text-muted-foreground">
-                      {formatDateTime(
-                        selectedRequest.applied_at,
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() =>
-                setDetailsDialogOpen(false)
-              }
-            >
-              Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ===================================================
-       * DECISION DIALOG
-       * ================================================= */}
-
-      <Dialog
-        open={decisionDialogOpen}
-        onOpenChange={setDecisionDialogOpen}
-      >
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>
-              Make Decision
-            </DialogTitle>
-
-            <DialogDescription>
-              Review the request and record the
-              administrative decision.
-            </DialogDescription>
-          </DialogHeader>
-
-          {selectedRequest && (
-            <div className="space-y-5">
-              <div className="rounded-lg border bg-muted/30 p-4">
-                <div className="font-medium">
-                  {
-                    selectedRequest.request_number
-                  }
-                </div>
-
-                <div className="mt-1 text-sm text-muted-foreground">
-                  {
-                    selectedRequest.invoice
-                      .invoice_number
-                  }{" "}
-                  · {selectedRequest.citizen.name}
-                </div>
-
-                <div className="mt-4 grid grid-cols-2 gap-4">
-                  <div>
-                    <div className="text-xs text-muted-foreground">
-                      Current Penalty
-                    </div>
-
-                    <div className="mt-1 font-medium">
-                      {formatCurrency(
-                        selectedRequest.invoice
-                          .penalty_amount,
-                      )}{" "}
-                      ETB
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="text-xs text-muted-foreground">
-                      Requested
-                    </div>
-
-                    <div className="mt-1 font-medium">
-                      {formatCurrency(
-                        selectedRequest.requested_amount,
-                      )}{" "}
-                      ETB
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium">
-                  Decision
-                </label>
-
-                <Select
-                  value={decision}
-                  onValueChange={(value) =>
-                    setDecision(
-                      value as
-                        | "APPROVED"
-                        | "REJECTED",
-                    )
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select decision" />
-                  </SelectTrigger>
-
-                  <SelectContent>
-                    <SelectItem value="APPROVED">
-                      Approve
-                    </SelectItem>
-
-                    <SelectItem value="REJECTED">
-                      Reject
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {decision === "APPROVED" && (
-                <div className="space-y-2">
-                  <label
-                    htmlFor="approved-amount"
-                    className="text-sm font-medium"
-                  >
-                    Approved Amount
-                  </label>
-
-                  <div className="relative">
-                    <Input
-                      id="approved-amount"
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={approvedAmount}
-                      onChange={(event) =>
-                        setApprovedAmount(
-                          event.target.value,
-                        )
-                      }
-                      placeholder="0.00"
-                      className="pr-14"
-                    />
-
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-                      ETB
-                    </span>
-                  </div>
-
-                  <p className="text-xs text-muted-foreground">
-                    Maximum requested amount:{" "}
-                    {formatCurrency(
-                      selectedRequest.requested_amount,
-                    )}{" "}
-                    ETB
-                  </p>
-                </div>
-              )}
-
-              <div className="space-y-2">
-                <label
-                  htmlFor="decision-reason"
-                  className="text-sm font-medium"
-                >
-                  Decision Reason
-                </label>
-
-                <textarea
-                  id="decision-reason"
-                  value={decisionReason}
-                  onChange={(event) =>
-                    setDecisionReason(
-                      event.target.value,
-                    )
-                  }
-                  placeholder={
-                    decision === "APPROVED"
-                      ? "Explain the approval decision..."
-                      : "Explain the rejection decision..."
-                  }
-                  className="min-h-[120px] w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
-                />
-              </div>
-            </div>
-          )}
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() =>
-                setDecisionDialogOpen(false)
-              }
-            >
-              Cancel
-            </Button>
-
-            <Button
-              disabled={
-                !decision ||
-                !decisionReason.trim() ||
-                (decision === "APPROVED" &&
-                  (!Number(approvedAmount) ||
-                    Number(approvedAmount) <= 0 ||
-                    Number(approvedAmount) >
-                      (selectedRequest?.requested_amount ??
-                        0)))
-              }
-              onClick={handleDecision}
-            >
-              Save Decision
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ===================================================
-       * HISTORY DIALOG
-       * ================================================= */}
-
-      <Dialog
-        open={historyDialogOpen}
-        onOpenChange={setHistoryDialogOpen}
-      >
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>
-              Request History
-            </DialogTitle>
-
-            <DialogDescription>
-              Timeline of actions performed on this
-              request.
-            </DialogDescription>
-          </DialogHeader>
-
-          {selectedRequest && (
-            <div className="space-y-6">
-              <div>
-                <div className="font-medium">
-                  {
-                    selectedRequest.request_number
-                  }
-                </div>
-
-                <div className="text-sm text-muted-foreground">
-                  {
-                    selectedRequest.invoice
-                      .invoice_number
-                  }{" "}
-                  · {selectedRequest.citizen.name}
-                </div>
-              </div>
-
-              <div className="relative space-y-7 pl-7">
-                <div className="absolute bottom-2 left-[7px] top-2 w-px bg-border" />
-
-                {/* Created */}
-
-                <div className="relative">
-                  <div className="absolute -left-7 top-1 h-3.5 w-3.5 rounded-full border-2 border-background bg-foreground" />
-
-                  <div className="text-sm font-medium">
-                    Request Created
-                  </div>
-
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    {formatDateTime(
-                      selectedRequest.created_at,
-                    )}{" "}
-                    ·{" "}
-                    {
-                      selectedRequest.created_by
-                        .name
-                    }
-                  </div>
-                </div>
-
-                {/* Submitted */}
-
-                {selectedRequest.submitted_at && (
-                  <div className="relative">
-                    <div className="absolute -left-7 top-1 h-3.5 w-3.5 rounded-full border-2 border-background bg-foreground" />
-
-                    <div className="text-sm font-medium">
-                      Request Submitted
-                    </div>
-
-                    <div className="mt-1 text-xs text-muted-foreground">
-                      {formatDateTime(
-                        selectedRequest.submitted_at,
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* Decision */}
-
-                {selectedRequest.decided_at && (
-                  <div className="relative">
-                    <div className="absolute -left-7 top-1 h-3.5 w-3.5 rounded-full border-2 border-background bg-foreground" />
-
-                    <div className="text-sm font-medium">
-                      Decision Recorded
-                    </div>
-
-                    <div className="mt-1 text-xs text-muted-foreground">
-                      {
-                        selectedRequest
-                          .decision
-                      }{" "}
-                      ·{" "}
-                      {formatDateTime(
-                        selectedRequest.decided_at,
-                      )}
-                    </div>
-
-                    {selectedRequest
-                      .approved_amount !==
-                      null && (
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        Approved amount:{" "}
-                        {formatCurrency(
-                          selectedRequest.approved_amount,
-                        )}{" "}
-                        ETB
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Applied */}
-
-                {selectedRequest.applied_at && (
-                  <div className="relative">
-                    <div className="absolute -left-7 top-1 h-3.5 w-3.5 rounded-full border-2 border-background bg-foreground" />
-
-                    <div className="text-sm font-medium">
-                      Discount Applied
-                    </div>
-
-                    <div className="mt-1 text-xs text-muted-foreground">
-                      {formatDateTime(
-                        selectedRequest.applied_at,
-                      )}
-                    </div>
-
-                    {selectedRequest
-                      .applied_by && (
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        By{" "}
-                        {
-                          selectedRequest
-                            .applied_by.name
-                        }
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Cancelled */}
-
-                {selectedRequest.status ===
-                  "CANCELLED" && (
-                  <div className="relative">
-                    <div className="absolute -left-7 top-1 h-3.5 w-3.5 rounded-full border-2 border-background bg-foreground" />
-
-                    <div className="text-sm font-medium">
-                      Request Cancelled
-                    </div>
-
-                    <div className="mt-1 text-xs text-muted-foreground">
-                      {formatDateTime(
-                        selectedRequest.updated_at,
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() =>
-                setHistoryDialogOpen(false)
-              }
-            >
-              Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        </AppDataTableLayout>
+      </section>
     </div>
   );
 }
 
-export default Page;

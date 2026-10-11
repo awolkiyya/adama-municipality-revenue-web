@@ -188,7 +188,7 @@ export const usePayment = (
   enabled = true,
 ) => {
   return useQuery<
-    ApiResponse<PaymentDetail>
+    ApiResponse<Payment>
   >({
     queryKey:
       paymentKeys.detail(id),

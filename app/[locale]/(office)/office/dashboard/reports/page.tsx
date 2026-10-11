@@ -7,11 +7,9 @@ import {
   AlertCircle,
   ArrowRight,
   BarChart3,
-  ClipboardCheck,
   CreditCard,
   FileBarChart,
   Landmark,
-  Receipt,
   Search,
   X,
 } from "lucide-react";
@@ -26,12 +24,9 @@ import { APP_PERMISSIONS } from "@/lib/authorization";
 import { Banner } from "@/components/banner/topBanner";
 import { FloatingParticles } from "@/components/design/FloatingParticles";
 
-// Connect your existing permission hook before production.
-
 type ReportCategory =
   | "revenue"
   | "transactions"
-  | "assessment"
   | "control";
 
 type CategoryFilter = "all" | ReportCategory;
@@ -44,6 +39,28 @@ type ReportItem = {
   category: ReportCategory;
   icon: typeof BarChart3;
 };
+
+/*
+|--------------------------------------------------------------------------
+| MVP Reports
+|--------------------------------------------------------------------------
+|
+| 1. Revenue Collection:
+|    Monitor revenue actually collected.
+|
+| 2. Payment Report:
+|    Monitor payment transactions and their statuses.
+|
+| 3. Outstanding Revenue:
+|    Monitor unpaid, partially paid, and overdue invoices.
+|
+| 4. Cash Reconciliation:
+|    Monitor revenue collectors' daily cash closings and discrepancies.
+|
+| Assessment management and invoice details remain in their operational
+| modules for the MVP.
+|
+*/
 
 const REPORTS: ReportItem[] = [
   {
@@ -63,51 +80,24 @@ const REPORTS: ReportItem[] = [
     category: "transactions",
     icon: CreditCard,
   },
-  {
-    title: "invoice_report",
-    description: "invoice_report_description",
-    url: "/office/dashboard/reports/invoices",
-    permission: APP_PERMISSIONS.REPORTS_INVOICES_VIEW,
-    category: "transactions",
-    icon: Receipt,
-  },
-  {
-    title: "assessment_report",
-    description: "assessment_report_description",
-    url: "/office/dashboard/reports/assessments",
-    permission: APP_PERMISSIONS.REPORTS_ASSESSMENTS_VIEW,
-    category: "assessment",
-    icon: ClipboardCheck,
-  },
-  {
-    title: "outstanding_revenue",
-    description: "outstanding_revenue_description",
-    url: "/office/dashboard/reports/outstanding-revenue",
-    permission:
-      APP_PERMISSIONS.REPORTS_OUTSTANDING_REVENUE_VIEW,
-    category: "revenue",
-    icon: AlertCircle,
-  },
-  {
-    title: "cash_reconciliation",
-    description: "cash_reconciliation_description",
-    url: "/office/dashboard/reports/cash-reconciliation",
-    permission:
-      APP_PERMISSIONS.REPORTS_CASH_RECONCILIATION_VIEW,
-    category: "control",
-    icon: Landmark,
-  },
 ];
 
 const CATEGORIES: {
   value: CategoryFilter;
   label: string;
 }[] = [
-  { value: "all", label: "all_reports" },
-  { value: "revenue", label: "revenue" },
-  { value: "transactions", label: "transactions" },
-  { value: "assessment", label: "assessment" },
-  { value: "control", label: "financial_control" },
+  {
+    value: "all",
+    label: "all_reports",
+  },
+  {
+    value: "revenue",
+    label: "revenue",
+  },
+  {
+    value: "transactions",
+    label: "transactions",
+  },
 ];
 
 function ReportsPage() {
@@ -119,9 +109,16 @@ function ReportsPage() {
     useState<CategoryFilter>("all");
 
   /*
-   * Replace this with your existing permission utility.
-   * The current implementation is for UI preview only.
-   */
+  |--------------------------------------------------------------------------
+  | Permission Integration
+  |--------------------------------------------------------------------------
+  |
+  | Replace this preview implementation with your existing permission hook.
+  | Hiding a report in the frontend is not authorization; Laravel must
+  | independently enforce report permissions on the API endpoints.
+  |
+  */
+
   const hasPermission = (_permission: string): boolean => true;
 
   const permittedReports = useMemo(
@@ -129,19 +126,26 @@ function ReportsPage() {
       REPORTS.filter((report) =>
         hasPermission(report.permission),
       ),
-    [],
+    // Re-evaluate when the real permission source changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [hasPermission],
   );
 
   const filteredReports = useMemo(() => {
-    const query = search.trim().toLocaleLowerCase(locale);
+    const query = search
+      .trim()
+      .toLocaleLowerCase(locale);
 
     return permittedReports.filter((report) => {
       const matchesCategory =
         category === "all" ||
         report.category === category;
 
-      const title = t(report.title).toLocaleLowerCase(locale);
-      const description = t(report.description).toLocaleLowerCase(locale);
+      const title = t(report.title)
+        .toLocaleLowerCase(locale);
+
+      const description = t(report.description)
+        .toLocaleLowerCase(locale);
 
       const matchesSearch =
         !query ||
@@ -150,7 +154,13 @@ function ReportsPage() {
 
       return matchesCategory && matchesSearch;
     });
-  }, [permittedReports, category, search, t, locale]);
+  }, [
+    permittedReports,
+    category,
+    search,
+    t,
+    locale,
+  ]);
 
   const clearFilters = () => {
     setSearch("");
@@ -159,7 +169,7 @@ function ReportsPage() {
 
   return (
     <main className="mx-auto flex w-full min-w-0 max-w-[1600px] flex-col gap-6 p-4 sm:p-6 lg:p-8">
-      {/* Page banner */}
+      {/* Page Banner */}
       <Banner
         title={t("title")}
         description={t("description")}
@@ -176,12 +186,12 @@ function ReportsPage() {
         overlayClassName="bg-transparent"
       />
 
-      {/* Search and category filters */}
+      {/* Search and Category Filters */}
       <section
         aria-label={t("report_directory")}
         className="flex flex-col gap-3"
       >
-        <div className="relative w-full ">
+        <div className="relative w-full">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
 
           <Input
@@ -191,7 +201,7 @@ function ReportsPage() {
             }
             placeholder={t("search_reports")}
             aria-label={t("search_reports")}
-            className="h-10 bg-background pl-9 pr-9 w-full"
+            className="h-10 w-full bg-background pl-9 pr-9"
           />
 
           {search && (
@@ -240,7 +250,7 @@ function ReportsPage() {
         </div>
       </section>
 
-      {/* Report directory heading */}
+      {/* Report Directory Heading */}
       <div className="flex items-center justify-between border-b pb-3">
         <h2 className="text-sm font-semibold tracking-tight">
           {t("report_directory")}
@@ -251,7 +261,7 @@ function ReportsPage() {
         </span>
       </div>
 
-      {/* Report cards */}
+      {/* Report Cards */}
       {filteredReports.length > 0 ? (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
           {filteredReports.map((report) => {
@@ -319,4 +329,3 @@ function ReportsPage() {
 }
 
 export default ReportsPage;
-

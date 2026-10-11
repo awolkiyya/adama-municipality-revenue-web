@@ -16,6 +16,7 @@ import {
   CreditCard,
   CalendarClock,
   Smartphone,
+  ClipboardCheck,
 } from "lucide-react";
 
 import { NavItem } from "@/types/commen";
@@ -317,6 +318,13 @@ export const NAV_ITEMS: NavItem[] = [
       title: "revenue_complaints",
       url: "/office/dashboard/revenue-complaints",
       permission: APP_PERMISSIONS.REVENUE_COMPLAINTS_VIEW,
+    },
+
+    {
+      title: "cash_reconciliation",
+      url: "/office/dashboard/cash-reconciliations",
+      icon: ClipboardCheck,
+      permission: APP_PERMISSIONS.CASH_RECONCILIATIONS_VIEW,
     },
   ],
 },

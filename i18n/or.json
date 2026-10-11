@@ -113,69 +113,110 @@
 
   "navigation": {
     "dashboard": "Gabatee Hojii",
-  
+    
+    "roles": "Gahee Hojii",
     "user_access": "Bulchiinsa Fayyadamtootaa fi Hayyamaa",
     "users": "Fayyadamtoota",
     "taxpayers": "Kaffaltoota Gibiraa",
-    "access_managements": "Bulchiinsa Mirga Seeni",
-  
+    "access_managements": "Bulchiinsa Mirga Seensaa",
+    
     "administrative_structure": "Caasaa Bulchiinsaa",
     "administrative_units": "Kutaa Bulchiinsaa",
     "sectors": "Dameewwan",
-  
+    
+    "workflow_configuration": "Qindaa'ina Adeemsa Hojii",
+    "service_sector_access": "Hayyama Tajaajilaa fi Damee",
+    
+    "system_settings": "Qindaa'ina Sirnaa",
+    "audit_logs": "Galmee Hordoffii",
+    
+    "revenue_configuration": "Qindaa'ina Galii",
+    "revenue_categories": "Ramaddii Galii",
+    "revenue_codes": "Koodii Galii",
+    "revenue_services": "Tajaajiloota Galii",
+    "interest_rates": "Sadarkaa Dhala Galii",
+    "penalty_rules": "Seerota Adabbii",
+    "payment_schedule_rules": "Seerota Sagantaa Kaffaltii",
+    "bank_accounts": "Herrega Baankii",
+    "payment_providers": "Tajaajiloota Kaffaltii",
+    
     "calculation_setup": "Qindaa'ina Shallaggii",
     "measurement_units": "Safartuuwwan Madaallii",
     "base_fields": "Dirreewwan Bu'uuraa",
     "formula_variables": "Jijjiiramoota Foormulaa",
-  
-    "workflow_configuration": "Qindaa'ina Adeemsa Hojii",
-    "service_sector_access": "Hayyama Tajaajila fi Damee",
-  
-    "system_settings": "Qindaa'ina Sirnaa",
-    "audit_logs": "Galmee Hordoffii",
-  
-    "revenue_configuration": "Qindaa'ina Galii",
-    "revenue_categories": "Ramaddii Galii",
-    "revenue_codes": "Koodii Galii",
-    "revenue_services": "Tajaajila Galii",
-    "interest_rates": "Sadarkaa Dhala Galii",
-    "penalty_rules": "Seerota Adabbii",
-  
-    "tariff_management": "Bulchiinsa Tariffii",
-    "tariff_versions": "Gosa Tariffii",
-    "tariff_rules": "Seera Tariffii",
-  
+    
+    "tariff_management": "Bulchiinsa Taariifaa",
+    "tariff_versions": "Gosa Taariifaa",
+    "tariff_rules": "Seerota Taariifaa",
+    
     "data_validation": "Mirkaneessa Odeeffannoo",
     "data_reports": "Gabaasa Odeeffannoo",
-  
+    
     "executive_dashboard": "Gabatee Hoggansaa",
     "revenue_overview": "Ilaalcha Galii",
     "performance_reports": "Gabaasa Raawwii",
-  
     "sector_dashboard": "Gabatee Damee",
+    
+    "revenue_operations": "Hojiiwwan Galii",
+    "revenue_data": "Odeeffannoo Galii",
     "revenue_data_entry": "Galmee Odeeffannoo Galii",
-    "sector_reports": "Gabaasa Damee",
-  
+    "assessments": "Madaallii Galii",
+    "lease_amendments": "Fooyya'iinsa Waliigaltee Kiraa Lafaa",
+    "invoices": "Invooyisii Kaffaltii",
+    "payments": "Kaffaltii",
+    "field_collection": "Sassaabbii Galii Dirree",
+    "cash_reconciliation": "Walbira Qabuu Maallaqa Kasaaraa",
+    "penalties": "Adabbiiwwan",
+    "penalty_discount_requests": "Gaaffii Hir'ina Adabbii",
+    "revenue_adjustments": "Sirreeffama Galii",
+    "revenue_complaints": "Komiiwwan Galii",
+    
+    "workflow": "Adeemsa Hojii",
+    "drafts": "Qabooftota",
+    "pending_approval": "Raggaasisa Eegaa Jiru",
+    "submitted": "Kan Dhiyaate",
+    "returned": "Kan Deebi'e",
+    
     "decision_dashboard": "Gabatee Murtii",
-    "pending_approvals": "Eegaa Raggaasisaa",
+    "assessment_decisions": "Murtiiwwan Madaallii",
+    "pending_assessments": "Madaalliiwwan Murtii Eegaa Jiran",
+    "pending_approvals": "Raggaasisa Eegaa Jiran",
     "decision_history": "Seenaa Murtii",
-  
+    
     "collections": "Sassaabbii",
     "pending_collections": "Sassaabbii Eegaa Jiru",
     "completed_collections": "Sassaabbii Xumurame",
-  
-    "payments": "Kaffaltii",
-    "create_payment": "Galmeessi Kaffaltii",
+    
+    "create_payment": "Kaffaltii Galmeessi",
     "payment_history": "Seenaa Kaffaltii",
-  
-    "reports": "Gabaasa",
     "receipts": "Ragaa Kaffaltii",
     "collection_reports": "Gabaasa Sassaabbii",
-  
+    
+    "reports": "Gabaasa",
+    "revenue_collection_report": "Gabaasa Sassaabbii Galii",
+    "payment_report": "Gabaasa Kaffaltii",
+    "invoice_report": "Gabaasa Invooyisii",
+    "assessment_report": "Gabaasa Madaallii",
+    "outstanding_revenue": "Galii Kaffalamuu Hafe",
+    "sector_reports": "Gabaasa Damee",
+    
     "registration_dashboard": "Gabatee Galmee",
-    "taxpayer_registration": "Galmee Kaffaltootaa",
-    "registration_reports": "Gabaasa Galmee"
-  }
+    "taxpayer_registration": "Galmee Kaffaltoota Gibiraa",
+    "registration_reports": "Gabaasa Galmee",
+    
+    "paymentSchedules": "Sagantaalee Kaffaltii",
+    "notifications": "Beeksisoota",
+    "profile": "Piroofaayilii",
+    
+    "taxpayerPortal": "Poortaala Kaffaltoota Gibiraa",
+    "taxpayer_services": "Tajaajiloota Kaffaltoota Gibiraa",
+    "payment_operations": "Hojiiwwan Kaffaltii",
+    
+    "mobile_app_management": "Bulchiinsa Appii Moobaayilaa",
+    "mobile_app_releases": "Maxxansa Haaraa Appii Moobaayilaa",
+    "mobile_app_update_settings": "Qindaa'ina Haaromsa Appii Moobaayilaa"
+    }
+    
   
   
   

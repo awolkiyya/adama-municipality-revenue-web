@@ -1,22 +1,28 @@
-
 import { api } from "@/lib/api";
+
 import type {
   CashReconciliation,
   CashReconciliationFilters,
   CashReconciliationListResponse,
-  CashReconciliationSingleResponse,
   CreateCashReconciliationPayload,
   UpdateCashReconciliationPayload,
   SubmitCashReconciliationPayload,
   ReviewCashReconciliationPayload,
+  CashReconciliationSingleResponse,
 } from "@/types/cash-reconciliation";
 
 const BASE_URL = "/cash-reconciliations";
 
+// ============================================================
+// QUERY STRING
+// ============================================================
+
 function buildQueryString(
   filters?: CashReconciliationFilters,
 ): string {
-  if (!filters) return "";
+  if (!filters) {
+    return "";
+  }
 
   const params = new URLSearchParams();
 
@@ -35,21 +41,33 @@ function buildQueryString(
   return query ? `?${query}` : "";
 }
 
+// ============================================================
+// SERVICE
+// ============================================================
+
 export const cashReconciliationService = {
   /**
+   * List cash reconciliations.
+   *
    * GET /cash-reconciliations
+   *
+   * Supports pagination, status filtering, collector filtering,
+   * period filtering, and sorting.
    */
   async getAll(
     filters?: CashReconciliationFilters,
   ): Promise<CashReconciliationListResponse> {
-    const response = await api.get<CashReconciliationListResponse>(
-      `${BASE_URL}${buildQueryString(filters)}`,
-    );
+    const response =
+      await api.get<CashReconciliationListResponse>(
+        `${BASE_URL}${buildQueryString(filters)}`,
+      );
 
     return response.data;
   },
 
   /**
+   * Retrieve one reconciliation.
+   *
    * GET /cash-reconciliations/{id}
    */
   async getById(
@@ -64,7 +82,12 @@ export const cashReconciliationService = {
   },
 
   /**
+   * Create a draft reconciliation.
+   *
    * POST /cash-reconciliations
+   *
+   * The backend assigns the collector from the authenticated
+   * user and initializes the financial totals.
    */
   async create(
     payload: CreateCashReconciliationPayload,
@@ -79,6 +102,8 @@ export const cashReconciliationService = {
   },
 
   /**
+   * Update an editable draft or returned reconciliation.
+   *
    * PUT /cash-reconciliations/{id}
    */
   async update(
@@ -95,7 +120,11 @@ export const cashReconciliationService = {
   },
 
   /**
+   * Submit the physical cash count for finance review.
+   *
    * POST /cash-reconciliations/{id}/submit
+   *
+   * The backend calculates expected cash and the difference.
    */
   async submit(
     id: number,
@@ -111,7 +140,14 @@ export const cashReconciliationService = {
   },
 
   /**
+   * Review a submitted reconciliation.
+   *
    * POST /cash-reconciliations/{id}/review
+   *
+   * Decisions:
+   * - RECONCILED
+   * - DISCREPANCY
+   * - RETURNED
    */
   async review(
     id: number,
@@ -127,6 +163,8 @@ export const cashReconciliationService = {
   },
 
   /**
+   * Cancel an eligible draft or returned reconciliation.
+   *
    * POST /cash-reconciliations/{id}/cancel
    */
   async cancel(

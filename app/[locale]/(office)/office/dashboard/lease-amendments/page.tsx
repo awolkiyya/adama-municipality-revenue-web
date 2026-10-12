@@ -548,7 +548,7 @@ export default function LeaseAmendmentsPage() {
             setPage(1);
           }}
         >
-          <div className="w-full overflow-hidden rounded-xl border bg-card">
+          <div className="w-full overflow-hidden rounded-none border bg-card">
             <div className="overflow-x-auto">
               <table className="w-full min-w-[1100px] border-collapse text-sm">
                 <thead>

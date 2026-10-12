@@ -19,14 +19,19 @@ export type InvoiceSourceType =
 
 export type PaymentStatus =
   | "PENDING"
-  | "SUCCESS"
+  | "PROCESSING"
+  | "COMPLETED"
   | "FAILED"
   | "CANCELLED"
+  | "EXPIRED"
+  | "PENDING_VERIFICATION"
+  | "VERIFIED"
+  | "POSTED"
+  | "REJECTED"
+  | "SUCCESS"
   | "REFUNDED";
 
-export type MoneyValue =
-  | number
-  | string;
+export type MoneyValue = number | string;
 
 export interface InvoiceUser {
   id: string;
@@ -44,7 +49,7 @@ export interface Citizen {
 export interface AdministrativeUnit {
   id: string;
   name: string;
-  code: string;
+  code: string | null;
 }
 
 export interface Assessment {
@@ -56,7 +61,7 @@ export interface Assessment {
 export interface RevenueService {
   id: string;
   name: string;
-  code: string;
+  code: string | null;
 }
 
 export interface AssessmentService {
@@ -79,7 +84,7 @@ export interface InvoiceItem {
 
   assessment_service_id: string | null;
   payment_schedule_id: string | null;
-  service_id: string;
+  service_id: string | null;
 
   description: string;
 
@@ -117,16 +122,31 @@ export interface PaymentFile {
   uploaded_at: string | null;
 }
 
+export interface PaymentReceipt {
+  id: string;
+}
+
+export interface CashPaymentDetails {
+  id: string;
+}
+
+export interface BankTransferDetails {
+  id: string;
+}
+
+export interface OnlinePaymentDetails {
+  id: string;
+}
+
 export interface Payment {
   id: string;
-
   payment_number: string;
 
   amount: MoneyValue;
   currency: string;
 
   payment_method: string;
-  payment_provider: string;
+  payment_provider: string | null;
 
   status: PaymentStatus;
 
@@ -134,6 +154,7 @@ export interface Payment {
   provider_reference: string | null;
 
   payment_date: string | null;
+  created_at: string | null;
   verified_at: string | null;
 
   received_by: InvoiceUser | null;
@@ -142,7 +163,11 @@ export interface Payment {
   failure_reason: string | null;
 
   evidence: PaymentFile[];
-  receipts: PaymentFile[];
+  receipt: PaymentReceipt | null;
+
+  cash_details: CashPaymentDetails | null;
+  bank_transfer_details: BankTransferDetails | null;
+  online_details: OnlinePaymentDetails | null;
 }
 
 export interface InvoiceFinancial {
@@ -190,35 +215,25 @@ export interface InvoiceVoid {
 
 export interface InvoiceDetail {
   id: string;
-
   invoice_number: string;
 
   source_type: InvoiceSourceType;
-
   status: InvoiceStatus;
-
   currency: string;
 
   citizen: Citizen | null;
-
   administrative_unit: AdministrativeUnit | null;
-
   assessment: Assessment | null;
 
   financial: InvoiceFinancial;
-
   dates: InvoiceDates;
 
   items: InvoiceItem[];
-
   payments: Payment[];
 
   source: InvoiceSource;
-
   audit: InvoiceAudit;
-
   cancellation: InvoiceCancellation;
-
   void: InvoiceVoid;
 
   notes: string | null;

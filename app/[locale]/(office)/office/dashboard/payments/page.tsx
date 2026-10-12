@@ -1,8 +1,7 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-
 import {
   Building2,
   CheckCircle2,
@@ -12,16 +11,29 @@ import {
   Eye,
   Loader2,
   MoreHorizontal,
-  Plus,
   Printer,
   Search,
+  ShieldCheck,
   SlidersHorizontal,
   Smartphone,
   Wallet,
   X,
   XCircle,
 } from "lucide-react";
+import { toast } from "sonner";
 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,7 +41,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-
 import {
   Dialog,
   DialogContent,
@@ -38,39 +49,25 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-
 import { Textarea } from "@/components/ui/textarea";
-
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
 
 import type {
   Payment,
   PaymentFilters,
 } from "@/types/payment";
-
 import {
-  usePayments,
   useCompleteCashPayment,
+  usePayments,
   useRejectBankTransfer,
   useVerifyBankTransfer,
 } from "@/hooks/payment/payment.hook";
+import { EthiopianDatePicker } from "@/components/input/EthiopianDatePicker";
 
-// =====================================================
+// =========================================================
 // CONSTANTS
-// =====================================================
+// =========================================================
 
 const DEFAULT_PER_PAGE = 10;
-
-// =====================================================
-// PAYMENT METHOD LABELS
-// =====================================================
 
 const METHOD_LABELS: Record<string, string> = {
   CASH: "Cash",
@@ -78,19 +75,11 @@ const METHOD_LABELS: Record<string, string> = {
   ONLINE: "Online Payment",
 };
 
-// =====================================================
-// PAYMENT SOURCE LABELS
-// =====================================================
-
 const SOURCE_LABELS: Record<string, string> = {
   OFFICE_RECORDED: "Office",
   BANK_TRANSFER: "Bank Transfer",
   ONLINE: "Online",
 };
-
-// =====================================================
-// PAYMENT STATUS LABELS
-// =====================================================
 
 const STATUS_LABELS: Record<string, string> = {
   PENDING: "Pending",
@@ -102,451 +91,350 @@ const STATUS_LABELS: Record<string, string> = {
   REVERSED: "Reversed",
 };
 
-// =====================================================
-// PAYMENT STATUS STYLES
-// =====================================================
-
 const STATUS_STYLES: Record<string, string> = {
   PENDING:
-    "bg-yellow-50 text-yellow-700 ring-yellow-600/20",
-
+    "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300",
   PROCESSING:
-    "bg-blue-50 text-blue-700 ring-blue-600/20",
-
+    "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-300",
   COMPLETED:
-    "bg-green-50 text-green-700 ring-green-600/20",
-
+    "border-green-200 bg-green-50 text-green-700 dark:border-green-900 dark:bg-green-950 dark:text-green-300",
   FAILED:
-    "bg-red-50 text-red-700 ring-red-600/20",
-
+    "border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300",
   CANCELLED:
-    "bg-gray-50 text-gray-600 ring-gray-500/20",
-
+    "border-gray-200 bg-gray-50 text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300",
   EXPIRED:
-    "bg-gray-50 text-gray-600 ring-gray-500/20",
-
+    "border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-900 dark:bg-orange-950 dark:text-orange-300",
   REVERSED:
-    "bg-orange-50 text-orange-700 ring-orange-600/20",
+    "border-purple-200 bg-purple-50 text-purple-700 dark:border-purple-900 dark:bg-purple-950 dark:text-purple-300",
 };
 
-// =====================================================
-// HELPERS
-// =====================================================
+// =========================================================
+// TYPES
+// =========================================================
 
-function getPaymentIcon(
-  method: Payment["payment_method"],
-) {
+type ActiveFilterChip = {
+  label: string;
+  clear: () => void;
+};
+
+// =========================================================
+// DATE HELPERS
+// =========================================================
+
+function toApiDate(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function fromApiDate(value: string): Date | undefined {
+  if (!value) return undefined;
+
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+
+  if (!match) return undefined;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+
+  const date = new Date(year, month - 1, day);
+
+  if (
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  ) {
+    return undefined;
+  }
+
+  return date;
+}
+
+// =========================================================
+// PAYMENT HELPERS
+// =========================================================
+
+function getPaymentIcon(method?: string) {
   switch (method) {
     case "CASH":
-      return (
-        <Wallet className="h-4 w-4 text-muted-foreground" />
-      );
-
+      return Wallet;
     case "BANK_TRANSFER":
-      return (
-        <Building2 className="h-4 w-4 text-muted-foreground" />
-      );
-
+      return Building2;
     case "ONLINE":
-      return (
-        <Smartphone className="h-4 w-4 text-muted-foreground" />
-      );
-
+      return Smartphone;
     default:
-      return (
-        <CreditCard className="h-4 w-4 text-muted-foreground" />
-      );
+      return CreditCard;
   }
 }
 
-// =====================================================
-// DATE FORMATTER
-// =====================================================
-
-function formatDate(
-  value?: string | null,
-): string {
-  if (!value) {
-    return "—";
-  }
+function formatDate(value?: string | null): string {
+  if (!value) return "—";
 
   const date = new Date(value);
 
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
+  if (Number.isNaN(date.getTime())) return "—";
 
-  return new Intl.DateTimeFormat("en-US", {
-    year: "numeric",
+  return date.toLocaleDateString("en-US", {
     month: "short",
-    day: "2-digit",
-  }).format(date);
+    day: "numeric",
+    year: "numeric",
+  });
 }
-
-// =====================================================
-// AMOUNT FORMATTER
-// =====================================================
 
 function formatAmount(
-  amount: number | string,
-  currency: string,
+  amount?: number | string | null,
+  currency = "ETB",
 ): string {
-  const numericAmount = Number(amount || 0);
+  const numericAmount = Number(amount ?? 0);
 
-  return (
-    new Intl.NumberFormat("en-US", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(numericAmount) +
-    ` ${currency}`
-  );
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(Number.isFinite(numericAmount) ? numericAmount : 0);
 }
 
-// =====================================================
-// PAYMENT DATE
-// =====================================================
-//
-// Uses the most meaningful date for each payment method.
-//
-// CASH
-//   cash_received_at
-//
-// BANK_TRANSFER
-//   transfer_date
-//
-// ONLINE
-//   paid_at
-//
-// fallback
-//   created_at
-//
-// =====================================================
-
-function getPaymentDate(
-  payment: Payment,
-): string | null {
-  if (payment.payment_method === "CASH") {
-    return (
-      payment.cash_details?.cash_received_at ??
-      payment.created_at
-    );
-  }
-
-  if (
-    payment.payment_method ===
-    "BANK_TRANSFER"
-  ) {
-    return (
-      payment.bank_transfer_details
-        ?.transfer_date ??
-      payment.created_at
-    );
-  }
-
-  if (payment.payment_method === "ONLINE") {
-    return (
-      payment.online_details?.paid_at ??
-      payment.created_at
-    );
-  }
-
-  return payment.created_at;
-}
-
-// =====================================================
-// METHOD DESCRIPTION
-// =====================================================
-//
-// Provider/bank-specific information is no longer stored
-// directly on Payment.
-//
-// Keep this helper based only on fields guaranteed by the
-// current frontend Payment type.
-//
-// =====================================================
-
-function getMethodDescription(
-  payment: Payment,
-): string {
+function getPaymentDate(payment: Payment): string | null {
   switch (payment.payment_method) {
     case "CASH":
       return (
-        payment.cash_details
-          ?.cashier_session_id
-          ? `Cashier session ${payment.cash_details.cashier_session_id}`
-          : "Municipal cash collection"
+        payment.cash_details?.cash_received_at ??
+        payment.created_at ??
+        null
       );
 
     case "BANK_TRANSFER":
       return (
-        payment.bank_transfer_details
-          ?.transfer_reference
-          ? `Transfer ${payment.bank_transfer_details.transfer_reference}`
-          : "Bank transfer"
+        payment.bank_transfer_details?.transfer_date ??
+        payment.created_at ??
+        null
       );
 
     case "ONLINE":
       return (
-        payment.online_details
-          ?.checkout_reference
-          ? `Checkout ${payment.online_details.checkout_reference}`
-          : "Online payment"
+        payment.online_details?.paid_at ??
+        payment.created_at ??
+        null
       );
 
     default:
-      return payment.payment_method;
+      return payment.created_at ?? null;
   }
 }
 
-// =====================================================
-// PAYMENT SOURCE LABEL
-// =====================================================
+function getMethodDescription(payment: Payment): string {
+  switch (payment.payment_method) {
+    case "CASH":
+      return payment.cash_details?.cashier_session_id
+        ? `Session: ${payment.cash_details.cashier_session_id}`
+        : "Cash payment";
 
-function getPaymentSourceLabel(
-  source:
-    | Payment["payment_source"]
-    | string
-    | null
-    | undefined,
-): string {
-  if (!source) {
-    return "—";
+    case "BANK_TRANSFER":
+      return (
+        payment.bank_transfer_details?.transfer_reference ??
+        "Bank transfer"
+      );
+
+    case "ONLINE":
+      return (
+        payment.online_details?.checkout_reference ??
+        "Online payment"
+      );
+
+    default:
+      return "Payment";
   }
-
-  return (
-    SOURCE_LABELS[source] ??
-    source
-  );
 }
 
-// =====================================================
+function getPaymentSourceLabel(source?: string | null): string {
+  if (!source) return "—";
+
+  return SOURCE_LABELS[source] ?? source.replaceAll("_", " ");
+}
+
+function getPaymentStatusLabel(status?: string | null): string {
+  if (!status) return "Unknown";
+
+  return STATUS_LABELS[status] ?? status.replaceAll("_", " ");
+}
+
+function getPaymentMethodLabel(method?: string | null): string {
+  if (!method) return "Unknown";
+
+  return METHOD_LABELS[method] ?? method.replaceAll("_", " ");
+}
+
+// =========================================================
 // FILTER GROUP
-// =====================================================
+// =========================================================
 
 function FilterGroup({
   title,
-  options,
   value,
+  options,
   onChange,
 }: {
   title: string;
-  options: Record<string, string>;
   value: string;
+  options: {
+    label: string;
+    value: string;
+  }[];
   onChange: (value: string) => void;
 }) {
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-medium">
-          {title}
-        </h3>
-
-        {value && (
-          <button
-            type="button"
-            onClick={() => onChange("")}
-            className="text-xs text-muted-foreground hover:text-foreground hover:underline"
-          >
-            Reset
-          </button>
-        )}
-      </div>
+    <div className="space-y-2">
+      <h3 className="text-sm font-medium">{title}</h3>
 
       <div className="flex flex-wrap gap-2">
-        {Object.entries(options).map(
-          ([key, label]) => {
-            const selected =
-              value === key;
+        {options.map((option) => {
+          const selected = value === option.value;
 
-            return (
-              <button
-                key={key}
-                type="button"
-                aria-pressed={selected}
-                onClick={() =>
-                  onChange(
-                    selected ? "" : key,
-                  )
-                }
-                className={`rounded-md border px-3 py-1.5 text-sm transition-colors ${
-                  selected
-                    ? "border-primary bg-primary/10 font-medium text-primary"
-                    : "bg-background text-muted-foreground hover:bg-muted hover:text-foreground"
-                }`}
-              >
-                {label}
-              </button>
-            );
-          },
-        )}
+          return (
+            <Button
+              key={option.value || "all"}
+              type="button"
+              size="sm"
+              variant={selected ? "default" : "outline"}
+              onClick={() => onChange(option.value)}
+              className="h-8"
+            >
+              {option.label}
+            </Button>
+          );
+        })}
       </div>
     </div>
   );
 }
 
-// =====================================================
-// PAGE
-// =====================================================
+// =========================================================
+// MAIN PAGE
+// =========================================================
 
-function PaymentsPage() {
+export default function PaymentsPage() {
   const router = useRouter();
 
-  // ===================================================
-  // FILTER STATE
-  // ===================================================
+  // -------------------------------------------------------
+  // ACTIVE FILTERS
+  // -------------------------------------------------------
 
-  const [search, setSearch] =
-    useState("");
+  const [search, setSearch] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState("");
+  const [paymentSource, setPaymentSource] = useState("");
+  const [status, setStatus] = useState("");
 
-  const [paymentMethod, setPaymentMethod] =
-    useState<string>("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
 
-  const [paymentSource, setPaymentSource] =
-    useState<string>("");
+  const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(DEFAULT_PER_PAGE);
 
-  const [status, setStatus] =
-    useState<string>("");
+  // -------------------------------------------------------
+  // FILTER SHEET DRAFT VALUES
+  // -------------------------------------------------------
 
-  const [page, setPage] =
-    useState(1);
+  const [sheetOpen, setSheetOpen] = useState(false);
 
-  const [perPage, setPerPage] =
-    useState(DEFAULT_PER_PAGE);
+  const [draftMethod, setDraftMethod] = useState("");
+  const [draftSource, setDraftSource] = useState("");
+  const [draftStatus, setDraftStatus] = useState("");
+  const [draftDateFrom, setDraftDateFrom] = useState("");
+  const [draftDateTo, setDraftDateTo] = useState("");
 
-  // ===================================================
-  // FILTER SHEET
-  // ===================================================
+  // -------------------------------------------------------
+  // VERIFY BANK TRANSFER DIALOG
+  // -------------------------------------------------------
 
-  const [sheetOpen, setSheetOpen] =
-    useState(false);
+  const [verifyDialogOpen, setVerifyDialogOpen] = useState(false);
+  const [verifyPayment, setVerifyPayment] = useState<Payment | null>(null);
 
-  const [draftMethod, setDraftMethod] =
-    useState("");
+  // -------------------------------------------------------
+  // REJECT BANK TRANSFER DIALOG
+  // -------------------------------------------------------
 
-  const [draftSource, setDraftSource] =
-    useState("");
+  const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
+  const [rejectPayment, setRejectPayment] = useState<Payment | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
 
-  const [draftStatus, setDraftStatus] =
-    useState("");
+  // -------------------------------------------------------
+  // FILTER COUNTS
+  // -------------------------------------------------------
 
   const activeFilterCount = [
     paymentMethod,
     paymentSource,
     status,
+    dateFrom,
+    dateTo,
   ].filter(Boolean).length;
 
   const draftCount = [
     draftMethod,
     draftSource,
     draftStatus,
+    draftDateFrom,
+    draftDateTo,
   ].filter(Boolean).length;
 
-  const openSheet = () => {
-    setDraftMethod(
-      paymentMethod,
-    );
+  // -------------------------------------------------------
+  // API FILTERS
+  // -------------------------------------------------------
 
-    setDraftSource(
-      paymentSource,
-    );
-
-    setDraftStatus(status);
-
-    setSheetOpen(true);
-  };
-
-  const applyFilters = () => {
-    setPaymentMethod(
-      draftMethod,
-    );
-
-    setPaymentSource(
-      draftSource,
-    );
-
-    setStatus(
-      draftStatus,
-    );
-
-    setPage(1);
-
-    setSheetOpen(false);
-  };
-
-  const clearDraft = () => {
-    setDraftMethod("");
-    setDraftSource("");
-    setDraftStatus("");
-  };
-
-  const resetAll = () => {
-    setSearch("");
-    setPaymentMethod("");
-    setPaymentSource("");
-    setStatus("");
-    setPage(1);
-  };
-
-  // ===================================================
-  // REJECT PAYMENT DIALOG
-  // ===================================================
-
-  const [rejectDialogOpen, setRejectDialogOpen] =
-    useState(false);
-
-  const [rejectPayment, setRejectPayment] =
-    useState<Payment | null>(null);
-
-  const [rejectReason, setRejectReason] =
-    useState("");
-
-  // ===================================================
-  // QUERY FILTERS
-  // ===================================================
-
-  const filters =
-    useMemo<PaymentFilters>(() => {
-      const result: PaymentFilters = {
-        page,
-        per_page: perPage,
-      };
-
-      const trimmedSearch =
-        search.trim();
-
-      if (trimmedSearch) {
-        result.search =
-          trimmedSearch;
-      }
-
-      if (paymentMethod) {
-        result.payment_method =
-          paymentMethod as PaymentFilters["payment_method"];
-      }
-
-      if (paymentSource) {
-        result.payment_source =
-          paymentSource as PaymentFilters["payment_source"];
-      }
-
-      if (status) {
-        result.status =
-          status as PaymentFilters["status"];
-      }
-
-      return result;
-    }, [
-      search,
-      paymentMethod,
-      paymentSource,
-      status,
+  const filters = useMemo<
+    PaymentFilters & {
+      date_from?: string;
+      date_to?: string;
+    }
+  >(() => {
+    const result: PaymentFilters & {
+      date_from?: string;
+      date_to?: string;
+    } = {
       page,
-      perPage,
-    ]);
+      per_page: perPage,
+    };
 
-  // ===================================================
-  // PAYMENT QUERY
-  // ===================================================
+    const trimmedSearch = search.trim();
+
+    if (trimmedSearch) result.search = trimmedSearch;
+
+    if (paymentMethod) {
+      result.payment_method =
+        paymentMethod as PaymentFilters["payment_method"];
+    }
+
+    if (paymentSource) {
+      result.payment_source =
+        paymentSource as PaymentFilters["payment_source"];
+    }
+
+    if (status) {
+      result.status = status as PaymentFilters["status"];
+    }
+
+    if (dateFrom) result.date_from = dateFrom;
+    if (dateTo) result.date_to = dateTo;
+
+    return result;
+  }, [
+    search,
+    paymentMethod,
+    paymentSource,
+    status,
+    dateFrom,
+    dateTo,
+    page,
+    perPage,
+  ]);
+
+  // -------------------------------------------------------
+  // QUERIES AND MUTATIONS
+  // -------------------------------------------------------
 
   const {
     data,
@@ -554,1505 +442,1279 @@ function PaymentsPage() {
     isFetching,
     isError,
     error,
+    refetch,
   } = usePayments({
     params: filters,
   });
 
-  // ===================================================
-  // MUTATIONS
-  // ===================================================
+  const completeCashPayment = useCompleteCashPayment();
+  const verifyBankTransfer = useVerifyBankTransfer();
+  const rejectBankTransfer = useRejectBankTransfer();
 
-  const completeCashPayment =
-    useCompleteCashPayment();
+  // -------------------------------------------------------
+  // RESPONSE DATA
+  // -------------------------------------------------------
 
-  const verifyBankTransfer =
-    useVerifyBankTransfer();
+  const payments = data?.data ?? [];
+  const pagination = data?.meta;
 
-  const rejectBankTransfer =
-    useRejectBankTransfer();
+  const currentPage = pagination?.current_page ?? page;
+  const lastPage = pagination?.last_page ?? 1;
+  const total = pagination?.total ?? payments.length;
 
-  // ===================================================
-  // DATA
-  // ===================================================
+  const rowOffset = (currentPage - 1) * perPage;
 
-  const payments =
-    data?.data ?? [];
-
-  const pagination =
-    data?.meta;
-
-  const currentPage =
-    pagination?.current_page ??
-    page;
-
-  const lastPage =
-    pagination?.last_page ??
-    1;
-
-  const total =
-    pagination?.total ??
-    payments.length;
-
-  const rowOffset =
-    (currentPage - 1) *
-    perPage;
-
-  // ===================================================
+  // -------------------------------------------------------
   // SUMMARY
-  // ===================================================
+  // -------------------------------------------------------
 
-  const summary =
-    useMemo(() => {
-      let totalAmount = 0;
-      let completedAmount = 0;
+  const completedAmount = payments.reduce(
+    (sum, payment) =>
+      payment.status === "COMPLETED"
+        ? sum + Number(payment.amount ?? 0)
+        : sum,
+    0,
+  );
 
-      let pendingCount = 0;
-      let completedCount = 0;
+  const pendingCount = payments.filter((payment) =>
+    ["PENDING", "PROCESSING"].includes(payment.status),
+  ).length;
 
-      for (const payment of payments) {
-        const amount =
-          Number(
-            payment.amount || 0,
-          );
+  // -------------------------------------------------------
+  // FILTER HANDLERS
+  // -------------------------------------------------------
 
-        totalAmount += amount;
+  const openSheet = () => {
+    setDraftMethod(paymentMethod);
+    setDraftSource(paymentSource);
+    setDraftStatus(status);
+    setDraftDateFrom(dateFrom);
+    setDraftDateTo(dateTo);
+    setSheetOpen(true);
+  };
 
-        if (
-          payment.status ===
-          "COMPLETED"
-        ) {
-          completedAmount +=
-            amount;
+  const applyFilters = () => {
+    if (draftDateFrom && draftDateTo && draftDateFrom > draftDateTo) {
+      toast.error("The start date cannot be after the end date.");
+      return;
+    }
 
-          completedCount += 1;
+    setPaymentMethod(draftMethod);
+    setPaymentSource(draftSource);
+    setStatus(draftStatus);
+    setDateFrom(draftDateFrom);
+    setDateTo(draftDateTo);
+    setPage(1);
+    setSheetOpen(false);
+  };
+
+  const clearDraft = () => {
+    setDraftMethod("");
+    setDraftSource("");
+    setDraftStatus("");
+    setDraftDateFrom("");
+    setDraftDateTo("");
+  };
+
+  const resetAll = () => {
+    setSearch("");
+    setPaymentMethod("");
+    setPaymentSource("");
+    setStatus("");
+    setDateFrom("");
+    setDateTo("");
+    setDraftMethod("");
+    setDraftSource("");
+    setDraftStatus("");
+    setDraftDateFrom("");
+    setDraftDateTo("");
+    setPage(1);
+  };
+
+  // -------------------------------------------------------
+  // ACTIVE FILTER CHIPS
+  // -------------------------------------------------------
+
+  const activeChips: ActiveFilterChip[] = [
+    paymentMethod
+      ? {
+          label: `Method: ${getPaymentMethodLabel(paymentMethod)}`,
+          clear: () => {
+            setPaymentMethod("");
+            setPage(1);
+          },
         }
+      : null,
 
-        if (
-          payment.status ===
-            "PENDING" ||
-          payment.status ===
-            "PROCESSING"
-        ) {
-          pendingCount += 1;
+    paymentSource
+      ? {
+          label: `Source: ${getPaymentSourceLabel(paymentSource)}`,
+          clear: () => {
+            setPaymentSource("");
+            setPage(1);
+          },
         }
-      }
+      : null,
 
-      return {
-        totalAmount,
-        completedAmount,
-        pendingCount,
-        completedCount,
-      };
-    }, [payments]);
+    status
+      ? {
+          label: `Status: ${getPaymentStatusLabel(status)}`,
+          clear: () => {
+            setStatus("");
+            setPage(1);
+          },
+        }
+      : null,
 
-  const currency =
-    payments[0]?.currency ??
-    "ETB";
+    dateFrom
+      ? {
+          label: `From: ${dateFrom}`,
+          clear: () => {
+            setDateFrom("");
+            setPage(1);
+          },
+        }
+      : null,
 
-  // ===================================================
-  // NAVIGATION
-  // ===================================================
+    dateTo
+      ? {
+          label: `To: ${dateTo}`,
+          clear: () => {
+            setDateTo("");
+            setPage(1);
+          },
+        }
+      : null,
+  ].filter(Boolean) as ActiveFilterChip[];
 
-  const goToPayment = (
-    id: string,
-  ) => {
+  // -------------------------------------------------------
+  // PAYMENT NAVIGATION
+  // -------------------------------------------------------
+
+  const openPayment = (payment: Payment) => {
     router.push(
-      `/office/dashboard/payments/${encodeURIComponent(
-        id,
-      )}`,
+      `/office/dashboard/payments/${encodeURIComponent(payment.id)}`,
     );
   };
 
-  const goToReceipt = (
-    id: string,
-  ) => {
+  const openReceipt = (payment: Payment) => {
     router.push(
-      `/office/dashboard/payments/${encodeURIComponent(
-        id,
-      )}/receipt`,
+      `/office/dashboard/payments/${encodeURIComponent(payment.id)}/receipt`,
     );
   };
 
-  const goToInvoice = (
-    id: string,
-  ) => {
+  const openInvoice = (payment: Payment) => {
+    const invoiceId = payment.invoice?.id;
+
+    if (!invoiceId) {
+      toast.error("No invoice is associated with this payment.");
+      return;
+    }
+
     router.push(
-      `/office/dashboard/invoices/${encodeURIComponent(
-        id,
-      )}`,
+      `/office/dashboard/invoices/${encodeURIComponent(invoiceId)}`,
     );
   };
 
-  // ===================================================
-  // VERIFY BANK TRANSFER
-  // ===================================================
+  // -------------------------------------------------------
+  // COMPLETE CASH PAYMENT
+  // -------------------------------------------------------
 
-  const handleVerify = async (
-    paymentId: string,
-  ) => {
-    const confirmed =
-      window.confirm(
-        "Verify this bank transfer?\n\n" +
-          "Successful verification will complete the payment, update the invoice, and generate the official receipt.",
-      );
+  const handleCompleteCash = async (payment: Payment) => {
+    if (payment.payment_method !== "CASH") return;
 
-    if (!confirmed) {
+    if (payment.status !== "PENDING") {
+      toast.error("Only pending cash payments can be completed.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "Complete this cash payment? This will update the invoice and payment status.",
+    );
+
+    if (!confirmed) return;
+
+    try {
+      await completeCashPayment.mutateAsync(payment.id);
+    } catch {
+      // Mutation hook handles the API error.
+    }
+  };
+
+  // -------------------------------------------------------
+  // OPEN VERIFY DIALOG
+  // -------------------------------------------------------
+
+  const openVerifyDialog = (payment: Payment) => {
+    if (payment.payment_method !== "BANK_TRANSFER") {
+      toast.error("Only bank transfers can be verified here.");
+      return;
+    }
+
+    if (payment.status !== "PENDING") {
+      toast.error("Only pending bank transfers can be verified.");
+      return;
+    }
+
+    setVerifyPayment(payment);
+    setVerifyDialogOpen(true);
+  };
+
+  // -------------------------------------------------------
+  // CONFIRM BANK TRANSFER VERIFICATION
+  // -------------------------------------------------------
+
+  const handleVerify = async () => {
+    if (!verifyPayment || verifyBankTransfer.isPending) return;
+
+    if (
+      verifyPayment.payment_method !== "BANK_TRANSFER" ||
+      verifyPayment.status !== "PENDING"
+    ) {
+      toast.error("This payment is no longer eligible for verification.");
+      setVerifyDialogOpen(false);
+      setVerifyPayment(null);
       return;
     }
 
     try {
-      await verifyBankTransfer.mutateAsync(
-        {
-          paymentId,
-        },
-      );
+      await verifyBankTransfer.mutateAsync({
+        paymentId: verifyPayment.id,
+      });
+
+      setVerifyDialogOpen(false);
+      setVerifyPayment(null);
     } catch {
-      // Mutation hook handles the error.
+      // Keep the dialog open so the officer can retry.
     }
   };
 
-  // ===================================================
-  // OPEN REJECT DIALOG
-  // ===================================================
+  // -------------------------------------------------------
+  // REJECT BANK TRANSFER
+  // -------------------------------------------------------
 
-  const openRejectDialog = (
-    payment: Payment,
-  ) => {
+  const openRejectDialog = (payment: Payment) => {
+    if (
+      payment.payment_method !== "BANK_TRANSFER" ||
+      payment.status !== "PENDING"
+    ) {
+      toast.error("Only pending bank transfers can be rejected.");
+      return;
+    }
+
     setRejectPayment(payment);
     setRejectReason("");
     setRejectDialogOpen(true);
   };
 
-  // ===================================================
-  // REJECT BANK TRANSFER
-  // ===================================================
-
   const handleReject = async () => {
-    if (!rejectPayment?.id) {
+    if (!rejectPayment || rejectBankTransfer.isPending) return;
+
+    const reason = rejectReason.trim();
+
+    if (!reason) {
+      toast.error("Enter a reason for rejecting this bank transfer.");
       return;
     }
 
-    const reason =
-      rejectReason.trim();
-
-    if (!reason) {
+    if (reason.length > 500) {
+      toast.error("The rejection reason cannot exceed 500 characters.");
       return;
     }
 
     try {
-      await rejectBankTransfer.mutateAsync(
-        {
-          paymentId:
-            rejectPayment.id,
-          data: {
-            reason,
-          },
+      await rejectBankTransfer.mutateAsync({
+        paymentId: rejectPayment.id,
+        data: {
+          reason,
         },
-      );
+      });
 
       setRejectDialogOpen(false);
       setRejectPayment(null);
       setRejectReason("");
     } catch {
-      // Keep the dialog open so the officer
-      // can see the error and retry.
+      // Keep the dialog open so the officer can retry.
     }
   };
 
-  // ===================================================
-  // COMPLETE CASH PAYMENT
-  // ===================================================
+  // -------------------------------------------------------
+  // LOADING STATE
+  // -------------------------------------------------------
 
-  const handleCompleteCash =
-    async (
-      paymentId: string,
-    ) => {
-      const confirmed =
-        window.confirm(
-          "Complete this cash payment?\n\n" +
-            "This will mark the payment as COMPLETED, apply the payment to the invoice, and generate the official receipt.",
-        );
-
-      if (!confirmed) {
-        return;
-      }
-
-      try {
-        await completeCashPayment.mutateAsync(
-          paymentId,
-        );
-      } catch {
-        // Mutation hook handles the error.
-      }
-    };
-
-  // ===================================================
-  // ERROR STATE
-  // ===================================================
-
-  if (isError) {
+  if (isLoading) {
     return (
-      <div className="mx-auto max-w-7xl space-y-6 p-6">
-        <div>
-          <h1 className="text-2xl font-semibold">
-            Payments
-          </h1>
-
-          <p className="text-sm text-muted-foreground">
-            Manage cash, bank transfer, and
-            online payments.
-          </p>
-        </div>
-
-        <div className="flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 p-5">
-          <XCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-600" />
-
-          <div>
-            <p className="font-medium text-red-800">
-              Failed to load payments
-            </p>
-
-            <p className="mt-1 text-sm text-red-700">
-              {error instanceof Error
-                ? error.message
-                : "An unexpected error occurred."}
-            </p>
-          </div>
+      <div className="flex min-h-[320px] items-center justify-center">
+        <div className="flex items-center gap-3 text-sm text-muted-foreground">
+          <Loader2 className="h-5 w-5 animate-spin" />
+          Loading payments...
         </div>
       </div>
     );
   }
 
-  // ===================================================
-  // ACTIVE FILTER CHIPS
-  // ===================================================
+  // -------------------------------------------------------
+  // ERROR STATE
+  // -------------------------------------------------------
 
-  const chips = [
-    paymentMethod && {
-      label:
-        METHOD_LABELS[
-          paymentMethod
-        ] ??
-        paymentMethod,
+  if (isError) {
+    return (
+      <div className="space-y-4 rounded-lg border p-6">
+        <div className="flex items-center gap-2 text-destructive">
+          <XCircle className="h-5 w-5" />
+          <h2 className="font-semibold">Unable to load payments</h2>
+        </div>
 
-      clear: () =>
-        setPaymentMethod(""),
-    },
+        <p className="text-sm text-muted-foreground">
+          {error instanceof Error
+            ? error.message
+            : "An unexpected error occurred while loading payments."}
+        </p>
 
-    paymentSource && {
-      label:
-        getPaymentSourceLabel(
-          paymentSource,
-        ),
+        <Button type="button" variant="outline" onClick={() => refetch()}>
+          Try again
+        </Button>
+      </div>
+    );
+  }
 
-      clear: () =>
-        setPaymentSource(""),
-    },
-
-    status && {
-      label:
-        STATUS_LABELS[status] ??
-        status,
-
-      clear: () =>
-        setStatus(""),
-    },
-  ].filter(Boolean) as {
-    label: string;
-    clear: () => void;
-  }[];
-
-  // ===================================================
-  // RENDER
-  // ===================================================
+  // -------------------------------------------------------
+  // PAGE
+  // -------------------------------------------------------
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 p-6">
+    <div className="space-y-6">
+      {/* PAGE HEADER */}
 
-      {/* =================================================
-          HEADER
-      ================================================= */}
-
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
-          <h1 className="text-2xl font-semibold">
-            Payments
-          </h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Payments</h1>
 
           <p className="mt-1 text-sm text-muted-foreground">
-            Manage and verify municipal payment
-            transactions.
+            Review payment transactions, verify transfers, and view receipts.
           </p>
         </div>
 
-        {/* <button
+        <Button
           type="button"
-          onClick={() =>
-            router.push(
-              "/office/dashboard/payments/create",
-            )
-          }
-          className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+          variant="outline"
+          onClick={() => window.print()}
         >
-          <Plus className="h-4 w-4" />
-          Record Payment
-        </button> */}
+          <Printer className="mr-2 h-4 w-4" />
+          Print
+        </Button>
       </div>
 
-      {/* =================================================
-          SUMMARY
-      ================================================= */}
+      {/* SUMMARY CARDS */}
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="rounded-lg border bg-card p-4">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm text-muted-foreground">
+              Payments on this page
+            </p>
+            <CreditCard className="h-4 w-4 text-muted-foreground" />
+          </div>
 
-        {/* TOTAL RECORDS */}
-
-        <div className="rounded-lg border bg-background p-4">
-          <p className="text-sm text-muted-foreground">
-            Payments on page
-          </p>
-
-          <p className="mt-1 text-xl font-semibold">
-            {payments.length}
-          </p>
+          <p className="mt-2 text-2xl font-semibold">{payments.length}</p>
 
           <p className="mt-1 text-xs text-muted-foreground">
-            {total.toLocaleString()} total records
+            {total.toLocaleString()} matching transactions in total
           </p>
         </div>
 
-        {/* TOTAL AMOUNT */}
+        <div className="rounded-lg border bg-card p-4">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm text-muted-foreground">
+              Completed amount on this page
+            </p>
+            <CheckCircle2 className="h-4 w-4 text-green-600" />
+          </div>
 
-        <div className="rounded-lg border bg-background p-4">
-          <p className="text-sm text-muted-foreground">
-            Amount on page
-          </p>
-
-          <p className="mt-1 text-xl font-semibold">
-            {formatAmount(
-              summary.totalAmount,
-              currency,
-            )}
-          </p>
-        </div>
-
-        {/* COMPLETED */}
-
-        <div className="rounded-lg border bg-background p-4">
-          <p className="text-sm text-muted-foreground">
-            Completed
-          </p>
-
-          <p className="mt-1 text-xl font-semibold">
-            {formatAmount(
-              summary.completedAmount,
-              currency,
-            )}
+          <p className="mt-2 text-2xl font-semibold">
+            {formatAmount(completedAmount)}
           </p>
 
           <p className="mt-1 text-xs text-muted-foreground">
-            {summary.completedCount} completed payment
-            {summary.completedCount === 1
-              ? ""
-              : "s"}
+            Completed payments on the current page
           </p>
         </div>
 
-        {/* PENDING */}
+        <div className="rounded-lg border bg-card p-4">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm text-muted-foreground">Pending review</p>
+            <Wallet className="h-4 w-4 text-amber-600" />
+          </div>
 
-        <div className="rounded-lg border bg-background p-4">
-          <p className="text-sm text-muted-foreground">
-            Pending
-          </p>
-
-          <p className="mt-1 text-xl font-semibold">
-            {summary.pendingCount}
-          </p>
+          <p className="mt-2 text-2xl font-semibold">{pendingCount}</p>
 
           <p className="mt-1 text-xs text-muted-foreground">
-            Awaiting processing or completion
+            Pending or processing payments on this page
           </p>
         </div>
       </div>
 
-      {/* =================================================
-          TABLE CARD
-      ================================================= */}
+      {/* TOOLBAR AND FILTERS */}
 
-      <div className="rounded-lg border bg-background">
+      <div className="space-y-4 rounded-lg border bg-card p-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+          <div className="relative min-w-0 flex-1">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
 
-        {/* =================================================
-            TOOLBAR
-        ================================================= */}
+            <Input
+              value={search}
+              onChange={(event) => {
+                setSearch(event.target.value);
+                setPage(1);
+              }}
+              placeholder="Search payment number, invoice, or reference..."
+              className="pl-9 pr-9"
+            />
 
-        <div className="space-y-3 border-b p-4">
-
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-
-            {/* SEARCH */}
-
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-
-              <input
-                type="search"
-                value={search}
-                onChange={(event) => {
-                  setSearch(
-                    event.target.value,
-                  );
-
+            {search && (
+              <button
+                type="button"
+                aria-label="Clear search"
+                onClick={() => {
+                  setSearch("");
                   setPage(1);
                 }}
-                placeholder="Search payment, invoice, or transaction..."
-                className="h-10 w-full rounded-md border bg-background pl-9 pr-3 text-sm outline-none placeholder:text-muted-foreground focus:ring-2 focus:ring-ring"
-              />
-            </div>
-
-            {/* FILTER BUTTON */}
-
-            <button
-              type="button"
-              onClick={openSheet}
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-md border px-4 text-sm font-medium hover:bg-muted"
-            >
-              <SlidersHorizontal className="h-4 w-4" />
-
-              Filters
-
-              {activeFilterCount >
-                0 && (
-                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-xs text-primary-foreground">
-                  {activeFilterCount}
-                </span>
-              )}
-            </button>
-
-            {/* FETCHING */}
-
-            {isFetching && (
-              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-4 w-4" />
+              </button>
             )}
           </div>
 
-          {/* =================================================
-              ACTIVE FILTER CHIPS
-          ================================================= */}
+          <Sheet
+            open={sheetOpen}
+            onOpenChange={(open) => {
+              if (open) {
+                openSheet();
+              } else {
+                setSheetOpen(false);
+              }
+            }}
+          >
+            <SheetTrigger asChild>
+              <Button type="button" variant="outline" className="shrink-0">
+                <SlidersHorizontal className="mr-2 h-4 w-4" />
+                Filters
 
-          {(chips.length > 0 ||
-            search.trim()) && (
-            <div className="flex flex-wrap items-center gap-2">
+                {activeFilterCount > 0 && (
+                  <Badge className="ml-2 h-5 min-w-5 justify-center px-1">
+                    {activeFilterCount}
+                  </Badge>
+                )}
+              </Button>
+            </SheetTrigger>
 
-              {/* SEARCH CHIP */}
+            <SheetContent
+              side="right"
+              className="flex w-full flex-col gap-0 p-0 sm:max-w-md"
+            >
+              <SheetHeader className="border-b p-5 text-left">
+                <SheetTitle>Payment Filters</SheetTitle>
 
-              {search.trim() && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs font-medium">
-                  Search:{" "}
-                  {search.trim()}
+                <SheetDescription>
+                  Narrow down payments by date, method, source, or status.
+                </SheetDescription>
+              </SheetHeader>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSearch("");
-                      setPage(1);
-                    }}
-                    aria-label="Remove search"
-                    className="rounded-full hover:text-foreground"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </span>
-              )}
+              <div className="flex-1 space-y-6 overflow-y-auto p-5">
+                {/* DATE RANGE */}
 
-              {/* FILTER CHIPS */}
+                <div className="space-y-3">
+                  <div>
+                    <h3 className="text-sm font-medium">
+                      Payment date range
+                    </h3>
 
-              {chips.map((chip) => (
-                <span
-                  key={chip.label}
-                  className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs font-medium"
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Select dates using the Ethiopian calendar.
+                    </p>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="min-w-0 space-y-2">
+                      <label className="text-sm font-medium">Date from</label>
+
+                      <EthiopianDatePicker
+                        value={fromApiDate(draftDateFrom)}
+                        onChange={(date) => {
+                          const nextDate = toApiDate(date);
+
+                          setDraftDateFrom(nextDate);
+
+                          if (draftDateTo && nextDate > draftDateTo) {
+                            setDraftDateTo("");
+                          }
+                        }}
+                        placeholder="Select start date"
+                      />
+
+                      {draftDateFrom && (
+                        <button
+                          type="button"
+                          className="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground"
+                          onClick={() => setDraftDateFrom("")}
+                        >
+                          Clear start date
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="min-w-0 space-y-2">
+                      <label className="text-sm font-medium">Date to</label>
+
+                      <EthiopianDatePicker
+                        value={fromApiDate(draftDateTo)}
+                        onChange={(date) => {
+                          const nextDate = toApiDate(date);
+
+                          if (draftDateFrom && nextDate < draftDateFrom) {
+                            toast.error(
+                              "The end date cannot be before the start date.",
+                            );
+                            return;
+                          }
+
+                          setDraftDateTo(nextDate);
+                        }}
+                        placeholder="Select end date"
+                      />
+
+                      {draftDateTo && (
+                        <button
+                          type="button"
+                          className="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground"
+                          onClick={() => setDraftDateTo("")}
+                        >
+                          Clear end date
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {draftDateFrom && draftDateTo && (
+                    <p className="text-xs text-muted-foreground">
+                      API date range: {draftDateFrom} to {draftDateTo}
+                    </p>
+                  )}
+                </div>
+
+                <div className="border-t" />
+
+                <FilterGroup
+                  title="Payment method"
+                  value={draftMethod}
+                  onChange={setDraftMethod}
+                  options={[
+                    { label: "All", value: "" },
+                    { label: "Cash", value: "CASH" },
+                    { label: "Bank Transfer", value: "BANK_TRANSFER" },
+                    { label: "Online", value: "ONLINE" },
+                  ]}
+                />
+
+                <div className="border-t" />
+
+                <FilterGroup
+                  title="Payment source"
+                  value={draftSource}
+                  onChange={setDraftSource}
+                  options={[
+                    { label: "All", value: "" },
+                    { label: "Office", value: "OFFICE_RECORDED" },
+                    { label: "Bank Transfer", value: "BANK_TRANSFER" },
+                    { label: "Online", value: "ONLINE" },
+                  ]}
+                />
+
+                <div className="border-t" />
+
+                <FilterGroup
+                  title="Payment status"
+                  value={draftStatus}
+                  onChange={setDraftStatus}
+                  options={[
+                    { label: "All", value: "" },
+                    { label: "Pending", value: "PENDING" },
+                    { label: "Processing", value: "PROCESSING" },
+                    { label: "Completed", value: "COMPLETED" },
+                    { label: "Failed", value: "FAILED" },
+                    { label: "Cancelled", value: "CANCELLED" },
+                    { label: "Expired", value: "EXPIRED" },
+                    { label: "Reversed", value: "REVERSED" },
+                  ]}
+                />
+              </div>
+
+              <SheetFooter className="border-t p-5 sm:flex-row">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={clearDraft}
+                  className="sm:flex-1"
                 >
-                  {chip.label}
+                  Clear filters
+                </Button>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      chip.clear();
-                      setPage(1);
-                    }}
-                    aria-label={`Remove ${chip.label} filter`}
-                    className="rounded-full hover:text-foreground"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </span>
-              ))}
+                <Button
+                  type="button"
+                  onClick={applyFilters}
+                  className="sm:flex-1"
+                >
+                  Apply filters
+                  {draftCount > 0 && ` (${draftCount})`}
+                </Button>
+              </SheetFooter>
+            </SheetContent>
+          </Sheet>
 
-              <button
-                type="button"
-                onClick={resetAll}
-                className="text-xs font-medium text-muted-foreground hover:text-foreground hover:underline"
-              >
-                Clear all
-              </button>
+          {isFetching && (
+            <div className="flex shrink-0 items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Updating
             </div>
           )}
         </div>
 
-        {/* =================================================
-            TABLE
-        ================================================= */}
+        {/* ACTIVE FILTER CHIPS */}
+
+        {(activeChips.length > 0 || search.trim()) && (
+          <div className="flex flex-wrap items-center gap-2">
+            {search.trim() && (
+              <Badge variant="secondary" className="gap-1.5 py-1">
+                Search: {search.trim()}
+
+                <button
+                  type="button"
+                  aria-label="Clear search filter"
+                  onClick={() => {
+                    setSearch("");
+                    setPage(1);
+                  }}
+                  className="ml-1 rounded-full hover:text-foreground"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </Badge>
+            )}
+
+            {activeChips.map((chip) => (
+              <Badge
+                key={chip.label}
+                variant="secondary"
+                className="gap-1.5 py-1"
+              >
+                {chip.label}
+
+                <button
+                  type="button"
+                  aria-label={`Remove ${chip.label} filter`}
+                  onClick={chip.clear}
+                  className="ml-1 rounded-full hover:text-foreground"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </Badge>
+            ))}
+
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={resetAll}
+              className="h-7 px-2 text-xs"
+            >
+              Clear all
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {/* PAYMENTS TABLE */}
+
+      <div className="overflow-hidden rounded-lg border bg-card">
+        <div className="flex flex-col gap-2 border-b p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="font-semibold">Payment transactions</h2>
+
+            <p className="mt-1 text-sm text-muted-foreground">
+              Showing {payments.length ? rowOffset + 1 : 0}
+              {"–"}
+              {rowOffset + payments.length} of {total} payments
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <label
+              htmlFor="payments-per-page"
+              className="text-sm text-muted-foreground"
+            >
+              Rows
+            </label>
+
+            <select
+              id="payments-per-page"
+              value={perPage}
+              onChange={(event) => {
+                setPerPage(Number(event.target.value));
+                setPage(1);
+              }}
+              className="h-9 rounded-md border bg-background px-3 text-sm"
+            >
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+          </div>
+        </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-
-            {/* TABLE HEADER */}
-
-            <thead className="border-b bg-muted/50 text-muted-foreground">
-              <tr>
-                <th className="w-12 px-4 py-3 text-left font-medium">
-                  #
-                </th>
-
-                <th className="px-4 py-3 text-left font-medium">
-                  Payment
-                </th>
-
-                <th className="px-4 py-3 text-left font-medium">
-                  Invoice
-                </th>
-
-                <th className="px-4 py-3 text-left font-medium">
-                  Method
-                </th>
-
-                <th className="px-4 py-3 text-left font-medium">
-                  Source
-                </th>
-
-                <th className="px-4 py-3 text-right font-medium">
-                  Amount
-                </th>
-
-                <th className="px-4 py-3 text-left font-medium">
-                  Date
-                </th>
-
-                <th className="px-4 py-3 text-left font-medium">
-                  Status
-                </th>
-
-                <th className="w-24 px-4 py-3 text-right font-medium">
+          <table className="w-full min-w-[1050px] text-sm">
+            <thead className="bg-muted/40">
+              <tr className="border-b text-left text-muted-foreground">
+                <th className="w-14 px-4 py-3 font-medium">#</th>
+                <th className="px-4 py-3 font-medium">Payment</th>
+                <th className="px-4 py-3 font-medium">Invoice</th>
+                <th className="px-4 py-3 font-medium">Method</th>
+                <th className="px-4 py-3 font-medium">Source</th>
+                <th className="px-4 py-3 text-right font-medium">Amount</th>
+                <th className="px-4 py-3 font-medium">Date</th>
+                <th className="px-4 py-3 font-medium">Status</th>
+                <th className="w-16 px-4 py-3 text-right font-medium">
                   Actions
                 </th>
               </tr>
             </thead>
 
-            {/* TABLE BODY */}
-
             <tbody>
-
-              {/* LOADING */}
-
-              {isLoading ? (
+              {payments.length === 0 ? (
                 <tr>
-                  <td
-                    colSpan={9}
-                    className="px-4 py-14 text-center"
-                  >
-                    <div className="flex items-center justify-center gap-2 text-muted-foreground">
-                      <Loader2 className="h-5 w-5 animate-spin" />
-                      Loading payments...
-                    </div>
-                  </td>
-                </tr>
-              ) : payments.length ===
-                0 ? (
-
-                /* EMPTY */
-
-                <tr>
-                  <td
-                    colSpan={9}
-                    className="px-4 py-14 text-center"
-                  >
+                  <td colSpan={9} className="px-4 py-16 text-center">
                     <div className="flex flex-col items-center gap-2">
-                      <CreditCard className="h-8 w-8 text-muted-foreground" />
+                      <CreditCard className="h-8 w-8 text-muted-foreground/60" />
 
-                      <p className="font-medium">
-                        No payments found
+                      <p className="font-medium">No payments found</p>
+
+                      <p className="max-w-sm text-sm text-muted-foreground">
+                        Try changing your search or filters to find matching
+                        payment transactions.
                       </p>
 
-                      <p className="text-sm text-muted-foreground">
-                        Try changing your search or filters.
-                      </p>
-
-                      {(search.trim() ||
-                        activeFilterCount >
-                          0) && (
-                        <button
+                      {(activeFilterCount > 0 || search.trim()) && (
+                        <Button
                           type="button"
-                          onClick={
-                            resetAll
-                          }
-                          className="mt-2 text-sm font-medium text-primary hover:underline"
+                          variant="outline"
+                          size="sm"
+                          onClick={resetAll}
+                          className="mt-2"
                         >
                           Clear filters
-                        </button>
+                        </Button>
                       )}
                     </div>
                   </td>
                 </tr>
               ) : (
+                payments.map((payment, index) => {
+                  const PaymentIcon = getPaymentIcon(
+                    payment.payment_method,
+                  );
 
-                /* DATA */
+                  const paymentDate = getPaymentDate(payment);
 
-                payments.map(
-                  (
-                    payment,
-                    index,
-                  ) => {
+                  const canCompleteCash =
+                    payment.payment_method === "CASH" &&
+                    payment.status === "PENDING";
 
-                    // -----------------------------------------
-                    // ACTION STATES
-                    // -----------------------------------------
+                  const canReviewBankTransfer =
+                    payment.payment_method === "BANK_TRANSFER" &&
+                    payment.status === "PENDING";
 
-                    const isPendingCash =
-                      payment.payment_method ===
-                        "CASH" &&
-                      payment.status ===
-                        "PENDING";
+                  const hasReceipt = Boolean(payment.receipt?.id);
 
-                    const isPendingBank =
-                      payment.payment_method ===
-                        "BANK_TRANSFER" &&
-                      payment.status ===
-                        "PENDING";
+                  return (
+                    <tr
+                      key={payment.id}
+                      className="border-b last:border-b-0 hover:bg-muted/20"
+                    >
+                      <td className="px-4 py-4 text-muted-foreground">
+                        {rowOffset + index + 1}
+                      </td>
 
-                    const isCompleted =
-                      payment.status ===
-                      "COMPLETED";
-
-                    const isCompleting =
-                      completeCashPayment.isPending &&
-                      completeCashPayment.variables ===
-                        payment.id;
-
-                    const isVerifying =
-                      verifyBankTransfer.isPending &&
-                      verifyBankTransfer
-                        .variables
-                        ?.paymentId ===
-                        payment.id;
-
-                    const isRejecting =
-                      rejectBankTransfer.isPending &&
-                      rejectBankTransfer
-                        .variables
-                        ?.paymentId ===
-                        payment.id;
-
-                    const paymentDate =
-                      getPaymentDate(
-                        payment,
-                      );
-
-                    const methodDescription =
-                      getMethodDescription(
-                        payment,
-                      );
-
-                    return (
-                      <tr
-                        key={
-                          payment.id
-                        }
-                        className="border-b last:border-0 hover:bg-muted/30"
-                      >
-
-                        {/* =================================
-                            #
-                        ================================= */}
-
-                        <td className="px-4 py-3 text-muted-foreground">
-                          {rowOffset +
-                            index +
-                            1}
-                        </td>
-
-                        {/* =================================
-                            PAYMENT
-                        ================================= */}
-
-                        <td className="px-4 py-3">
-                          <div className="space-y-0.5">
-
-                            <button
-                              type="button"
-                              onClick={() =>
-                                goToPayment(
-                                  payment.id,
-                                )
-                              }
-                              className="font-medium hover:underline"
-                            >
-                              {
-                                payment.payment_number
-                              }
-                            </button>
-
-                            <p className="text-xs text-muted-foreground">
-                              {
-                                payment.transaction_reference
-                              }
-                            </p>
-                          </div>
-                        </td>
-
-                        {/* =================================
-                            INVOICE
-                        ================================= */}
-
-                        <td className="px-4 py-3">
-                          {payment.invoice_id ? (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                goToInvoice(
-                                  payment.invoice_id!,
-                                )
-                              }
-                              className="font-medium hover:underline"
-                            >
-                              {
-                                payment.invoice_id
-                              }
-                            </button>
-                          ) : (
-                            <span className="text-muted-foreground">
-                              —
-                            </span>
-                          )}
-                        </td>
-
-                        {/* =================================
-                            METHOD
-                        ================================= */}
-
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
-
-                            {getPaymentIcon(
-                              payment.payment_method,
-                            )}
-
-                            <div className="min-w-0 leading-tight">
-
-                              <p>
-                                {
-                                  METHOD_LABELS[
-                                    payment.payment_method
-                                  ] ??
-                                    payment.payment_method
-                                }
-                              </p>
-
-                              <p className="max-w-48 truncate text-xs text-muted-foreground">
-                                {
-                                  methodDescription
-                                }
-                              </p>
-                            </div>
-                          </div>
-                        </td>
-
-                        {/* =================================
-                            SOURCE
-                        ================================= */}
-
-                        <td className="px-4 py-3">
-                          <span className="text-sm">
-                            {getPaymentSourceLabel(
-                              payment.payment_source,
-                            )}
+                      <td className="px-4 py-4">
+                        <button
+                          type="button"
+                          onClick={() => openPayment(payment)}
+                          className="text-left"
+                        >
+                          <span className="font-medium hover:underline">
+                            {payment.payment_number ?? payment.id}
                           </span>
-                        </td>
+                        </button>
 
-                        {/* =================================
-                            AMOUNT
-                        ================================= */}
+                        <p className="mt-1 max-w-[220px] truncate text-xs text-muted-foreground">
+                          {getMethodDescription(payment)}
+                        </p>
+                      </td>
 
-                        <td className="whitespace-nowrap px-4 py-3 text-right font-medium">
-                          {formatAmount(
-                            payment.amount,
-                            payment.currency,
-                          )}
-                        </td>
-
-                        {/* =================================
-                            DATE
-                        ================================= */}
-
-                        <td className="whitespace-nowrap px-4 py-3">
-                          {formatDate(
-                            paymentDate,
-                          )}
-                        </td>
-
-                        {/* =================================
-                            STATUS
-                        ================================= */}
-
-                        <td className="px-4 py-3">
-                          <span
-                            className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset ${
-                              STATUS_STYLES[
-                                payment.status
-                              ] ??
-                              "bg-muted text-muted-foreground ring-transparent"
-                            }`}
+                      <td className="px-4 py-4">
+                        {payment.invoice?.id ? (
+                          <button
+                            type="button"
+                            onClick={() => openInvoice(payment)}
+                            className="text-left font-medium hover:underline"
                           >
-                            {
-                              STATUS_LABELS[
-                                payment.status
-                              ] ??
-                                payment.status
-                            }
+                            {payment.invoice.invoice_number ??
+                              payment.invoice.id}
+                          </button>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </td>
+
+                      <td className="px-4 py-4">
+                        <div className="flex items-center gap-2">
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border bg-background">
+                            <PaymentIcon className="h-4 w-4 text-muted-foreground" />
+                          </div>
+
+                          <span>
+                            {getPaymentMethodLabel(payment.payment_method)}
                           </span>
-                        </td>
+                        </div>
+                      </td>
 
-                        {/* =================================
-                            ACTIONS
-                        ================================= */}
+                      <td className="px-4 py-4">
+                        {getPaymentSourceLabel(payment.payment_source)}
+                      </td>
 
-                        <td className="px-4 py-3">
+                      <td className="px-4 py-4 text-right font-medium tabular-nums">
+                        {formatAmount(
+                          payment.amount,
+                          payment.currency ?? "ETB",
+                        )}
+                      </td>
 
-                          <div className="flex items-center justify-end gap-1">
+                      <td className="whitespace-nowrap px-4 py-4">
+                        {formatDate(paymentDate)}
+                      </td>
 
-                            {/* VIEW */}
+                      <td className="px-4 py-4">
+                        <Badge
+                          variant="outline"
+                          className={
+                            STATUS_STYLES[payment.status] ??
+                            "border-muted bg-muted/30"
+                          }
+                        >
+                          {getPaymentStatusLabel(payment.status)}
+                        </Badge>
+                      </td>
 
-                            <button
+                      <td className="px-4 py-4 text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
                               type="button"
-                              title="View payment"
-                              onClick={() =>
-                                goToPayment(
-                                  payment.id,
-                                )
-                              }
-                              className="rounded-md p-2 hover:bg-muted"
+                              variant="ghost"
+                              size="icon"
+                              aria-label="Payment actions"
                             >
-                              <Eye className="h-4 w-4" />
-                            </button>
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
 
-                            {/* MORE */}
+                          <DropdownMenuContent align="end" className="w-56">
+                            <DropdownMenuItem
+                              onSelect={() => openPayment(payment)}
+                            >
+                              <Eye className="mr-2 h-4 w-4" />
+                              View payment
+                            </DropdownMenuItem>
 
-                            <DropdownMenu>
-
-                              <DropdownMenuTrigger
-                                asChild
+                            {payment.invoice?.id && (
+                              <DropdownMenuItem
+                                onSelect={() => openInvoice(payment)}
                               >
-                                <button
-                                  type="button"
-                                  title="More actions"
-                                  className="rounded-md p-2 hover:bg-muted"
-                                >
-                                  <MoreHorizontal className="h-4 w-4" />
-                                </button>
-                              </DropdownMenuTrigger>
+                                <CreditCard className="mr-2 h-4 w-4" />
+                                View invoice
+                              </DropdownMenuItem>
+                            )}
 
-                              <DropdownMenuContent
-                                align="end"
-                                className="w-64"
-                              >
-
-                                {/* VIEW PAYMENT */}
+                            {canCompleteCash && (
+                              <>
+                                <DropdownMenuSeparator />
 
                                 <DropdownMenuItem
-                                  onClick={() =>
-                                    goToPayment(
-                                      payment.id,
-                                    )
+                                  disabled={completeCashPayment.isPending}
+                                  onSelect={() =>
+                                    void handleCompleteCash(payment)
                                   }
                                 >
-                                  <Eye className="mr-2 h-4 w-4" />
+                                  {completeCashPayment.isPending ? (
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <CheckCircle2 className="mr-2 h-4 w-4" />
+                                  )}
+                                  Complete cash payment
+                                </DropdownMenuItem>
+                              </>
+                            )}
 
-                                  View Payment
+                            {canReviewBankTransfer && (
+                              <>
+                                <DropdownMenuSeparator />
+
+                                <DropdownMenuItem
+                                  disabled={verifyBankTransfer.isPending}
+                                  onSelect={() => openVerifyDialog(payment)}
+                                >
+                                  <ShieldCheck className="mr-2 h-4 w-4" />
+                                  Verify bank transfer
                                 </DropdownMenuItem>
 
-                                {/* VIEW INVOICE */}
+                                <DropdownMenuItem
+                                  disabled={rejectBankTransfer.isPending}
+                                  onSelect={() => openRejectDialog(payment)}
+                                  className="text-destructive focus:text-destructive"
+                                >
+                                  <XCircle className="mr-2 h-4 w-4" />
+                                  Reject bank transfer
+                                </DropdownMenuItem>
+                              </>
+                            )}
 
-                                {payment.invoice_id && (
-                                  <DropdownMenuItem
-                                    onClick={() =>
-                                      goToInvoice(
-                                        payment.invoice_id!,
-                                      )
-                                    }
-                                  >
-                                    <CreditCard className="mr-2 h-4 w-4" />
+                            {payment.status === "COMPLETED" && (
+                              <>
+                                <DropdownMenuSeparator />
 
-                                    View Invoice
-                                  </DropdownMenuItem>
-                                )}
-
-                                {/* =================================
-                                    CASH
-                                ================================= */}
-
-                                {isPendingCash && (
-                                  <>
-                                    <DropdownMenuSeparator />
-
-                                    <DropdownMenuItem
-                                      disabled={
-                                        isCompleting
-                                      }
-                                      onClick={() =>
-                                        handleCompleteCash(
-                                          payment.id,
-                                        )
-                                      }
-                                    >
-                                      {isCompleting ? (
-                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                      ) : (
-                                        <CheckCircle2 className="mr-2 h-4 w-4" />
-                                      )}
-
-                                      Complete Cash Payment
-                                    </DropdownMenuItem>
-                                  </>
-                                )}
-
-                                {/* =================================
-                                    BANK TRANSFER
-                                ================================= */}
-
-                                {isPendingBank && (
-                                  <>
-                                    <DropdownMenuSeparator />
-
-                                    <DropdownMenuItem
-                                      disabled={
-                                        isVerifying ||
-                                        isRejecting
-                                      }
-                                      onClick={() =>
-                                        handleVerify(
-                                          payment.id,
-                                        )
-                                      }
-                                    >
-                                      {isVerifying ? (
-                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                      ) : (
-                                        <CheckCircle2 className="mr-2 h-4 w-4" />
-                                      )}
-
-                                      Verify Bank Transfer
-                                    </DropdownMenuItem>
-
-                                    <DropdownMenuItem
-                                      disabled={
-                                        isVerifying ||
-                                        isRejecting
-                                      }
-                                      onClick={() =>
-                                        openRejectDialog(
-                                          payment,
-                                        )
-                                      }
-                                      className="text-destructive focus:text-destructive"
-                                    >
-                                      {isRejecting ? (
-                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                      ) : (
-                                        <XCircle className="mr-2 h-4 w-4" />
-                                      )}
-
-                                      Reject Bank Transfer
-                                    </DropdownMenuItem>
-                                  </>
-                                )}
-
-                                {/* =================================
-                                    RECEIPT
-                                ================================= */}
-
-                                {isCompleted &&
-                                  payment.receipt && (
-                                    <>
-                                      <DropdownMenuSeparator />
-
-                                      <DropdownMenuItem
-                                        onClick={() =>
-                                          goToReceipt(
-                                            payment.id,
-                                          )
-                                        }
-                                      >
-                                        <Printer className="mr-2 h-4 w-4" />
-
-                                        View / Print Receipt
-                                      </DropdownMenuItem>
-                                    </>
-                                  )}
-
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  },
-                )
+                                <DropdownMenuItem
+                                  disabled={!hasReceipt}
+                                  onSelect={() => openReceipt(payment)}
+                                >
+                                  <Printer className="mr-2 h-4 w-4" />
+                                  View receipt
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
         </div>
 
-        {/* =================================================
-            PAGINATION
-        ================================================= */}
+        {/* PAGINATION */}
 
         <div className="flex flex-col gap-3 border-t p-4 sm:flex-row sm:items-center sm:justify-between">
-
           <p className="text-sm text-muted-foreground">
-            Page{" "}
-            <span className="font-medium text-foreground">
-              {currentPage}
-            </span>{" "}
-            of{" "}
-            <span className="font-medium text-foreground">
-              {lastPage}
-            </span>
-
-            {" · "}
-
-            <span className="font-medium text-foreground">
-              {total}
-            </span>{" "}
-            payments
+            Page {currentPage} of {lastPage}
           </p>
 
           <div className="flex items-center gap-2">
-
-            <select
-              value={perPage}
-              onChange={(event) => {
-                setPerPage(
-                  Number(
-                    event.target.value,
-                  ),
-                );
-
-                setPage(1);
-              }}
-              className="h-9 rounded-md border bg-background px-2 text-sm"
-              aria-label="Payments per page"
-            >
-              {[10, 25, 50, 100].map(
-                (number) => (
-                  <option
-                    key={number}
-                    value={number}
-                  >
-                    {number} / page
-                  </option>
-                ),
-              )}
-            </select>
-
-            <button
+            <Button
               type="button"
-              disabled={
-                isFetching ||
-                currentPage <= 1
-              }
+              variant="outline"
+              size="sm"
+              disabled={currentPage <= 1 || isFetching}
               onClick={() =>
-                setPage(
-                  (current) =>
-                    Math.max(
-                      1,
-                      current - 1,
-                    ),
-                )
+                setPage((previous) => Math.max(1, previous - 1))
               }
-              className="inline-flex h-9 items-center gap-1 rounded-md border px-3 text-sm hover:bg-muted disabled:pointer-events-none disabled:opacity-50"
             >
-              <ChevronLeft className="h-4 w-4" />
+              <ChevronLeft className="mr-1 h-4 w-4" />
               Previous
-            </button>
+            </Button>
 
-            <button
+            <Button
               type="button"
-              disabled={
-                isFetching ||
-                currentPage >=
-                  lastPage
-              }
+              variant="outline"
+              size="sm"
+              disabled={currentPage >= lastPage || isFetching}
               onClick={() =>
-                setPage(
-                  (current) =>
-                    current + 1,
-                )
+                setPage((previous) => Math.min(lastPage, previous + 1))
               }
-              className="inline-flex h-9 items-center gap-1 rounded-md border px-3 text-sm hover:bg-muted disabled:pointer-events-none disabled:opacity-50"
             >
               Next
-              <ChevronRight className="h-4 w-4" />
-            </button>
-
+              <ChevronRight className="ml-1 h-4 w-4" />
+            </Button>
           </div>
         </div>
       </div>
 
-      {/* =================================================
-          FILTER SHEET
-      ================================================= */}
+      {/* VERIFY BANK TRANSFER DIALOG */}
 
-      <Sheet
-        open={sheetOpen}
-        onOpenChange={
-          setSheetOpen
-        }
+      <Dialog
+        open={verifyDialogOpen}
+        onOpenChange={(open) => {
+          if (verifyBankTransfer.isPending) return;
+
+          setVerifyDialogOpen(open);
+
+          if (!open) {
+            setVerifyPayment(null);
+          }
+        }}
       >
-        <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-md">
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ShieldCheck className="h-5 w-5" />
+              Verify bank transfer
+            </DialogTitle>
 
-          {/* HEADER */}
+            <DialogDescription>
+              Review the payment information and confirm that the bank transfer
+              has been verified against the actual bank transaction.
+            </DialogDescription>
+          </DialogHeader>
 
-          <SheetHeader className="space-y-1 border-b px-6 py-5 pr-14 text-left">
+          {verifyPayment && (
+            <div className="space-y-3 rounded-lg border bg-muted/20 p-4">
+              <div className="flex items-start justify-between gap-4">
+                <span className="text-sm text-muted-foreground">
+                  Payment number
+                </span>
 
-            <SheetTitle className="text-lg">
-              Payment Filters
-            </SheetTitle>
+                <span className="break-all text-right text-sm font-medium">
+                  {verifyPayment.payment_number ?? verifyPayment.id}
+                </span>
+              </div>
 
-            <SheetDescription>
-              Narrow down payments by method, source,
-              or payment status.
-            </SheetDescription>
+              <div className="flex items-start justify-between gap-4">
+                <span className="text-sm text-muted-foreground">
+                  Amount
+                </span>
 
-          </SheetHeader>
+                <span className="text-right text-sm font-semibold">
+                  {formatAmount(
+                    verifyPayment.amount,
+                    verifyPayment.currency ?? "ETB",
+                  )}
+                </span>
+              </div>
 
-          {/* BODY */}
+              <div className="flex items-start justify-between gap-4">
+                <span className="text-sm text-muted-foreground">
+                  Transfer reference
+                </span>
 
-          <div className="flex-1 space-y-6 overflow-y-auto px-6 py-6">
+                <span className="max-w-[65%] break-words text-right text-sm">
+                  {verifyPayment.bank_transfer_details?.transfer_reference ??
+                    "—"}
+                </span>
+              </div>
 
-            <FilterGroup
-              title="Payment method"
-              options={
-                METHOD_LABELS
-              }
-              value={
-                draftMethod
-              }
-              onChange={
-                setDraftMethod
-              }
-            />
+              <div className="flex items-start justify-between gap-4">
+                <span className="text-sm text-muted-foreground">Invoice</span>
 
-            <div className="border-t" />
+                <span className="max-w-[65%] break-words text-right text-sm">
+                  {verifyPayment.invoice?.invoice_number ??
+                    verifyPayment.invoice?.id ??
+                    "—"}
+                </span>
+              </div>
 
-            <FilterGroup
-              title="Payment source"
-              options={
-                SOURCE_LABELS
-              }
-              value={
-                draftSource
-              }
-              onChange={
-                setDraftSource
-              }
-            />
+              <div className="flex items-start justify-between gap-4">
+                <span className="text-sm text-muted-foreground">
+                  Current status
+                </span>
 
-            <div className="border-t" />
+                <Badge
+                  variant="outline"
+                  className={
+                    STATUS_STYLES[verifyPayment.status] ??
+                    "border-muted bg-muted/30"
+                  }
+                >
+                  {getPaymentStatusLabel(verifyPayment.status)}
+                </Badge>
+              </div>
+            </div>
+          )}
 
-            <FilterGroup
-              title="Payment status"
-              options={
-                STATUS_LABELS
-              }
-              value={
-                draftStatus
-              }
-              onChange={
-                setDraftStatus
-              }
-            />
-
+          <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+            Confirm only after checking the bank transfer evidence and
+            confirming the amount and reference against the appropriate bank
+            records.
           </div>
 
-          {/* FOOTER */}
-
-          <SheetFooter className="flex-row gap-3 border-t bg-muted/30 px-6 py-4 sm:space-x-0">
-
-            <button
+          <DialogFooter>
+            <Button
               type="button"
-              onClick={
-                clearDraft
-              }
+              variant="outline"
+              disabled={verifyBankTransfer.isPending}
+              onClick={() => {
+                setVerifyDialogOpen(false);
+                setVerifyPayment(null);
+              }}
+            >
+              Cancel
+            </Button>
+
+            <Button
+              type="button"
               disabled={
-                draftCount === 0
+                verifyBankTransfer.isPending ||
+                !verifyPayment ||
+                verifyPayment.status !== "PENDING"
               }
-              className="h-10 flex-1 rounded-md border bg-background px-4 text-sm font-medium hover:bg-muted disabled:pointer-events-none disabled:opacity-50"
+              onClick={() => void handleVerify()}
             >
-              Clear all
-            </button>
+              {verifyBankTransfer.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Verifying...
+                </>
+              ) : (
+                <>
+                  <ShieldCheck className="mr-2 h-4 w-4" />
+                  Confirm verification
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-            <button
-              type="button"
-              onClick={
-                applyFilters
-              }
-              className="h-10 flex-1 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-            >
-              Apply filters
-
-              {draftCount >
-                0
-                ? ` (${draftCount})`
-                : ""}
-            </button>
-
-          </SheetFooter>
-
-        </SheetContent>
-      </Sheet>
-
-      {/* =================================================
-          REJECT BANK TRANSFER DIALOG
-      ================================================= */}
+      {/* REJECT BANK TRANSFER DIALOG */}
 
       <Dialog
         open={rejectDialogOpen}
         onOpenChange={(open) => {
-          if (
-            !rejectBankTransfer.isPending
-          ) {
-            setRejectDialogOpen(
-              open,
-            );
+          if (rejectBankTransfer.isPending) return;
 
-            if (!open) {
-              setRejectPayment(null);
-              setRejectReason("");
-            }
+          setRejectDialogOpen(open);
+
+          if (!open) {
+            setRejectPayment(null);
+            setRejectReason("");
           }
         }}
       >
-        <DialogContent className="sm:max-w-md">
-
-          {/* HEADER */}
-
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>
-              Reject bank transfer
-            </DialogTitle>
+            <DialogTitle>Reject bank transfer</DialogTitle>
 
             <DialogDescription>
-              Rejecting this payment will change
-              its status to{" "}
-              <strong>
-                Cancelled
-              </strong>
-              . The payment will not be applied
-              to the invoice.
+              Provide a clear reason for rejecting this payment. The reason
+              should explain why the transfer could not be verified.
             </DialogDescription>
           </DialogHeader>
 
           {rejectPayment && (
-            <div className="space-y-5 py-2">
+            <div className="space-y-3 rounded-lg border bg-muted/20 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <span className="text-sm text-muted-foreground">Payment</span>
 
-              {/* =========================================
-                  PAYMENT SUMMARY
-              ========================================= */}
-
-              <div className="rounded-lg border bg-muted/30 p-4">
-
-                <div className="flex items-center justify-between gap-4">
-                  <span className="text-sm text-muted-foreground">
-                    Payment
-                  </span>
-
-                  <span className="text-sm font-medium">
-                    {
-                      rejectPayment.payment_number
-                    }
-                  </span>
-                </div>
-
-                <div className="mt-3 flex items-center justify-between gap-4">
-                  <span className="text-sm text-muted-foreground">
-                    Amount
-                  </span>
-
-                  <span className="text-base font-semibold">
-                    {formatAmount(
-                      rejectPayment.amount,
-                      rejectPayment.currency,
-                    )}
-                  </span>
-                </div>
-
-                <div className="mt-3 flex items-center justify-between gap-4">
-                  <span className="text-sm text-muted-foreground">
-                    Transfer reference
-                  </span>
-
-                  <span className="max-w-48 break-all text-right font-mono text-xs font-medium">
-                    {rejectPayment
-                      .bank_transfer_details
-                      ?.transfer_reference ??
-                      "—"}
-                  </span>
-                </div>
-
-                <div className="mt-3 flex items-center justify-between gap-4">
-                  <span className="text-sm text-muted-foreground">
-                    Invoice
-                  </span>
-
-                  <span className="max-w-48 truncate text-right text-sm font-medium">
-                    {rejectPayment.invoice_id ??
-                      "—"}
-                  </span>
-                </div>
-
+                <span className="text-right text-sm font-medium">
+                  {rejectPayment.payment_number ?? rejectPayment.id}
+                </span>
               </div>
 
-              {/* =========================================
-                  WARNING
-              ========================================= */}
+              <div className="flex items-start justify-between gap-3">
+                <span className="text-sm text-muted-foreground">Amount</span>
 
-              <div className="flex gap-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-
-                <XCircle className="mt-0.5 h-4 w-4 shrink-0" />
-
-                <p className="leading-5">
-                  This action will cancel the pending
-                  bank transfer. The amount will not
-                  be recognized as a completed municipal
-                  payment.
-                </p>
-
+                <span className="text-right text-sm font-semibold">
+                  {formatAmount(
+                    rejectPayment.amount,
+                    rejectPayment.currency ?? "ETB",
+                  )}
+                </span>
               </div>
 
-              {/* =========================================
-                  REASON
-              ========================================= */}
+              <div className="flex items-start justify-between gap-3">
+                <span className="text-sm text-muted-foreground">
+                  Transfer reference
+                </span>
 
-              <div className="space-y-2">
-
-                <label
-                  htmlFor="rejection-reason"
-                  className="text-sm font-medium"
-                >
-                  Rejection reason
-                  <span className="ml-1 text-destructive">
-                    *
-                  </span>
-                </label>
-
-                <Textarea
-                  id="rejection-reason"
-                  value={
-                    rejectReason
-                  }
-                  onChange={(event) =>
-                    setRejectReason(
-                      event.target.value,
-                    )
-                  }
-                  placeholder="Explain why this bank transfer cannot be verified..."
-                  rows={4}
-                  maxLength={500}
-                  disabled={
-                    rejectBankTransfer.isPending
-                  }
-                />
-
-                <div className="flex justify-end">
-                  <span className="text-xs text-muted-foreground">
-                    {
-                      rejectReason.length
-                    }
-                    /500
-                  </span>
-                </div>
-
+                <span className="max-w-[65%] break-words text-right text-sm">
+                  {rejectPayment.bank_transfer_details?.transfer_reference ??
+                    "—"}
+                </span>
               </div>
 
-              {/* =========================================
-                  ERROR
-              ========================================= */}
+              <div className="flex items-start justify-between gap-3">
+                <span className="text-sm text-muted-foreground">Invoice</span>
 
-              {rejectBankTransfer.isError && (
-                <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-3 text-sm text-destructive">
-                  {rejectBankTransfer.error instanceof
-                  Error
-                    ? rejectBankTransfer.error.message
-                    : "Unable to reject this payment. Please try again."}
-                </div>
-              )}
-
+                <span className="max-w-[65%] break-words text-right text-sm">
+                  {rejectPayment.invoice?.invoice_number ??
+                    rejectPayment.invoice?.id ??
+                    "—"}
+                </span>
+              </div>
             </div>
           )}
 
-          {/* ===========================================
-              FOOTER
-          =========================================== */}
+          <div className="space-y-2">
+            <label
+              htmlFor="bank-transfer-rejection-reason"
+              className="text-sm font-medium"
+            >
+              Rejection reason <span className="text-destructive">*</span>
+            </label>
 
-          <DialogFooter className="gap-2">
+            <Textarea
+              id="bank-transfer-rejection-reason"
+              value={rejectReason}
+              onChange={(event) => setRejectReason(event.target.value)}
+              placeholder="Explain why this bank transfer is being rejected..."
+              rows={4}
+              maxLength={500}
+              disabled={rejectBankTransfer.isPending}
+            />
 
-            <button
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs text-muted-foreground">
+                A rejection reason is required.
+              </p>
+
+              <p className="text-xs tabular-nums text-muted-foreground">
+                {rejectReason.length}/500
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
               type="button"
-              disabled={
-                rejectBankTransfer.isPending
-              }
+              variant="outline"
+              disabled={rejectBankTransfer.isPending}
               onClick={() => {
-                setRejectDialogOpen(
-                  false,
-                );
-
+                setRejectDialogOpen(false);
                 setRejectPayment(null);
                 setRejectReason("");
               }}
-              className="inline-flex h-10 items-center justify-center rounded-md border bg-background px-4 text-sm font-medium hover:bg-muted disabled:pointer-events-none disabled:opacity-50"
             >
               Cancel
-            </button>
+            </Button>
 
-            <button
+            <Button
               type="button"
+              variant="destructive"
               disabled={
+                rejectBankTransfer.isPending ||
                 !rejectReason.trim() ||
-                rejectBankTransfer.isPending
+                rejectReason.trim().length > 500
               }
-              onClick={
-                handleReject
-              }
-              className="inline-flex h-10 items-center justify-center rounded-md bg-destructive px-4 text-sm font-medium text-destructive-foreground hover:bg-destructive/90 disabled:pointer-events-none disabled:opacity-50"
+              onClick={() => void handleReject()}
             >
-              {rejectBankTransfer.isPending ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Rejecting...
-                </>
-              ) : (
-                <>
-                  <XCircle className="mr-2 h-4 w-4" />
-                  Reject Payment
-                </>
+              {rejectBankTransfer.isPending && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               )}
-            </button>
-
+              Reject payment
+            </Button>
           </DialogFooter>
-
         </DialogContent>
       </Dialog>
-
     </div>
   );
 }
-
-export default PaymentsPage;

@@ -1,990 +1,806 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
+  AlertCircle,
   ArrowRight,
   Banknote,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Clock3,
   CreditCard,
-  Filter,
   Landmark,
+  Loader2,
+  RefreshCw,
   Search,
   Smartphone,
-  WalletCards,
   X,
+  XCircle,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import {
-  Sheet,
-  SheetClose,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
+
+import type { Payment } from "@/types/payment/payment";
+import { useAgentPayments } from "@/hooks/agent/agent-payment.hook";
 
 /* =========================================================
-   TYPES
+   CONFIGURATION
    ========================================================= */
 
-type PaymentMethod = "ONLINE" | "BANK_TRANSFER";
+const PAGE_SIZE = 20;
 
-type PaymentStatus = "POSTED" | "PENDING_VERIFICATION";
+const STATUS_TABS = [
+  { value: "ALL", label: "All" },
+  { value: "PENDING", label: "Pending" },
+  { value: "PROCESSING", label: "Processing" },
+  { value: "COMPLETED", label: "Completed" },
+  { value: "FAILED", label: "Failed" },
+  { value: "CANCELLED", label: "Cancelled" },
+  { value: "EXPIRED", label: "Expired" },
+  { value: "REVERSED", label: "Reversed" },
+] as const;
 
-type Payment = {
-  id: string;
-  receiptNumber: string;
-  invoiceNumber: string;
-  taxpayerName: string;
-  tin: string;
-  amount: number;
-  method: PaymentMethod;
-  provider?: "TELEBIRR" | "CHAPA";
-  bank?: string;
-  reference?: string;
-  status: PaymentStatus;
-  date: string;
-  time: string;
+type StatusFilter = (typeof STATUS_TABS)[number]["value"];
+
+const METHOD_OPTIONS = [
+  { value: "ALL", label: "All methods" },
+  { value: "CASH", label: "Cash" },
+  { value: "BANK_TRANSFER", label: "Bank transfer" },
+  { value: "ONLINE", label: "Online" },
+] as const;
+
+type MethodFilter = (typeof METHOD_OPTIONS)[number]["value"];
+
+const STATUS_STYLES: Record<
+  string,
+  { label: string; className: string; icon: React.ElementType }
+> = {
+  COMPLETED: {
+    label: "Completed",
+    className:
+      "bg-emerald-50 text-emerald-700 ring-emerald-600/20 dark:bg-emerald-950/40 dark:text-emerald-300",
+    icon: CheckCircle2,
+  },
+  PENDING: {
+    label: "Pending",
+    className:
+      "bg-amber-50 text-amber-700 ring-amber-600/20 dark:bg-amber-950/40 dark:text-amber-300",
+    icon: Clock3,
+  },
+  PROCESSING: {
+    label: "Processing",
+    className:
+      "bg-blue-50 text-blue-700 ring-blue-600/20 dark:bg-blue-950/40 dark:text-blue-300",
+    icon: RefreshCw,
+  },
+  FAILED: {
+    label: "Failed",
+    className:
+      "bg-red-50 text-red-700 ring-red-600/20 dark:bg-red-950/40 dark:text-red-300",
+    icon: XCircle,
+  },
+  CANCELLED: {
+    label: "Cancelled",
+    className: "bg-muted text-muted-foreground ring-border",
+    icon: XCircle,
+  },
+  EXPIRED: {
+    label: "Expired",
+    className: "bg-muted text-muted-foreground ring-border",
+    icon: Clock3,
+  },
+  REVERSED: {
+    label: "Reversed",
+    className:
+      "bg-orange-50 text-orange-700 ring-orange-600/20 dark:bg-orange-950/40 dark:text-orange-300",
+    icon: RefreshCw,
+  },
 };
 
-/* =========================================================
-   MOCK DATA
-   ========================================================= */
-
-const MOCK_PAYMENTS: Payment[] = [
-  {
-    id: "PAY-00091",
-    receiptNumber: "RCT-2026-00091",
-    invoiceNumber: "INV-2026-00124",
-    taxpayerName: "Abebe Trading PLC",
-    tin: "0012345678",
-    amount: 12500,
-    method: "ONLINE",
-    provider: "TELEBIRR",
-    status: "POSTED",
-    date: "2026-10-03",
-    time: "14:32",
-  },
-  {
-    id: "PAY-00090",
-    receiptNumber: "RCT-2026-00090",
-    invoiceNumber: "INV-2026-00121",
-    taxpayerName: "Hawa Mohammed",
-    tin: "0019876543",
-    amount: 4800,
-    method: "BANK_TRANSFER",
-    bank: "Commercial Bank of Ethiopia",
-    reference: "CBE-784521",
-    status: "PENDING_VERIFICATION",
-    date: "2026-10-03",
-    time: "13:18",
-  },
-  {
-    id: "PAY-00089",
-    receiptNumber: "RCT-2026-00089",
-    invoiceNumber: "INV-2026-00118",
-    taxpayerName: "Kedir Construction",
-    tin: "0023456789",
-    amount: 28500,
-    method: "ONLINE",
-    provider: "CHAPA",
-    status: "POSTED",
-    date: "2026-10-03",
-    time: "11:45",
-  },
-  {
-    id: "PAY-00088",
-    receiptNumber: "RCT-2026-00088",
-    invoiceNumber: "INV-2026-00115",
-    taxpayerName: "Sara Hotel",
-    tin: "0034567891",
-    amount: 17600,
-    method: "BANK_TRANSFER",
-    bank: "Awash Bank",
-    reference: "AWB-458921",
-    status: "POSTED",
-    date: "2026-10-03",
-    time: "10:26",
-  },
-  {
-    id: "PAY-00087",
-    receiptNumber: "RCT-2026-00087",
-    invoiceNumber: "INV-2026-00109",
-    taxpayerName: "Mekonnen Services",
-    tin: "0045678912",
-    amount: 7200,
-    method: "ONLINE",
-    provider: "TELEBIRR",
-    status: "POSTED",
-    date: "2026-10-03",
-    time: "09:41",
-  },
-  {
-    id: "PAY-00086",
-    receiptNumber: "RCT-2026-00086",
-    invoiceNumber: "INV-2026-00103",
-    taxpayerName: "Fatuma Ali",
-    tin: "0056789123",
-    amount: 3500,
-    method: "BANK_TRANSFER",
-    bank: "Dashen Bank",
-    reference: "DB-928374",
-    status: "PENDING_VERIFICATION",
-    date: "2026-10-03",
-    time: "09:12",
-  },
-];
+const METHOD_STYLES: Record<
+  string,
+  { label: string; icon: React.ElementType }
+> = {
+  CASH: { label: "Cash", icon: Banknote },
+  BANK_TRANSFER: { label: "Bank transfer", icon: Landmark },
+  ONLINE: { label: "Online", icon: Smartphone },
+};
 
 /* =========================================================
    HELPERS
    ========================================================= */
 
-const formatETB = (amount: number) =>
-  new Intl.NumberFormat("en-ET", {
+function humanize(value: string): string {
+  return value ? value.replaceAll("_", " ") : "Unknown";
+}
+
+function formatAmount(amount: number | string | null | undefined): string {
+  const numeric = Number(amount ?? 0);
+
+  return new Intl.NumberFormat("en-ET", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  }).format(amount);
+  }).format(Number.isFinite(numeric) ? numeric : 0);
+}
 
-/* =========================================================
-   STATUS BADGE
-   ========================================================= */
+function formatDateTime(value?: string | null): string {
+  if (!value) return "—";
 
-function StatusBadge({
-  status,
-}: {
-  status: PaymentStatus;
-}) {
-  if (status === "POSTED") {
-    return (
-      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/10">
-        <CheckCircle2 className="h-3.5 w-3.5" />
-        Posted
-      </span>
-    );
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+
+  return new Intl.DateTimeFormat("en-ET", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+}
+
+function getStatus(payment: Payment): string {
+  return String(payment.status ?? "").toUpperCase();
+}
+
+function getMethod(payment: Payment): string {
+  return String(payment.payment_method ?? "").toUpperCase();
+}
+
+function getPaymentNumber(payment: Payment): string {
+  return (
+    payment.receipt?.receipt_number ||
+    payment.payment_number ||
+    payment.transaction_reference ||
+    payment.id
+  );
+}
+
+function getInvoiceNumber(payment: Payment): string {
+  return payment.invoice?.invoice_number || "No invoice";
+}
+
+function getTaxpayerName(payment: Payment): string {
+  const citizen = payment.citizen ?? payment.invoice?.citizen;
+
+  return (
+    citizen?.full_name ||
+    citizen?.name ||
+    payment.payer?.name ||
+    "Unknown taxpayer"
+  );
+}
+
+function getTaxpayerId(payment: Payment): string | null {
+  const citizen = (payment.citizen ?? payment.invoice?.citizen) as unknown as
+    | { citizen_uid?: string | null; taxpayer_number?: string | null }
+    | undefined;
+
+  return citizen?.citizen_uid || citizen?.taxpayer_number || null;
+}
+
+/** Second line under the method: provider, bank reference, or nothing. */
+function getMethodDetail(payment: Payment): string | null {
+  const method = getMethod(payment);
+
+  if (method === "ONLINE" && payment.payment_provider) {
+    return humanize(String(payment.payment_provider));
   }
 
-  return (
-    <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-600/10">
-      <Clock3 className="h-3.5 w-3.5" />
-      Pending verification
-    </span>
-  );
-}
-
-/* =========================================================
-   METHOD
-   ========================================================= */
-
-function MethodBadge({
-  payment,
-}: {
-  payment: Payment;
-}) {
-  if (payment.method === "ONLINE") {
-    return (
-      <div className="flex items-center gap-2.5">
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100">
-          <Smartphone className="h-4 w-4 text-slate-600" />
-        </div>
-
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-slate-800">
-            Online
-          </p>
-
-          <p className="text-xs text-slate-400">
-            {payment.provider}
-          </p>
-        </div>
-      </div>
-    );
+  if (method === "BANK_TRANSFER") {
+    const reference =
+      payment.provider_reference || payment.transaction_reference;
+    return reference ? `Ref ${reference}` : null;
   }
 
-  return (
-    <div className="flex items-center gap-2.5">
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100">
-        <Landmark className="h-4 w-4 text-slate-600" />
-      </div>
+  return null;
+}
 
-      <div className="min-w-0">
-        <p className="text-sm font-medium text-slate-800">
-          Bank transfer
-        </p>
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error
+    ? error.message
+    : "Something went wrong while loading payments. Try again.";
+}
 
-        <p className="max-w-[180px] truncate text-xs text-slate-400">
-          {payment.bank}
-        </p>
-      </div>
-    </div>
-  );
+function isStatusFilter(value: string | null): value is StatusFilter {
+  return STATUS_TABS.some((tab) => tab.value === value);
 }
 
 /* =========================================================
-   FILTER OPTION
-   ========================================================= */
-
-function FilterOption({
-  selected,
-  onClick,
-  children,
-}: {
-  selected: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={[
-        "flex w-full items-center gap-3 rounded-lg border px-3.5 py-3 text-left transition-colors",
-        selected
-          ? "border-primary bg-primary/5"
-          : "border-slate-200 hover:bg-slate-50",
-      ].join(" ")}
-    >
-      <span
-        className={[
-          "flex h-4 w-4 shrink-0 items-center justify-center rounded-full border",
-          selected
-            ? "border-primary"
-            : "border-slate-300",
-        ].join(" ")}
-      >
-        {selected && (
-          <span className="h-2 w-2 rounded-full bg-primary" />
-        )}
-      </span>
-
-      <span
-        className={[
-          "text-sm",
-          selected
-            ? "font-medium text-slate-900"
-            : "text-slate-600",
-        ].join(" ")}
-      >
-        {children}
-      </span>
-    </button>
-  );
-}
-
-/* =========================================================
-   PAGE
+   PAGE (Suspense wrapper is required for useSearchParams)
    ========================================================= */
 
 export default function PaymentsPage() {
+  return (
+    <Suspense fallback={null}>
+      <PaymentsContent />
+    </Suspense>
+  );
+}
+
+function PaymentsContent() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  // The dashboard links here with ?status=PENDING, so start from the URL.
+  const urlStatus = searchParams.get("status")?.toUpperCase() ?? null;
+  const initialStatus: StatusFilter = isStatusFilter(urlStatus)
+    ? urlStatus
+    : "ALL";
+
+  const [status, setStatus] = useState<StatusFilter>(initialStatus);
+  const [method, setMethod] = useState<MethodFilter>("ALL");
+  const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
 
-  const [statusFilter, setStatusFilter] = useState<
-    "ALL" | PaymentStatus
-  >("ALL");
+  // Search as you type, without calling the API on every keystroke.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearch(searchInput.trim());
+      setPage(1);
+    }, 400);
 
-  const [methodFilter, setMethodFilter] = useState<
-    "ALL" | PaymentMethod
-  >("ALL");
+    return () => clearTimeout(timer);
+  }, [searchInput]);
 
-  /* ---------------------------------------------------------
-     FILTERED PAYMENTS
-     --------------------------------------------------------- */
+  const changeStatus = (next: StatusFilter) => {
+    setStatus(next);
+    setPage(1);
 
-  const filteredPayments = useMemo(() => {
-    const query = search.trim().toLowerCase();
+    const params = new URLSearchParams(searchParams.toString());
+    if (next === "ALL") params.delete("status");
+    else params.set("status", next);
 
-    return MOCK_PAYMENTS.filter((payment) => {
-      const matchesSearch =
-        !query ||
-        payment.id.toLowerCase().includes(query) ||
-        payment.receiptNumber.toLowerCase().includes(query) ||
-        payment.invoiceNumber.toLowerCase().includes(query) ||
-        payment.taxpayerName.toLowerCase().includes(query) ||
-        payment.tin.toLowerCase().includes(query) ||
-        payment.reference?.toLowerCase().includes(query);
-
-      const matchesStatus =
-        statusFilter === "ALL" ||
-        payment.status === statusFilter;
-
-      const matchesMethod =
-        methodFilter === "ALL" ||
-        payment.method === methodFilter;
-
-      return (
-        matchesSearch &&
-        matchesStatus &&
-        matchesMethod
-      );
+    const queryString = params.toString();
+    router.replace(queryString ? `${pathname}?${queryString}` : pathname, {
+      scroll: false,
     });
-  }, [search, statusFilter, methodFilter]);
-
-  /* ---------------------------------------------------------
-     SUMMARY
-     --------------------------------------------------------- */
-
-  const postedToday = MOCK_PAYMENTS.filter(
-    (payment) => payment.status === "POSTED",
-  ).reduce(
-    (total, payment) => total + payment.amount,
-    0,
-  );
-
-  const pendingAmount = MOCK_PAYMENTS.filter(
-    (payment) =>
-      payment.status === "PENDING_VERIFICATION",
-  ).reduce(
-    (total, payment) => total + payment.amount,
-    0,
-  );
-
-  const postedCount = MOCK_PAYMENTS.filter(
-    (payment) => payment.status === "POSTED",
-  ).length;
-
-  const pendingCount = MOCK_PAYMENTS.filter(
-    (payment) =>
-      payment.status === "PENDING_VERIFICATION",
-  ).length;
-
-  const hasActiveFilters =
-    statusFilter !== "ALL" ||
-    methodFilter !== "ALL";
-
-  const activeFilterCount =
-    (statusFilter !== "ALL" ? 1 : 0) +
-    (methodFilter !== "ALL" ? 1 : 0);
-
-  const clearFilters = () => {
-    setStatusFilter("ALL");
-    setMethodFilter("ALL");
   };
 
+  const changeMethod = (next: MethodFilter) => {
+    setMethod(next);
+    setPage(1);
+  };
+
+  const filters = useMemo(
+    () => ({
+      page,
+      per_page: PAGE_SIZE,
+      search: search || undefined,
+      status: status === "ALL" ? undefined : status,
+      payment_method: method === "ALL" ? undefined : method,
+    }),
+    [page, search, status, method],
+  );
+
+  const query = useAgentPayments(filters);
+
+  const payments = query.data?.items ?? [];
+  const total = query.data?.pagination?.total ?? payments.length;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  const isLoading = query.isLoading;
+  const isError = query.isError && !isLoading;
+
+  const hasFilters = status !== "ALL" || method !== "ALL" || !!search;
+
+  const clearAll = () => {
+    setSearchInput("");
+    setSearch("");
+    setMethod("ALL");
+    changeStatus("ALL");
+  };
+
+  // Totals for the rows currently loaded (not the whole history).
+  const summary = useMemo(() => {
+    let completed = 0;
+    let open = 0;
+
+    for (const payment of payments) {
+      const amount = Number(payment.amount || 0);
+      const s = getStatus(payment);
+
+      if (s === "COMPLETED") completed += amount;
+      if (s === "PENDING" || s === "PROCESSING") open += amount;
+    }
+
+    return { completed, open };
+  }, [payments]);
+
+  const from = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+  const to = Math.min(page * PAGE_SIZE, total);
+
   return (
-    <div className="min-h-screen bg-slate-50">
-      {/* =====================================================
-          HEADER
-          ===================================================== */}
+    <div className="mx-auto w-full max-w-4xl space-y-6">
+      {/* ---------- Header ---------- */}
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-semibold tracking-tight">Payments</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Search, filter and review the payments you have processed.
+          </p>
+        </div>
 
-      <header className="border-b bg-white">
-        <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 text-sm text-slate-500">
-                <WalletCards className="h-4 w-4" />
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => void query.refetch()}
+            disabled={query.isFetching}
+          >
+            <RefreshCw
+              className={`mr-2 h-4 w-4 ${
+                query.isFetching ? "animate-spin" : ""
+              }`}
+            />
+            Refresh
+          </Button>
 
-                <span>Revenue</span>
-
-                <span>/</span>
-
-                <span className="text-slate-700">
-                  Payments
-                </span>
-              </div>
-
-              <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">
-                Payments
-              </h1>
-
-              <p className="mt-1 text-sm text-slate-500">
-                View payments processed on behalf of taxpayers.
-              </p>
-            </div>
-
-            <Button asChild>
-              <Link href="/revenue/payments/process">
-                Process payment
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Link>
-            </Button>
-          </div>
+          <Button asChild>
+            <Link href="/agent/dashboard/payments/process">
+              Process payment
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Link>
+          </Button>
         </div>
       </header>
 
-      {/* =====================================================
-          MAIN
-          ===================================================== */}
-
-      <main className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
-        {/* ===================================================
-            SUMMARY
-            =================================================== */}
-
-        <section className="grid gap-4 md:grid-cols-3">
-          {/* Posted */}
-          <SummaryCard
-            label="Posted today"
-            value={`ETB ${formatETB(postedToday)}`}
-            description={`${postedCount} ${
-              postedCount === 1
-                ? "payment"
-                : "payments"
-            } successfully posted`}
-            icon={CheckCircle2}
-            iconClassName="bg-emerald-50 text-emerald-600"
+      {/* ---------- Summary strip ---------- */}
+      <Card className="overflow-hidden">
+        <div className="grid grid-cols-1 divide-y sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+          <SummaryItem
+            label="Completed"
+            value={`ETB ${formatAmount(summary.completed)}`}
+            loading={isLoading}
           />
-
-          {/* Pending */}
-          <SummaryCard
-            label="Pending verification"
-            value={`ETB ${formatETB(pendingAmount)}`}
-            description={`${pendingCount} ${
-              pendingCount === 1
-                ? "payment"
-                : "payments"
-            } awaiting verification`}
-            icon={Clock3}
-            iconClassName="bg-amber-50 text-amber-600"
-            attention={pendingCount > 0}
+          <SummaryItem
+            label="Pending or processing"
+            value={`ETB ${formatAmount(summary.open)}`}
+            loading={isLoading}
+            highlight={summary.open > 0}
           />
-
-          {/* Transactions */}
-          <SummaryCard
-            label="Payments today"
-            value={MOCK_PAYMENTS.length.toString()}
-            description="Online and bank transfer payments"
-            icon={CreditCard}
-            iconClassName="bg-slate-100 text-slate-600"
+          <SummaryItem
+            label="Matching payments"
+            value={total.toLocaleString("en-ET")}
+            loading={isLoading}
           />
-        </section>
+        </div>
 
-        {/* ===================================================
-            PAYMENT HISTORY
-            =================================================== */}
+        <p className="border-t bg-muted/30 px-5 py-2 text-xs text-muted-foreground">
+          Amounts cover the {payments.length} payment
+          {payments.length === 1 ? "" : "s"} on this page.
+        </p>
+      </Card>
 
-        <section className="overflow-hidden rounded-xl border bg-white">
-          {/* -------------------------------------------------
-              SECTION HEADER
-              ------------------------------------------------- */}
+      {/* ---------- Payments list ---------- */}
+      <Card className="overflow-hidden">
+        {/* Toolbar */}
+        <div className="space-y-4 border-b p-4 sm:p-5">
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <div className="relative flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
 
-          <div className="border-b px-5 py-4">
-            <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-              <div>
-                <h2 className="font-semibold text-slate-900">
-                  Payment history
-                </h2>
+              <Input
+                value={searchInput}
+                onChange={(event) => setSearchInput(event.target.value)}
+                placeholder="Search by payment, invoice or taxpayer"
+                className="pl-9 pr-9"
+                aria-label="Search payments"
+              />
 
-                <p className="mt-0.5 text-sm text-slate-500">
-                  Payments processed by you.
-                </p>
-              </div>
-
-              <div className="flex flex-col gap-2 sm:flex-row">
-                {/* Search */}
-                <div className="relative sm:w-80">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-
-                  <Input
-                    value={search}
-                    onChange={(event) =>
-                      setSearch(event.target.value)
-                    }
-                    placeholder="Search payment, invoice or taxpayer"
-                    className="h-10 pl-9 pr-9"
-                  />
-
-                  {search && (
-                    <button
-                      type="button"
-                      onClick={() => setSearch("")}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
-                      aria-label="Clear search"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  )}
-                </div>
-
-                {/* Filter Sheet */}
-                <Sheet>
-                  <SheetTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className="relative h-10 gap-2"
-                    >
-                      <Filter className="h-4 w-4" />
-
-                      Filter
-
-                      {activeFilterCount > 0 && (
-                        <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-semibold text-primary-foreground">
-                          {activeFilterCount}
-                        </span>
-                      )}
-                    </Button>
-                  </SheetTrigger>
-
-                  <SheetContent
-                    side="right"
-                    className="flex w-full flex-col sm:max-w-md"
-                  >
-                    <SheetHeader className="border-b pb-5">
-                      <SheetTitle>
-                        Filter payments
-                      </SheetTitle>
-
-                      <SheetDescription>
-                        Refine the payment history by status
-                        or payment method.
-                      </SheetDescription>
-                    </SheetHeader>
-
-                    <div className="flex-1 space-y-7 overflow-y-auto py-6">
-                      {/* Status */}
-                      <div>
-                        <div className="mb-3">
-                          <h3 className="text-sm font-semibold text-slate-900">
-                            Status
-                          </h3>
-
-                          <p className="mt-1 text-xs text-slate-500">
-                            Select the payment status to display.
-                          </p>
-                        </div>
-
-                        <div className="space-y-2">
-                          <FilterOption
-                            selected={
-                              statusFilter === "ALL"
-                            }
-                            onClick={() =>
-                              setStatusFilter("ALL")
-                            }
-                          >
-                            All statuses
-                          </FilterOption>
-
-                          <FilterOption
-                            selected={
-                              statusFilter === "POSTED"
-                            }
-                            onClick={() =>
-                              setStatusFilter("POSTED")
-                            }
-                          >
-                            Posted
-                          </FilterOption>
-
-                          <FilterOption
-                            selected={
-                              statusFilter ===
-                              "PENDING_VERIFICATION"
-                            }
-                            onClick={() =>
-                              setStatusFilter(
-                                "PENDING_VERIFICATION",
-                              )
-                            }
-                          >
-                            Pending verification
-                          </FilterOption>
-                        </div>
-                      </div>
-
-                      {/* Method */}
-                      <div>
-                        <div className="mb-3">
-                          <h3 className="text-sm font-semibold text-slate-900">
-                            Payment method
-                          </h3>
-
-                          <p className="mt-1 text-xs text-slate-500">
-                            Select how the payment was processed.
-                          </p>
-                        </div>
-
-                        <div className="space-y-2">
-                          <FilterOption
-                            selected={
-                              methodFilter === "ALL"
-                            }
-                            onClick={() =>
-                              setMethodFilter("ALL")
-                            }
-                          >
-                            All methods
-                          </FilterOption>
-
-                          <FilterOption
-                            selected={
-                              methodFilter === "ONLINE"
-                            }
-                            onClick={() =>
-                              setMethodFilter("ONLINE")
-                            }
-                          >
-                            <span className="flex items-center gap-2">
-                              <Smartphone className="h-4 w-4 text-slate-500" />
-                              Online
-                            </span>
-                          </FilterOption>
-
-                          <FilterOption
-                            selected={
-                              methodFilter ===
-                              "BANK_TRANSFER"
-                            }
-                            onClick={() =>
-                              setMethodFilter(
-                                "BANK_TRANSFER",
-                              )
-                            }
-                          >
-                            <span className="flex items-center gap-2">
-                              <Landmark className="h-4 w-4 text-slate-500" />
-                              Bank transfer
-                            </span>
-                          </FilterOption>
-                        </div>
-                      </div>
-                    </div>
-
-                    <SheetFooter className="border-t pt-4">
-                      <Button
-                        variant="outline"
-                        onClick={clearFilters}
-                        disabled={!hasActiveFilters}
-                      >
-                        Clear filters
-                      </Button>
-
-                      <SheetClose asChild>
-                        <Button>
-                          Apply filters
-                        </Button>
-                      </SheetClose>
-                    </SheetFooter>
-                  </SheetContent>
-                </Sheet>
-              </div>
-            </div>
-
-            {/* Active filter summary */}
-            {(hasActiveFilters || search) && (
-              <div className="mt-4 flex flex-wrap items-center gap-2">
-                <span className="text-xs font-medium text-slate-500">
-                  Active:
-                </span>
-
-                {search && (
-                  <FilterChip
-                    label={`Search: ${search}`}
-                    onRemove={() => setSearch("")}
-                  />
-                )}
-
-                {statusFilter !== "ALL" && (
-                  <FilterChip
-                    label={
-                      statusFilter === "POSTED"
-                        ? "Posted"
-                        : "Pending verification"
-                    }
-                    onRemove={() =>
-                      setStatusFilter("ALL")
-                    }
-                  />
-                )}
-
-                {methodFilter !== "ALL" && (
-                  <FilterChip
-                    label={
-                      methodFilter === "ONLINE"
-                        ? "Online"
-                        : "Bank transfer"
-                    }
-                    onRemove={() =>
-                      setMethodFilter("ALL")
-                    }
-                  />
-                )}
-
+              {searchInput && (
                 <button
                   type="button"
-                  onClick={() => {
-                    setSearch("");
-                    clearFilters();
-                  }}
-                  className="ml-1 text-xs font-medium text-primary hover:underline"
+                  onClick={() => setSearchInput("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  aria-label="Clear search"
                 >
-                  Clear all
+                  <X className="h-4 w-4" />
                 </button>
-              </div>
-            )}
+              )}
+            </div>
+
+            <select
+              value={method}
+              onChange={(event) =>
+                changeMethod(event.target.value as MethodFilter)
+              }
+              aria-label="Filter by payment method"
+              className="h-10 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring sm:w-44"
+            >
+              {METHOD_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
           </div>
 
-          {/* -------------------------------------------------
-              TABLE
-              ------------------------------------------------- */}
+          {/* Status tabs */}
+          <div
+            role="tablist"
+            aria-label="Filter by status"
+            className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-0.5"
+          >
+            {STATUS_TABS.map((tab) => {
+              const active = status === tab.value;
 
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[980px]">
-              <thead>
-                <tr className="border-b bg-slate-50/70">
-                  <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Payment
-                  </th>
+              return (
+                <button
+                  key={tab.value}
+                  role="tab"
+                  type="button"
+                  aria-selected={active}
+                  onClick={() => changeStatus(tab.value)}
+                  className={`shrink-0 rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
+                    active
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
 
-                  <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Taxpayer
-                  </th>
-
-                  <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Method
-                  </th>
-
-                  <th className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Amount
-                  </th>
-
-                  <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Status
-                  </th>
-
-                  <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Date
-                  </th>
-
-                  <th className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Action
-                  </th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {filteredPayments.map((payment) => (
-                  <tr
-                    key={payment.id}
-                    className="border-b last:border-0 transition-colors hover:bg-slate-50/70"
-                  >
-                    {/* Payment */}
-                    <td className="px-5 py-4">
-                      <Link
-                        href={`/revenue/payments/${payment.id}`}
-                        className="group inline-block"
-                      >
-                        <p className="font-medium text-slate-900 group-hover:text-primary">
-                          {payment.receiptNumber}
-                        </p>
-
-                        <p className="mt-1 text-xs text-slate-500">
-                          {payment.invoiceNumber}
-                        </p>
-                      </Link>
-                    </td>
-
-                    {/* Taxpayer */}
-                    <td className="px-5 py-4">
-                      <div>
-                        <p className="font-medium text-slate-800">
-                          {payment.taxpayerName}
-                        </p>
-
-                        <p className="mt-1 text-xs text-slate-500">
-                          TIN: {payment.tin}
-                        </p>
-                      </div>
-                    </td>
-
-                    {/* Method */}
-                    <td className="px-5 py-4">
-                      <MethodBadge payment={payment} />
-
-                      {payment.reference && (
-                        <p className="mt-1 pl-10 text-xs text-slate-400">
-                          Ref: {payment.reference}
-                        </p>
-                      )}
-                    </td>
-
-                    {/* Amount */}
-                    <td className="px-5 py-4 text-right">
-                      <span className="font-semibold tabular-nums text-slate-900">
-                        ETB {formatETB(payment.amount)}
-                      </span>
-                    </td>
-
-                    {/* Status */}
-                    <td className="px-5 py-4">
-                      <StatusBadge
-                        status={payment.status}
-                      />
-                    </td>
-
-                    {/* Date */}
-                    <td className="px-5 py-4">
-                      <p className="text-sm text-slate-700">
-                        {payment.date}
-                      </p>
-
-                      <p className="mt-1 text-xs text-slate-400">
-                        {payment.time}
-                      </p>
-                    </td>
-
-                    {/* Action */}
-                    <td className="px-5 py-4 text-right">
-                      <Button
-                        asChild
-                        variant="ghost"
-                        size="sm"
-                        className="gap-1.5"
-                      >
-                        <Link
-                          href={`/agent/dashboard/payments/${payment.id}`}
-                        >
-                          View
-                          <ArrowRight className="h-3.5 w-3.5" />
-                        </Link>
-                      </Button>
-                    </td>
+        {/* Body */}
+        {isLoading ? (
+          <StateMessage
+            icon={<Loader2 className="h-6 w-6 animate-spin" />}
+            title="Loading payments"
+          />
+        ) : isError ? (
+          <StateMessage
+            icon={<AlertCircle className="h-6 w-6" />}
+            title="Couldn't load payments"
+            description={getErrorMessage(query.error)}
+            action={
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => void query.refetch()}
+                disabled={query.isFetching}
+              >
+                Try again
+              </Button>
+            }
+          />
+        ) : payments.length === 0 ? (
+          <StateMessage
+            icon={<Search className="h-6 w-6" />}
+            title={hasFilters ? "No matching payments" : "No payments yet"}
+            description={
+              hasFilters
+                ? "Try a different search or clear the filters."
+                : "Payments you process will appear here."
+            }
+            action={
+              hasFilters ? (
+                <Button variant="outline" size="sm" onClick={clearAll}>
+                  Clear filters
+                </Button>
+              ) : (
+                <Button asChild size="sm">
+                  <Link href="/agent/dashboard/payments/process">
+                    Process payment
+                  </Link>
+                </Button>
+              )
+            }
+          />
+        ) : (
+          <>
+            {/* Desktop table */}
+            <div className="hidden overflow-x-auto md:block">
+              <table className="w-full min-w-[760px] text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/30 text-xs text-muted-foreground">
+                    <th className="px-5 py-3 text-left font-medium">Payment</th>
+                    <th className="px-5 py-3 text-left font-medium">
+                      Taxpayer
+                    </th>
+                    <th className="px-5 py-3 text-left font-medium">Method</th>
+                    <th className="px-5 py-3 text-right font-medium">Amount</th>
+                    <th className="px-5 py-3 text-left font-medium">Status</th>
+                    <th className="w-10 px-3 py-3">
+                      <span className="sr-only">Open</span>
+                    </th>
                   </tr>
-                ))}
+                </thead>
 
-                {/* Empty state */}
-                {filteredPayments.length === 0 && (
-                  <tr>
-                    <td colSpan={7} className="px-5 py-16">
-                      <div className="mx-auto flex max-w-sm flex-col items-center text-center">
-                        <div className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-100">
-                          <Search className="h-5 w-5 text-slate-500" />
-                        </div>
+                <tbody>
+                  {payments.map((payment) => (
+                    <PaymentRow
+                      key={payment.id}
+                      payment={payment}
+                      onOpen={() =>
+                        router.push(
+                          `/agent/dashboard/payments/${payment.id}`,
+                        )
+                      }
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
 
-                        <h3 className="mt-4 font-medium text-slate-900">
-                          No payments found
-                        </h3>
+            {/* Mobile list */}
+            <ul className="divide-y md:hidden">
+              {payments.map((payment) => (
+                <PaymentListItem key={payment.id} payment={payment} />
+              ))}
+            </ul>
 
-                        <p className="mt-1 text-sm leading-6 text-slate-500">
-                          No payments match your current search
-                          and filters.
-                        </p>
-
-                        {(search ||
-                          hasActiveFilters) && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="mt-4"
-                            onClick={() => {
-                              setSearch("");
-                              clearFilters();
-                            }}
-                          >
-                            Clear filters
-                          </Button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
+            {/* Pagination */}
+            <div className="flex flex-col gap-3 border-t px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs text-muted-foreground">
+                Showing{" "}
+                <span className="font-medium text-foreground">
+                  {from}–{to}
+                </span>{" "}
+                of{" "}
+                <span className="font-medium text-foreground">{total}</span>
+                {query.isFetching && (
+                  <span className="ml-2 inline-flex items-center gap-1">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    Updating…
+                  </span>
                 )}
-              </tbody>
-            </table>
-          </div>
+              </p>
 
-          {/* -------------------------------------------------
-              FOOTER
-              ------------------------------------------------- */}
+              {totalPages > 1 && (
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={page <= 1 || query.isFetching}
+                  >
+                    <ChevronLeft className="mr-1 h-4 w-4" />
+                    Previous
+                  </Button>
 
-          <div className="flex items-center justify-between border-t bg-slate-50/50 px-5 py-3">
-            <p className="text-xs text-slate-500">
-              Showing{" "}
-              <span className="font-medium text-slate-700">
-                {filteredPayments.length}
-              </span>{" "}
-              of{" "}
-              <span className="font-medium text-slate-700">
-                {MOCK_PAYMENTS.length}
-              </span>{" "}
-              payments
-            </p>
-          </div>
-        </section>
-      </main>
+                  <span className="text-xs text-muted-foreground">
+                    Page {page} of {totalPages}
+                  </span>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      setPage((p) => Math.min(totalPages, p + 1))
+                    }
+                    disabled={page >= totalPages || query.isFetching}
+                  >
+                    Next
+                    <ChevronRight className="ml-1 h-4 w-4" />
+                  </Button>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </Card>
     </div>
   );
 }
 
 /* =========================================================
-   SUMMARY CARD
+   TABLE ROW (desktop)
    ========================================================= */
 
-function SummaryCard({
-  label,
-  value,
-  description,
-  icon: Icon,
-  iconClassName,
-  attention = false,
+function PaymentRow({
+  payment,
+  onOpen,
 }: {
-  label: string;
-  value: string;
-  description: string;
-  icon: React.ElementType;
-  iconClassName: string;
-  attention?: boolean;
+  payment: Payment;
+  onOpen: () => void;
 }) {
+  const detail = getMethodDetail(payment);
+  const taxpayerId = getTaxpayerId(payment);
+
   return (
-    <div
-      className={[
-        "rounded-xl border bg-white p-5",
-        attention
-          ? "border-amber-200"
-          : "border-slate-200",
-      ].join(" ")}
+    <tr
+      onClick={onOpen}
+      className="cursor-pointer border-b transition-colors last:border-0 hover:bg-muted/30"
     >
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-slate-500">
-            {label}
-          </p>
-
-          <p className="mt-2 text-2xl font-semibold tracking-tight text-slate-900 tabular-nums">
-            {value}
-          </p>
-
-          <p className="mt-1.5 text-xs leading-5 text-slate-500">
-            {description}
-          </p>
-        </div>
-
-        <div
-          className={`shrink-0 rounded-lg p-2.5 ${iconClassName}`}
+      <td className="px-5 py-4">
+        <Link
+          href={`/agent/dashboard/payments/${payment.id}`}
+          onClick={(event) => event.stopPropagation()}
+          className="font-medium hover:text-primary"
         >
-          <Icon className="h-5 w-5" />
+          {getPaymentNumber(payment)}
+        </Link>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          {getInvoiceNumber(payment)} · {formatDateTime(payment.created_at)}
+        </p>
+      </td>
+
+      <td className="px-5 py-4">
+        <div className="max-w-52">
+          <p className="truncate font-medium">{getTaxpayerName(payment)}</p>
+          {taxpayerId && (
+            <p className="mt-0.5 truncate text-xs text-muted-foreground">
+              ID {taxpayerId}
+            </p>
+          )}
         </div>
+      </td>
+
+      <td className="px-5 py-4">
+        <MethodCell payment={payment} detail={detail} />
+      </td>
+
+      <td className="whitespace-nowrap px-5 py-4 text-right font-medium tabular-nums">
+        {payment.currency || "ETB"} {formatAmount(payment.amount)}
+      </td>
+
+      <td className="px-5 py-4">
+        <StatusBadge status={getStatus(payment)} />
+      </td>
+
+      <td className="px-3 py-4 text-muted-foreground">
+        <ChevronRight className="h-4 w-4" />
+      </td>
+    </tr>
+  );
+}
+
+/* =========================================================
+   LIST ITEM (mobile)
+   ========================================================= */
+
+function PaymentListItem({ payment }: { payment: Payment }) {
+  const method = METHOD_STYLES[getMethod(payment)];
+
+  return (
+    <li>
+      <Link
+        href={`/agent/dashboard/payments/${payment.id}`}
+        className="block space-y-2 px-4 py-4 transition-colors hover:bg-muted/30"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="truncate font-medium">
+              {getPaymentNumber(payment)}
+            </p>
+            <p className="mt-0.5 truncate text-sm text-muted-foreground">
+              {getTaxpayerName(payment)}
+            </p>
+          </div>
+
+          <p className="shrink-0 font-medium tabular-nums">
+            {payment.currency || "ETB"} {formatAmount(payment.amount)}
+          </p>
+        </div>
+
+        <div className="flex items-center justify-between gap-3">
+          <StatusBadge status={getStatus(payment)} />
+
+          <p className="truncate text-xs text-muted-foreground">
+            {method?.label ?? humanize(getMethod(payment))} ·{" "}
+            {formatDateTime(payment.created_at)}
+          </p>
+        </div>
+      </Link>
+    </li>
+  );
+}
+
+/* =========================================================
+   SMALL COMPONENTS
+   ========================================================= */
+
+function StatusBadge({ status }: { status: string }) {
+  const style = STATUS_STYLES[status] ?? {
+    label: humanize(status),
+    className: "bg-muted text-muted-foreground ring-border",
+    icon: AlertCircle,
+  };
+
+  const Icon = style.icon;
+
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset ${style.className}`}
+    >
+      <Icon className="h-3.5 w-3.5 shrink-0" />
+      {style.label}
+    </span>
+  );
+}
+
+function MethodCell({
+  payment,
+  detail,
+}: {
+  payment: Payment;
+  detail: string | null;
+}) {
+  const key = getMethod(payment);
+  const config = METHOD_STYLES[key];
+  const Icon = config?.icon ?? CreditCard;
+
+  return (
+    <div className="flex items-center gap-2.5">
+      <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+
+      <div className="min-w-0">
+        <p>{config?.label ?? humanize(key)}</p>
+        {detail && (
+          <p className="max-w-40 truncate text-xs text-muted-foreground">
+            {detail}
+          </p>
+        )}
       </div>
     </div>
   );
 }
 
-/* =========================================================
-   FILTER CHIP
-   ========================================================= */
-
-function FilterChip({
+function SummaryItem({
   label,
-  onRemove,
+  value,
+  loading,
+  highlight = false,
 }: {
   label: string;
-  onRemove: () => void;
+  value: string;
+  loading: boolean;
+  highlight?: boolean;
 }) {
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
-      {label}
+    <div className="p-5">
+      <p className="text-sm text-muted-foreground">{label}</p>
 
-      <button
-        type="button"
-        onClick={onRemove}
-        className="rounded-full text-slate-400 hover:text-slate-700"
-        aria-label={`Remove ${label}`}
-      >
-        <X className="h-3 w-3" />
-      </button>
-    </span>
+      <div className="mt-1.5 flex min-h-8 items-center">
+        {loading ? (
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        ) : (
+          <p
+            className={`text-2xl font-semibold tracking-tight tabular-nums ${
+              highlight ? "text-amber-600 dark:text-amber-300" : ""
+            }`}
+          >
+            {value}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function StateMessage({
+  icon,
+  title,
+  description,
+  action,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  description?: string;
+  action?: React.ReactNode;
+}) {
+  return (
+    <div className="flex min-h-64 flex-col items-center justify-center gap-3 p-6 text-center">
+      <div className="rounded-xl bg-muted p-3 text-muted-foreground">
+        {icon}
+      </div>
+
+      <div>
+        <h3 className="font-medium">{title}</h3>
+        {description && (
+          <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
+            {description}
+          </p>
+        )}
+      </div>
+
+      {action}
+    </div>
   );
 }

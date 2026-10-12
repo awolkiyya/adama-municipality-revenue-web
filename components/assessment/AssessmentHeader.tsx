@@ -310,53 +310,6 @@ export function AssessmentHeader({
               <DropdownMenuSeparator />
 
 
-              {/* --------------------------------------------------------
-                  SCHEDULED PAYMENT MANAGEMENT
-                  -------------------------------------------------------- */}
-
-              <DropdownMenuItem
-                onClick={
-                  onManageScheduledPayments
-                }
-                className="
-                  cursor-pointer
-                  gap-3
-                  py-3
-                "
-              >
-                <CalendarClock
-                  className="
-                    h-4
-                    w-4
-                    text-muted-foreground
-                  "
-                />
-
-                <div
-                  className="
-                    flex
-                    flex-col
-                  "
-                >
-                  <span
-                    className="
-                      font-medium
-                    "
-                  >
-                    Scheduled Payments
-                  </span>
-
-                  <span
-                    className="
-                      text-xs
-                      text-muted-foreground
-                    "
-                  >
-                    Manage payment schedules and installments
-                  </span>
-                </div>
-              </DropdownMenuItem>
-
             </DropdownMenuContent>
 
           </DropdownMenu>

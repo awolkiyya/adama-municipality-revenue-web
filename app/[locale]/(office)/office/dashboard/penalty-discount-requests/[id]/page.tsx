@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useLocale } from "next-intl";
@@ -17,9 +18,11 @@ import {
   MoreHorizontal,
   ReceiptText,
   RefreshCw,
-  Scale,
   Send,
   XCircle,
+  Check,
+  X,
+  ShieldCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -29,6 +32,7 @@ import { useOpenFile } from "@/hooks/use-open-file";
 import {
   usePenaltyDiscountRequest,
   useSubmitPenaltyDiscountRequest,
+  useDecidePenaltyDiscountRequest,
   useApplyPenaltyDiscountRequest,
   useCancelPenaltyDiscountRequest,
 } from "@/hooks/revenue/use-penalty-discount-requests";
@@ -45,6 +49,9 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -60,6 +67,8 @@ import {
 type DetailRecord = Record<string, unknown>;
 
 type ProgressState = "completed" | "current" | "upcoming" | "failed";
+
+type DecisionMode = "APPROVED" | "REJECTED" | null;
 
 /* -------------------------------------------------------------------------- */
 /* Constants                                                                  */
@@ -316,6 +325,14 @@ export default function PenaltyDiscountRequestDetailPage() {
   const { openFile, isOpening } = useOpenFile();
 
   /* ------------------------------------------------------------------------ */
+  /* Decision form state                                                      */
+  /* ------------------------------------------------------------------------ */
+
+  const [decisionMode, setDecisionMode] = useState<DecisionMode>(null);
+  const [approvedAmountInput, setApprovedAmountInput] = useState("");
+  const [decisionReasonInput, setDecisionReasonInput] = useState("");
+
+  /* ------------------------------------------------------------------------ */
   /* Permissions                                                              */
   /* ------------------------------------------------------------------------ */
 
@@ -344,11 +361,13 @@ export default function PenaltyDiscountRequestDetailPage() {
   /* ------------------------------------------------------------------------ */
 
   const submitMutation = useSubmitPenaltyDiscountRequest();
+  const decideMutation = useDecidePenaltyDiscountRequest();
   const applyMutation = useApplyPenaltyDiscountRequest();
   const cancelMutation = useCancelPenaltyDiscountRequest();
 
   const isActionPending =
     submitMutation.isPending ||
+    decideMutation.isPending ||
     applyMutation.isPending ||
     cancelMutation.isPending;
 
@@ -440,7 +459,10 @@ export default function PenaltyDiscountRequestDetailPage() {
             <p className="text-sm text-muted-foreground">
               You do not have permission to view penalty discount requests.
             </p>
-            <Button variant="outline" onClick={() => router.push(requestsUrl)}>
+            <Button
+              variant="outline"
+              onClick={() => router.push(requestsUrl)}
+            >
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back to requests
             </Button>
@@ -462,14 +484,14 @@ export default function PenaltyDiscountRequestDetailPage() {
   const requestId = asText(request.id, id);
 
   const isDraft = normalizedStatus === "DRAFT";
-  const isSubmitted = normalizedStatus === "SUBMITTED";
   const isRejected = normalizedStatus === "REJECTED";
   const isCancelled = normalizedStatus === "CANCELLED";
-  const isApplied = normalizedStatus === "APPLIED" ||
-    request.applied_to_invoice === true ||
-    Boolean(request.applied_at);
 
-  const isApproved = normalizedStatus === "APPROVED" || isApplied;
+  // Use the authoritative workflow status to determine whether it is applied.
+  const isApplied = normalizedStatus === "APPLIED";
+
+  const isApproved =
+    normalizedStatus === "APPROVED" || isApplied;
 
   const isReviewPending = [
     "SUBMITTED",
@@ -479,11 +501,12 @@ export default function PenaltyDiscountRequestDetailPage() {
     "IN_REVIEW",
   ].includes(normalizedStatus);
 
+  const requestedAmount = Number(request.requested_amount ?? 0);
   const approvedAmount = Number(request.approved_amount ?? 0);
 
   const canSubmitRequest = canSubmit && isDraft;
 
-  const canReviewRequest = canDecide && isReviewPending;
+  const canDecideRequest = canDecide && isReviewPending;
 
   const canApplyRequest =
     canApply &&
@@ -502,13 +525,15 @@ export default function PenaltyDiscountRequestDetailPage() {
   const hasWorkflowActions =
     canEditDraft ||
     canSubmitRequest ||
-    canReviewRequest ||
+    canDecideRequest ||
     canApplyRequest ||
     canCancelRequest;
 
   const files = Array.isArray(request.supporting_files)
     ? request.supporting_files.map(asRecord)
-    : [];
+    : request.supporting_file
+      ? [asRecord(request.supporting_file)]
+      : [];
 
   const requestReference = asText(
     request.request_number ?? request.reference_number,
@@ -520,7 +545,7 @@ export default function PenaltyDiscountRequestDetailPage() {
   const decidedDate = formatDate(request.decided_at);
   const appliedDate = formatDate(request.applied_at);
 
-  const invoiceId = asText(invoice.id, "");
+  const invoiceId = asText(invoice.id ?? request.invoice_id, "");
 
   const progressMessage = isDraft
     ? "Submit this draft before it can be reviewed."
@@ -558,13 +583,113 @@ export default function PenaltyDiscountRequestDetailPage() {
 
     submitMutation.mutate(requestId, {
       onSuccess: () => {
-        toast.success("Penalty discount request submitted successfully.");
         void refetch();
       },
-      onError: (mutationError) => {
-        toast.error(getErrorMessage(mutationError));
-      },
     });
+  }
+
+  function openApproveForm() {
+    if (!canDecideRequest || isActionPending) return;
+
+    setDecisionMode("APPROVED");
+    setApprovedAmountInput(
+      Number.isFinite(requestedAmount) && requestedAmount > 0
+        ? String(requestedAmount)
+        : "",
+    );
+    setDecisionReasonInput("");
+  }
+
+  function openRejectForm() {
+    if (!canDecideRequest || isActionPending) return;
+
+    setDecisionMode("REJECTED");
+    setApprovedAmountInput("");
+    setDecisionReasonInput("");
+  }
+
+  function closeDecisionForm() {
+    if (decideMutation.isPending) return;
+
+    setDecisionMode(null);
+    setApprovedAmountInput("");
+    setDecisionReasonInput("");
+  }
+
+  function handleDecisionSubmit() {
+    if (!canDecideRequest || !decisionMode || isActionPending) return;
+
+    const reason = decisionReasonInput.trim();
+
+    if (decisionMode === "REJECTED" && !reason) {
+      toast.error("A reason is required when rejecting a request.");
+      return;
+    }
+
+    let amount: number | undefined;
+
+    if (decisionMode === "APPROVED") {
+      amount = Number(approvedAmountInput);
+
+      if (
+        !approvedAmountInput.trim() ||
+        !Number.isFinite(amount) ||
+        amount <= 0
+      ) {
+        toast.error("Enter a valid approved discount amount greater than zero.");
+        return;
+      }
+
+      if (
+        !Number.isFinite(requestedAmount) ||
+        requestedAmount <= 0 ||
+        amount > requestedAmount
+      ) {
+        toast.error(
+          "The approved discount cannot exceed the requested discount.",
+        );
+        return;
+      }
+    }
+
+    const actionLabel =
+      decisionMode === "APPROVED" ? "approve" : "reject";
+
+    const confirmed = window.confirm(
+      decisionMode === "APPROVED"
+        ? `Approve this request for ${formatMoney(amount)}?`
+        : "Reject this penalty discount request? This decision will be recorded.",
+    );
+
+    if (!confirmed) return;
+
+    decideMutation.mutate(
+      {
+        id: requestId,
+        payload: {
+          decision: decisionMode,
+          ...(decisionMode === "APPROVED"
+            ? { approved_amount: amount }
+            : {}),
+          decision_reason: reason || null,
+        },
+      },
+      {
+        onSuccess: () => {
+          setDecisionMode(null);
+          setApprovedAmountInput("");
+          setDecisionReasonInput("");
+          void refetch();
+        },
+        onError: (mutationError) => {
+          // The shared mutation hook also reports API errors.
+          console.error(
+            `Unable to ${actionLabel} penalty discount request.`,
+            mutationError,
+          );
+        },
+      },
+    );
   }
 
   function handleApply() {
@@ -580,11 +705,7 @@ export default function PenaltyDiscountRequestDetailPage() {
 
     applyMutation.mutate(requestId, {
       onSuccess: () => {
-        toast.success("Penalty discount applied successfully.");
         void refetch();
-      },
-      onError: (mutationError) => {
-        toast.error(getErrorMessage(mutationError));
       },
     });
   }
@@ -600,24 +721,13 @@ export default function PenaltyDiscountRequestDetailPage() {
 
     cancelMutation.mutate(requestId, {
       onSuccess: () => {
-        toast.success("Penalty discount request cancelled.");
         void refetch();
-      },
-      onError: (mutationError) => {
-        toast.error(getErrorMessage(mutationError));
       },
     });
   }
 
   function handleRefresh() {
     void refetch();
-  }
-
-  function handleReview() {
-    document.getElementById("request-details")?.scrollIntoView({
-      behavior: "smooth",
-      block: "start",
-    });
   }
 
   /* ------------------------------------------------------------------------ */
@@ -716,13 +826,25 @@ export default function PenaltyDiscountRequestDetailPage() {
                   </>
                 )}
 
-                {canReviewRequest && (
+                {canDecideRequest && (
                   <>
                     <DropdownMenuSeparator />
                     <Can resource={RESOURCE} action="decide">
-                      <DropdownMenuItem onSelect={handleReview}>
-                        <Scale className="mr-2 h-4 w-4 text-muted-foreground" />
-                        Review request
+                      <DropdownMenuItem
+                        disabled={isActionPending}
+                        onSelect={openApproveForm}
+                      >
+                        <Check className="mr-2 h-4 w-4 text-emerald-600" />
+                        Approve request
+                      </DropdownMenuItem>
+
+                      <DropdownMenuItem
+                        disabled={isActionPending}
+                        onSelect={openRejectForm}
+                        className="text-destructive focus:text-destructive"
+                      >
+                        <X className="mr-2 h-4 w-4" />
+                        Reject request
                       </DropdownMenuItem>
                     </Can>
                   </>
@@ -779,86 +901,280 @@ export default function PenaltyDiscountRequestDetailPage() {
                   </CardDescription>
                 </CardHeader>
 
-                <CardContent className="flex flex-wrap gap-2">
-                  {canEditDraft && (
-                    <Button
-                      variant="outline"
-                      onClick={() => router.push(editUrl)}
-                      disabled={isActionPending}
-                    >
-                      <FileText className="mr-2 h-4 w-4" />
-                      Edit draft
-                    </Button>
-                  )}
-
-                  {canSubmitRequest && (
-                    <Can resource={RESOURCE} action="submit">
-                      <Button
-                        onClick={handleSubmit}
-                        disabled={isActionPending}
-                      >
-                        {submitMutation.isPending ? (
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        ) : (
-                          <Send className="mr-2 h-4 w-4" />
-                        )}
-                        Submit for approval
-                      </Button>
-                    </Can>
-                  )}
-
-                  {canReviewRequest && (
-                    <Can resource={RESOURCE} action="decide">
-                      <Button variant="outline" onClick={handleReview}>
-                        <Scale className="mr-2 h-4 w-4" />
-                        Review request
-                      </Button>
-                    </Can>
-                  )}
-
-                  {canApplyRequest && (
-                    <Can resource={RESOURCE} action="apply">
-                      <Button
-                        onClick={handleApply}
-                        disabled={isActionPending}
-                      >
-                        {applyMutation.isPending ? (
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        ) : (
-                          <CheckCircle2 className="mr-2 h-4 w-4" />
-                        )}
-                        Apply discount
-                      </Button>
-                    </Can>
-                  )}
-
-                  {canCancelRequest && (
-                    <Can resource={RESOURCE} action="cancel">
+                <CardContent className="space-y-4">
+                  <div className="flex flex-wrap gap-2">
+                    {canEditDraft && (
                       <Button
                         variant="outline"
-                        onClick={handleCancel}
+                        onClick={() => router.push(editUrl)}
                         disabled={isActionPending}
-                        className="text-destructive hover:text-destructive"
                       >
-                        {cancelMutation.isPending ? (
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        ) : (
-                          <Ban className="mr-2 h-4 w-4" />
-                        )}
-                        Cancel request
+                        <FileText className="mr-2 h-4 w-4" />
+                        Edit draft
                       </Button>
+                    )}
+
+                    {canSubmitRequest && (
+                      <Can resource={RESOURCE} action="submit">
+                        <Button
+                          onClick={handleSubmit}
+                          disabled={isActionPending}
+                        >
+                          {submitMutation.isPending ? (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          ) : (
+                            <Send className="mr-2 h-4 w-4" />
+                          )}
+                          Submit for approval
+                        </Button>
+                      </Can>
+                    )}
+
+                    {canDecideRequest && (
+                      <Can resource={RESOURCE} action="decide">
+                        <Button
+                          onClick={openApproveForm}
+                          disabled={isActionPending}
+                        >
+                          <CheckCircle2 className="mr-2 h-4 w-4" />
+                          Approve request
+                        </Button>
+
+                        <Button
+                          variant="outline"
+                          onClick={openRejectForm}
+                          disabled={isActionPending}
+                          className="text-destructive hover:text-destructive"
+                        >
+                          <XCircle className="mr-2 h-4 w-4" />
+                          Reject request
+                        </Button>
+                      </Can>
+                    )}
+
+                    {canApplyRequest && (
+                      <Can resource={RESOURCE} action="apply">
+                        <Button
+                          onClick={handleApply}
+                          disabled={isActionPending}
+                        >
+                          {applyMutation.isPending ? (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          ) : (
+                            <CheckCircle2 className="mr-2 h-4 w-4" />
+                          )}
+                          Apply discount
+                        </Button>
+                      </Can>
+                    )}
+
+                    {canCancelRequest && (
+                      <Can resource={RESOURCE} action="cancel">
+                        <Button
+                          variant="outline"
+                          onClick={handleCancel}
+                          disabled={isActionPending}
+                          className="text-destructive hover:text-destructive"
+                        >
+                          {cancelMutation.isPending ? (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          ) : (
+                            <Ban className="mr-2 h-4 w-4" />
+                          )}
+                          Cancel request
+                        </Button>
+                      </Can>
+                    )}
+                  </div>
+
+                  {/* Approval / rejection form */}
+                  {decisionMode && canDecideRequest && (
+                    <Can resource={RESOURCE} action="decide">
+                      <div className="rounded-xl border bg-muted/20 p-4">
+                        <div className="flex items-start gap-3">
+                          <div
+                            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
+                              decisionMode === "APPROVED"
+                                ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300"
+                                : "bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-300"
+                            }`}
+                          >
+                            {decisionMode === "APPROVED" ? (
+                              <ShieldCheck className="h-5 w-5" />
+                            ) : (
+                              <XCircle className="h-5 w-5" />
+                            )}
+                          </div>
+
+                          <div className="min-w-0 flex-1">
+                            <h3 className="font-semibold">
+                              {decisionMode === "APPROVED"
+                                ? "Approve penalty discount request"
+                                : "Reject penalty discount request"}
+                            </h3>
+
+                            <p className="mt-1 text-sm leading-5 text-muted-foreground">
+                              {decisionMode === "APPROVED"
+                                ? "Enter the amount authorized for this discount. It cannot exceed the requested amount."
+                                : "Provide a clear reason explaining why this request is being rejected."}
+                            </p>
+                          </div>
+
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            aria-label="Close decision form"
+                            disabled={decideMutation.isPending}
+                            onClick={closeDecisionForm}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+
+                        {decisionMode === "APPROVED" && (
+                          <div className="mt-5 space-y-2">
+                            <Label htmlFor="approved-amount">
+                              Approved discount amount (ETB)
+                            </Label>
+
+                            <Input
+                              id="approved-amount"
+                              type="number"
+                              inputMode="decimal"
+                              min="0.01"
+                              max={
+                                Number.isFinite(requestedAmount)
+                                  ? requestedAmount
+                                  : undefined
+                              }
+                              step="0.01"
+                              value={approvedAmountInput}
+                              onChange={(event) =>
+                                setApprovedAmountInput(event.target.value)
+                              }
+                              placeholder="Enter approved amount"
+                              disabled={decideMutation.isPending}
+                            />
+
+                            <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                              <span>
+                                Requested: {formatMoney(request.requested_amount)}
+                              </span>
+                              <span>
+                                Approved: {formatMoney(approvedAmountInput)}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="mt-4 space-y-2">
+                          <Label htmlFor="decision-reason">
+                            Decision remarks
+                            {decisionMode === "REJECTED" && (
+                              <span className="ml-1 text-destructive">*</span>
+                            )}
+                          </Label>
+
+                          <Textarea
+                            id="decision-reason"
+                            value={decisionReasonInput}
+                            onChange={(event) =>
+                              setDecisionReasonInput(event.target.value)
+                            }
+                            placeholder={
+                              decisionMode === "APPROVED"
+                                ? "Optional remarks about the approval"
+                                : "Explain the reason for rejection"
+                            }
+                            rows={3}
+                            maxLength={2000}
+                            disabled={decideMutation.isPending}
+                          />
+
+                          <p className="text-xs text-muted-foreground">
+                            {decisionMode === "REJECTED"
+                              ? "A rejection reason is required."
+                              : "Remarks are optional for approval."}
+                          </p>
+                        </div>
+
+                        <Separator className="my-4" />
+
+                        <div className="flex flex-wrap justify-end gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={closeDecisionForm}
+                            disabled={decideMutation.isPending}
+                          >
+                            Cancel
+                          </Button>
+
+                          <Button
+                            type="button"
+                            onClick={handleDecisionSubmit}
+                            disabled={
+                              isActionPending ||
+                              (decisionMode === "REJECTED" &&
+                                !decisionReasonInput.trim()) ||
+                              (decisionMode === "APPROVED" &&
+                                !approvedAmountInput.trim())
+                            }
+                            className={
+                              decisionMode === "REJECTED"
+                                ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                : ""
+                            }
+                          >
+                            {decideMutation.isPending ? (
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : decisionMode === "APPROVED" ? (
+                              <CheckCircle2 className="mr-2 h-4 w-4" />
+                            ) : (
+                              <XCircle className="mr-2 h-4 w-4" />
+                            )}
+
+                            {decideMutation.isPending
+                              ? "Saving decision..."
+                              : decisionMode === "APPROVED"
+                                ? "Confirm approval"
+                                : "Confirm rejection"}
+                          </Button>
+                        </div>
+                      </div>
                     </Can>
                   )}
 
                   {isActionPending && (
-                    <span
+                    <p
                       className="inline-flex items-center gap-2 text-sm text-muted-foreground"
                       role="status"
                     >
                       <Loader2 className="h-4 w-4 animate-spin" />
-                      Processing request…
-                    </span>
+                      Processing request...
+                    </p>
                   )}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Pending decision notice */}
+            {isReviewPending && (
+              <Card>
+                <CardContent className="flex items-start gap-3 p-4">
+                  <Clock3 className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">
+                      Awaiting review and decision
+                    </p>
+                    <p className="mt-1 text-sm leading-5 text-muted-foreground">
+                      This request has been submitted and is awaiting an
+                      authorized officer&apos;s decision. The discount cannot
+                      be applied until the request is approved.
+                    </p>
+                  </div>
                 </CardContent>
               </Card>
             )}
@@ -907,6 +1223,14 @@ export default function PenaltyDiscountRequestDetailPage() {
                   <InfoItem label="Submitted on" value={submittedDate} />
                   <InfoItem label="Decision date" value={decidedDate} />
                   <InfoItem label="Applied date" value={appliedDate} />
+                  <InfoItem
+                    label="Created by"
+                    value={asText(asRecord(request.creator).name)}
+                  />
+                  <InfoItem
+                    label="Decided by"
+                    value={asText(asRecord(request.decider).name)}
+                  />
                 </div>
 
                 <Separator />
@@ -976,6 +1300,7 @@ export default function PenaltyDiscountRequestDetailPage() {
                                   "Supporting document",
                                 )}
                               </p>
+
                               <p className="mt-1 text-xs text-muted-foreground">
                                 {asText(
                                   file.mime_type ?? file.file_type,
@@ -1251,6 +1576,7 @@ export default function PenaltyDiscountRequestDetailPage() {
                               ? "Draft request"
                               : "Awaiting decision"}
                   </p>
+
                   <p className="mt-1 text-xs leading-5 text-muted-foreground">
                     {progressMessage}
                   </p>

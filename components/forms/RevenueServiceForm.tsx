@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import type { FormEvent, ReactNode } from "react";
 
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -33,12 +34,10 @@ import {
     FileText,
     Hash,
     CalendarDays,
-    ToggleLeft,
-    ChevronDown,
-    List,
 } from "lucide-react";
 
 import { RevenueCodeDropdown } from "../input/RevenuCodeDropDown";
+import { BaseFieldDropdown } from "../input/BaseFieldsDropdown";
 
 import {
     createRevenueServiceSchema,
@@ -47,53 +46,28 @@ import {
     type UpdateRevenueServiceInput,
 } from "@/lib/zod-forms/revenueService.schema";
 
-import { RevenueCode } from "@/types/revenue/revenue-code";
-import { ServiceType } from "@/types/service.type";
-import { CollectionMode } from "@/types/revenue/revenu-service";
-import { BaseField } from "@/types/revenue/revenue-baseField";
-import { BaseFieldDropdown } from "../input/BaseFieldsDropdown";
-
+import type { RevenueCode } from "@/types/revenue/revenue-code";
+import type { ServiceType } from "@/types/service.type";
+import type { CollectionMode } from "@/types/revenue/revenu-service";
+import type { BaseField } from "@/types/revenue/revenue-baseField";
 
 /*
 |--------------------------------------------------------------------------
 | Revenue Service Field Configuration
 |--------------------------------------------------------------------------
-|
-| This represents revenue_service_fields.
-|
 */
 
 export interface RevenueServiceFieldRow {
     baseFieldId: string;
-
-    /*
-    | Service-specific label override.
-    */
     label: string;
-
-    /*
-    | Whether officer must provide this value.
-    */
     required: boolean;
-
-    /*
-    | Optional explanation shown to officer.
-    */
     helpText: string;
-
-    /*
-    | Optional validation configuration.
-    */
     validationRules?: {
         min?: number;
         max?: number;
         minLength?: number;
         maxLength?: number;
     };
-
-    /*
-    | Preserves service field order.
-    */
     sortOrder: number;
 }
 
@@ -105,19 +79,12 @@ export interface RevenueServiceFieldRow {
 
 export interface RevenueServiceFormValues {
     id?: string;
-
     revenueCodeId: string;
-
     name: string;
-
     description: string;
-
     serviceType: ServiceType | "";
-
     collectionMode: CollectionMode;
-
     isActive: boolean;
-
     fields: RevenueServiceFieldRow[];
 }
 
@@ -131,37 +98,31 @@ export const SERVICE_TYPE_OPTIONS = [
     {
         value: "REGISTRATION",
         label: "Registration",
-        description: "Citizen or business registration service",
         icon: FileText,
     },
     {
         value: "ASSESSMENT",
         label: "Assessment",
-        description: "Assessment requiring tariff calculation",
         icon: Hash,
     },
     {
         value: "PERMIT",
         label: "Permit",
-        description: "Issue authorization or permit",
         icon: CheckCircle2,
     },
     {
         value: "RENEWAL",
         label: "Renewal",
-        description: "Renew an existing authorization",
         icon: CalendarDays,
     },
     {
         value: "COLLECTION",
         label: "Collection",
-        description: "Direct revenue collection service",
         icon: ListChecks,
     },
     {
         value: "PENALTY",
         label: "Penalty",
-        description: "Violation or late-payment charge",
         icon: AlertCircle,
     },
 ] as const;
@@ -176,7 +137,7 @@ const COLLECTION_MODE_OPTIONS: {
     value: CollectionMode;
     label: string;
     description: string;
-    icon: React.ReactNode;
+    icon: ReactNode;
 }[] = [
     {
         value: "ASSESSMENT_ONLY",
@@ -200,24 +161,20 @@ const COLLECTION_MODE_OPTIONS: {
 
 /*
 |--------------------------------------------------------------------------
-| EMPTY FIELD
+| DEFAULT VALUES
 |--------------------------------------------------------------------------
 */
 
-const EMPTY_FIELD_ROW: RevenueServiceFieldRow = {
+const createEmptyField = (
+    sortOrder: number
+): RevenueServiceFieldRow => ({
     baseFieldId: "",
     label: "",
     required: true,
     helpText: "",
     validationRules: {},
-    sortOrder: 0,
-};
-
-/*
-|--------------------------------------------------------------------------
-| DEFAULT VALUES
-|--------------------------------------------------------------------------
-*/
+    sortOrder,
+});
 
 const DEFAULT_VALUES: RevenueServiceFormValues = {
     revenueCodeId: "",
@@ -237,11 +194,8 @@ const DEFAULT_VALUES: RevenueServiceFormValues = {
 
 interface RevenueServiceFormCreateProps {
     mode: "create";
-
     initialValues?: RevenueServiceFormValues;
-
     baseFields: BaseField[];
-
     onSubmit: (
         values: CreateRevenueServiceInput
     ) => Promise<void>;
@@ -249,11 +203,8 @@ interface RevenueServiceFormCreateProps {
 
 interface RevenueServiceFormEditProps {
     mode: "edit";
-
     initialValues: RevenueServiceFormValues;
-
     baseFields: BaseField[];
-
     onSubmit: (
         values: UpdateRevenueServiceInput
     ) => Promise<void>;
@@ -295,16 +246,19 @@ export function RevenueServiceForm({
         useState<RevenueCode>();
 
     /*
-    |--------------------------------------------------------------------------
-    | SERVICE TYPE
-    |--------------------------------------------------------------------------
-    */
+     * Keep complete selected base-field objects separately from the
+     * parent baseFields list. AsyncDropdown loads options independently,
+     * so a selected item might not exist in the parent's list.
+     *
+     * Keys are stable row IDs, not array indexes, so deleting a row
+     * cannot associate metadata with the wrong field.
+     */
+    const [selectedBaseFields, setSelectedBaseFields] =
+        useState<Record<string, BaseField>>({});
 
-    const selectedType =
-        SERVICE_TYPE_OPTIONS.find(
-            (item) =>
-                item.value === values.serviceType
-        );
+    const selectedType = SERVICE_TYPE_OPTIONS.find(
+        (item) => item.value === values.serviceType
+    );
 
     /*
     |--------------------------------------------------------------------------
@@ -312,9 +266,7 @@ export function RevenueServiceForm({
     |--------------------------------------------------------------------------
     */
 
-    const setField = <
-        K extends keyof RevenueServiceFormValues
-    >(
+    const setField = <K extends keyof RevenueServiceFormValues>(
         key: K,
         value: RevenueServiceFormValues[K]
     ) => {
@@ -329,12 +281,6 @@ export function RevenueServiceForm({
         }));
     };
 
-    /*
-    |--------------------------------------------------------------------------
-    | SERVICE FIELD HELPER
-    |--------------------------------------------------------------------------
-    */
-
     const setServiceField = (
         index: number,
         key: keyof RevenueServiceFieldRow,
@@ -346,12 +292,15 @@ export function RevenueServiceForm({
             | undefined
     ) => {
         setValues((previous) => {
-            const fields = [
-                ...previous.fields,
-            ];
+            const fields = [...previous.fields];
+            const existing = fields[index];
+
+            if (!existing) {
+                return previous;
+            }
 
             fields[index] = {
-                ...fields[index],
+                ...existing,
                 [key]: value,
             };
 
@@ -378,11 +327,7 @@ export function RevenueServiceForm({
             ...previous,
             fields: [
                 ...previous.fields,
-                {
-                    ...EMPTY_FIELD_ROW,
-                    sortOrder:
-                        previous.fields.length,
-                },
+                createEmptyField(previous.fields.length),
             ],
         }));
     };
@@ -397,15 +342,36 @@ export function RevenueServiceForm({
         setValues((previous) => ({
             ...previous,
             fields: previous.fields
-                .filter(
-                    (_, currentIndex) =>
-                        currentIndex !== index
-                )
+                .filter((_, currentIndex) => currentIndex !== index)
                 .map((field, currentIndex) => ({
                     ...field,
                     sortOrder: currentIndex,
                 })),
         }));
+
+        setSelectedBaseFields((previous) => {
+            const next: Record<string, BaseField> = {};
+
+            Object.entries(previous).forEach(([rowId, baseField]) => {
+                if (rowId !== String(index)) {
+                    next[rowId] = baseField;
+                }
+            });
+
+            return next;
+        });
+
+        setErrors((previous) => {
+            const next: Record<string, string> = {};
+
+            Object.entries(previous).forEach(([key, message]) => {
+                if (!key.startsWith(`fields.${index}.`)) {
+                    next[key] = message;
+                }
+            });
+
+            return next;
+        });
     };
 
     /*
@@ -416,36 +382,52 @@ export function RevenueServiceForm({
 
     const handleBaseFieldChange = (
         index: number,
-        baseFieldId: string
+        selectedValue: string,
+        selectedItem: BaseField
     ) => {
+        /*
+         * Prefer the object returned by AsyncDropdown. It represents
+         * the actual selected API result and may not be in baseFields.
+         */
         const selectedField =
+            selectedItem ??
             baseFields.find(
                 (field) =>
-                    field.id === baseFieldId
+                    field.id === selectedValue ||
+                    field.code === selectedValue
             );
 
-        if (!selectedField) {
+        if (!selectedField?.id) {
+            console.error("Unable to resolve selected base field", {
+                selectedValue,
+                selectedItem,
+            });
+
+            setErrors((previous) => ({
+                ...previous,
+                [`fields.${index}.baseFieldId`]:
+                    "Could not resolve this base field. Please select it again.",
+            }));
+
             return;
         }
 
         setValues((previous) => {
-            const fields = [
-                ...previous.fields,
-            ];
+            const fields = [...previous.fields];
+            const existing = fields[index];
+
+            if (!existing) {
+                return previous;
+            }
 
             fields[index] = {
-                ...fields[index],
-                baseFieldId:
-                    selectedField.id,
-
-                /*
-                | Automatically use base field name
-                | as initial service label.
-                */
+                ...existing,
+                // Always store the backend UUID, never the code.
+                baseFieldId: selectedField.id,
                 label:
-                    fields[index].label ||
-                    selectedField.name,
-
+                    existing.label.trim() === ""
+                        ? selectedField.name
+                        : existing.label,
                 sortOrder: index,
             };
 
@@ -455,10 +437,40 @@ export function RevenueServiceForm({
             };
         });
 
+        /*
+         * Store the selected API object so its code, type and
+         * description render immediately.
+         */
+        setSelectedBaseFields((previous) => ({
+            ...previous,
+            [String(index)]: selectedField,
+        }));
+
         setErrors((previous) => ({
             ...previous,
             [`fields.${index}.baseFieldId`]: "",
         }));
+    };
+
+    /*
+    |--------------------------------------------------------------------------
+    | RESOLVE SELECTED BASE FIELD
+    |--------------------------------------------------------------------------
+    */
+
+    const getSelectedBaseField = (
+        index: number,
+        baseFieldId: string
+    ): BaseField | undefined => {
+        const cached = selectedBaseFields[String(index)];
+
+        if (cached && cached.id === baseFieldId) {
+            return cached;
+        }
+
+        return baseFields.find(
+            (baseField) => baseField.id === baseFieldId
+        );
     };
 
     /*
@@ -473,34 +485,19 @@ export function RevenueServiceForm({
                 ? createRevenueServiceSchema
                 : updateRevenueServiceSchema;
 
-        /*
-        |--------------------------------------------------------------------------
-        | API PAYLOAD
-        |--------------------------------------------------------------------------
-        |
-        | Convert frontend camelCase to backend
-        | structure if your Zod schema expects this shape.
-        |
-        */
-
         const payload = {
             ...values,
-
             serviceType:
                 values.serviceType === ""
                     ? undefined
                     : values.serviceType,
-
-            fields: values.fields.map(
-                (field, index) => ({
-                    ...field,
-                    sortOrder: index,
-                })
-            ),
+            fields: values.fields.map((field, index) => ({
+                ...field,
+                sortOrder: index,
+            })),
         };
 
-        const result =
-            schema.safeParse(payload);
+        const result = schema.safeParse(payload);
 
         if (result.success) {
             setErrors({});
@@ -512,18 +509,13 @@ export function RevenueServiceForm({
             };
         }
 
-        const nextErrors:
-            Record<string, string> = {};
+        const nextErrors: Record<string, string> = {};
 
-        for (
-            const issue of result.error.issues
-        ) {
-            const key =
-                issue.path.join(".");
+        for (const issue of result.error.issues) {
+            const key = issue.path.join(".");
 
             if (!nextErrors[key]) {
-                nextErrors[key] =
-                    issue.message;
+                nextErrors[key] = issue.message;
             }
         }
 
@@ -542,21 +534,14 @@ export function RevenueServiceForm({
     |--------------------------------------------------------------------------
     */
 
-    const handleSubmit = async (
-        event: React.FormEvent
-    ) => {
+    const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
 
-        const {
-            isValid,
-            data,
-        } = validate();
+        const { isValid, data } = validate();
 
         if (!isValid || !data) {
             document
-                .getElementById(
-                    "service-error-banner"
-                )
+                .getElementById("service-error-banner")
                 ?.scrollIntoView({
                     behavior: "smooth",
                     block: "center",
@@ -569,23 +554,22 @@ export function RevenueServiceForm({
 
         try {
             if (mode === "create") {
-                await onSubmit(
-                    data as CreateRevenueServiceInput
-                );
+                await onSubmit(data as CreateRevenueServiceInput);
             } else {
-                await onSubmit(
-                    data as UpdateRevenueServiceInput
-                );
+                await onSubmit(data as UpdateRevenueServiceInput);
             }
+        } catch (error) {
+            /*
+             * Let the page/service layer handle its normal error
+             * notification, but don't silently swallow the error.
+             */
+            console.error("Failed to save revenue service:", error);
         } finally {
             setIsSubmitting(false);
         }
     };
 
-    const errorCount =
-        Object.values(errors)
-            .filter(Boolean)
-            .length;
+    const errorCount = Object.values(errors).filter(Boolean).length;
 
     /*
     |--------------------------------------------------------------------------
@@ -594,51 +578,36 @@ export function RevenueServiceForm({
     */
 
     return (
-        <form
-            onSubmit={handleSubmit}
-            className="pb-28"
-        >
+        <form onSubmit={handleSubmit} className="pb-28">
             <div className="space-y-6">
+                {/* ERROR SUMMARY */}
 
-                {/* =====================================================
-                    ERROR SUMMARY
-                ====================================================== */}
+                {showErrorBanner && errorCount > 0 && (
+                    <div
+                        id="service-error-banner"
+                        className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 dark:border-red-900/50 dark:bg-red-950/30"
+                    >
+                        <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
 
-                {showErrorBanner &&
-                    errorCount > 0 && (
-                        <div
-                            id="service-error-banner"
-                            className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 dark:border-red-900/50 dark:bg-red-950/30"
-                        >
-                            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
+                        <div>
+                            <p className="text-sm font-medium text-red-700 dark:text-red-400">
+                                {errorCount}{" "}
+                                {errorCount === 1 ? "issue" : "issues"} need your
+                                attention
+                            </p>
 
-                            <div>
-                                <p className="text-sm font-medium text-red-700 dark:text-red-400">
-                                    {errorCount}{" "}
-                                    {errorCount === 1
-                                        ? "issue"
-                                        : "issues"}{" "}
-                                    need your attention
-                                </p>
-
-                                <p className="text-xs text-red-600/80 dark:text-red-400/70">
-                                    Fix the highlighted
-                                    fields before saving.
-                                </p>
-                            </div>
+                            <p className="text-xs text-red-600/80 dark:text-red-400/70">
+                                Fix the highlighted fields before saving.
+                            </p>
                         </div>
-                    )}
+                    </div>
+                )}
 
-                {/* =====================================================
-                    SERVICE DETAILS
-                ====================================================== */}
+                {/* SERVICE DETAILS */}
 
                 <section className="rounded-xl border bg-card shadow-sm">
-
                     <div className="flex items-center justify-between border-b px-6 py-4">
-
                         <div className="flex items-center gap-3">
-
                             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
                                 <Briefcase className="h-4 w-4" />
                             </div>
@@ -649,11 +618,9 @@ export function RevenueServiceForm({
                                 </h2>
 
                                 <p className="text-xs text-muted-foreground">
-                                    Define the revenue service
-                                    and its behavior.
+                                    Define the revenue service and its behavior.
                                 </p>
                             </div>
-
                         </div>
 
                         {selectedType && (
@@ -664,48 +631,29 @@ export function RevenueServiceForm({
                                 {selectedType.label}
                             </Badge>
                         )}
-
                     </div>
 
                     <div className="space-y-5 p-6">
-
-                        {/* Revenue Code */}
+                        {/* REVENUE CODE */}
 
                         <div className="space-y-1.5">
-
                             <Label>
                                 Revenue Code{" "}
-                                <span className="text-red-500">
-                                    *
-                                </span>
+                                <span className="text-red-500">*</span>
                             </Label>
 
                             <RevenueCodeDropdown
-                                value={
-                                    values.revenueCodeId ||
-                                    null
-                                }
-                                onChange={(
-                                    id,
-                                    item
-                                ) => {
-                                    setField(
-                                        "revenueCodeId",
-                                        id
-                                    );
-
-                                    setSelectedCode(
-                                        item
-                                    );
+                                value={values.revenueCodeId || null}
+                                onChange={(id, item) => {
+                                    setField("revenueCodeId", id);
+                                    setSelectedCode(item);
                                 }}
                             />
 
                             {errors.revenueCodeId && (
                                 <p className="flex items-center gap-1 text-xs text-red-500">
                                     <AlertCircle className="h-3 w-3" />
-                                    {
-                                        errors.revenueCodeId
-                                    }
+                                    {errors.revenueCodeId}
                                 </p>
                             )}
 
@@ -713,42 +661,25 @@ export function RevenueServiceForm({
                                 <p className="text-[11px] text-muted-foreground">
                                     Under category:{" "}
                                     <span className="font-medium text-foreground">
-                                        {
-                                            selectedCode
-                                                .category
-                                                ?.name
-                                        }
+                                        {selectedCode.category?.name}
                                     </span>
                                 </p>
                             )}
-
                         </div>
 
-                        {/* Name + Type */}
+                        {/* NAME AND TYPE */}
 
                         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-
                             <div className="space-y-1.5">
-
                                 <Label>
                                     Service Name{" "}
-                                    <span className="text-red-500">
-                                        *
-                                    </span>
+                                    <span className="text-red-500">*</span>
                                 </Label>
 
                                 <Input
-                                    value={
-                                        values.name
-                                    }
-                                    onChange={(
-                                        event
-                                    ) =>
-                                        setField(
-                                            "name",
-                                            event.target
-                                                .value
-                                        )
+                                    value={values.name}
+                                    onChange={(event) =>
+                                        setField("name", event.target.value)
                                     }
                                     placeholder="e.g. Commercial Property Assessment"
                                     className={
@@ -760,289 +691,197 @@ export function RevenueServiceForm({
 
                                 {errors.name && (
                                     <p className="text-xs text-red-500">
-                                        {
-                                            errors.name
-                                        }
+                                        {errors.name}
                                     </p>
                                 )}
-
                             </div>
 
                             <div className="space-y-1.5">
-
-                                <Label>
-                                    Service Type
-                                </Label>
+                                <Label>Service Type</Label>
 
                                 <Select
-                                    value={
-                                        values.serviceType
-                                    }
-                                    onValueChange={(
-                                        value
-                                    ) =>
+                                    value={values.serviceType}
+                                    onValueChange={(value) =>
                                         setField(
                                             "serviceType",
                                             value as ServiceType
                                         )
                                     }
                                 >
-
                                     <SelectTrigger className="w-full py-5">
                                         <SelectValue placeholder="Select service type" />
                                     </SelectTrigger>
 
                                     <SelectContent>
+                                        {SERVICE_TYPE_OPTIONS.map((option) => {
+                                            const Icon = option.icon;
 
-                                        {SERVICE_TYPE_OPTIONS.map(
-                                            (
-                                                option
-                                            ) => {
-                                                const Icon =
-                                                    option.icon;
-
-                                                return (
-                                                    <SelectItem
-                                                        key={
-                                                            option.value
-                                                        }
-                                                        value={
-                                                            option.value
-                                                        }
-                                                    >
-                                                        <div className="flex items-center gap-2">
-
-                                                            <Icon className="h-4 w-4 text-muted-foreground" />
-
-                                                            <span>
-                                                                {
-                                                                    option.label
-                                                                }
-                                                            </span>
-
-                                                        </div>
-                                                    </SelectItem>
-                                                );
-                                            }
-                                        )}
-
+                                            return (
+                                                <SelectItem
+                                                    key={option.value}
+                                                    value={option.value}
+                                                >
+                                                    <div className="flex items-center gap-2">
+                                                        <Icon className="h-4 w-4 text-muted-foreground" />
+                                                        <span>{option.label}</span>
+                                                    </div>
+                                                </SelectItem>
+                                            );
+                                        })}
                                     </SelectContent>
-
                                 </Select>
 
                                 {errors.serviceType && (
                                     <p className="text-xs text-red-500">
-                                        {
-                                            errors.serviceType
-                                        }
+                                        {errors.serviceType}
                                     </p>
                                 )}
-
                             </div>
-
                         </div>
 
-                        {/* Description */}
+                        {/* DESCRIPTION */}
 
                         <div className="space-y-1.5">
-
                             <div className="flex items-center justify-between">
-
-                                <Label>
-                                    Description
-                                </Label>
+                                <Label>Description</Label>
 
                                 <span className="text-[11px] text-muted-foreground">
-                                    {
-                                        values
-                                            .description
-                                            .length
-                                    }
-                                    /255
+                                    {values.description.length}/255
                                 </span>
-
                             </div>
 
                             <Textarea
-                                value={
-                                    values.description
-                                }
+                                value={values.description}
                                 maxLength={255}
-                                onChange={(
-                                    event
-                                ) =>
+                                onChange={(event) =>
                                     setField(
                                         "description",
-                                        event.target
-                                            .value
+                                        event.target.value
                                     )
                                 }
                                 placeholder="Describe what this service covers."
                                 rows={3}
                             />
 
+                            {errors.description && (
+                                <p className="text-xs text-red-500">
+                                    {errors.description}
+                                </p>
+                            )}
                         </div>
 
-                        {/* Active */}
+                        {/* ACTIVE STATUS */}
 
                         <div className="flex items-center justify-between rounded-lg border bg-muted/30 px-4 py-3">
-
                             <div>
-                                <Label>
-                                    Active Status
-                                </Label>
+                                <Label>Active Status</Label>
 
                                 <p className="text-xs text-muted-foreground">
-                                    Inactive services
-                                    cannot be selected.
+                                    Inactive services cannot be selected.
                                 </p>
                             </div>
 
                             <Switch
-                                checked={
-                                    values.isActive
-                                }
-                                onCheckedChange={(
-                                    value
-                                ) =>
-                                    setField(
-                                        "isActive",
-                                        value
-                                    )
+                                checked={values.isActive}
+                                onCheckedChange={(checked) =>
+                                    setField("isActive", checked)
                                 }
                             />
-
                         </div>
-
                     </div>
-
                 </section>
 
-                {/* =====================================================
-                    COLLECTION MODE
-                ====================================================== */}
+                {/* COLLECTION MODE */}
 
                 <section className="rounded-xl border bg-card shadow-sm">
-
                     <div className="border-b px-6 py-4">
-
                         <h2 className="text-sm font-semibold">
                             Collection Mode
                         </h2>
 
                         <p className="text-xs text-muted-foreground">
-                            Define how this service can
-                            generate a payable charge.
+                            Define how this service can generate a payable
+                            charge.
                         </p>
-
                     </div>
 
                     <div className="grid grid-cols-1 gap-3 p-6 sm:grid-cols-3">
+                        {COLLECTION_MODE_OPTIONS.map((option) => {
+                            const selected =
+                                values.collectionMode === option.value;
 
-                        {COLLECTION_MODE_OPTIONS.map(
-                            (option) => {
-
-                                const selected =
-                                    values.collectionMode ===
-                                    option.value;
-
-                                return (
-                                    <button
-                                        key={
+                            return (
+                                <button
+                                    key={option.value}
+                                    type="button"
+                                    onClick={() =>
+                                        setField(
+                                            "collectionMode",
                                             option.value
-                                        }
-                                        type="button"
-                                        onClick={() =>
-                                            setField(
-                                                "collectionMode",
-                                                option.value
-                                            )
-                                        }
-                                        className={`
-                                            flex flex-col items-start gap-3 rounded-xl border p-4 text-left transition
-                                            ${
+                                        )
+                                    }
+                                    className={`flex flex-col items-start gap-3 rounded-xl border p-4 text-left transition ${
+                                        selected
+                                            ? "border-primary bg-primary/5 ring-1 ring-primary"
+                                            : "hover:border-foreground/30 hover:bg-muted/40"
+                                    }`}
+                                >
+                                    <div className="flex w-full items-center justify-between">
+                                        <div
+                                            className={`flex h-8 w-8 items-center justify-center rounded-lg ${
                                                 selected
-                                                    ? "border-primary bg-primary/5 ring-1 ring-primary"
-                                                    : "hover:border-foreground/30 hover:bg-muted/40"
-                                            }
-                                        `}
-                                    >
-
-                                        <div className="flex w-full items-center justify-between">
-
-                                            <div
-                                                className={`
-                                                    flex h-8 w-8 items-center justify-center rounded-lg
-                                                    ${
-                                                        selected
-                                                            ? "bg-primary text-primary-foreground"
-                                                            : "bg-muted text-muted-foreground"
-                                                    }
-                                                `}
-                                            >
-                                                {
-                                                    option.icon
-                                                }
-                                            </div>
-
-                                            {selected && (
-                                                <CheckCircle2 className="h-4 w-4 text-primary" />
-                                            )}
-
+                                                    ? "bg-primary text-primary-foreground"
+                                                    : "bg-muted text-muted-foreground"
+                                            }`}
+                                        >
+                                            {option.icon}
                                         </div>
 
-                                        <div>
+                                        {selected && (
+                                            <CheckCircle2 className="h-4 w-4 text-primary" />
+                                        )}
+                                    </div>
 
-                                            <p className="text-sm font-medium">
-                                                {
-                                                    option.label
-                                                }
-                                            </p>
+                                    <div>
+                                        <p className="text-sm font-medium">
+                                            {option.label}
+                                        </p>
 
-                                            <p className="text-xs text-muted-foreground">
-                                                {
-                                                    option.description
-                                                }
-                                            </p>
-
-                                        </div>
-
-                                    </button>
-                                );
-                            }
-                        )}
-
+                                        <p className="text-xs text-muted-foreground">
+                                            {option.description}
+                                        </p>
+                                    </div>
+                                </button>
+                            );
+                        })}
                     </div>
 
+                    {errors.collectionMode && (
+                        <p className="px-6 pb-4 text-xs text-red-500">
+                            {errors.collectionMode}
+                        </p>
+                    )}
                 </section>
 
-                {/* =====================================================
-                    SERVICE FIELDS
-                ====================================================== */}
+                {/* SERVICE FIELDS */}
 
                 <section className="rounded-xl border bg-card shadow-sm">
-
                     <div className="flex flex-wrap items-center justify-between gap-3 border-b px-6 py-4">
-
                         <div className="flex items-center gap-3">
-
                             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600">
                                 <SlidersHorizontal className="h-4 w-4" />
                             </div>
 
                             <div>
-
                                 <h2 className="text-sm font-semibold">
                                     Service Fields
                                 </h2>
 
                                 <p className="text-xs text-muted-foreground">
-                                    Select existing base fields
-                                    required by this service.
+                                    Select existing base fields required by this
+                                    service.
                                 </p>
-
                             </div>
-
                         </div>
 
                         <Button
@@ -1054,277 +893,240 @@ export function RevenueServiceForm({
                             <Plus className="mr-1.5 h-3.5 w-3.5" />
                             Add Field
                         </Button>
-
                     </div>
 
                     <div className="p-6">
-
                         {values.fields.length === 0 ? (
-
                             <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed py-14 text-center">
-
                                 <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
                                     <Inbox className="h-5 w-5 text-muted-foreground" />
                                 </div>
 
                                 <div>
-
                                     <p className="text-sm font-medium">
                                         No fields configured
                                     </p>
 
                                     <p className="mt-1 max-w-md text-xs text-muted-foreground">
-                                        Select the base fields that
-                                        officers must provide when
-                                        this service is used.
+                                        Select the base fields that officers
+                                        must provide when this service is used.
                                     </p>
-
                                 </div>
 
                                 <Button
                                     type="button"
                                     variant="outline"
                                     size="sm"
-                                    onClick={
-                                        addField
-                                    }
+                                    onClick={addField}
                                 >
                                     <Plus className="mr-1.5 h-3.5 w-3.5" />
                                     Add First Field
                                 </Button>
-
                             </div>
-
                         ) : (
-
                             <div className="space-y-4">
+                                {values.fields.map((field, index) => {
+                                    const selectedBaseField =
+                                        getSelectedBaseField(
+                                            index,
+                                            field.baseFieldId
+                                        );
 
-                                {values.fields.map(
-                                    (
-                                        field,
-                                        index
-                                    ) => {
+                                    const fieldError =
+                                        errors[
+                                            `fields.${index}.baseFieldId`
+                                        ];
 
-                                        const selectedBaseField =
-                                            baseFields.find(
-                                                (
-                                                    baseField
-                                                ) =>
-                                                    baseField.id ===
-                                                    field.baseFieldId
-                                            );
+                                    return (
+                                        <div
+                                            key={`service-field-${index}`}
+                                            className={`rounded-xl border bg-muted/20 p-4 ${
+                                                fieldError
+                                                    ? "border-red-300 bg-red-50/50 dark:border-red-900 dark:bg-red-950/20"
+                                                    : ""
+                                            }`}
+                                        >
+                                            <div className="flex items-start gap-3">
+                                                <div className="mt-2 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-background text-xs font-medium ring-1 ring-border">
+                                                    {index + 1}
+                                                </div>
 
-                                        const fieldError =
-                                            errors[
-                                                `fields.${index}.baseFieldId`
-                                            ];
+                                                <div className="min-w-0 flex-1 space-y-4">
+                                                    {/* FIELD SELECTION */}
 
-                                        return (
-                                            <div
-                                                key={`${field.baseFieldId}-${index}`}
-                                                className={`
-                                                    rounded-xl border bg-muted/20 p-4
-                                                    ${
-                                                        fieldError
-                                                            ? "border-red-300 bg-red-50/50"
-                                                            : ""
-                                                    }
-                                                `}
-                                            >
+                                                    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1.5fr_1fr_auto_auto]">
+                                                        <div className="space-y-1.5">
+                                                            <Label className="text-xs">
+                                                                Base Field{" "}
+                                                                <span className="text-red-500">
+                                                                    *
+                                                                </span>
+                                                            </Label>
 
-                                                <div className="flex items-start gap-3">
-
-                                                    {/* ORDER */}
-
-                                                    <div className="mt-2 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-background text-xs font-medium ring-1 ring-border">
-                                                        {
-                                                            index +
-                                                            1
-                                                        }
-                                                    </div>
-
-                                                    <div className="min-w-0 flex-1 space-y-4">
-
-                                                        {/* FIELD SELECTION */}
-
-                                                        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1.5fr_1fr_auto_auto]">
-
-                                                            {/* BASE FIELD */}
-
-                                                            <div className="space-y-1.5">
-
-                                                                <Label className="text-xs">
-                                                                    Base Field{" "}
-                                                                    <span className="text-red-500">
-                                                                        *
-                                                                    </span>
-                                                                </Label>
-
-                                                                <BaseFieldDropdown
-                                                                    value={field.baseFieldId || null}
-                                                                    excludeIds={values.fields
-                                                                        .filter((_, existingIndex) => existingIndex !== index)
-                                                                        .map((existing) => existing.baseFieldId)
-                                                                        .filter(Boolean)}
-                                                                    onChange={(value, item) => handleBaseFieldChange(index, value)}
-                                                                    />
-
-                                                                {fieldError && (
-                                                                    <p className="text-xs text-red-500">
-                                                                        {
-                                                                            fieldError
-                                                                        }
-                                                                    </p>
-                                                                )}
-
-                                                            </div>
-
-                                                            {/* LABEL */}
-
-                                                            <div className="space-y-1.5">
-
-                                                                <Label className="text-xs">
-                                                                    Display Label
-                                                                </Label>
-
-                                                                <Input
-                                                                    value={
-                                                                        field.label
-                                                                    }
-                                                                    onChange={(
-                                                                        event
-                                                                    ) =>
-                                                                        setServiceField(
-                                                                            index,
-                                                                            "label",
-                                                                            event
-                                                                                .target
-                                                                                .value
-                                                                        )
-                                                                    }
-                                                                    placeholder={
-                                                                        selectedBaseField?.name ||
-                                                                        "Field label"
-                                                                    }
-                                                                    className="h-10"
-                                                                />
-
-                                                            </div>
-
-                                                            {/* REQUIRED */}
-
-                                                            <div className="flex flex-col items-center justify-end gap-1.5">
-
-                                                                <Label className="text-xs">
-                                                                    Required
-                                                                </Label>
-
-                                                                <Switch
-                                                                    checked={
-                                                                        field.required
-                                                                    }
-                                                                    onCheckedChange={(
-                                                                        checked
-                                                                    ) =>
-                                                                        setServiceField(
-                                                                            index,
-                                                                            "required",
-                                                                            checked
-                                                                        )
-                                                                    }
-                                                                />
-
-                                                            </div>
-
-                                                            {/* DELETE */}
-
-                                                            <div className="flex items-end">
-
-                                                                <Button
-                                                                    type="button"
-                                                                    variant="ghost"
-                                                                    size="icon"
-                                                                    className="h-10 w-10 text-muted-foreground hover:text-red-500"
-                                                                    onClick={() =>
-                                                                        removeField(
+                                                            <BaseFieldDropdown
+                                                                value={
+                                                                    field.baseFieldId ||
+                                                                    null
+                                                                }
+                                                                excludeIds={values.fields
+                                                                    .filter(
+                                                                        (
+                                                                            _,
+                                                                            existingIndex
+                                                                        ) =>
+                                                                            existingIndex !==
                                                                             index
-                                                                        )
-                                                                    }
-                                                                >
-                                                                    <Trash2 className="h-4 w-4" />
-                                                                </Button>
+                                                                    )
+                                                                    .map(
+                                                                        (existing) =>
+                                                                            existing.baseFieldId
+                                                                    )
+                                                                    .filter(
+                                                                        Boolean
+                                                                    )}
+                                                                onChange={(
+                                                                    value,
+                                                                    item
+                                                                ) =>
+                                                                    handleBaseFieldChange(
+                                                                        index,
+                                                                        value,
+                                                                        item
+                                                                    )
+                                                                }
+                                                            />
 
-                                                            </div>
-
+                                                            {fieldError && (
+                                                                <p className="text-xs text-red-500">
+                                                                    {fieldError}
+                                                                </p>
+                                                            )}
                                                         </div>
 
-                                                       {/* FIELD INFORMATION */}
-
-                                                        {selectedBaseField && (
-                                                            <div className="rounded-lg border bg-background p-3">
-                                                                <div className="flex flex-wrap items-center gap-2">
-                                                                    <Badge variant="secondary">
-                                                                        {selectedBaseField.code}
-                                                                    </Badge>
-
-                                                                    <Badge variant="outline">
-                                                                        {selectedBaseField.data_type}
-                                                                    </Badge>
-
-                                                                    {/* {selectedBaseField.measurement_unit && (
-                                                                        <Badge variant="outline">
-                                                                            {selectedBaseField.measurement_unit.symbol
-                                                                                ? `${selectedBaseField.measurement_unit.code} (${selectedBaseField.measurement_unit.symbol})`
-                                                                                : selectedBaseField.measurement_unit.code}
-                                                                        </Badge>
-                                                                    )} */}
-                                                                </div>
-
-                                                                {selectedBaseField.description && (
-                                                                    <p className="mt-2 text-xs text-muted-foreground">
-                                                                        {selectedBaseField.description}
-                                                                    </p>
-                                                                )}
-                                                            </div>
-                                                        )}
-
-                                                        {/* HELP TEXT */}
+                                                        {/* DISPLAY LABEL */}
 
                                                         <div className="space-y-1.5">
-
                                                             <Label className="text-xs">
-                                                                Help Text
+                                                                Display Label
                                                             </Label>
 
                                                             <Input
-                                                                value={
-                                                                    field.helpText
-                                                                }
+                                                                value={field.label}
                                                                 onChange={(
                                                                     event
                                                                 ) =>
                                                                     setServiceField(
                                                                         index,
-                                                                        "helpText",
-                                                                        event
-                                                                            .target
+                                                                        "label",
+                                                                        event.target
                                                                             .value
                                                                     )
                                                                 }
-                                                                placeholder="Explain what the officer should enter."
-                                                                className="h-9"
+                                                                placeholder={
+                                                                    selectedBaseField?.name ??
+                                                                    "Field label"
+                                                                }
+                                                                className="h-10"
                                                             />
-
                                                         </div>
 
+                                                        {/* REQUIRED */}
+
+                                                        <div className="flex flex-col items-center justify-end gap-1.5">
+                                                            <Label className="text-xs">
+                                                                Required
+                                                            </Label>
+
+                                                            <Switch
+                                                                checked={
+                                                                    field.required
+                                                                }
+                                                                onCheckedChange={(
+                                                                    checked
+                                                                ) =>
+                                                                    setServiceField(
+                                                                        index,
+                                                                        "required",
+                                                                        checked
+                                                                    )
+                                                                }
+                                                            />
+                                                        </div>
+
+                                                        {/* DELETE */}
+
+                                                        <div className="flex items-end">
+                                                            <Button
+                                                                type="button"
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                aria-label={`Remove field ${index + 1}`}
+                                                                className="h-10 w-10 text-muted-foreground hover:text-red-500"
+                                                                onClick={() =>
+                                                                    removeField(
+                                                                        index
+                                                                    )
+                                                                }
+                                                            >
+                                                                <Trash2 className="h-4 w-4" />
+                                                            </Button>
+                                                        </div>
                                                     </div>
 
-                                                </div>
+                                                    {/* FIELD INFORMATION */}
 
+                                                    {selectedBaseField && (
+                                                        <div className="rounded-lg border bg-background p-3">
+                                                            <div className="flex flex-wrap items-center gap-2">
+                                                                <Badge variant="secondary">
+                                                                    {
+                                                                        selectedBaseField.code
+                                                                    }
+                                                                </Badge>
+
+                                                                <Badge variant="outline">
+                                                                    {
+                                                                        selectedBaseField.data_type
+                                                                    }
+                                                                </Badge>
+                                                            </div>
+
+                                                            {selectedBaseField.description && (
+                                                                <p className="mt-2 text-xs text-muted-foreground">
+                                                                    {
+                                                                        selectedBaseField.description
+                                                                    }
+                                                                </p>
+                                                            )}
+                                                        </div>
+                                                    )}
+
+                                                    {/* HELP TEXT */}
+
+                                                    <div className="space-y-1.5">
+                                                        <Label className="text-xs">
+                                                            Help Text
+                                                        </Label>
+
+                                                        <Input
+                                                            value={field.helpText}
+                                                            onChange={(event) =>
+                                                                setServiceField(
+                                                                    index,
+                                                                    "helpText",
+                                                                    event.target
+                                                                        .value
+                                                                )
+                                                            }
+                                                            placeholder="Explain what the officer should enter."
+                                                            className="h-9"
+                                                        />
+                                                    </div>
+                                                </div>
                                             </div>
-                                        );
-                                    }
-                                )}
+                                        </div>
+                                    );
+                                })}
 
                                 <Button
                                     type="button"
@@ -1336,47 +1138,46 @@ export function RevenueServiceForm({
                                     <Plus className="mr-1.5 h-3.5 w-3.5" />
                                     Add Another Field
                                 </Button>
-
                             </div>
-
                         )}
-
                     </div>
-
                 </section>
-
             </div>
 
-           {/* =====================================================
-                STICKY ACTION BAR
-            ====================================================== */}
+            {/* STICKY ACTION BAR */}
 
             <div className="sticky inset-x-0 bottom-0 z-40 -mx-6 my-5 border-t bg-background/95 px-6 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+                <div className="mx-auto flex max-w-7xl items-center justify-end gap-3 py-3.5">
+                    <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => router.back()}
+                        disabled={isSubmitting}
+                    >
+                        Cancel
+                    </Button>
 
-            <div className="mx-auto flex max-w-7xl items-center justify-end gap-3 py-3.5">
-
-                <Button type="button" variant="outline" onClick={() => router.back()} disabled={isSubmitting}>
-                    Cancel
-                </Button>
-
-                <Button type="submit" disabled={isSubmitting} className="min-w-[160px]">
-                    {isSubmitting ? (
-                        <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Saving...
-                        </>
-                    ) : (
-                        <>
-                            <Save className="mr-2 h-4 w-4" />
-                            {mode === "create" ? "Create Service" : "Save Changes"}
-                        </>
-                    )}
-                </Button>
-
+                    <Button
+                        type="submit"
+                        disabled={isSubmitting}
+                        className="min-w-[160px]"
+                    >
+                        {isSubmitting ? (
+                            <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Saving...
+                            </>
+                        ) : (
+                            <>
+                                <Save className="mr-2 h-4 w-4" />
+                                {mode === "create"
+                                    ? "Create Service"
+                                    : "Save Changes"}
+                            </>
+                        )}
+                    </Button>
+                </div>
             </div>
-
-            </div>
-
         </form>
     );
 }

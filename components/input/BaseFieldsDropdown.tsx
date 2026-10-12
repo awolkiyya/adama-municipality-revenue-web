@@ -27,7 +27,7 @@ export const BaseFieldDropdown: React.FC<BaseFieldDropdownProps> = ({
   excludeIds = [],
   disabled = false,
 }) => {
-  const [pageSize] = useState(20);
+  const [pageSize] = useState(100);
 
   const fetchBaseFields = useCallback(
     async ({

@@ -323,3 +323,30 @@ export function getInvoiceDisplayTitle(invoice: Invoice): string {
   if (rest.length === 0) return first.description;
   return `${first.description} + ${rest.length} more`;
 }
+
+export function toDateKey(date: Date): string {
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, "0")
+    const day = String(date.getDate()).padStart(2, "0")
+  
+    return `${year}-${month}-${day}`
+  }
+
+  /* -------------------------------------------------------------------------- */
+/* Helpers                                                                    */
+/* -------------------------------------------------------------------------- */
+
+export function formatETB(value: number): string {
+  return new Intl.NumberFormat("en-ET", {
+    style: "currency",
+    currency: "ETB",
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+export function formatCompactETB(value: number): string {
+  if (value >= 1_000_000) return `ETB ${(value / 1_000_000).toFixed(1)}M`;
+  if (value >= 1_000) return `ETB ${(value / 1_000).toFixed(0)}K`;
+
+  return `ETB ${value.toLocaleString("en-ET")}`;
+}

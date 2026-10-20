@@ -25,7 +25,12 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
+
 import TaxpayerAppDownload from "@/components/TaxpayerAppDownload";
+import MagnetLines from "@/components/MagnetLines";
+import DotGrid from "@/components/DotGrid";
+import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 
 /* -------------------------------------------------------------------------- */
 /* Theme                                                                      */
@@ -592,136 +597,194 @@ export default function LandingPage() {
 
   return (
     <main className="min-h-screen overflow-x-hidden bg-background text-foreground">
-      {/* Navbar */}
-      <header className="sticky top-0 z-50 border-b bg-background/90 backdrop-blur-xl">
-        <nav
-          aria-label="Main"
-          className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6"
+
+
+{/* Navbar */}
+<header className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+  <nav
+    aria-label="Main"
+    className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6"
+  >
+    {/* Brand */}
+    <Link
+      href="/"
+      className="flex items-center gap-2.5 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+    >
+      <BrandMark />
+      <span className="font-serif text-base font-bold">Adama Revenue</span>
+    </Link>
+
+    {/* Desktop links */}
+    <ul className="hidden items-center gap-1 md:flex">
+      {content.nav.map((link) => (
+        <li key={link.href}>
+          <a
+            href={link.href}
+            className="rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {link.label}
+          </a>
+        </li>
+      ))}
+    </ul>
+
+    {/* Desktop actions */}
+    <div className="hidden items-center gap-3 md:flex">
+      <PortalToggle portal={portal} onChange={choosePortal} />
+      <div className="h-6 w-px bg-border" aria-hidden />
+      <Button asChild>
+        <Link href={content.loginHref}>Sign in</Link>
+      </Button>
+    </div>
+
+    {/* Mobile menu */}
+    <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
+      <SheetTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="md:hidden"
+          aria-label="Open menu"
         >
-          <Link href="/" className="flex items-center gap-2.5">
+          <Menu className="size-5" />
+        </Button>
+      </SheetTrigger>
+
+      <SheetContent side="right" className="flex w-[85%] max-w-sm flex-col gap-0 p-0">
+        <SheetHeader className="border-b p-4 text-left">
+          <SheetTitle className="flex items-center gap-2.5">
             <BrandMark />
             <span className="font-serif text-base font-bold">Adama Revenue</span>
-          </Link>
+          </SheetTitle>
+          <SheetDescription className="sr-only">Site navigation</SheetDescription>
+        </SheetHeader>
 
-          <div className="hidden items-center gap-6 text-sm font-medium md:flex">
-            {content.nav.map((link) => (
+        <ul className="flex-1 space-y-1 overflow-y-auto p-4">
+          {content.nav.map((link) => (
+            <li key={link.href}>
               <a
-                key={link.href}
-                href={link.href}
-                className="text-muted-foreground transition hover:text-foreground"
-              >
-                {link.label}
-              </a>
-            ))}
-          </div>
-
-          <div className="hidden items-center gap-3 md:flex">
-            <PortalToggle portal={portal} onChange={choosePortal} />
-            <Link
-              href={content.loginHref}
-              className="rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-            >
-              Sign in
-            </Link>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => setMenuOpen((open) => !open)}
-            className="rounded-lg p-2 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:hidden"
-            aria-label={menuOpen ? "Close menu" : "Open menu"}
-            aria-expanded={menuOpen}
-          >
-            {menuOpen ? <X className="size-5" /> : <Menu className="size-5" />}
-          </button>
-        </nav>
-
-        {menuOpen && (
-          <div className="space-y-1 border-t px-4 py-4 md:hidden">
-            <div className="pb-3">
-              <PortalToggle portal={portal} onChange={choosePortal} />
-            </div>
-
-            {content.nav.map((link) => (
-              <a
-                key={link.href}
                 href={link.href}
                 onClick={() => setMenuOpen(false)}
-                className="block rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-accent hover:text-accent-foreground"
+                className="block rounded-md px-3 py-2.5 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
               >
                 {link.label}
               </a>
-            ))}
+            </li>
+          ))}
+        </ul>
 
-            <Link
-              href={content.loginHref}
-              className="mt-2 block rounded-xl bg-primary px-4 py-3 text-center text-sm font-semibold text-primary-foreground"
-            >
+        <div className="space-y-3 border-t p-4">
+          <PortalToggle portal={portal} onChange={choosePortal} />
+          <Button asChild size="lg" className="w-full">
+            <Link href={content.loginHref} onClick={() => setMenuOpen(false)}>
               Sign in
             </Link>
-          </div>
-        )}
-      </header>
-
-      {/* Hero */}
-      <section className="relative overflow-hidden px-4 pb-36 pt-14 sm:px-6 sm:pb-48 sm:pt-20">
-        <HeroWaves />
-
-        <div className="relative z-10 mx-auto max-w-3xl text-center">
-          <p className="inline-flex items-center gap-2 rounded-full border bg-card/70 px-3 py-1.5 text-xs font-semibold text-muted-foreground">
-            <span className="size-1.5 rounded-full" style={{ backgroundColor: SUCCESS }} />
-            {content.badge}
-          </p>
-
-          <h1 className="mt-6 font-serif text-4xl font-bold leading-[1.08] tracking-tight sm:text-5xl lg:text-6xl">
-            {content.headline[0]}{" "}
-            <span style={accentText}>{content.headline[1]}</span>
-          </h1>
-
-          <p className="mx-auto mt-5 max-w-xl text-base leading-7 text-muted-foreground">
-            {content.intro}
-          </p>
-
-          <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <Link href={content.loginHref} className={`group w-full sm:w-auto ${primaryButton}`}>
-              {content.loginLabel}
-              <ArrowRight className="size-4 transition group-hover:translate-x-0.5" />
-            </Link>
-
-            {isCitizen ? (
-              <a href="#app" className={secondaryButton}>
-                <Download className="size-4" />
-                Get the mobile app
-              </a>
-            ) : (
-              <a href="#verify" className={secondaryButton}>
-                <Search className="size-4" />
-                Verify a receipt
-              </a>
-            )}
-          </div>
-
-          <ul className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
-            {content.chips.map((chip) => {
-              const Icon = chip.icon;
-              return (
-                <li key={chip.title} className="flex items-center gap-1.5">
-                  <Icon className="size-4" style={{ color: SUCCESS }} />
-                  {chip.title}
-                </li>
-              );
-            })}
-          </ul>
-
-          {isCitizen && (
-            <p className="mt-6 text-xs text-muted-foreground">
-              Citizens can&apos;t self-register. Visit the municipal revenue office to be
-              registered as a taxpayer.
-            </p>
-          )}
+          </Button>
         </div>
-      </section>
+      </SheetContent>
+    </Sheet>
+  </nav>
+</header>
+   {/* Hero */}
+<section className="relative isolate overflow-hidden px-4 pb-32 pt-16 sm:px-6 sm:pb-44 sm:pt-24">
+  {/* Layer 1: interactive pattern */}
+  <div
+    aria-hidden
+    className="absolute inset-0 -z-30 "
+  >
+    <MagnetLines
+      lineColor="#d4d4d8"
+      spacing={34}
+      lineWidth={2}
+      lineHeight={18}
+      mode="orbit"
+      shape="line"
+      radius={200}
+      fade={0.65}
+      baseAngle={-10}
+      stretch={0.4}
+      inertia={0.35}
+      bounce={0.3}
+      ripple={0.3}
+      clickPulse
+      intro
+      idle={false}
+    />
+  </div>
 
+  {/* Layer 2: brand glow at the top */}
+  {/* <div
+    aria-hidden
+    className="pointer-events-none absolute left-1/2 top-0 -z-20 h-72 w-[42rem] max-w-full -translate-x-1/2 rounded-full bg-primary/10 blur-3xl"
+  /> */}
+
+  {/* Layer 3: soft spotlight behind the text so it stays readable */}
+  <div
+    aria-hidden
+    className="pointer-events-none absolute left-1/2 top-1/2 -z-20 h-[75%] w-[85%] max-w-3xl -translate-x-1/2 -translate-y-1/2 rounded-full bg-background/80 blur-3xl"
+  />
+
+  {/* Layer 4: bottom fade into the next section */}
+  <div
+    aria-hidden
+    className="pointer-events-none absolute inset-x-0 bottom-0 -z-10 h-40 bg-gradient-to-t from-background to-transparent"
+  />
+
+  {/* Content */}
+  <div className="pointer-events-none mx-auto max-w-3xl text-center">
+    <p className="inline-flex items-center gap-2 rounded-full border bg-card/70 px-3 py-1.5 text-xs font-semibold text-muted-foreground shadow-sm backdrop-blur">
+      <span className="size-1.5 rounded-full" style={{ backgroundColor: SUCCESS }} />
+      {content.badge}
+    </p>
+
+    <h1 className="mt-6 text-balance font-serif text-4xl font-bold leading-[1.08] tracking-tight sm:text-5xl lg:text-6xl">
+      {content.headline[0]}{" "}
+      <span style={accentText}>{content.headline[1]}</span>
+    </h1>
+
+    <p className="mx-auto mt-5 max-w-xl text-pretty text-base leading-7 text-muted-foreground sm:text-lg sm:leading-8">
+      {content.intro}
+    </p>
+
+    <div className="pointer-events-auto mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
+      <Link href={content.loginHref} className={`group w-full sm:w-auto ${primaryButton}`}>
+        {content.loginLabel}
+        <ArrowRight className="size-4 transition group-hover:translate-x-0.5" />
+      </Link>
+
+      {isCitizen ? (
+        <a href="#app" className={`w-full sm:w-auto ${secondaryButton}`}>
+          <Download className="size-4" />
+          Get the mobile app
+        </a>
+      ) : (
+        <a href="#verify" className={`w-full sm:w-auto ${secondaryButton}`}>
+          <Search className="size-4" />
+          Verify a receipt
+        </a>
+      )}
+    </div>
+
+    <ul className="mt-10 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 border-t border-border/60 pt-6 text-sm text-muted-foreground">
+      {content.chips.map((chip) => {
+        const Icon = chip.icon;
+        return (
+          <li key={chip.title} className="flex items-center gap-1.5">
+            <Icon className="size-4" style={{ color: SUCCESS }} />
+            {chip.title}
+          </li>
+        );
+      })}
+    </ul>
+
+    {isCitizen && (
+      <p className="mt-6 text-xs text-muted-foreground">
+        Citizens can&apos;t self-register. Visit the municipal revenue office to be
+        registered as a taxpayer.
+      </p>
+    )}
+  </div>
+</section>
       {/* How it works */}
       <section id="workflow" className="scroll-mt-20 border-b bg-muted/40 px-4 py-16 sm:px-6">
         <div className="mx-auto max-w-6xl">
@@ -789,38 +852,72 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Citizen: mobile app */}
-      {isCitizen && (
-        <section id="app" className="scroll-mt-20 px-4 pb-16 sm:px-6">
-          <div className="mx-auto max-w-6xl rounded-3xl bg-primary p-6 text-primary-foreground sm:p-10">
-            <div className="grid items-center gap-8 lg:grid-cols-2">
-              <div>
-                <p className="text-sm font-semibold text-primary-foreground/70">
-                  Taxpayer mobile app
-                </p>
-                <h2 className="mt-2 font-serif text-3xl font-bold tracking-tight">
-                  Your revenue account, on your phone.
-                </h2>
-                <p className="mt-3 max-w-md text-sm leading-6 text-primary-foreground/70">
-                  Download the official Android app to view assessments and invoices, pay,
-                  and open your receipts. It uses the same account as the web portal.
-                </p>
-                <CheckList
-                  onDark
-                  items={["Official application", "Android", "Same account as the web portal"]}
-                />
-              </div>
 
-              <div className="rounded-2xl bg-card p-4 text-card-foreground">
-                <TaxpayerAppDownload />
-              </div>
-            </div>
-          </div>
-        </section>
-      )}
 
-      {/* Office: receipt verification */}
-      {!isCitizen && (
+
+{/* Citizen: mobile app */}
+{isCitizen && (
+  <section id="app" className="scroll-mt-20 px-4 pb-16 sm:px-6">
+    <div className="relative mx-auto max-w-6xl overflow-hidden rounded-3xl bg-primary p-6 text-primary-foreground sm:p-10">
+      {/* Background */}
+      <div
+        aria-hidden
+        className="absolute inset-0 [mask-image:linear-gradient(to_right,black,transparent_85%)]"
+      >
+        <DotGrid
+          baseColor="#ffffff"
+          activeColor="#ffffff"
+          shape="circle"
+          dotSize={4}
+          gap={20}
+          proximity={140}
+          strength={1}
+          bounce={0.6}
+          tension={0.4}
+          returnDuration={0.8}
+          shockRadius={320}
+          shockStrength={5}
+          swell={0.8}
+          stretch={0.5}
+          glow={0.5}
+          fade={0}
+          intro
+          opacity={0.18}
+          mouseInteraction
+          clickShock
+        />
+      </div>
+
+      {/* Content */}
+      <div className="relative z-10 grid items-center gap-8 lg:grid-cols-2">
+        <div>
+          <p className="text-sm font-semibold text-primary-foreground/70">
+            Taxpayer mobile app
+          </p>
+          <h2 className="mt-2 font-serif text-3xl font-bold tracking-tight">
+            Your revenue account, on your phone.
+          </h2>
+          <p className="mt-3 max-w-md text-sm leading-6 text-primary-foreground/70">
+            Download the official Android app to view assessments and invoices, pay,
+            and open your receipts. It uses the same account as the web portal.
+          </p>
+          <CheckList
+            onDark
+            items={["Official application", "Android", "Same account as the web portal"]}
+          />
+        </div>
+
+        <div className="rounded-2xl bg-card p-4 text-card-foreground">
+          <TaxpayerAppDownload />
+        </div>
+      </div>
+    </div>
+  </section>
+)}
+
+
+{/* Office: receipt verification */}
+{!isCitizen && (
         <section id="verify" className="scroll-mt-20 border-y bg-muted/40 px-4 py-16 sm:px-6">
           <div className="mx-auto grid max-w-6xl items-center gap-10 lg:grid-cols-[0.9fr_1.1fr]">
             <div>
@@ -869,6 +966,8 @@ export default function LandingPage() {
           </div>
         </div>
       </footer>
+
+
     </main>
   );
 }

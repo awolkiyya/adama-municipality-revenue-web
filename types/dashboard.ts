@@ -11,7 +11,6 @@ import {
     CreditCard,
     FileCheck2,
     FileText,
-    HandCoins,
     Landmark,
     MapPinned,
     PieChart,

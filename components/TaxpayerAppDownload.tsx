@@ -1,9 +1,13 @@
-/* =========================================================
-   PUBLIC TAXPAYER APK DOWNLOAD
-========================================================= */
+"use client";
 
 import { AlertCircle, Download, Loader2, Smartphone } from "lucide-react";
 import { useEffect, useState } from "react";
+
+import { Button } from "@/components/ui/button";
+
+/* -------------------------------------------------------------------------- */
+/* Types                                                                      */
+/* -------------------------------------------------------------------------- */
 
 type MobileAppRelease = {
   id: string;
@@ -29,18 +33,50 @@ type LatestReleaseResponse = {
   data?: MobileAppRelease | MobileAppRelease[] | null;
 };
 
-function formatFileSize(bytes?: number): string {
-  if (!bytes || bytes <= 0) {
-    return "";
-  }
+/* -------------------------------------------------------------------------- */
+/* Helpers                                                                    */
+/* -------------------------------------------------------------------------- */
 
+function formatFileSize(bytes?: number): string {
+  if (!bytes || bytes <= 0) return "";
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export default  function TaxpayerAppDownload() {
-  const [release, setRelease] =
-    useState<MobileAppRelease | null>(null);
+function isDownloadable(release?: MobileAppRelease | null): boolean {
+  return Boolean(
+    release?.id &&
+      release.status?.toLowerCase() === "published" &&
+      release.is_downloadable === true &&
+      release.apk?.status?.toUpperCase() === "READY" &&
+      release.apk?.extension?.toLowerCase() === "apk",
+  );
+}
 
+function getDownloadUrl(release: MobileAppRelease): string | null {
+  if (!release.download_url) {
+    return `/api/mobile-app-releases/${encodeURIComponent(release.id)}/download`;
+  }
+
+  if (/^https?:\/\//i.test(release.download_url)) {
+    return release.download_url;
+  }
+
+  const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/\/+$/, "");
+  if (!apiBaseUrl) return null;
+
+  const path = release.download_url.startsWith("/")
+    ? release.download_url
+    : `/${release.download_url}`;
+
+  return `${apiBaseUrl}${path}`;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Component                                                                  */
+/* -------------------------------------------------------------------------- */
+
+export default function TaxpayerAppDownload() {
+  const [release, setRelease] = useState<MobileAppRelease | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -49,28 +85,13 @@ export default  function TaxpayerAppDownload() {
     setError(null);
 
     try {
-      const apiBaseUrl =
-        process.env.NEXT_PUBLIC_API_URL?.replace(/\/+$/, "");
+      const response = await fetch("/api/mobile-app-releases/latest", {
+        method: "GET",
+        headers: { Accept: "application/json" },
+        cache: "no-store",
+      });
 
-      if (!apiBaseUrl) {
-        throw new Error(
-          "The API URL is not configured. Please contact the system administrator.",
-        );
-      }
-
-      const response = await fetch(
-        `/api/mobile-app-releases/latest`,
-        {
-          method: "GET",
-          headers: {
-            Accept: "application/json",
-          },
-          cache: "no-store",
-        },
-      );
-
-      const result =
-        (await response.json()) as LatestReleaseResponse;
+      const result = (await response.json()) as LatestReleaseResponse;
 
       if (!response.ok || result.success === false) {
         throw new Error(
@@ -79,28 +100,11 @@ export default  function TaxpayerAppDownload() {
         );
       }
 
-      const releaseData = Array.isArray(result.data)
-        ? result.data[0]
-        : result.data;
-
-      if (
-        !releaseData ||
-        releaseData.status?.toLowerCase() !== "published" ||
-        releaseData.is_downloadable !== true ||
-        releaseData.apk?.status?.toUpperCase() !== "READY" ||
-        releaseData.apk?.extension?.toLowerCase() !== "apk" ||
-        !releaseData.id
-      ) {
-        setRelease(null);
-        return;
-      }
-
-      setRelease(releaseData);
+      const data = Array.isArray(result.data) ? result.data[0] : result.data;
+      setRelease(isDownloadable(data) ? (data as MobileAppRelease) : null);
     } catch (err) {
       setError(
-        err instanceof Error
-          ? err.message
-          : "Unable to load the taxpayer app.",
+        err instanceof Error ? err.message : "Unable to load the taxpayer app.",
       );
     } finally {
       setLoading(false);
@@ -112,108 +116,108 @@ export default  function TaxpayerAppDownload() {
   }, []);
 
   const handleDownload = () => {
-    if (!release) {
-      return;
-    }
+    if (!release) return;
 
-    const apiBaseUrl =
-      process.env.NEXT_PUBLIC_API_URL?.replace(/\/+$/, "");
+    const url = getDownloadUrl(release);
 
-    if (!apiBaseUrl) {
+    if (!url) {
       setError("The API URL is not configured.");
       return;
     }
 
-    const downloadUrl = release.download_url
-      ? /^https?:\/\//i.test(release.download_url)
-        ? release.download_url
-        : `${apiBaseUrl}${
-            release.download_url.startsWith("/") ? "" : "/"
-          }${release.download_url}`
-      : `/api/mobile-app-releases/${encodeURIComponent(
-          release.id,
-        )}/download`;
-
-    window.location.assign(downloadUrl);
+    window.location.assign(url);
   };
 
+  /* ---- Status line under the title ---- */
+  let status: React.ReactNode;
+
+  if (loading) {
+    status = (
+      <p className="text-sm text-muted-foreground">
+        Checking for the latest release...
+      </p>
+    );
+  } else if (error) {
+    status = (
+      <p className="text-sm text-destructive">Unable to check for updates.</p>
+    );
+  } else if (release) {
+    const size = formatFileSize(release.apk?.size_bytes);
+
+    status = (
+      <>
+        <p className="text-sm text-muted-foreground">
+          Version {release.version_name}
+          {release.is_latest ? " · Latest release" : ""}
+        </p>
+        <p className="text-xs text-muted-foreground">
+          Android APK{size ? ` · ${size}` : ""}
+        </p>
+      </>
+    );
+  } else {
+    status = (
+      <p className="text-sm text-muted-foreground">
+        No downloadable release is currently available.
+      </p>
+    );
+  }
+
+  /* ---- Action button ---- */
+  let action: React.ReactNode;
+
+  if (loading) {
+    action = (
+      <Button size="lg" className="w-full" disabled>
+        <Loader2 className="size-4 animate-spin" />
+        Checking
+      </Button>
+    );
+  } else if (error) {
+    action = (
+      <Button
+        size="lg"
+        variant="outline"
+        className="w-full"
+        onClick={() => void loadLatestRelease()}
+      >
+        <AlertCircle className="size-4" />
+        Try again
+      </Button>
+    );
+  } else if (release) {
+    action = (
+      <Button size="lg" className="w-full" onClick={handleDownload}>
+        <Download className="size-4" />
+        Download APK
+      </Button>
+    );
+  } else {
+    action = (
+      <Button size="lg" variant="secondary" className="w-full" disabled>
+        Not available
+      </Button>
+    );
+  }
+
   return (
-    <div className="w-full max-w-md">
-      <div className="flex flex-col gap-4 rounded-2xl border border-black/10 bg-white/80 p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex min-w-0 items-start gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#0F1B2E] text-[#E8C468]">
-            <Smartphone className="h-5 w-5" />
-          </div>
-
-          <div className="min-w-0">
-            <h3 className="text-sm font-bold text-[#0F1B2E]">
-              Taxpayer Android App
-            </h3>
-
-            {loading ? (
-              <p className="mt-1 text-xs text-black/45">
-                Checking for the latest release...
-              </p>
-            ) : error ? (
-              <p className="mt-1 text-xs text-red-600">
-                Unable to check for updates.
-              </p>
-            ) : release ? (
-              <>
-                <p className="mt-1 text-xs text-black/50">
-                  Version {release.version_name}
-                  {release.is_latest ? " · Latest release" : ""}
-                </p>
-
-                <p className="mt-1 text-[10px] text-black/40">
-                  Android APK
-                  {release.apk?.size_bytes
-                    ? ` · ${formatFileSize(release.apk.size_bytes)}`
-                    : ""}
-                </p>
-              </>
-            ) : (
-              <p className="mt-1 text-xs text-black/45">
-                No downloadable release is currently available.
-              </p>
-            )}
-          </div>
+    <div className="w-full space-y-4">
+      <div className="flex items-center gap-3">
+        <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+          <Smartphone className="size-5" />
         </div>
 
-        {loading ? (
-          <div className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-[#0F1B2E]/10 px-4 py-3 text-xs font-semibold text-[#0F1B2E]/60">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Checking
-          </div>
-        ) : error ? (
-          <button
-            type="button"
-            onClick={() => void loadLatestRelease()}
-            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-black/10 bg-white px-4 py-3 text-xs font-semibold text-[#0F1B2E] transition hover:bg-black/5"
-          >
-            <AlertCircle className="h-4 w-4" />
-            Try again
-          </button>
-        ) : release ? (
-          <button
-            type="button"
-            onClick={handleDownload}
-            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-[#0F1B2E] px-4 py-3 text-xs font-semibold text-white transition hover:-translate-y-0.5 hover:bg-[#1B2B45]"
-          >
-            <Download className="h-4 w-4" />
-            Download APK
-          </button>
-        ) : (
-          <div className="shrink-0 rounded-xl bg-black/5 px-4 py-3 text-xs font-medium text-black/40">
-            Not available
-          </div>
-        )}
+        <div className="min-w-0 space-y-0.5" aria-live="polite">
+          <h3 className="text-sm font-semibold">Taxpayer Android App</h3>
+          {status}
+        </div>
       </div>
 
-      <p className="mt-2 text-[10px] leading-5 text-black/40">
-        Download the official Adama City Revenue taxpayer
-        application. Install only releases published by the
-        municipal revenue office.
+      {action}
+
+      <p className="text-xs leading-5 text-muted-foreground">
+        Download the official Adama City Revenue taxpayer application. Install
+        only releases published by the municipal revenue office.
       </p>
     </div>
   );

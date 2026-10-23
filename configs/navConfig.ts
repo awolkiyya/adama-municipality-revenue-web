@@ -85,24 +85,6 @@ export const NAV_ITEMS: NavItem[] = [
   },
 
   // =========================================================
-  // EXECUTIVE / ANALYTICS
-  // =========================================================
-
-  // {
-  //   title: "analytics",
-  //   url: "/office/dashboard/analytics",
-  //   icon: Target,
-  //   permission: APP_PERMISSIONS.ANALYTICS_VIEW,
-  // },
-
-  // {
-  //   title: "revenue_overview",
-  //   url: "/dashboard/revenue",
-  //   icon: Landmark,
-  //   permission: APP_PERMISSIONS.REVENUE_VIEW,
-  // },
-
-  // =========================================================
   // ADMINISTRATIVE STRUCTURE
   // =========================================================
 

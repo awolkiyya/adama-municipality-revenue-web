@@ -188,6 +188,7 @@ export const adminUnitService = {
     code: string;
     description: string;
     cluster_id: string;
+    is_active: boolean;
   }): Promise<ApiResponse<Sector>> => {
     try {
 

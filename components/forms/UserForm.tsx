@@ -303,49 +303,7 @@ export function UserForm({
   }, [initialData]);
 
 
-  /*
-  |--------------------------------------------------------------------------
-  | Role → Sector Rules
-  |--------------------------------------------------------------------------
-  |
-  | These are role NAMES, not role IDs.
-  |
-  */
-
-  const sectorRoles: UserRole[] = [
-    "SECTOR_OFFICER",
-    "REVENUE_DECISION_OFFICER",
-    "REVENUE_COMPLAINT_OFFICER",
-    "REVENUE_TAX_ADMINISTRATION_OFFICER",
-    "REVENUE_COLLECTOR",
-  ];
-
-
-  const showSectorField =
-    roleName !== undefined &&
-    sectorRoles.includes(roleName);
-
-
-  /*
-  |--------------------------------------------------------------------------
-  | Role → Administrative Level Rules
-  |--------------------------------------------------------------------------
-  */
-
-  const lowerLevelRoles: UserRole[] = [
-    "SECTOR_OFFICER",
-    "REGISTRATION_OFFICER",
-    "REVENUE_DECISION_OFFICER",
-    "REVENUE_COMPLAINT_OFFICER",
-    "REVENUE_TAX_ADMINISTRATION_OFFICER",
-    "REVENUE_COLLECTOR",
-  ];
-
-
-  const canSelectLowerLevels =
-    roleName !== undefined &&
-    lowerLevelRoles.includes(roleName);
-
+ 
 
   /*
   |--------------------------------------------------------------------------
@@ -933,24 +891,13 @@ export function UserForm({
                 <SelectItem value="CITY">
                   City
                 </SelectItem>
+                <SelectItem value="SUBCITY">
+                  Subcity
+                </SelectItem>
+                <SelectItem value="WEREDA">
+                  Wereda
+                </SelectItem>
 
-
-                {canSelectLowerLevels && (
-
-                  <>
-
-                    <SelectItem value="SUBCITY">
-                      Subcity
-                    </SelectItem>
-
-
-                    <SelectItem value="WEREDA">
-                      Wereda
-                    </SelectItem>
-
-                  </>
-
-                )}
 
               </SelectContent>
 
@@ -1050,8 +997,6 @@ export function UserForm({
             {/* SECTOR */}
             {/* ================================================================ */}
 
-            {showSectorField && (
-
               <div className="space-y-1">
 
                 <label className="text-sm font-medium">
@@ -1113,8 +1058,6 @@ export function UserForm({
                 />
 
               </div>
-
-            )}
 
 
             {/* ================================================================ */}

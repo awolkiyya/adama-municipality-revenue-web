@@ -3,9 +3,11 @@
 import * as React from "react";
 import { useSelector } from "react-redux";
 import { useTranslations } from "next-intl";
+import { Search } from "lucide-react";
 
 import { NavMain } from "@/components/nav-main";
 import { NavUser } from "@/components/nav-user";
+import ModuleSearchDialog from "@/components/dashboard/ModuleSearchDialog";
 
 import {
   Sidebar,
@@ -13,12 +15,15 @@ import {
   SidebarFooter,
   SidebarHeader,
   SidebarRail,
+  useSidebar,
 } from "@/components/ui/sidebar";
 
-import { NavItem } from "@/types/commen";
-import { RootState } from "@/lib/store/store";
-import { PermissionAction } from "@/types/user";
+import { Button } from "@/components/ui/button";
 
+import type { NavItem } from "@/types/commen";
+import type { PermissionAction } from "@/types/user";
+
+import { RootState } from "@/lib/store/store";
 import { usePermission } from "@/hooks/usePermission";
 
 /* =====================================================
@@ -27,14 +32,14 @@ import { usePermission } from "@/hooks/usePermission";
 
 function SidebarSkeleton() {
   return (
-    <div className="p-4 space-y-4 animate-pulse">
-      <div className="h-10 w-10 rounded-xl bg-sidebar-accent/60 border border-sidebar-border" />
+    <div className="space-y-4 p-4 animate-pulse">
+      <div className="size-10 rounded-xl border border-sidebar-border bg-sidebar-accent/60" />
 
       <div className="h-4 w-32 rounded-md bg-sidebar-accent/50" />
 
       <div className="h-3 w-24 rounded-md bg-sidebar-accent/40" />
 
-      <div className="space-y-2 mt-6">
+      <div className="mt-6 space-y-2">
         <div className="h-4 w-full rounded-md bg-sidebar-accent/40" />
         <div className="h-4 w-3/4 rounded-md bg-sidebar-accent/40" />
         <div className="h-4 w-1/2 rounded-md bg-sidebar-accent/40" />
@@ -48,32 +53,17 @@ function SidebarSkeleton() {
 ===================================================== */
 
 /**
- * Builds navigation based ONLY on permissions.
+ * Builds navigation based only on permissions.
  *
- * Roles are intentionally NOT used here.
+ * The parent layout supplies the navigation configuration
+ * for the active portal.
  *
- * The selected portal navigation configuration is
- * provided by the parent layout.
+ * Responsibilities:
+ * 1. Filter navigation using permissions.
+ * 2. Translate visible navigation labels.
+ * 3. Preserve visible children under their parent groups.
  *
- * Office Layout:
- *
- *   <AppSidebar navItems={NAV_ITEMS} />
- *
- * Agent Layout:
- *
- *   <AppSidebar navItems={AGENT_NAV_ITEMS} />
- *
- * AppSidebar does NOT determine which portal is active.
- *
- * Its responsibility is only to:
- *
- *   1. Receive navigation configuration
- *   2. Filter items by permissions
- *   3. Translate navigation labels
- *   4. Render the sidebar
- *
- * Backend authorization remains the real security
- * boundary.
+ * Backend authorization remains the security boundary.
  */
 function buildNav(
   items: NavItem[],
@@ -85,21 +75,9 @@ function buildNav(
 ): NavItem[] {
   return items
     .map((item): NavItem | null => {
-      /* =================================================
-         PROCESS CHILDREN FIRST
-      ================================================= */
-
       const children = item.items
-        ? buildNav(
-            item.items,
-            can,
-            tNav,
-          )
+        ? buildNav(item.items, can, tNav)
         : undefined;
-
-      /* =================================================
-         CHECK ITEM PERMISSION
-      ================================================= */
 
       const hasPermission =
         !item.permission ||
@@ -108,14 +86,8 @@ function buildNav(
           item.permission.action,
         );
 
-      /* =================================================
-         DETERMINE VISIBILITY
-      ================================================= */
-
       if (item.items) {
-        /*
-         * Parent/group with visible children.
-         */
+        // Keep groups that contain authorized children.
         if (children && children.length > 0) {
           return {
             ...item,
@@ -124,16 +96,8 @@ function buildNav(
           };
         }
 
-        /*
-         * No visible children.
-         *
-         * Keep the parent only if it is itself a
-         * permitted direct navigation item.
-         */
-        if (
-          hasPermission &&
-          item.url !== "#"
-        ) {
+        // A parent can also be a directly accessible link.
+        if (hasPermission && item.url !== "#") {
           return {
             ...item,
             title: tNav(item.title),
@@ -144,10 +108,6 @@ function buildNav(
         return null;
       }
 
-      /* =================================================
-         NORMAL MENU ITEM
-      ================================================= */
-
       if (!hasPermission) {
         return null;
       }
@@ -157,15 +117,7 @@ function buildNav(
         title: tNav(item.title),
       };
     })
-
-    /* ===================================================
-       REMOVE NULL ITEMS
-    =================================================== */
-
-    .filter(
-      (item): item is NavItem =>
-        item !== null,
-    );
+    .filter((item): item is NavItem => item !== null);
 }
 
 /* =====================================================
@@ -181,32 +133,28 @@ export function AppSidebar({
   navItems,
   ...props
 }: AppSidebarProps) {
-  /* ===================================================
-     AUTHENTICATED USER
-  =================================================== */
+  const [searchOpen, setSearchOpen] = React.useState(false);
 
-  const {
-    user,
-    isLoading,
-  } = useSelector(
+  const { user, isLoading } = useSelector(
     (state: RootState) => state.auth,
   );
 
-  /* ===================================================
-     PERMISSION ENGINE
-  =================================================== */
-
   const { can } = usePermission();
 
-  /* ===================================================
-     TRANSLATIONS
-  =================================================== */
+  const { state } = useSidebar();
+  const isCollapsed = state === "collapsed";
 
-  const tSystem =
-    useTranslations("system");
+  const tSystem = useTranslations("system");
+  const tNav = useTranslations("navigation");
 
-  const tNav =
-    useTranslations("navigation");
+  /*
+   * Keep hooks above conditional returns.
+   * Build the authorized navigation for the sidebar and search dialog.
+   */
+  const authorizedNav = React.useMemo(
+    () => buildNav(navItems, can, tNav),
+    [navItems, can, tNav],
+  );
 
   /* ===================================================
      LOADING
@@ -214,10 +162,7 @@ export function AppSidebar({
 
   if (isLoading) {
     return (
-      <Sidebar
-        collapsible="icon"
-        {...props}
-      >
+      <Sidebar collapsible="icon" {...props}>
         <SidebarHeader>
           <SidebarSkeleton />
         </SidebarHeader>
@@ -234,16 +179,6 @@ export function AppSidebar({
   }
 
   /* ===================================================
-     BUILD AUTHORIZED NAVIGATION
-  =================================================== */
-
-  const authorizedNav = buildNav(
-    navItems,
-    can,
-    tNav,
-  );
-
-  /* ===================================================
      RENDER
   =================================================== */
 
@@ -253,30 +188,30 @@ export function AppSidebar({
       className="border-r border-sidebar-border bg-primary"
       {...props}
     >
-      {/* =================================================
-          HEADER
-      ================================================= */}
+      {/* MODULE SEARCH DIALOG */}
+
+      <ModuleSearchDialog
+        open={searchOpen}
+        onOpenChange={setSearchOpen}
+        navItems={authorizedNav}
+      />
+
+      {/* HEADER */}
 
       <SidebarHeader
         className="
-          flex
-          flex-row
-          p-2
-          pb-4
-          items-center
-          gap-2
-          bg-background
+          flex flex-row items-center gap-2
+          border-b bg-background p-2 pb-4
           text-sidebar-foreground
-          border-b
         "
       >
         <img
           src="/images/logo.png"
           alt="Logo"
-          className="object-contain size-8"
+          className="size-8 shrink-0 object-contain"
         />
 
-        <div className="grid flex-1 text-left text-sm leading-tight">
+        <div className="grid min-w-0 flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
           <span className="truncate font-semibold tracking-tight">
             {tSystem("title")}
           </span>
@@ -287,26 +222,59 @@ export function AppSidebar({
         </div>
       </SidebarHeader>
 
-      {/* =================================================
-          NAVIGATION
-      ================================================= */}
+      {/* MODULE SEARCH BUTTON */}
+
+      <div
+        className={
+          isCollapsed
+            ? "flex justify-center px-1 py-2"
+            : "px-2 py-2"
+        }
+      >
+        <Button
+          type="button"
+          variant={isCollapsed ? "ghost" : "outline"}
+          size={isCollapsed ? "icon" : "default"}
+          onClick={() => setSearchOpen(true)}
+          aria-label="Search modules"
+          title={isCollapsed ? "Search modules" : undefined}
+          className={
+            isCollapsed
+              ? "size-8 shrink-0"
+              : "w-full justify-start"
+          }
+        >
+          <Search
+            className="size-4 shrink-0"
+            aria-hidden="true"
+          />
+
+          {!isCollapsed && (
+            <>
+              <span className="flex-1 text-left">
+                Search modules
+              </span>
+
+              <kbd className="hidden rounded border bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground sm:inline-block">
+                Ctrl K
+              </kbd>
+            </>
+          )}
+        </Button>
+      </div>
+
+      {/* NAVIGATION */}
 
       <SidebarContent className="bg-primary">
-        <NavMain
-          items={authorizedNav}
-        />
+        <NavMain items={authorizedNav} />
       </SidebarContent>
 
-      {/* =================================================
-          USER
-      ================================================= */}
+      {/* USER */}
 
       <SidebarFooter
         className="
-          border-t
-          border-sidebar-border
-          text-sidebar-foreground
-          bg-background
+          border-t border-sidebar-border
+          bg-background text-sidebar-foreground
         "
       >
         <NavUser user={user} />

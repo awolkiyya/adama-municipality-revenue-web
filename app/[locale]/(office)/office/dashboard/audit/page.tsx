@@ -1,143 +1,76 @@
-"use client";
+"use client"
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react"
+import { RefreshCw, ScrollText, Search, TriangleAlert } from "lucide-react"
 
-import { Banner } from "@/components/banner/topBanner";
-import { FloatingParticles } from "@/components/design/FloatingParticles";
-import { IconBadge } from "@/components/commen/icon-badge";
+import { Banner } from "@/components/banner/topBanner"
+import { FloatingParticles } from "@/components/design/FloatingParticles"
+import { IconBadge } from "@/components/commen/icon-badge"
+import { Filters } from "@/components/commen/Filters"
+import { Toolbar } from "@/components/commen/Toolbar"
+import { ExportDropdown } from "@/components/commen/ExportDropdown"
+import { DataTablePagination } from "@/components/table/data-pagination"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import type { FilterField } from "@/types/commen"
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { AuditLogDetailsDialog } from "@/components/audit/AuditLogDetailsDialog"
+import { useAuditLogs } from "@/hooks/audit/use-audit-logs"
+import { AuditLogTable } from "@/components/audit/AuditLogTable"
 
-import { Plus, Users, Search } from "lucide-react";
 
-import { Filters } from "@/components/commen/Filters";
-import { Toolbar } from "@/components/commen/Toolbar";
-import { ExportDropdown } from "@/components/commen/ExportDropdown";
+/*
+|--------------------------------------------------------------------------
+| Filters
+|--------------------------------------------------------------------------
+| Add more modules here as your backend logs them.
+*/
 
-import { CommenTable } from "@/components/table/CommenTable";
-import {
-  CommentType,
-  FilterField,
-} from "@/types/commen";
+const auditFilters: FilterField[] = [
+  {
+    key: "action",
+    label: "Action",
+    type: "select",
+    options: [
+      { label: "Create", value: "CREATE" },
+      { label: "Update", value: "UPDATE" },
+      { label: "Delete", value: "DELETE" },
+      { label: "View", value: "VIEW" },
+      { label: "View list", value: "VIEW_LIST" },
+    ],
+  },
+  {
+    key: "module",
+    label: "Module",
+    type: "select",
+    options: [
+      { label: "Access Management", value: "Access Management" },
+      { label: "Administrative", value: "Administrative" },
+      { label: "Dashboard", value: "Dashboard" },
+      { label: "Sectors", value: "Sectors" },
+    ],
+  },
+]
 
-import { DataTablePagination } from "@/components/table/data-pagination";
+const DEFAULT_PAGE_SIZE = 20
 
-// =====================================================
-// TYPES
-// =====================================================
+/*
+|--------------------------------------------------------------------------
+| Helpers
+|--------------------------------------------------------------------------
+*/
 
-type UserStatus = "ACTIVE" | "INACTIVE";
+function useDebouncedValue<T>(value: T, delay = 400): T {
+  const [debounced, setDebounced] = useState(value)
 
-type UserRole =
-  | "REVENUE_COLLECTOR"
-  | "FIELD_ENFORCEMENT_OFFICER";
+  useEffect(() => {
+    const timeout = setTimeout(() => setDebounced(value), delay)
 
-type UserLevel =
-  | "CITY"
-  | "SUBCITY"
-  | "WEREDA";
+    return () => clearTimeout(timeout)
+  }, [value, delay])
 
-interface MockUser {
-  id: string;
-  name: string;
-  email: string;
-  role: UserRole;
-  status: UserStatus;
-  level: UserLevel;
-  created_at: number;
+  return debounced
 }
-
-
-// =====================================================
-// FILTERS
-// =====================================================
-
-export const userFilters: FilterField[] = [
-  {
-    key: "role",
-    label: "Role",
-    type: "select",
-    options: [
-      {
-        label: "Collector",
-        value: "REVENUE_COLLECTOR",
-      },
-      {
-        label: "Inspector",
-        value: "FIELD_ENFORCEMENT_OFFICER",
-      },
-    ],
-  },
-
-  {
-    key: "status",
-    label: "Status",
-    type: "select",
-    options: [
-      {
-        label: "Active",
-        value: "ACTIVE",
-      },
-      {
-        label: "Inactive",
-        value: "INACTIVE",
-      },
-    ],
-  },
-];
-
-
-// =====================================================
-// MOCK USERS DATA
-// =====================================================
-
-const mockUsers: MockUser[] = [
-  {
-    id: "1",
-    name: "Abebe Kebede",
-    email: "abebe@example.com",
-    role: "REVENUE_COLLECTOR",
-    status: "ACTIVE",
-    level: "CITY",
-    created_at: Date.now(),
-  },
-
-  {
-    id: "2",
-    name: "Sara Mohamed",
-    email: "sara@example.com",
-    role: "FIELD_ENFORCEMENT_OFFICER",
-    status: "ACTIVE",
-    level: "CITY",
-    created_at: Date.now(),
-  },
-
-  {
-    id: "3",
-    name: "Dawit Tesfaye",
-    email: "dawit@example.com",
-    role: "REVENUE_COLLECTOR",
-    status: "INACTIVE",
-    level: "CITY",
-    created_at: Date.now(),
-  },
-
-  {
-    id: "4",
-    name: "Hana Ali",
-    email: "hana@example.com",
-    role: "FIELD_ENFORCEMENT_OFFICER",
-    status: "ACTIVE",
-    level: "SUBCITY",
-    created_at: Date.now(),
-  },
-];
-
-
-// =====================================================
-// SEARCH INPUT
-// =====================================================
 
 function SearchInput({
   className,
@@ -146,197 +79,112 @@ function SearchInput({
   return (
     <div className="relative w-full max-w-md">
       <Search
-        className="
-          pointer-events-none
-          absolute
-          left-3
-          top-1/2
-          h-4
-          w-4
-          -translate-y-1/2
-          text-muted-foreground
-        "
+        className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+        aria-hidden="true"
       />
 
-      <Input
-        className={`w-full py-4 pl-9 ${className ?? ""}`}
-        {...props}
-      />
+      <Input className={`w-full pl-9 ${className ?? ""}`} {...props} />
     </div>
-  );
+  )
 }
 
+/*
+|--------------------------------------------------------------------------
+| Page
+|--------------------------------------------------------------------------
+*/
 
-// =====================================================
-// PAGE
-// =====================================================
+export default function AuditLogsPage() {
+  const [search, setSearch] = useState("")
+  const [filters, setFilters] = useState<Record<string, string>>({})
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
 
-export default function Page() {
-  // ===================================================
-  // SEARCH
-  // ===================================================
+  const debouncedSearch = useDebouncedValue(search.trim())
 
-  const [search, setSearch] = useState("");
-
-
-  // ===================================================
-  // FILTERS
-  // ===================================================
-
-  const [filters, setFilters] = useState<
-    Record<string, string>
-  >({});
-
-
-  // ===================================================
-  // FILTER USERS
-  // ===================================================
-
-  const filteredUsers = mockUsers.filter(
-    (user) => {
-      // -----------------------------------------------
-      // SEARCH
-      // -----------------------------------------------
-
-      const normalizedSearch =
-        search
-          .trim()
-          .toLowerCase();
-
-      const matchSearch =
-        normalizedSearch === "" ||
-        user.name
-          .toLowerCase()
-          .includes(normalizedSearch) ||
-        user.email
-          .toLowerCase()
-          .includes(normalizedSearch);
-
-
-      // -----------------------------------------------
-      // ROLE
-      // -----------------------------------------------
-
-      const matchRole =
-        !filters.role ||
-        user.role === filters.role;
-
-
-      // -----------------------------------------------
-      // STATUS
-      // -----------------------------------------------
-
-      const matchStatus =
-        !filters.status ||
-        user.status === filters.status;
-
-
-      // -----------------------------------------------
-      // RESULT
-      // -----------------------------------------------
-
-      return (
-        matchSearch &&
-        matchRole &&
-        matchStatus
-      );
-    },
-  );
-
-
-  // ===================================================
-  // HANDLERS
-  // ===================================================
-
-  const handleAddUser = () => {
-    console.log("Add new user");
-  };
-
-
-  const handleViewUser = (
-    row: MockUser,
-  ) => {
-    console.log(
-      "view",
-      row,
-    );
-  };
-
-
-  const handleEditUser = (
-    row: MockUser,
-  ) => {
-    console.log(
-      "edit",
-      row,
-    );
-  };
-
-
-  const handleDeleteUser = (
-    id: string,
-  ) => {
-    console.log(
-      "delete",
-      id,
-    );
-  };
-
-
-  const handlePageChange = (
-    page: number,
-  ) => {
-    console.log(
-      "page",
+  const { data, isLoading, isFetching, isError, error, refetch } =
+    useAuditLogs({
       page,
-    );
-  };
+      perPage: pageSize,
+      search: debouncedSearch || undefined,
+      action: filters.action || undefined,
+      module: filters.module || undefined,
+    })
 
+  const logs = data?.data ?? []
+  const total = data?.meta.total ?? 0
 
-  const handlePageSizeChange = (
-    size: number,
-  ) => {
-    console.log(
-      "pageSize",
-      size,
-    );
-  };
+  /*
+  |------------------------------------------------------------------------
+  | Dialog navigation (within the current page)
+  |------------------------------------------------------------------------
+  */
 
+  const selectedLog =
+    selectedIndex !== null ? (logs[selectedIndex] ?? null) : null
 
-  // ===================================================
-  // RENDER
-  // ===================================================
+  const handlePrevious = useCallback(() => {
+    setSelectedIndex((current) =>
+      current !== null && current > 0 ? current - 1 : current,
+    )
+  }, [])
+
+  const handleNext = useCallback(() => {
+    setSelectedIndex((current) =>
+      current !== null && current < logs.length - 1
+        ? current + 1
+        : current,
+    )
+  }, [logs.length])
+
+  /*
+  |------------------------------------------------------------------------
+  | Handlers
+  |------------------------------------------------------------------------
+  */
+
+  function handleSearchChange(value: string) {
+    setSearch(value)
+    setPage(1)
+  }
+
+  function handleFiltersChange(next: Record<string, string>) {
+    setFilters(next)
+    setPage(1)
+  }
+
+  function handlePageChange(nextPage: number) {
+    setSelectedIndex(null)
+    setPage(nextPage)
+  }
+
+  function handlePageSizeChange(size: number) {
+    setSelectedIndex(null)
+    setPageSize(size)
+    setPage(1)
+  }
+
+  /*
+  |------------------------------------------------------------------------
+  | Render
+  |------------------------------------------------------------------------
+  */
 
   return (
     <div className="space-y-6">
-
-      {/* =================================================
-          HEADER
-      ================================================= */}
+      {/* Header */}
 
       <Banner
-        description={
-          "Manage staff accounts, roles, and permissions in the revenue system"
-        }
-
+        description="Review who did what, when, and from where across the revenue system"
         badge={
           <IconBadge
-            className="
-              gap-2
-              rounded-full
-              bg-black/20
-              p-3
-              text-[10px]
-              text-white
-            "
-            icon={
-              <Users className="h-3 w-3" />
-            }
+            className="gap-2 rounded-full bg-black/20 p-3 text-[10px] text-white"
+            icon={<ScrollText className="h-3 w-3" />}
           >
-            Manage User & Access
+            Security & Audit
           </IconBadge>
         }
-
         background={
           <FloatingParticles
             color="#040404"
@@ -346,151 +194,118 @@ export default function Page() {
             position="bottom-right"
           />
         }
-
-        overlayClassName="
-          bg-gradient-to-r
-          from-primary/95
-          via-primary/80
-          to-primary/50
-        "
-
-        actions={
-          <Button
-            type="button"
-            className="
-              bg-white
-              p-4
-              text-sm
-              text-black
-              hover:bg-white/90
-            "
-            onClick={
-              handleAddUser
-            }
-          >
-            <Plus className="h-4 w-4" />
-
-            Add New User
-          </Button>
-        }
-
+        overlayClassName="bg-gradient-to-r from-primary/95 via-primary/80 to-primary/50"
         className="text-white"
       />
 
-
-      {/* =================================================
-          TOOLBAR
-      ================================================= */}
+      {/* Toolbar */}
 
       <Toolbar
         search={
           <SearchInput
-            placeholder="Search users..."
+            placeholder="Search by user, description, or request ID..."
+            aria-label="Search audit logs"
             value={search}
-            onChange={(event) =>
-              setSearch(
-                event.target.value,
-              )
-            }
+            onChange={(event) => handleSearchChange(event.target.value)}
           />
         }
-
         right={
           <>
             <Filters
-              schema={userFilters}
+              schema={auditFilters}
               value={filters}
-              onChange={setFilters}
-              onReset={() =>
-                setFilters({})
-              }
+              onChange={handleFiltersChange}
+              onReset={() => handleFiltersChange({})}
             />
+
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              onClick={() => refetch()}
+              disabled={isFetching}
+              aria-label="Refresh audit logs"
+            >
+              <RefreshCw
+                className={`size-4 ${isFetching ? "animate-spin" : ""}`}
+              />
+            </Button>
 
             <ExportDropdown />
           </>
         }
       />
 
+      {/* Table or error */}
 
-      {/* =================================================
-          TABLE
-      ================================================= */}
+      {isError ? (
+        <div
+          className="flex flex-col items-center gap-3 rounded-lg border border-dashed py-16 text-center"
+          role="alert"
+        >
+          <TriangleAlert
+            className="size-8 text-muted-foreground"
+            aria-hidden="true"
+          />
 
-      <CommenTable
-        type={
-          "user" as CommentType
-        }
+          <div>
+            <p className="font-medium">Unable to load audit logs</p>
+            <p className="mt-1 max-w-md text-sm text-muted-foreground">
+              {error instanceof Error
+                ? error.message
+                : "Something went wrong while loading the logs."}
+            </p>
+          </div>
 
-        data={
-          filteredUsers
-        }
+          <Button variant="outline" onClick={() => refetch()}>
+            Try again
+          </Button>
+        </div>
+      ) : (
+        <AuditLogTable
+          logs={logs}
+          isLoading={isLoading}
+          skeletonRows={Math.min(pageSize, 8)}
+          onView={setSelectedIndex}
+        />
+      )}
 
-        page={1}
+      {/* Pagination */}
 
-        pageSize={10}
+      {!isError && (
+        <DataTablePagination
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          onPageChange={handlePageChange}
+          onPageSizeChange={handlePageSizeChange}
+        />
+      )}
 
-        isLoading={false}
+      {/* Details dialog */}
 
-        /*
-         * Only actions relevant to the User table
-         * are specified here.
-         *
-         * CommenTable should define this prop as:
-         *
-         * Partial<Record<TableActionKey, boolean>>
-         *
-         * so unspecified actions automatically behave
-         * as disabled/undefined.
-         */
-
-        actions={{
-          view: true,
-          edit: true,
-          delete: true,
-          create: false,
-          toggleStatus: true,
-
-          updatePassword: false,
-          updateRole: false,
-          updateHierarchy: false,
+      <AuditLogDetailsDialog
+        log={selectedLog}
+        open={selectedLog !== null}
+        onOpenChange={(open) => {
+          if (!open) setSelectedIndex(null)
         }}
-
-        onView={
-          handleViewUser
+        onPrevious={
+          selectedIndex !== null && selectedIndex > 0
+            ? handlePrevious
+            : undefined
         }
-
-        onEdit={
-          handleEditUser
+        onNext={
+          selectedIndex !== null && selectedIndex < logs.length - 1
+            ? handleNext
+            : undefined
         }
-
-        onDelete={
-          handleDeleteUser
-        }
-      />
-
-
-      {/* =================================================
-          PAGINATION
-      ================================================= */}
-
-      <DataTablePagination
-        page={1}
-
-        pageSize={10}
-
-        total={
-          filteredUsers.length
-        }
-
-        onPageChange={
-          handlePageChange
-        }
-
-        onPageSizeChange={
-          handlePageSizeChange
+        position={
+          selectedIndex !== null
+            ? { index: selectedIndex + 1, total: logs.length }
+            : undefined
         }
       />
-
     </div>
-  );
+  )
 }

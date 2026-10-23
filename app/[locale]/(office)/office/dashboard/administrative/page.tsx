@@ -2,232 +2,213 @@
 
 import { useState } from "react";
 import { useSelector } from "react-redux";
-import {
-  Search,
-  MapPin,
-  Layers,
-} from "lucide-react";
+import { Building2, MapPin } from "lucide-react";
 
 import { Banner } from "@/components/banner/topBanner";
 import { FloatingParticles } from "@/components/design/FloatingParticles";
 import { IconBadge } from "@/components/commen/icon-badge";
-
-import { Input } from "@/components/ui/input";
-
-import { Filters } from "@/components/commen/Filters";
-import { Toolbar } from "@/components/commen/Toolbar";
 import { ExportDropdown } from "@/components/commen/ExportDropdown";
-
 import { CommenTable } from "@/components/table/CommenTable";
 import { DataTablePagination } from "@/components/table/data-pagination";
 
 import {
-  CommentType,
-  FilterField,
-} from "@/types/commen";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+import type { CommentType } from "@/types/commen";
+import type { AdminUnit } from "@/types/admin-unit";
 
 import { RootState } from "@/lib/store/store";
+import { APP_PERMISSIONS } from "@/lib/authorization";
 
 import { resolveActions } from "@/components/table/permissions/ResolveActions";
 import { CommentTableRegistry } from "@/components/table/registry";
 
 import { useAdminUnits } from "@/hooks/useAdminUnit.hook";
 
-
-import { APP_PERMISSIONS } from "@/lib/authorization";
 import ProtectedRoute from "@/components/access/ProtectedRoute";
-import { SearchInput } from "@/components/input/SearchInput";
+import AdministrativeUnitDetailsDialog from "@/components/dialogs/AdministrativeUnitDetailsDialog";
+import AppFilterBar from "@/components/app-filter-bar";
 
-/* =====================================================
-   FILTERS
-===================================================== */
+/* -------------------------------------------------------------------------- */
+/* Constants                                                                  */
+/* -------------------------------------------------------------------------- */
 
-export const administrativeUnitFilters: FilterField[] = [
-  {
-    key: "level",
-    label: "Level",
-    type: "select",
-    defaultValue: "ALL",
-    icon: Layers,
-    options: [
-      {
-        label: "All",
-        value: "ALL",
-      },
-      {
-        label: "City",
-        value: "CITY",
-      },
-      {
-        label: "Subcity",
-        value: "SUBCITY",
-      },
-      {
-        label: "Wereda",
-        value: "WEREDA",
-      },
-    ],
-  },
-];
-
-const INITIAL_FILTERS = {
+const INITIAL_FILTERS: Record<string, string> = {
   level: "ALL",
 };
 
+const LEVEL_OPTIONS = [
+  { label: "City", value: "CITY" },
+  { label: "Sub-city", value: "SUBCITY" },
+  { label: "Wereda", value: "WEREDA" },
+] as const;
 
-/* =====================================================
-   PAGE CONTENT
-===================================================== */
+/* -------------------------------------------------------------------------- */
+/* Loading state                                                              */
+/* -------------------------------------------------------------------------- */
+
+function CheckingPermissions() {
+  return (
+    <div className="flex h-40 flex-col items-center justify-center gap-3 text-center">
+      <div
+        className="size-6 animate-spin rounded-full border-2 border-muted border-t-primary"
+        aria-hidden="true"
+      />
+
+      <div className="flex flex-col gap-0.5">
+        <p className="text-sm font-medium text-foreground">
+          Checking permissions
+        </p>
+
+        <p className="text-xs text-muted-foreground">
+          This will only take a moment
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Error state                                                                */
+/* -------------------------------------------------------------------------- */
+
+function AdministrativeUnitError() {
+  return (
+    <div className="flex min-h-[400px] items-center justify-center">
+      <div className="space-y-2 text-center">
+        <p className="text-sm font-semibold text-destructive">
+          Failed to load administrative units
+        </p>
+
+        <p className="text-xs text-muted-foreground">
+          Please try again later.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Page content                                                               */
+/* -------------------------------------------------------------------------- */
 
 function AdministrativeUnitContent() {
-  const user = useSelector(
-    (state: RootState) => state.auth.user,
-  );
-
-  /* ===================================================
-     PAGINATION
-  =================================================== */
+  const user = useSelector((state: RootState) => state.auth.user);
 
   const [page, setPage] = useState(1);
-
   const [pageSize, setPageSize] = useState(10);
-
-  /* ===================================================
-     SEARCH
-  =================================================== */
-
   const [search, setSearch] = useState("");
 
-  /* ===================================================
-     FILTERS
-  =================================================== */
+  // Applied filters are sent to the API.
+  const [filters, setFilters] = useState<Record<string, string>>(
+    INITIAL_FILTERS,
+  );
 
-  const [filters, setFilters] = useState<
-    Record<string, any>
-  >(INITIAL_FILTERS);
+  // Draft filters change locally until Apply is clicked.
+  const [draftFilters, setDraftFilters] = useState<Record<string, string>>(
+    INITIAL_FILTERS,
+  );
 
-  /* ===================================================
-     ADMINISTRATIVE UNITS
-  =================================================== */
+  const [selectedUnit, setSelectedUnit] = useState<AdminUnit | null>(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
-  const {
-    data,
-    isLoading,
-    isError,
-  } = useAdminUnits({
+  const { data, isLoading, isError } = useAdminUnits({
     search,
     page,
     per_page: pageSize,
     ...filters,
   });
 
-  const units = data?.data ?? [];
-
+  const units: AdminUnit[] = data?.data ?? [];
   const meta = data?.meta;
 
-  /* ===================================================
-     USER
-  =================================================== */
+  /* ------------------------------------------------------------------------ */
+  /* Filter state                                                             */
+  /* ------------------------------------------------------------------------ */
 
-  if (!user?.role) {
-    return (
-      <div
-        className="
-          flex
-          flex-col
-          items-center
-          justify-center
-          h-40
-          gap-3
-          text-center
-        "
-      >
-        <div
-          className="
-            size-6
-            rounded-full
-            border-2
-            border-muted
-            border-t-primary
-            animate-spin
-          "
-        />
+  const activeFilterCount = Object.entries(filters).filter(
+    ([key, value]) =>
+      value !== "" &&
+      value !== "ALL" &&
+      INITIAL_FILTERS[key] !== value,
+  ).length;
 
-        <div className="flex flex-col gap-0.5">
-          <p className="text-sm font-medium text-foreground">
-            Checking permissions
-          </p>
+  const hasAppliedFilters =
+    search.trim().length > 0 || activeFilterCount > 0;
 
-          <p className="text-xs text-muted-foreground">
-            This will only take a moment
-          </p>
-        </div>
-      </div>
-    );
+  const hasPendingChanges = Object.keys(INITIAL_FILTERS).some(
+    (key) => (draftFilters[key] ?? "") !== (filters[key] ?? ""),
+  );
+
+  const applyFilters = () => {
+    setFilters({ ...draftFilters });
+    setPage(1);
+  };
+
+  const clearFilters = () => {
+    setSearch("");
+    setDraftFilters({ ...INITIAL_FILTERS });
+    setFilters({ ...INITIAL_FILTERS });
+    setPage(1);
+  };
+
+  /* ------------------------------------------------------------------------ */
+  /* Dialog actions                                                           */
+  /* ------------------------------------------------------------------------ */
+
+  const handleView = (row: AdminUnit) => {
+    setSelectedUnit(row);
+    setDetailsOpen(true);
+  };
+
+  const handleDetailsOpenChange = (open: boolean) => {
+    setDetailsOpen(open);
+
+    if (!open) {
+      setSelectedUnit(null);
+    }
+  };
+
+  /* ------------------------------------------------------------------------ */
+  /* Permissions                                                              */
+  /* ------------------------------------------------------------------------ */
+
+  if (!user || !Array.isArray(user.permissions)) {
+    return <CheckingPermissions />;
   }
-
-  /* ===================================================
-     TABLE ACTIONS
-  =================================================== */
 
   const actions = resolveActions(
     CommentTableRegistry.administrativeUnit,
     user.permissions,
   );
 
-  /* ===================================================
-     ERROR
-  =================================================== */
-
   if (isError) {
-    return (
-      <div className="flex min-h-[400px] items-center justify-center">
-        <div className="text-center space-y-2">
-          <p className="text-sm font-semibold text-destructive">
-            Failed to load administrative units
-          </p>
-
-          <p className="text-xs text-muted-foreground">
-            Please try again later.
-          </p>
-        </div>
-      </div>
-    );
+    return <AdministrativeUnitError />;
   }
 
-  /* ===================================================
-     RENDER
-  =================================================== */
+  /* ------------------------------------------------------------------------ */
+  /* Render                                                                   */
+  /* ------------------------------------------------------------------------ */
 
   return (
-    <div className="space-y-6 max-w-7xl m-auto">
-
-      {/* =================================================
-          HEADER
-      ================================================= */}
-
+    <div className="mx-auto max-w-4xl space-y-6">
+      {/* Header */}
       <Banner
-        description="
-          Manage administrative boundaries including
-          Cities, Subcities, and Weredas
-        "
+        description="Manage administrative boundaries including Cities, Subcities, and Weredas."
         badge={
           <IconBadge
-            className="
-              p-3
-              text-[10px]
-              bg-black/20
-              text-white
-              gap-2
-              rounded-full
-            "
-            icon={
-              <MapPin className="w-3 h-3" />
-            }
+            className="gap-2 rounded-full"
+            icon={<MapPin className="size-3" />}
           >
             City &gt; Subcity &gt; Wereda
           </IconBadge>
         }
+        overlayClassName="bg-transparent"
         background={
           <FloatingParticles
             color="#040404"
@@ -237,119 +218,104 @@ function AdministrativeUnitContent() {
             position="bottom-right"
           />
         }
-        overlayClassName="
-          bg-gradient-to-r
-          from-primary/95
-          via-primary/80
-          to-primary/50
-        "
-        className="text-white"
-        actions={
-          <ExportDropdown />
-        }
+        actions={<ExportDropdown />}
       />
 
-      {/* =================================================
-          TOOLBAR
-      ================================================= */}
+      {/* Search and filters */}
+      <AppFilterBar
+        search={search}
+        onSearchChange={(value) => {
+          setSearch(value);
+          setPage(1);
+        }}
+        searchPlaceholder="Search by unit name or code..."
+        searchLabel="Search administrative units"
+        title="Search and filter"
+        description="Narrow the register by administrative level."
+        activeFilterCount={activeFilterCount}
+        hasFilters={hasAppliedFilters || hasPendingChanges}
+        onApply={applyFilters}
+        onClear={clearFilters}
+      >
+        <div className="space-y-2">
+          <label className="text-sm font-medium" htmlFor="admin-unit-level">
+            Administrative level
+          </label>
 
-      <Toolbar
-        search={
-          <SearchInput
-            placeholder="Search administrative units..."
-            value={search}
-            onChange={(event) =>
-              setSearch(event.target.value)
-            }
-          />
-        }
-        right={
-          <>
-            <Filters
-              schema={administrativeUnitFilters}
-              value={filters}
-              onChange={setFilters}
-              onReset={() =>
-                setFilters(INITIAL_FILTERS)
-              }
-              layout="row"
-              resetPosition="end"
+          <Select
+            value={draftFilters.level || "ALL"}
+            onValueChange={(value) => {
+              setDraftFilters((current) => ({
+                ...current,
+                level: value,
+              }));
+            }}
+          >
+            <SelectTrigger id="admin-unit-level" className="w-full">
+              <SelectValue placeholder="All levels" />
+            </SelectTrigger>
 
+            <SelectContent>
+              <SelectItem value="ALL">All levels</SelectItem>
 
+              {LEVEL_OPTIONS.map((level) => (
+                <SelectItem key={level.value} value={level.value}>
+                  {level.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </AppFilterBar>
 
-            />
-          </>
-        }
-      />
-
-      {/* =================================================
-          TABLE
-      ================================================= */}
-
+      {/* Table */}
       <CommenTable
-        type={
-          "administrativeUnit" as CommentType
-        }
+        type={"administrativeUnit" as CommentType}
         data={units}
-        page={
-          meta?.current_page ?? page
-        }
-        pageSize={
-          meta?.per_page ?? pageSize
-        }
+        page={meta?.current_page ?? page}
+        pageSize={meta?.per_page ?? pageSize}
         isLoading={isLoading}
         actions={actions}
-        onView={(row) =>
-          console.log("view", row)
-        }
-        onEdit={(row) =>
-          console.log("edit", row)
-        }
-        onDelete={(id) =>
-          console.log("delete", id)
-        }
+        onView={(row) => handleView(row as AdminUnit)}
+        onEdit={(row) => {
+          console.log("edit", row);
+        }}
+        onDelete={(id) => {
+          console.log("delete", id);
+        }}
       />
 
-      {/* =================================================
-          PAGINATION
-      ================================================= */}
-
+      {/* Pagination */}
       <DataTablePagination
-        page={
-          meta?.current_page ?? page
-        }
-        pageSize={
-          meta?.per_page ?? pageSize
-        }
-        total={
-          meta?.total ?? 0
-        }
-        onPageChange={(newPage) => {
-          setPage(newPage);
-        }}
+        page={meta?.current_page ?? page}
+        pageSize={meta?.per_page ?? pageSize}
+        total={meta?.total ?? 0}
+        onPageChange={setPage}
         onPageSizeChange={(newSize) => {
           setPageSize(newSize);
           setPage(1);
         }}
       />
 
+      {/* Administrative unit details modal */}
+      <AdministrativeUnitDetailsDialog
+        unit={selectedUnit}
+        open={detailsOpen}
+        onOpenChange={handleDetailsOpenChange}
+      />
     </div>
   );
 }
 
-/* =====================================================
-   PROTECTED PAGE
-===================================================== */
+/* -------------------------------------------------------------------------- */
+/* Protected page                                                             */
+/* -------------------------------------------------------------------------- */
 
 export default function AdministrativeUnitPage() {
   return (
     <ProtectedRoute
-      resource={
-        APP_PERMISSIONS.ADMINISTRATIVE_UNITS_VIEW.resource
-      }
-      action={
-        APP_PERMISSIONS.ADMINISTRATIVE_UNITS_VIEW.action
-      }
+      resource={APP_PERMISSIONS.ADMINISTRATIVE_UNITS_VIEW.resource}
+      action={APP_PERMISSIONS.ADMINISTRATIVE_UNITS_VIEW.action}
     >
       <AdministrativeUnitContent />
     </ProtectedRoute>

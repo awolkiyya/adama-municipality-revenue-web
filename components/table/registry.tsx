@@ -145,7 +145,7 @@ export const CommentTableRegistry: Record<
   */
 
   sector: {
-    columns: ["name", "cluster_name", "code"],
+    columns: ["name", "cluster_name","is_active", "code"],
 
     actions: {
       view: {
@@ -165,7 +165,7 @@ export const CommentTableRegistry: Record<
       },
 
       delete: {
-        enabled: true,
+        enabled: false,
         permission: {
           resource: "sectors",
           action: "delete",

@@ -42,7 +42,7 @@ import {
   useToggleUserStatus,
   useUpdateUserPassword,
   useUsers,
-} from "@/hooks/useUser.hook";
+} from "@/hooks/user/useUser.hook";
 
 import { AuthUser } from "@/types/user";
 
@@ -488,10 +488,8 @@ function UsersPageContent() {
             className="
               gap-2
               rounded-full
-              bg-black/20
               p-3
               text-[10px]
-              text-white
             "
             icon={
               <Users className="h-3 w-3" />
@@ -509,13 +507,9 @@ function UsersPageContent() {
             position="bottom-right"
           />
         }
-        overlayClassName="
-          bg-gradient-to-r
-          from-primary/95
-          via-primary/80
-          to-primary/50
-        "
+        overlayClassName="bg-transparent"
         actions={
+          <>
           <Button
             variant="outline"
             onClick={handleCreate}
@@ -523,8 +517,16 @@ function UsersPageContent() {
             <Plus className="h-4 w-4" />
             Add New User
           </Button>
+          
+             {/* =========================================
+                EXPORT
+            ========================================= */}
+
+          <ExportDropdown />
+          </>
+       
         }
-        className="text-white"
+        // className="text-white"
       />
 
       {/* =================================================
@@ -592,12 +594,6 @@ function UsersPageContent() {
                 </span>
               )}
             </Button>
-
-            {/* =========================================
-                EXPORT
-            ========================================= */}
-
-            <ExportDropdown />
 
           </div>
         }

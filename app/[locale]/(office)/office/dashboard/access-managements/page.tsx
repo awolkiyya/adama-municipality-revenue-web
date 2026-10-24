@@ -3,15 +3,20 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSelector } from "react-redux";
-import { Loader2, Plus, Search, ShieldCheck } from "lucide-react";
+import { Plus, ShieldCheck } from "lucide-react";
+import { toast } from "sonner";
 
-import { RootState } from "@/lib/store/store";
+import type { RootState } from "@/lib/store/store";
+import type { CommentType } from "@/types/commen";
 
 import { Banner } from "@/components/banner/topBanner";
 import { FloatingParticles } from "@/components/design/FloatingParticles";
 import { IconBadge } from "@/components/commen/icon-badge";
+import { Toolbar } from "@/components/commen/Toolbar";
+import { CommenTable } from "@/components/table/CommenTable";
+import { DataTablePagination } from "@/components/table/data-pagination";
+import { SearchInput } from "@/components/input/SearchInput";
 
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
 import {
@@ -25,11 +30,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-import { Toolbar } from "@/components/commen/Toolbar";
-import { CommenTable } from "@/components/table/CommenTable";
-import { DataTablePagination } from "@/components/table/data-pagination";
-import { CommentType } from "@/types/commen";
-
 import {
   useDeleteRole,
   useRoles,
@@ -38,28 +38,44 @@ import {
 import { resolveActions } from "@/components/table/permissions/ResolveActions";
 import { CommentTableRegistry } from "@/components/table/registry";
 import ProtectedRoute from "@/components/access/ProtectedRoute";
-import { SearchInput } from "@/components/input/SearchInput";
 
+/*
+|--------------------------------------------------------------------------
+| Constants
+|--------------------------------------------------------------------------
+*/
 
+const ROLES_URL = "/office/dashboard/access-managements";
 
-/* ============================================================
-   API ROLE SHAPE
-============================================================ */
+const CREATE_ROLE_URL = `${ROLES_URL}/create`;
+
+const ROLE_DETAIL_URL = (roleId: string) =>
+  `${ROLES_URL}/${encodeURIComponent(roleId)}`;
+
+const ROLE_EDIT_URL = (roleId: string) =>
+  `${ROLE_DETAIL_URL(roleId)}/edit`;
+
+/*
+|--------------------------------------------------------------------------
+| API Role Shape
+|--------------------------------------------------------------------------
+*/
 
 interface ApiRole {
   id: string;
   name: string;
   description: string | null;
-  is_system: boolean;
+  is_system?: boolean;
   usersCount?: number;
   permissionsCount?: number;
-  created_at: string;
+  createdAt?: string;
 }
 
-
-/* ============================================================
-   ROLE TABLE ROW
-============================================================ */
+/*
+|--------------------------------------------------------------------------
+| Role Table Row
+|--------------------------------------------------------------------------
+*/
 
 interface RoleRow {
   id: string;
@@ -71,259 +87,232 @@ interface RoleRow {
   createdAt: string;
 }
 
+/*
+|--------------------------------------------------------------------------
+| Debounced Value
+|--------------------------------------------------------------------------
+*/
 
-
-/* ============================================================
-   DEBOUNCED VALUE
-============================================================ */
-
-/**
- * Debounces a fast-changing value (e.g. a search input)
- * so downstream effects — like a network request — only
- * run after the value settles.
- */
-function useDebouncedValue<T>(
-  value: T,
-  delayMs: number
-): T {
-  const [debounced, setDebounced] =
-    useState(value);
+function useDebouncedValue<T>(value: T, delayMs: number): T {
+  const [debounced, setDebounced] = useState(value);
 
   useEffect(() => {
-    const timeout = setTimeout(
-      () => setDebounced(value),
-      delayMs
-    );
+    const timeout = setTimeout(() => {
+      setDebounced(value);
+    }, delayMs);
 
-    return () =>
-      clearTimeout(timeout);
+    return () => clearTimeout(timeout);
   }, [value, delayMs]);
 
   return debounced;
 }
 
-
-/* ============================================================
-   PAGE
-============================================================ */
+/*
+|--------------------------------------------------------------------------
+| Protected Access Management Page
+|--------------------------------------------------------------------------
+*/
 
 export default function AccessManagementPage() {
   return (
-    <ProtectedRoute
-      resource="roles"
-      action="view"
-    >
+    <ProtectedRoute resource="roles" action="view">
       <AccessManagementPageContent />
     </ProtectedRoute>
   );
 }
 
-
-/* ============================================================
-   ACCESS MANAGEMENT PAGE CONTENT
-============================================================ */
+/*
+|--------------------------------------------------------------------------
+| Access Management Page Content
+|--------------------------------------------------------------------------
+*/
 
 function AccessManagementPageContent() {
   const router = useRouter();
 
   const user = useSelector(
-    (state: RootState) =>
-      state.auth.user
+    (state: RootState) => state.auth.user,
   );
 
-  /* ----------------------------------------------------------
-     Search
-  ---------------------------------------------------------- */
+  /*
+  |--------------------------------------------------------------------------
+  | Search
+  |--------------------------------------------------------------------------
+  */
 
-  const [searchInput, setSearchInput] =
-    useState("");
+  const [searchInput, setSearchInput] = useState("");
 
-  const search =
-    useDebouncedValue(
-      searchInput,
-      400
-    );
+  const search = useDebouncedValue(searchInput, 400);
 
-  /* ----------------------------------------------------------
-     Pagination
-  ---------------------------------------------------------- */
+  /*
+  |--------------------------------------------------------------------------
+  | Pagination
+  |--------------------------------------------------------------------------
+  */
 
-  const [page, setPage] =
-    useState(1);
+  const [page, setPage] = useState(1);
 
-  const [pageSize, setPageSize] =
-    useState(10);
+  const [pageSize, setPageSize] = useState(10);
 
-  /* ----------------------------------------------------------
-     Delete
-  ---------------------------------------------------------- */
+  /*
+  |--------------------------------------------------------------------------
+  | Delete Confirmation
+  |--------------------------------------------------------------------------
+  */
 
   const [roleToDelete, setRoleToDelete] =
     useState<RoleRow | null>(null);
 
-  /* ----------------------------------------------------------
-     Roles query
-  ---------------------------------------------------------- */
+  /*
+  |--------------------------------------------------------------------------
+  | Roles Query
+  |--------------------------------------------------------------------------
+  */
 
   const {
     data,
     isLoading,
     isError,
+    error,
+    refetch,
   } = useRoles({
     search,
     page,
     per_page: pageSize,
   });
 
-  const deleteRole =
-    useDeleteRole();
+  /*
+  |--------------------------------------------------------------------------
+  | Delete Mutation
+  |--------------------------------------------------------------------------
+  */
 
-  /* ----------------------------------------------------------
-     Reset page when search changes
-  ---------------------------------------------------------- */
+  const deleteRole = useDeleteRole();
+
+  /*
+  |--------------------------------------------------------------------------
+  | Reset Pagination When Search Changes
+  |--------------------------------------------------------------------------
+  */
 
   useEffect(() => {
     setPage(1);
   }, [search]);
 
-  /* ----------------------------------------------------------
-     Transform API roles
-  ---------------------------------------------------------- */
+  /*
+  |--------------------------------------------------------------------------
+  | Transform API Roles
+  |--------------------------------------------------------------------------
+  */
 
-  const roles: RoleRow[] =
-    useMemo(() => {
-      return (
-        (
-          data?.data as
-            | ApiRole[]
-            | undefined
-        )?.map((role) => ({
-          id: role.id,
-          name: role.name,
-          description:
-            role.description ??
-            "No description",
-          isSystem:
-            role.is_system,
-          usersCount:
-            role.usersCount ?? 0,
-          permissionsCount:
-            role.permissionsCount ??
-            0,
-          createdAt:
-            role.created_at ?? "-",
-        })) ?? []
-      );
-    }, [data]);
+  const roles: RoleRow[] = useMemo(() => {
+    const apiRoles = data?.data as ApiRole[] | undefined;
 
-  /* ----------------------------------------------------------
-     Delete request
-  ---------------------------------------------------------- */
-
-  function handleDeleteRequest(
-    id: string
-  ) {
-    const role = roles.find(
-      (r) => r.id === id
+    return (
+      apiRoles?.map((role) => ({
+        id: role.id,
+        name: role.name,
+        description: role.description ?? "No description",
+        isSystem: role.is_system ?? false,
+        usersCount: role.usersCount ?? 0,
+        permissionsCount: role.permissionsCount ?? 0,
+        createdAt: role.createdAt ?? "-",
+      })) ?? []
     );
+  }, [data]);
 
-    if (role) {
-      setRoleToDelete(role);
-    }
+  /*
+  |--------------------------------------------------------------------------
+  | Table Actions
+  |--------------------------------------------------------------------------
+  */
+
+  const actions = useMemo(
+    () =>
+      resolveActions(
+        CommentTableRegistry.role,
+        user?.permissions,
+      ),
+    [user?.permissions],
+  );
+
+  /*
+  |--------------------------------------------------------------------------
+  | Navigation
+  |--------------------------------------------------------------------------
+  */
+
+  function handleCreate() {
+    router.push(CREATE_ROLE_URL);
   }
 
-  /* ----------------------------------------------------------
-     Delete confirm
-  ---------------------------------------------------------- */
+  function handleView(row: RoleRow) {
+    router.push(ROLE_DETAIL_URL(row.id));
+  }
 
-  function handleDeleteConfirm() {
-    if (!roleToDelete) {
+  function handleEdit(row: RoleRow) {
+    router.push(ROLE_EDIT_URL(row.id));
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Request Role Deletion
+  |--------------------------------------------------------------------------
+  */
+
+  function handleDeleteRequest(id: string) {
+    const selectedRole = roles.find((role) => role.id === id);
+
+    if (!selectedRole) {
+      toast.error("The selected role could not be found.");
       return;
     }
 
-    deleteRole.mutate(
-      roleToDelete.id,
-      {
-        onSettled: () =>
-          setRoleToDelete(null),
-      }
-    );
+    setRoleToDelete(selectedRole);
   }
 
-  /* ==========================================================
-     AUTH STATE
-  ========================================================== */
+  /*
+  |--------------------------------------------------------------------------
+  | Confirm Role Deletion
+  |--------------------------------------------------------------------------
+  */
 
-  /**
-   * Still resolving the authenticated
-   * user / role.
-   */
-  if (user === undefined) {
-    return (
-      <div className="flex h-40 flex-col items-center justify-center gap-3 text-center">
-        <Loader2 className="size-6 animate-spin text-muted-foreground" />
+  async function handleDeleteConfirm() {
+    if (!roleToDelete || deleteRole.isPending) {
+      return;
+    }
 
-        <div>
-          <p className="text-sm font-medium">
-            Checking permissions
-          </p>
+    try {
+      await deleteRole.mutateAsync(roleToDelete.id);
 
-          <p className="text-xs text-muted-foreground">
-            This will only take a moment
-          </p>
-        </div>
-      </div>
-    );
+      toast.success("Role deleted successfully.");
+
+      setRoleToDelete(null);
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Failed to delete role.",
+      );
+    }
   }
 
-  /**
-   * Authenticated user exists but
-   * does not have a role.
-   */
-  if (!user?.role) {
-    return (
-      <div className="flex h-40 flex-col items-center justify-center gap-2 text-center">
-        <p className="text-sm font-medium">
-          No role assigned
-        </p>
-
-        <p className="text-xs text-muted-foreground">
-          Contact an administrator to
-          get access to this page.
-        </p>
-      </div>
-    );
-  }
-
-  /* ----------------------------------------------------------
-     Table actions
-  ---------------------------------------------------------- */
-
-  const actions =
-    resolveActions(
-      CommentTableRegistry.role,
-      user.permissions
-    );
-
-  /* ==========================================================
-     RENDER
-  ========================================================== */
+  /*
+  |--------------------------------------------------------------------------
+  | Render
+  |--------------------------------------------------------------------------
+  */
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
-
-      {/* ======================================================
-          HEADER
-      ====================================================== */}
+      {/* Header */}
 
       <Banner
         description="Manage system roles, assign permissions, and control user access across the municipality platform."
         badge={
           <IconBadge
-            className="gap-2 rounded-full bg-black/20 p-3 text-xs text-white"
-            icon={
-              <ShieldCheck className="h-4 w-4" />
-            }
+            className="gap-2 rounded-full p-3 text-xs"
+            icon={<ShieldCheck className="h-4 w-4" />}
           >
             Access Management
           </IconBadge>
@@ -337,103 +326,95 @@ function AccessManagementPageContent() {
             position="bottom-right"
           />
         }
-        overlayClassName="bg-gradient-to-r from-primary/95 via-primary/80 to-primary/50"
-        className="text-white"
+        overlayClassName="bg-transparent"
         actions={
-          <Button
-            onClick={() =>
-              router.push(
-                "/office/dashboard/access-managements/create"
-              )
-            }
-            className="p-4"
-          >
-            <Plus className="mr-2 h-4 w-4" />
-
+          <Button onClick={handleCreate} className="p-4">
+            <Plus className="mr-2 size-4" />
             Create Role
           </Button>
         }
       />
 
-      {/* ======================================================
-          TOOLBAR
-      ====================================================== */}
+      {/* Search Toolbar */}
 
       <Toolbar
         search={
           <SearchInput
             placeholder="Search roles..."
             value={searchInput}
-            onChange={(e) =>
-              setSearchInput(
-                e.target.value
-              )
-            }
+            onChange={(event) => {
+              setSearchInput(event.target.value);
+              setPage(1);
+            }}
           />
         }
       />
 
-      {/* ======================================================
-          ROLE TABLE
-      ====================================================== */}
+      {/* Error State */}
+
+      {isError && (
+        <div
+          className="flex flex-col gap-3 rounded-lg border border-destructive/30 p-4 sm:flex-row sm:items-center sm:justify-between"
+          role="alert"
+        >
+          <div>
+            <p className="text-sm font-medium">
+              Unable to load roles
+            </p>
+
+            <p className="mt-1 text-sm text-muted-foreground">
+              {error instanceof Error
+                ? error.message
+                : "An unexpected error occurred while retrieving roles."}
+            </p>
+          </div>
+
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => void refetch()}
+          >
+            Retry
+          </Button>
+        </div>
+      )}
+
+      {/* Roles Table */}
 
       <CommenTable
-        type={
-          "role" as CommentType
-        }
+        type={"role" as CommentType}
         data={roles}
         page={page}
         pageSize={pageSize}
         isLoading={isLoading}
-        onView={(row) =>
-          router.push(
-            `/office/dashboard/access-managements/${row.id}`
-          )
-        }
-        onEdit={(row) =>
-          router.push(
-            `/office/dashboard/access-managements/${row.id}/edit`
-          )
-        }
-        onDelete={(id) =>
-          handleDeleteRequest(
-            id as string
-          )
-        }
+        onView={handleView}
+        onEdit={handleEdit}
+        onDelete={(id) => handleDeleteRequest(String(id))}
         actions={actions}
       />
 
-      {/* ======================================================
-          PAGINATION
-      ====================================================== */}
+      {/* Pagination */}
 
       <DataTablePagination
         page={page}
         pageSize={pageSize}
-        total={
-          data?.meta?.total ?? 0
-        }
-        onPageChange={
-          setPage
-        }
-        onPageSizeChange={(
-          size
-        ) => {
+        total={data?.meta?.total ?? 0}
+        onPageChange={setPage}
+        onPageSizeChange={(size) => {
           setPageSize(size);
           setPage(1);
         }}
       />
 
-      {/* ======================================================
-          DELETE CONFIRMATION
-      ====================================================== */}
+      {/* Delete Confirmation */}
 
       <AlertDialog
-        open={!!roleToDelete}
-        onOpenChange={(open) =>
-          !open &&
-          setRoleToDelete(null)
-        }
+        open={Boolean(roleToDelete)}
+        onOpenChange={(open) => {
+          if (!open && !deleteRole.isPending) {
+            setRoleToDelete(null);
+          }
+        }}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -443,51 +424,38 @@ function AccessManagementPageContent() {
 
             <AlertDialogDescription>
               This will permanently delete{" "}
-              <span className="font-medium">
+              <span className="font-medium text-foreground">
                 {roleToDelete?.name}
               </span>
               .
 
-              {roleToDelete &&
-                roleToDelete.usersCount >
-                  0 && (
-                  <>
-                    {" "}
-                    It currently has{" "}
-                    {
-                      roleToDelete.usersCount
-                    }{" "}
-                    {roleToDelete.usersCount ===
-                    1
-                      ? "user"
-                      : "users"}{" "}
-                    assigned — they will
-                    lose the permissions it
-                    grants.
-                  </>
-                )}{" "}
-              This action cannot be
-              undone.
+              {roleToDelete && roleToDelete.usersCount > 0 && (
+                <>
+                  {" "}
+                  It currently has {roleToDelete.usersCount}{" "}
+                  {roleToDelete.usersCount === 1 ? "user" : "users"}{" "}
+                  assigned. Those users may lose the permissions this
+                  role grants.
+                </>
+              )}{" "}
+              This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
 
           <AlertDialogFooter>
-            <AlertDialogCancel>
+            <AlertDialogCancel disabled={deleteRole.isPending}>
               Cancel
             </AlertDialogCancel>
 
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              disabled={
-                deleteRole.isPending
-              }
-              onClick={
-                handleDeleteConfirm
-              }
+              disabled={deleteRole.isPending}
+              onClick={(event) => {
+                event.preventDefault();
+                void handleDeleteConfirm();
+              }}
             >
-              {deleteRole.isPending
-                ? "Deleting..."
-                : "Delete Role"}
+              {deleteRole.isPending ? "Deleting..." : "Delete Role"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

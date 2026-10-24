@@ -1,7 +1,7 @@
 "use client";
 
 import { UserForm } from "@/components/forms/UserForm";
-import { useCreateUser } from "@/hooks/useUser.hook";
+import { useCreateUser } from "@/hooks/user/useUser.hook";
 
 export default function CreateUserPage() {
 

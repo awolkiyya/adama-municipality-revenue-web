@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 import { getInitials } from "@/utils/getInitials";
 import { formatEthiopianDate, formatEthiopianDateWithTime } from "@/lib/utils";
+import { usePrivateImage } from "@/hooks/usePrivateImage";
 // import { usePrivateImage } from "@/hooks/usePrivateImage";
 
 
@@ -70,8 +71,8 @@ export const columnRenderers: Record<string, (row: any) => React.ReactNode> =
   ========================================================= */
 
   avatar: (row) => (
-    <Avatar className="h-8 w-8 rounded-lg">
-      {/* <AvatarImage src={usePrivateImage(row.avatar).url} alt={row.name} /> */}
+    <Avatar className="h-10 w-10 rounded-lg">
+      <AvatarImage src={usePrivateImage(row.avatar).url} alt={row.name} />
       <AvatarFallback className="rounded-lg text-xs">
         {getInitials(row.name)}
       </AvatarFallback>
@@ -189,6 +190,14 @@ export const columnRenderers: Record<string, (row: any) => React.ReactNode> =
     <span className="text-sm text-muted-foreground">
       {row.created_at
         ? formatEthiopianDate(new Date(row.created_at).toLocaleDateString())
+        : "-"}
+    </span>
+  ),
+
+  createdAt: (row) => (
+    <span className="text-sm text-muted-foreground">
+      {row.createdAt
+        ? formatEthiopianDate(new Date(row.createdAt).toLocaleDateString())
         : "-"}
     </span>
   ),

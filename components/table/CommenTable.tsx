@@ -7,8 +7,8 @@ import {
   getCoreRowModel,
   getSortedRowModel,
   flexRender,
-  ColumnDef,
-  SortingState,
+  type ColumnDef,
+  type SortingState,
 } from "@tanstack/react-table";
 
 import {
@@ -43,17 +43,17 @@ import {
 
 import { SortableRow } from "./SortableRow";
 import { columnRenderers } from "./renderers";
-
 import { TableEmptyState } from "./table-empty";
 import { TableLoading } from "./TableLoading";
 import { RowActions } from "./RowActions";
 
 import {
   CommentTableRegistry,
-  TableActionKey,
+  type TableActionKey,
 } from "./registry";
 
-import { CommentType } from "@/types/commen";
+import type { CommentType } from "@/types/commen";
+import { usePermission } from "@/hooks/usePermission";
 
 /* =====================================================
    TYPES
@@ -70,23 +70,16 @@ export interface TableProps {
 
   isLoading?: boolean;
 
-  /*
-  |--------------------------------------------------------------------------
-  | RESOLVED ACTION PERMISSIONS
-  |--------------------------------------------------------------------------
-  |
-  | Each page only needs to provide the actions it uses.
-  | Unspecified actions are treated as unavailable.
-  |
-  */
-
+  /**
+   * Actions requested by the current page.
+   *
+   * An action is visible only when the page enables it,
+   * the registry enables it, and the user has the required
+   * permission when one is configured.
+   */
   actions: Partial<Record<TableActionKey, boolean>>;
 
-  /*
-  |--------------------------------------------------------------------------
-  | CORE ACTIONS
-  |--------------------------------------------------------------------------
-  */
+  /* CORE ACTIONS */
 
   onView?: (row: any) => void;
 
@@ -96,11 +89,7 @@ export interface TableProps {
 
   onCreate?: () => void;
 
-  /*
-  |--------------------------------------------------------------------------
-  | USER / GOVERNANCE ACTIONS
-  |--------------------------------------------------------------------------
-  */
+  /* USER / GOVERNANCE ACTIONS */
 
   onUpdatePassword?: (row: any) => void;
 
@@ -112,19 +101,11 @@ export interface TableProps {
 
   onToggleStatus?: (row: any) => void;
 
-  /*
-  |--------------------------------------------------------------------------
-  | TARIFF RULE
-  |--------------------------------------------------------------------------
-  */
+  /* TARIFF RULE */
 
   onManageFormulaVariables?: (row: any) => void;
 
-  /*
-  |--------------------------------------------------------------------------
-  | WORKFLOW ACTIONS
-  |--------------------------------------------------------------------------
-  */
+  /* WORKFLOW ACTIONS */
 
   onSubmit?: (row: any) => void;
 
@@ -132,11 +113,7 @@ export interface TableProps {
 
   onApprove?: (row: any) => void;
 
-  /*
-  |--------------------------------------------------------------------------
-  | INVOICE ACTIONS
-  |--------------------------------------------------------------------------
-  */
+  /* INVOICE ACTIONS */
 
   onIssue?: (row: any) => void;
 
@@ -161,57 +138,31 @@ export interface TableProps {
 
 export function CommenTable({
   type,
-
   data,
-
   page,
-
   pageSize,
-
   isLoading,
-
   actions,
-
   onView,
-
   onEdit,
-
   onDelete,
-
   onCreate,
-
   onUpdatePassword,
-
   onUpdateRole,
-
   onUpdateHierarchy,
-
   onManageAccess,
-
   onToggleStatus,
-
   onManageFormulaVariables,
-
   onSubmit,
-
   onReturn,
-
   onApprove,
-
   onIssue,
-
   onApplyDiscount,
-
   onApplyPenalty,
-
   onCancel,
-
   onVoid,
-
   onPay,
-
   onPrint,
-
   onDownload,
 }: TableProps) {
   /* ===================================================
@@ -219,6 +170,64 @@ export function CommenTable({
   =================================================== */
 
   const config = CommentTableRegistry[type];
+
+  /* ===================================================
+     PERMISSIONS
+  =================================================== */
+
+  const { can } = usePermission();
+
+  /**
+   * Resolve whether an action is available.
+   *
+   * Page configuration can restrict an action, but cannot
+   * bypass the registry or the user's permissions.
+   */
+  const resolveActionVisibility = React.useCallback(
+    (key: TableActionKey): boolean => {
+      // The page must explicitly request the action.
+      if (actions[key] !== true) {
+        return false;
+      }
+
+      const actionConfig = config.actions[key];
+
+      // Registry-disabled or unregistered actions are hidden.
+      if (!actionConfig?.enabled) {
+        return false;
+      }
+
+      // No permission requirement: page and registry
+      // configuration are sufficient.
+      if (!actionConfig.permission) {
+        return true;
+      }
+
+      // Check the existing centralized permission system.
+      return can(
+        actionConfig.permission.resource,
+        actionConfig.permission.action,
+      );
+    },
+    [actions, can, config.actions],
+  );
+
+  /**
+   * Calculate visibility for all actions and pass the result
+   * to RowActions.
+   */
+  const visibleActions = React.useMemo(
+    () =>
+      Object.fromEntries(
+        (
+          Object.keys(config.actions) as TableActionKey[]
+        ).map((key) => [
+          key,
+          resolveActionVisibility(key),
+        ]),
+      ) as Partial<Record<TableActionKey, boolean>>,
+    [config.actions, resolveActionVisibility],
+  );
 
   /* ===================================================
      SORTING
@@ -231,311 +240,152 @@ export function CommenTable({
      COLUMN CONFIG
   =================================================== */
 
-  const columns =
-    React.useMemo<ColumnDef<any>[]>(() => {
-      return [
-        /*
-        |--------------------------------------------------------------------------
-        | ROW NUMBER
-        |--------------------------------------------------------------------------
-        */
+  const columns = React.useMemo<ColumnDef<any>[]>(() => {
+    return [
+      /* ROW NUMBER */
 
-        {
-          id: "no",
+      {
+        id: "no",
+        header: "#",
+        enableSorting: false,
 
-          header: "#",
+        cell: ({ row }) => {
+          const pageIndex = page ?? 1;
+          const size = pageSize ?? 10;
 
-          enableSorting: false,
-
-          cell: ({ row }) => {
-            const pageIndex = page ?? 1;
-
-            const size = pageSize ?? 10;
-
-            return (
-              (pageIndex - 1) *
-                size +
-              row.index +
-              1
-            );
-          },
+          return (
+            (pageIndex - 1) * size +
+            row.index +
+            1
+          );
         },
+      },
 
-        /*
-        |--------------------------------------------------------------------------
-        | DYNAMIC COLUMNS
-        |--------------------------------------------------------------------------
-        */
+      /* DYNAMIC COLUMNS */
 
-        ...config.columns.map(
-          (key) => ({
-            accessorKey: key,
+      ...config.columns.map((key) => ({
+        accessorKey: key,
+        header: key.toUpperCase(),
+        enableSorting: true,
 
-            header:
-              key.toUpperCase(),
+        cell: ({ row }: any) =>
+          columnRenderers[key]?.(row.original) ??
+          row.original[key],
+      })),
 
-            enableSorting: true,
+      /* ACTIONS */
 
-            cell: ({
-              row,
-            }: any) =>
-              columnRenderers[key]?.(
-                row.original,
-              ) ??
-              row.original[key],
-          }),
+      {
+        id: "actions",
+        header: "ACTIONS",
+        enableSorting: false,
+
+        cell: ({ row }: any) => (
+          <RowActions
+            // Pass resolved action visibility, not raw page flags.
+            actions={visibleActions}
+            row={row.original}
+
+            /* CORE */
+
+            onView={() => onView?.(row.original)}
+
+            onEdit={() => onEdit?.(row.original)}
+
+            onDelete={() => onDelete?.(row.original.id)}
+
+            onCreate={onCreate}
+
+            /* STATUS */
+
+            onToggleStatus={() =>
+              onToggleStatus?.(row.original)
+            }
+
+            /* USER / GOVERNANCE */
+
+            onUpdatePassword={() =>
+              onUpdatePassword?.(row.original)
+            }
+
+            onUpdateRole={() =>
+              onUpdateRole?.(row.original)
+            }
+
+            onUpdateHierarchy={() =>
+              onUpdateHierarchy?.(row.original)
+            }
+
+            onManageAccess={() =>
+              onManageAccess?.(row.original)
+            }
+
+            /* FORMULA VARIABLES */
+
+            onManageFormulaVariables={() =>
+              onManageFormulaVariables?.(row.original)
+            }
+
+            /* WORKFLOW */
+
+            onSubmit={() => onSubmit?.(row.original)}
+
+            onReturn={() => onReturn?.(row.original)}
+
+            onApprove={() => onApprove?.(row.original)}
+
+            /* INVOICE */
+
+            onIssue={() => onIssue?.(row.original)}
+
+            onApplyDiscount={() =>
+              onApplyDiscount?.(row.original)
+            }
+
+            onApplyPenalty={() =>
+              onApplyPenalty?.(row.original)
+            }
+
+            onCancel={() => onCancel?.(row.original)}
+
+            onVoid={() => onVoid?.(row.original)}
+
+            onPay={() => onPay?.(row.original)}
+
+            onPrint={() => onPrint?.(row.original)}
+
+            onDownload={() => onDownload?.(row.original)}
+          />
         ),
-
-        /*
-        |--------------------------------------------------------------------------
-        | ACTIONS
-        |--------------------------------------------------------------------------
-        */
-
-        {
-          id: "actions",
-
-          header: "ACTIONS",
-
-          enableSorting: false,
-
-          cell: ({
-            row,
-          }: any) => (
-            <RowActions
-              /*
-              |--------------------------------------------------------------------------
-              | ACTION PERMISSIONS
-              |--------------------------------------------------------------------------
-              |
-              | RowActions should accept:
-              |
-              | Partial<Record<TableActionKey, boolean>>
-              |
-              */
-
-              actions={actions}
-
-              /*
-              |--------------------------------------------------------------------------
-              | ROW
-              |--------------------------------------------------------------------------
-              */
-
-              row={row.original}
-
-              /*
-              |--------------------------------------------------------------------------
-              | CORE
-              |--------------------------------------------------------------------------
-              */
-
-              onView={() =>
-                onView?.(
-                  row.original,
-                )
-              }
-
-              onEdit={() =>
-                onEdit?.(
-                  row.original,
-                )
-              }
-
-              onDelete={() =>
-                onDelete?.(
-                  row.original.id,
-                )
-              }
-
-              onCreate={onCreate}
-
-              /*
-              |--------------------------------------------------------------------------
-              | STATUS
-              |--------------------------------------------------------------------------
-              */
-
-              onToggleStatus={() =>
-                onToggleStatus?.(
-                  row.original,
-                )
-              }
-
-              /*
-              |--------------------------------------------------------------------------
-              | USER / GOVERNANCE
-              |--------------------------------------------------------------------------
-              */
-
-              onUpdatePassword={() =>
-                onUpdatePassword?.(
-                  row.original,
-                )
-              }
-
-              onUpdateRole={() =>
-                onUpdateRole?.(
-                  row.original,
-                )
-              }
-
-              onUpdateHierarchy={() =>
-                onUpdateHierarchy?.(
-                  row.original,
-                )
-              }
-
-              onManageAccess={() =>
-                onManageAccess?.(
-                  row.original,
-                )
-              }
-
-              /*
-              |--------------------------------------------------------------------------
-              | FORMULA VARIABLES
-              |--------------------------------------------------------------------------
-              */
-
-              onManageFormulaVariables={() =>
-                onManageFormulaVariables?.(
-                  row.original,
-                )
-              }
-
-              /*
-              |--------------------------------------------------------------------------
-              | WORKFLOW
-              |--------------------------------------------------------------------------
-              */
-
-              onSubmit={() =>
-                onSubmit?.(
-                  row.original,
-                )
-              }
-
-              onReturn={() =>
-                onReturn?.(
-                  row.original,
-                )
-              }
-
-              onApprove={() =>
-                onApprove?.(
-                  row.original,
-                )
-              }
-
-              /*
-              |--------------------------------------------------------------------------
-              | INVOICE
-              |--------------------------------------------------------------------------
-              */
-
-              onIssue={() =>
-                onIssue?.(
-                  row.original,
-                )
-              }
-
-              onApplyDiscount={() =>
-                onApplyDiscount?.(
-                  row.original,
-                )
-              }
-
-              onApplyPenalty={() =>
-                onApplyPenalty?.(
-                  row.original,
-                )
-              }
-
-              onCancel={() =>
-                onCancel?.(
-                  row.original,
-                )
-              }
-
-              onVoid={() =>
-                onVoid?.(
-                  row.original,
-                )
-              }
-
-              onPay={() =>
-                onPay?.(
-                  row.original,
-                )
-              }
-
-              onPrint={() =>
-                onPrint?.(
-                  row.original,
-                )
-              }
-
-              onDownload={() =>
-                onDownload?.(
-                  row.original,
-                )
-              }
-            />
-          ),
-        },
-      ];
-    }, [
-      config.columns,
-
-      page,
-
-      pageSize,
-
-      actions,
-
-      onView,
-
-      onEdit,
-
-      onDelete,
-
-      onCreate,
-
-      onToggleStatus,
-
-      onUpdatePassword,
-
-      onUpdateRole,
-
-      onUpdateHierarchy,
-
-      onManageAccess,
-
-      onManageFormulaVariables,
-
-      onSubmit,
-
-      onReturn,
-
-      onApprove,
-
-      onIssue,
-
-      onApplyDiscount,
-
-      onApplyPenalty,
-
-      onCancel,
-
-      onVoid,
-
-      onPay,
-
-      onPrint,
-
-      onDownload,
-    ]);
+      },
+    ];
+  }, [
+    config.columns,
+    page,
+    pageSize,
+    visibleActions,
+    onView,
+    onEdit,
+    onDelete,
+    onCreate,
+    onToggleStatus,
+    onUpdatePassword,
+    onUpdateRole,
+    onUpdateHierarchy,
+    onManageAccess,
+    onManageFormulaVariables,
+    onSubmit,
+    onReturn,
+    onApprove,
+    onIssue,
+    onApplyDiscount,
+    onApplyPenalty,
+    onCancel,
+    onVoid,
+    onPay,
+    onPrint,
+    onDownload,
+  ]);
 
   /* ===================================================
      TABLE INSTANCE
@@ -543,39 +393,32 @@ export function CommenTable({
 
   const table = useReactTable({
     data,
-
     columns,
 
     state: {
       sorting,
     },
 
-    onSortingChange:
-      setSorting,
+    onSortingChange: setSorting,
 
-    getCoreRowModel:
-      getCoreRowModel(),
+    getCoreRowModel: getCoreRowModel(),
 
-    getSortedRowModel:
-      getSortedRowModel(),
+    getSortedRowModel: getSortedRowModel(),
   });
 
   /* ===================================================
      ROWS
   =================================================== */
 
-  const rows =
-    table.getRowModel().rows;
+  const rows = table.getRowModel().rows;
 
   /* ===================================================
-     DND
+     DRAG AND DROP
   =================================================== */
 
   const sensors = useSensors(
     useSensor(MouseSensor),
-
     useSensor(TouchSensor),
-
     useSensor(KeyboardSensor),
   );
 
@@ -583,43 +426,25 @@ export function CommenTable({
      COLUMN SPAN
   =================================================== */
 
-  const colSpan =
-    config.columns.length + 2;
+  const colSpan = config.columns.length + 2;
 
   /* ===================================================
      SORT ICON
   =================================================== */
 
-  const renderSortIcon = (
-    column: any,
-  ) => {
-    const sorted =
-      column.getIsSorted();
+  const renderSortIcon = (column: any) => {
+    const sorted = column.getIsSorted();
 
     if (sorted === "asc") {
-      return (
-        <ArrowUp
-          className="h-3 w-3"
-        />
-      );
+      return <ArrowUp className="h-3 w-3" />;
     }
 
     if (sorted === "desc") {
-      return (
-        <ArrowDown
-          className="h-3 w-3"
-        />
-      );
+      return <ArrowDown className="h-3 w-3" />;
     }
 
     return (
-      <ArrowUpDown
-        className="
-          h-3
-          w-3
-          opacity-40
-        "
-      />
+      <ArrowUpDown className="h-3 w-3 opacity-40" />
     );
   };
 
@@ -628,186 +453,86 @@ export function CommenTable({
   =================================================== */
 
   return (
-    <div
-      className="
-        overflow-x-auto
-        rounded-lg
-        border-none
-      "
-    >
+    <div className="overflow-x-auto rounded-lg border-none">
       <DndContext
         sensors={sensors}
-        collisionDetection={
-          closestCenter
-        }
+        collisionDetection={closestCenter}
       >
         <SortableContext
-          items={data.map(
-            (item) => item.id,
-          )}
-          strategy={
-            verticalListSortingStrategy
-          }
+          items={data.map((item) => item.id)}
+          strategy={verticalListSortingStrategy}
         >
           <Table>
-            {/* =================================================
-                HEADER
-            ================================================= */}
+            {/* HEADER */}
 
             <TableHeader>
-              {table
-                .getHeaderGroups()
-                .map(
-                  (
-                    headerGroup,
-                  ) => (
-                    <TableRow
-                      key={
-                        headerGroup.id
+              {table.getHeaderGroups().map((headerGroup) => (
+                <TableRow key={headerGroup.id}>
+                  {headerGroup.headers.map((header) => (
+                    <TableHead
+                      key={header.id}
+                      onClick={
+                        header.column.getToggleSortingHandler()
+                      }
+                      className={
+                        header.column.getCanSort()
+                          ? "cursor-pointer select-none"
+                          : "select-none"
                       }
                     >
-                      {headerGroup.headers.map(
-                        (
-                          header,
-                        ) => (
-                          <TableHead
-                            key={
-                              header.id
-                            }
-                            onClick={
-                              header.column
-                                .getToggleSortingHandler()
-                            }
-                            className={
-                              header.column
-                                .getCanSort()
-                                ? `
-                                  cursor-pointer
-                                  select-none
-                                `
-                                : `
-                                  select-none
-                                `
-                            }
-                          >
-                            <div
-                              className="
-                                flex
-                                items-center
-                                gap-1
-                              "
-                            >
-                              {flexRender(
-                                header
-                                  .column
-                                  .columnDef
-                                  .header,
+                      <div className="flex items-center gap-1">
+                        {flexRender(
+                          header.column.columnDef.header,
+                          header.getContext(),
+                        )}
 
-                                header.getContext(),
-                              )}
-
-                              {header
-                                .column
-                                .getCanSort() &&
-                                renderSortIcon(
-                                  header.column,
-                                )}
-                            </div>
-                          </TableHead>
-                        ),
-                      )}
-                    </TableRow>
-                  ),
-                )}
+                        {header.column.getCanSort() &&
+                          renderSortIcon(header.column)}
+                      </div>
+                    </TableHead>
+                  ))}
+                </TableRow>
+              ))}
             </TableHeader>
 
-            {/* =================================================
-                BODY
-            ================================================= */}
+            {/* BODY */}
 
             <TableBody>
-              {/* ===============================================
-                  LOADING
-              =============================================== */}
-
               {isLoading ? (
                 <TableLoading
-                  colSpan={
-                    colSpan
-                  }
+                  colSpan={colSpan}
                   message={`Loading ${type} data...`}
                 />
-              ) : rows.length ===
-                0 ? (
-                /* =============================================
-                   EMPTY
-                ============================================= */
-
+              ) : rows.length === 0 ? (
                 <TableEmptyState
-                  colSpan={
-                    colSpan
-                  }
+                  colSpan={colSpan}
                   title={`No ${type} found`}
                   description={`Start by creating a new ${type} record`}
                   action={
-                    onCreate && (
+                    visibleActions.create && onCreate ? (
                       <button
                         type="button"
-                        onClick={
-                          onCreate
-                        }
-                        className="
-                          rounded-md
-                          bg-primary
-                          px-3
-                          py-2
-                          text-sm
-                          text-white
-                        "
+                        onClick={onCreate}
+                        className="rounded-md bg-primary px-3 py-2 text-sm text-white"
                       >
-                        Create{" "}
-                        {type}
+                        Create {type}
                       </button>
-                    )
+                    ) : undefined
                   }
                 />
               ) : (
-                /* =============================================
-                   DATA
-                ============================================= */
-
-                rows.map(
-                  (row) => (
-                    <SortableRow
-                      key={
-                        row.id
-                      }
-                      row={row}
-                    >
-                      {row
-                        .getVisibleCells()
-                        .map(
-                          (
-                            cell,
-                          ) => (
-                            <TableCell
-                              key={
-                                cell.id
-                              }
-                            >
-                              {flexRender(
-                                cell.column
-                                  .columnDef
-                                  .cell,
-
-                                cell.getContext(),
-                              )}
-                            </TableCell>
-                          ),
+                rows.map((row) => (
+                  <SortableRow key={row.id} row={row}>
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell key={cell.id}>
+                        {flexRender(
+                          cell.column.columnDef.cell,
+                          cell.getContext(),
                         )}
-                    </SortableRow>
-                  ),
-                )
+                      </TableCell>
+                    ))}
+                  </SortableRow>
+                ))
               )}
             </TableBody>
           </Table>

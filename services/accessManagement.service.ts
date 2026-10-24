@@ -238,7 +238,7 @@ export const accessManagementService = {
   ): Promise<ApiResponse<Permission[]>> => {
     try {
       const res = await api.get<ApiResponse<Permission[]>>(
-        `/system/access-management/roles/${roleId}/permissions`
+        `/system/access-management/roles/${roleId}/grouped`
       );
 
       return res.data;

@@ -8,14 +8,11 @@ import {
   User,
   Phone,
   MapPin,
-  CreditCard,
   Save,
   Loader2,
   Landmark,
   CheckCircle2,
   Circle,
-  Mail,
-  Cake,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -37,11 +34,12 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 
 import {
-  TaxpayerFormValues,
+  TaxpayerFormInput,
+  type TaxpayerFormValues,
   taxpayerSchema,
 } from "@/lib/zod-forms/taxpayer.schema";
 import { useAdminUnits } from "@/hooks/useAdminUnit.hook";
-import { AdminUnit } from "@/types/admin-unit";
+import { type AdminUnit } from "@/types/admin-unit";
 import { SmartSelect, type Option } from "../input/SmartSelect";
 import { FieldHint } from "./FieldHint";
 import { Label } from "./UserForm";
@@ -49,11 +47,6 @@ import { EthiopianDatePicker } from "../input/EthiopianDatePicker";
 import { parseDate } from "@/utils/formatEth";
 import { formatDate, formatEthiopianDate } from "@/lib/utils";
 
-// Use SmartSelect's own Option type rather than a parallel local type.
-// Its `meta` field is optional there, so anything we build (meta always
-// present) is assignable to it — but the reverse isn't true, which is what
-// caused the onChange type error. Alias it so the rest of the file reads
-// clearly, without redeclaring a stricter, incompatible shape.
 type AdminUnitOption = Option;
 
 type TaxpayerFormProps = {
@@ -64,7 +57,16 @@ type TaxpayerFormProps = {
   adminLevel?: string;
 };
 
-/** Section wrapper: numbered, with an icon, title, and a one-line purpose statement. */
+type FormSectionProps = {
+  index: number;
+  icon: React.ElementType;
+  title: string;
+  description: string;
+  children: React.ReactNode;
+  complete: boolean;
+};
+
+/** Numbered section with completion status and explanatory text. */
 function FormSection({
   index,
   icon: Icon,
@@ -72,14 +74,7 @@ function FormSection({
   description,
   children,
   complete,
-}: {
-  index: number;
-  icon: React.ElementType;
-  title: string;
-  description: string;
-  children: React.ReactNode;
-  complete: boolean;
-}) {
+}: FormSectionProps) {
   return (
     <Card className="border-border/60 shadow-sm">
       <CardHeader className="border-b border-border/60 bg-muted/30 pb-4">
@@ -88,17 +83,24 @@ function FormSection({
             <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border bg-background text-xs font-semibold text-muted-foreground">
               {index}
             </span>
+
             <Icon className="h-4 w-4 text-primary" />
+
             {title}
           </CardTitle>
+
           {complete ? (
             <CheckCircle2 className="h-4 w-4 text-emerald-600" />
           ) : (
             <Circle className="h-4 w-4 text-muted-foreground/40" />
           )}
         </div>
-        <p className="pl-10 text-sm text-muted-foreground">{description}</p>
+
+        <p className="pl-10 text-sm text-muted-foreground">
+          {description}
+        </p>
       </CardHeader>
+
       <CardContent className="grid gap-5 pt-6 md:grid-cols-2">
         {children}
       </CardContent>
@@ -108,6 +110,7 @@ function FormSection({
 
 function FieldError({ message }: { message?: string }) {
   if (!message) return null;
+
   return <p className="text-sm text-destructive">{message}</p>;
 }
 
@@ -117,21 +120,23 @@ export function TaxpayerForm({
   isSubmitting = false,
   adminLevel = "WEREDA",
 }: TaxpayerFormProps) {
-
-
-  const form = useForm<TaxpayerFormValues>({
-    resolver: zodResolver(taxpayerSchema),
-    defaultValues: {
-      full_name: "",
-      national_id: "",
-      gender: "MALE",
-      date_of_birth: "",
-      phone: "",
-      email: "",
-      administrative_unit_id: "",
-      ...defaultValues,
-    },
-  });
+  const form = useForm<
+  TaxpayerFormInput,
+  undefined,
+  TaxpayerFormValues
+>({
+  resolver: zodResolver(taxpayerSchema),
+  defaultValues: {
+    full_name: "",
+    national_id: "",
+    gender: "MALE",
+    date_of_birth: "",
+    phone: "",
+    email: "",
+    administrative_unit_id: "",
+    ...defaultValues,
+  },
+});
 
   const {
     data: adminUnitResponse,
@@ -145,7 +150,9 @@ export function TaxpayerForm({
   const identityComplete = Boolean(
     values.full_name && values.national_id && values.date_of_birth
   );
+
   const contactComplete = Boolean(values.phone);
+
   const addressComplete = Boolean(values.administrative_unit_id);
 
   const fieldsFilled = [
@@ -155,10 +162,12 @@ export function TaxpayerForm({
     values.phone,
     values.administrative_unit_id,
   ].filter(Boolean).length;
+
   const progressPct = Math.round((fieldsFilled / 5) * 100);
 
   const initials = useMemo(() => {
     if (!values.full_name) return "—";
+
     return values.full_name
       .trim()
       .split(/\s+/)
@@ -167,12 +176,15 @@ export function TaxpayerForm({
       .join("");
   }, [values.full_name]);
 
-  // Administrative units filtered to the level this form registers against.
+  // Filter administrative units by the level used for registration.
   const adminUnitOptions: AdminUnitOption[] = useMemo(() => {
     if (!adminLevel) return [];
+
     return (
       adminUnitResponse?.data
-        ?.filter((unit: AdminUnit) => String(unit.level) === String(adminLevel))
+        ?.filter(
+          (unit: AdminUnit) => String(unit.level) === String(adminLevel)
+        )
         .map((unit: AdminUnit) => ({
           id: String(unit.id),
           label: unit.name,
@@ -181,7 +193,7 @@ export function TaxpayerForm({
     );
   }, [adminUnitResponse, adminLevel]);
 
-  // The option object SmartSelect should show as currently selected.
+  // Resolve the selected administrative unit for SmartSelect and the preview.
   const selectedAdminUnit = useMemo(
     () =>
       adminUnitOptions.find(
@@ -190,9 +202,7 @@ export function TaxpayerForm({
     [adminUnitOptions, values.administrative_unit_id]
   );
 
-  const handleAdminUnitChange: (option: AdminUnitOption | null) => void = (
-    option
-  ) => {
+  const handleAdminUnitChange = (option: AdminUnitOption | null) => {
     form.setValue("administrative_unit_id", option?.id ?? "", {
       shouldValidate: true,
       shouldDirty: true,
@@ -208,13 +218,16 @@ export function TaxpayerForm({
         {/* Progress */}
         <div className="flex items-center gap-4 rounded-lg border border-border/60 bg-muted/30 px-4 py-3">
           <Landmark className="h-5 w-5 shrink-0 text-primary" />
+
           <div className="flex-1">
             <div className="flex items-center justify-between text-sm">
               <span className="font-medium">Taxpayer registration</span>
+
               <span className="text-muted-foreground">
                 {progressPct}% complete
               </span>
             </div>
+
             <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-border">
               <div
                 className="h-full rounded-full bg-primary transition-all duration-300"
@@ -234,52 +247,57 @@ export function TaxpayerForm({
         >
           <div className="space-y-2">
             <Label required>Full name</Label>
+
             <Input
               placeholder="Enter full name"
+              autoComplete="name"
               {...form.register("full_name")}
               className="py-4"
-
             />
+
             <FieldError message={errors.full_name?.message} />
           </div>
 
           <div className="space-y-2">
-            <Label required>
-              National ID
-            </Label>
+            <Label required>National ID</Label>
+
             <Input
               placeholder="Enter national ID"
               {...form.register("national_id")}
               className="py-4"
             />
+
             <FieldError message={errors.national_id?.message} />
           </div>
 
           <div className="space-y-2">
             <Label required>Gender</Label>
+
             <Select
               value={form.watch("gender")}
               onValueChange={(value) =>
                 form.setValue("gender", value as "MALE" | "FEMALE", {
                   shouldValidate: true,
+                  shouldDirty: true,
                 })
               }
             >
               <SelectTrigger className="w-full py-4">
                 <SelectValue placeholder="Select gender" />
               </SelectTrigger>
+
               <SelectContent>
                 <SelectItem value="MALE">Male</SelectItem>
                 <SelectItem value="FEMALE">Female</SelectItem>
               </SelectContent>
             </Select>
+
             <FieldError message={errors.gender?.message} />
           </div>
 
           <div className="space-y-2">
-            <Label required>
-              Date of birth
-            </Label>
+            <Label required>Date of birth</Label>
+
             <EthiopianDatePicker
               value={parseDate(values.date_of_birth ?? undefined)}
               onChange={(date) =>
@@ -288,9 +306,9 @@ export function TaxpayerForm({
                   shouldDirty: true,
                 })
               }
-              placeholder = "Guyyaa dhalootaa filadhaa"
-                          />
-            {/* <Input type="date" {...form.register("date_of_birth")}               className="py-4" /> */}
+              placeholder="Guyyaa dhalootaa filadhaa"
+            />
+
             <FieldError message={errors.date_of_birth?.message} />
           </div>
         </FormSection>
@@ -305,22 +323,34 @@ export function TaxpayerForm({
         >
           <div className="space-y-2">
             <Label required>Phone number</Label>
-            <Input placeholder="+2519XXXXXXXX" {...form.register("phone")}  className="py-4" />
+
+            <Input
+              type="tel"
+              placeholder="+2519XXXXXXXX"
+              autoComplete="tel"
+              {...form.register("phone")}
+              className="py-4"
+            />
+
             <FieldError message={errors.phone?.message} />
           </div>
 
           <div className="space-y-2">
-            <Label >
-              Email
+            <Label>
+              Email{" "}
               <span className="font-normal text-muted-foreground">
                 (optional)
               </span>
             </Label>
+
             <Input
+              type="email"
               placeholder="email@example.com"
+              autoComplete="email"
               {...form.register("email")}
               className="py-4"
             />
+
             <FieldError message={errors.email?.message} />
           </div>
         </FormSection>
@@ -350,7 +380,8 @@ export function TaxpayerForm({
 
             {isAdminUnitsError && (
               <p className="text-sm text-destructive">
-                Couldn&apos;t load administrative units. Try refreshing the page.
+                Couldn&apos;t load administrative units. Try refreshing the
+                page.
               </p>
             )}
 
@@ -366,16 +397,18 @@ export function TaxpayerForm({
         </FormSection>
 
         {/* Submit */}
-        <div className="flex items-center justify-between rounded-lg border border-border/60 bg-muted/30 px-4 py-3">
+        <div className="flex items-center justify-between gap-4 rounded-lg border border-border/60 bg-muted/30 px-4 py-3">
           <p className="text-sm text-muted-foreground">
             Review the registration card before saving.
           </p>
+
           <Button disabled={isSubmitting} type="submit" size="lg">
             {isSubmitting ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (
               <Save className="mr-2 h-4 w-4" />
             )}
+
             {isSubmitting ? "Saving..." : "Save taxpayer"}
           </Button>
         </div>
@@ -390,18 +423,22 @@ export function TaxpayerForm({
                 <span className="text-xs font-medium uppercase tracking-wider opacity-80">
                   Taxpayer registration card
                 </span>
+
                 <Landmark className="h-4 w-4 opacity-80" />
               </div>
             </div>
+
             <CardContent className="space-y-4 pt-5">
               <div className="flex items-center gap-3">
                 <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-semibold text-muted-foreground">
                   {initials}
                 </div>
+
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold">
                     {values.full_name || "Full name pending"}
                   </p>
+
                   <p className="text-xs text-muted-foreground">
                     {values.national_id
                       ? `ID ${values.national_id}`
@@ -415,26 +452,41 @@ export function TaxpayerForm({
               <dl className="space-y-2.5 text-sm">
                 <div className="flex justify-between gap-3">
                   <dt className="text-muted-foreground">Gender</dt>
+
                   <dd className="font-medium capitalize">
                     {values.gender?.toLowerCase() || "—"}
                   </dd>
                 </div>
+
                 <div className="flex justify-between gap-3">
                   <dt className="text-muted-foreground">Date of birth</dt>
-                  <dd className="font-medium">{values.date_of_birth?formatEthiopianDate(new Date(values.date_of_birth)) : "—"}</dd>
-                </div>
-                <div className="flex justify-between gap-3">
-                  <dt className="text-muted-foreground">Phone</dt>
-                  <dd className="font-medium">{values.phone || "—"}</dd>
-                </div>
-                <div className="flex justify-between gap-3">
-                  <dt className="text-muted-foreground">Email</dt>
-                  <dd className="truncate font-medium">
-                    {values.email || "—"}
+
+                  <dd className="font-medium">
+                    {values.date_of_birth
+                      ? formatEthiopianDate(new Date(values.date_of_birth))
+                      : "—"}
                   </dd>
                 </div>
+
+                <div className="flex justify-between gap-3">
+                  <dt className="text-muted-foreground">Phone</dt>
+
+                  <dd className="font-medium">
+                    {values.phone || "—"}
+                  </dd>
+                </div>
+
+                <div className="flex justify-between gap-3">
+                  <dt className="text-muted-foreground">Email</dt>
+
+                  <dd className="max-w-[60%] truncate text-right font-medium">
+                    {values.email?.trim() || "—"}
+                  </dd>
+                </div>
+
                 <div className="flex justify-between gap-3">
                   <dt className="shrink-0 text-muted-foreground">Wereda</dt>
+
                   <dd className="text-right font-medium">
                     {selectedAdminUnit?.label || "—"}
                   </dd>

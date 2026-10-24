@@ -1,7 +1,7 @@
 import { api } from "@/lib/api";
 import { normalizeApiError } from "@/lib/api-error";
 import { PaginatedResponse, SingleResponse } from "@/types/api";
-import { AuthUser, UserFormData, UserQueryParams } from "@/types/user";
+import { AuthUser, UserFormData, UserQueryParams, UserResponse } from "@/types/user";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -36,9 +36,11 @@ export const UserService = {
   // =========================
   // GET SINGLE USER
   // =========================
-  async getUser(id: string | number): Promise<UserFormData> {
+  async getUser(
+    id: string | number,
+  ): Promise<UserResponse> {
     try {
-      const response = await api.get<SingleResponse<UserFormData>>(
+      const response = await api.get<SingleResponse<UserResponse>>(
         `/users/${id}`,
       );
 
@@ -47,6 +49,7 @@ export const UserService = {
       throw normalizeApiError(error);
     }
   },
+ 
 
   // =========================
   // CREATE USER

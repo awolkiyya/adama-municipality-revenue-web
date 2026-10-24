@@ -75,7 +75,7 @@ interface RoleFormState {
 |--------------------------------------------------------------------------
 */
 
-const ROLES_URL = "/or/dashboard/administration/roles"
+const ROLES_URL = "/en/office/dashboard/access-managements"
 
 /*
 |--------------------------------------------------------------------------

@@ -812,6 +812,7 @@ export function UserForm({
   }}
 />
 
+
 {errors.role_id && (
   <p className="text-xs text-red-500">
     {errors.role_id.message?.toString()}
@@ -877,7 +878,7 @@ export function UserForm({
 
             >
 
-              <SelectTrigger className="w-full py-4">
+              <SelectTrigger className="w-full py-5">
 
                 <SelectValue
                   placeholder="Select Level"

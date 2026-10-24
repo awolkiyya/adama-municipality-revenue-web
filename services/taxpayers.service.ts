@@ -10,6 +10,7 @@ import {
   Citizen,
   CitizenFilters,
   CitizenFormData,
+  CitizenSummary,
 } from "@/types/citizen";
 
 /**
@@ -25,7 +26,7 @@ export const citizenService = {
   getAll: async (params?: CitizenFilters) => {
     try {
       const res = await api.get<
-        PaginatedResponse<Citizen>
+        PaginatedResponse<Citizen,CitizenSummary>
       >(
         "/citizens",
         {

@@ -101,9 +101,10 @@ export interface CitizenFilters {
 
   source?: CitizenSource;
 
+  status?: "ACTIVE" | "INACTIVE";
+
   address?:string;
 
-  is_active?: boolean;
 
   page?: number;
 
@@ -113,3 +114,10 @@ export interface CitizenFilters {
 
   sort_direction?: "asc" | "desc";
 }
+
+export type CitizenSummary = {
+  total_citizens: number;
+  manual_registration: number;
+  imported_records: number;
+  external_system: number;
+};

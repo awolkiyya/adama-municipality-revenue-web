@@ -59,6 +59,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 import { cn } from "@/lib/utils";
 import ProtectedRoute from "@/components/access/ProtectedRoute";
+import Can from "@/components/access/Can";
 
 /**
  * Extract the exact filter type used by useCitizens.
@@ -77,6 +78,10 @@ type CitizenSource = NonNullable<
 
 type CitizenGender = NonNullable<
   CitizenQueryParams["gender"]
+>;
+
+type CitizenStatus = NonNullable<
+  CitizenQueryParams["status"]
 >;
 
 
@@ -745,79 +750,63 @@ function CitizensPageContent() {
    * values.
    */
 
-  const sourceFilter =
-    filters.source === "ALL"
-      ? undefined
-      : (filters.source as CitizenSource);
+  const statusFilter =
+  filters.status === "ALL"
+    ? undefined
+    : (filters.status as CitizenStatus);
 
-  const genderFilter =
-    filters.gender === "ALL"
-      ? undefined
-      : (filters.gender as CitizenGender);
+const sourceFilter =
+  filters.source === "ALL"
+    ? undefined
+    : (filters.source as CitizenSource);
 
-  /* ----------------------------------------------------------
-     Citizens query
-  ---------------------------------------------------------- */
+const genderFilter =
+  filters.gender === "ALL"
+    ? undefined
+    : (filters.gender as CitizenGender);
 
-  const {
-    data,
-    isLoading,
-    isFetching,
-  } = useCitizens({
-    search,
-    page,
-    per_page: pageSize,
+ /* ----------------------------------------------------------
+   Citizens query
+---------------------------------------------------------- */
 
-    source: sourceFilter,
+const {
+  data,
+  isLoading,
+  isFetching,
+} = useCitizens({
+  search,
+  page,
+  per_page: pageSize,
+  source: sourceFilter,
+  gender: genderFilter,
+  status: statusFilter,
+});
 
-    gender: genderFilter,
-  });
+const toggleStatusMutation = useToggleCitizenStatus();
 
+/* ----------------------------------------------------------
+   Response data
+---------------------------------------------------------- */
 
-  const toggleStatusMutation =
-  useToggleCitizenStatus();
-  /* ----------------------------------------------------------
-     Response data
-  ---------------------------------------------------------- */
+const citizens = data?.data ?? [];
+const meta = data?.meta;
 
-  const citizens =
-    data?.data ?? [];
+/* ----------------------------------------------------------
+   Statistics
+---------------------------------------------------------- */
 
-  const meta =
-    data?.meta;
+const stats = useMemo(
+  () => ({
+    total: meta?.summary?.total_citizens ?? 0,
 
-  /* ----------------------------------------------------------
-     Statistics
-  ---------------------------------------------------------- */
+    manual: meta?.summary?.manual_registration ?? 0,
 
-  const stats = useMemo(
-    () => ({
-      total:
-        meta?.total ?? 0,
+    imported: meta?.summary?.imported_records ?? 0,
 
-      manual:
-        citizens.filter(
-          (citizen) =>
-            citizen.source ===
-            "MANUAL"
-        ).length,
-
-      imported:
-        citizens.filter(
-          (citizen) =>
-            citizen.source ===
-            "IMPORT"
-        ).length,
-
-      external:
-        citizens.filter(
-          (citizen) =>
-            citizen.source ===
-            "EXTERNAL_SYSTEM"
-        ).length,
-    }),
-    [citizens, meta]
-  );
+    external: meta?.summary?.external_system ?? 0,
+  }),
+  [meta?.summary],
+);
 
   /* ----------------------------------------------------------
      Search handler
@@ -898,7 +887,7 @@ function CitizensPageContent() {
         description="Manage citizen registration, identity records, imports, and external system synchronization across the revenue platform."
         badge={
           <IconBadge
-            className="rounded-full bg-black/20 px-3 py-2 text-white"
+            className="rounded-fullpy-2"
             icon={
               <Landmark className="h-3 w-3" />
             }
@@ -915,36 +904,41 @@ function CitizensPageContent() {
             position="bottom-right"
           />
         }
-        overlayClassName="bg-gradient-to-r from-primary via-primary/90 to-primary/60"
+
+        overlayClassName="bg-transparent"
+
         actions={
           <div className="flex gap-3">
+          <Can
+            resource="citizens"
+            action="create"
+          >
             <Button
               variant="secondary"
               onClick={() =>
-                router.push(
-                  "/office/dashboard/taxpayers/create"
-                )
+                router.push("/office/dashboard/taxpayers/create")
               }
             >
               <Plus className="mr-2 h-4 w-4" />
-
               New Citizen
             </Button>
-
+          </Can>
+        
+          <Can
+            resource="citizens"
+            action="import"
+          >
             <Button
               onClick={() =>
-                router.push(
-                  "/office/dashboard/taxpayers/import"
-                )
+                router.push("/office/dashboard/taxpayers/import")
               }
             >
               <Upload className="mr-2 h-4 w-4" />
-
               Import Citizens
             </Button>
-          </div>
+          </Can>
+        </div>
         }
-        className="text-white"
       />
 
       {/* ======================================================
@@ -1029,12 +1023,7 @@ function CitizensPageContent() {
       actions={{
         view: true,
         edit: true,
-        delete: true,
-        create: false,
         toggleStatus: true,
-        updatePassword: false,
-        updateRole: false,
-        updateHierarchy: false,
       }}
       onView={(row) =>
         router.push(
@@ -1044,12 +1033,6 @@ function CitizensPageContent() {
       onEdit={(row) =>
         router.push(
           `/office/dashboard/taxpayers/${row.id}/edit`
-        )
-      }
-      onDelete={(id) =>
-        console.log(
-          "delete citizen",
-          id
         )
       }
       onToggleStatus={(row) => {

@@ -15,8 +15,16 @@ import {
   Ruler,
 } from "lucide-react";
 
-import { Filters } from "@/components/commen/Filters";
-import { Toolbar } from "@/components/commen/Toolbar";
+
+
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
 
 import { CommenTable } from "@/components/table/CommenTable";
 import {
@@ -47,6 +55,7 @@ import {
   MeasurementUnitDialog,
   type MeasurementUnitDialogMode,
 } from "@/components/dialogs/MeasurementUnitDialog";
+import AppFilterBar from "@/components/app-filter-bar";
 
 
 // ============================================================
@@ -455,7 +464,7 @@ export default function MeasurementUnitsPage() {
     <div
       className="
         m-auto
-        max-w-7xl
+        max-w-4xl
         space-y-6
       "
     >
@@ -475,10 +484,8 @@ export default function MeasurementUnitsPage() {
             className="
               gap-2
               rounded-full
-              bg-black/20
               p-3
               text-[10px]
-              text-white
             "
             icon={
               <Ruler
@@ -503,7 +510,7 @@ export default function MeasurementUnitsPage() {
         }
         actions={
           <Button
-            variant="outline"
+            variant="default"
             onClick={handleCreate}
           >
             <Plus
@@ -516,76 +523,70 @@ export default function MeasurementUnitsPage() {
             Create New
           </Button>
         }
-        overlayClassName="
-          bg-gradient-to-r
-          from-primary/95
-          via-primary/80
-          to-primary/50
-        "
-        className="
-          text-white
-        "
+        overlayClassName="bg-transparent"
+
       />
 
 
-      {/* ======================================================
-          TOOLBAR
-      ====================================================== */}
+      {/* FILTERS */}
 
-      <Toolbar
-        search={
-          <SearchInput
-            placeholder="
-              Search measurement units...
-            "
-            value={search}
-            onChange={(event) => {
+<AppFilterBar
+  search={search}
+  onSearchChange={(value) => {
+    setSearch(value);
+    setPage(1);
+  }}
+  searchPlaceholder="Search measurement units..."
+  searchLabel="Search measurement units"
+  title="Search and filter"
+  description="Find measurement units by name, code, symbol, or status."
+  activeFilterCount={
+    filters.status !== INITIAL_FILTERS.status ? 1 : 0
+  }
+  hasFilters={filters.status !== INITIAL_FILTERS.status}
+  onApply={() => setPage(1)}
+  onClear={() => {
+    setSearch("");
+    setFilters(INITIAL_FILTERS);
+    setPage(1);
+  }}
+>
+  <div className="space-y-2">
+    <label className="text-sm font-medium">
+      Status
+    </label>
 
-              setSearch(
-                event.target.value,
-              );
+    <Select
+      value={filters.status || "ALL"}
+      onValueChange={(value) => {
+        setFilters((current) => ({
+          ...current,
+          status: value,
+        }));
 
-              setPage(1);
-            }}
-          />
-        }
+        setPage(1);
+      }}
+    >
+      <SelectTrigger className="w-full">
+        <SelectValue placeholder="All statuses" />
+      </SelectTrigger>
 
-        right={
-          <Filters
-            schema={
-              measurementUnitFilters
-            }
+      <SelectContent>
+        <SelectItem value="ALL">
+          All statuses
+        </SelectItem>
 
-            value={
-              filters
-            }
+        <SelectItem value="ACTIVE">
+          Active
+        </SelectItem>
 
-            onChange={(
-              next,
-            ) => {
-
-              setFilters(
-                next,
-              );
-
-              setPage(1);
-            }}
-
-            onReset={() => {
-
-              setFilters(
-                INITIAL_FILTERS,
-              );
-
-              setPage(1);
-            }}
-
-            layout="row"
-
-            resetPosition="end"
-          />
-        }
-      />
+        <SelectItem value="INACTIVE">
+          Inactive
+        </SelectItem>
+      </SelectContent>
+    </Select>
+  </div>
+</AppFilterBar>
 
 
       {/* ======================================================

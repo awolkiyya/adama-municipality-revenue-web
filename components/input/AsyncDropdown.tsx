@@ -5,6 +5,7 @@ import React, {
   useEffect,
   useRef,
   useCallback,
+  useMemo,
 } from "react";
 
 import {
@@ -38,7 +39,10 @@ import { Button } from "@/components/ui/button";
    TYPES
 ========================================================= */
 
-interface AsyncDropdownProps<T, V extends string | number> {
+interface AsyncDropdownProps<
+  T,
+  V extends string | number
+> {
   value: V | null;
 
   onChange: (value: V, item: T) => void;
@@ -54,37 +58,10 @@ interface AsyncDropdownProps<T, V extends string | number> {
 
   fetchItemById?: (id: V) => Promise<T | null>;
 
-  /**
-   * Default label field (plain text).
-   * Used when renderLabel is not provided.
-   */
   displayField?: keyof T;
 
-  /**
-   * Plain-text label generator.
-   *
-   * IMPORTANT: must return a string — this is used in the trigger
-   * button (and as the fallback row label). Returning JSX here will
-   * break the trigger (it needs a plain string, not a React node).
-   *
-   * Example:
-   * renderLabel={(item) => `${item.code} - ${item.name}`}
-   */
   renderLabel?: (item: T) => string;
 
-  /**
-   * Optional rich JSX renderer for dropdown list rows only
-   * (badges, icons, secondary text, etc). Falls back to
-   * renderLabel / displayField when not provided.
-   *
-   * Example:
-   * renderOption={(item) => (
-   *   <div className="flex flex-col">
-   *     <span className="font-medium">{item.name}</span>
-   *     <span className="text-xs text-muted-foreground">{item.code}</span>
-   *   </div>
-   * )}
-   */
   renderOption?: (item: T) => React.ReactNode;
 
   valueField: keyof T;
@@ -102,232 +79,429 @@ interface AsyncDropdownProps<T, V extends string | number> {
    HELPERS
 ========================================================= */
 
-const truncateText = (text: string, max: number = 60) => {
+const truncateText = (
+  text: string,
+  max = 60
+): string => {
   if (!text) return "";
 
-  return text.length > max ? text.slice(0, max) + "..." : text;
+  return text.length > max
+    ? `${text.slice(0, max)}...`
+    : text;
+};
+
+/**
+ * Normalize IDs for comparisons.
+ *
+ * This supports API IDs returned as either 4 or "4",
+ * while still treating null and undefined as unselected.
+ */
+const sameId = (
+  first: unknown,
+  second: unknown
+): boolean => {
+  if (first == null || second == null) {
+    return first == null && second == null;
+  }
+
+  return String(first) === String(second);
 };
 
 /* =========================================================
    COMPONENT
 ========================================================= */
 
-export const AsyncDropdown = <T extends Record<string, any>, V extends string | number>({
+export const AsyncDropdown = <
+  T extends Record<string, any>,
+  V extends string | number
+>({
   value,
-
   onChange,
-
   fetchData,
-
   fetchItemById,
-
   displayField,
-
   renderLabel,
-
   renderOption,
-
   valueField,
-
   placeholder = "Select...",
-
   pageSize = 20,
-
   debounceTime = 300,
-
   disabled = false,
 }: AsyncDropdownProps<T, V>) => {
   const [open, setOpen] = useState(false);
-
   const [options, setOptions] = useState<T[]>([]);
-
   const [search, setSearch] = useState("");
-
   const [page, setPage] = useState(1);
-
   const [total, setTotal] = useState<number | null>(null);
-
   const [loading, setLoading] = useState(false);
-
   const [error, setError] = useState<string | null>(null);
 
-  const [selectedItem, setSelectedItem] = useState<T | null>(null);
-
-  const mountedRef = useRef(true);
-
-  const resolvedSelected =
-    selectedItem ||
-    options.find((item) => item[valueField] === value) ||
-    null;
-
   /**
-   * Plain-text label — SAFE for the trigger button.
-   * Always guaranteed to return a string, never an object/JSX.
+   * Store the selected object for cases where the selected item
+   * is fetched individually or is not present in the current page.
+   *
+   * The controlled value remains the source of truth.
    */
-  const getLabelText = (item: T): string => {
-    if (renderLabel) {
-      return renderLabel(item);
-    }
+  const [selectedItem, setSelectedItem] =
+    useState<T | null>(null);
 
-    if (displayField) {
-      const raw = item[displayField];
+  const mountedRef = useRef(false);
+  const requestIdRef = useRef(0);
 
-      // Guard against fields that are objects/arrays instead of primitives
-      if (typeof raw === "string" || typeof raw === "number") {
-        return String(raw);
+  /* =========================================================
+     LABEL HELPERS
+  ========================================================= */
+
+  const getLabelText = useCallback(
+    (item: T): string => {
+      if (renderLabel) {
+        return renderLabel(item);
+      }
+
+      if (displayField) {
+        const raw = item[displayField];
+
+        if (
+          typeof raw === "string" ||
+          typeof raw === "number"
+        ) {
+          return String(raw);
+        }
       }
 
       return "";
-    }
+    },
+    [renderLabel, displayField]
+  );
 
-    return "";
-  };
+  const getOptionNode = useCallback(
+    (item: T): React.ReactNode => {
+      if (renderOption) {
+        return renderOption(item);
+      }
+
+      return getLabelText(item);
+    },
+    [renderOption, getLabelText]
+  );
+
+  /* =========================================================
+     RESOLVE CURRENT SELECTION
+  ========================================================= */
 
   /**
-   * Rich node for dropdown rows — can be JSX if renderOption is given,
-   * otherwise falls back to the plain-text label.
+   * Always prefer an option matching the current controlled value.
+   *
+   * This fixes the edit-form case where value is already 4 but
+   * the dropdown options arrive asynchronously.
    */
-  const getOptionNode = (item: T): React.ReactNode => {
-    if (renderOption) {
-      return renderOption(item);
+  const resolvedSelected = useMemo(() => {
+    if (value == null) {
+      return null;
     }
 
-    return getLabelText(item);
-  };
+    const matchingOption = options.find((item) =>
+      sameId(item[valueField], value)
+    );
 
-  /* =========================
+    if (matchingOption) {
+      return matchingOption;
+    }
+
+    if (
+      selectedItem &&
+      sameId(selectedItem[valueField], value)
+    ) {
+      return selectedItem;
+    }
+
+    return null;
+  }, [value, options, selectedItem, valueField]);
+
+  /* =========================================================
      LOAD DATA
-  ========================= */
+  ========================================================= */
 
   const loadOptions = useCallback(
-    async (pageNum: number, searchText: string, reset = false) => {
-      setLoading(true);
+    async (
+      pageNum: number,
+      searchText: string,
+      reset = false
+    ) => {
+      const requestId = ++requestIdRef.current;
 
+      setLoading(true);
       setError(null);
 
       try {
-        const res = await fetchData({
+        const result = await fetchData({
           search: searchText,
           page: pageNum,
           pageSize,
         });
 
-        if (!mountedRef.current) return;
+        if (
+          !mountedRef.current ||
+          requestId !== requestIdRef.current
+        ) {
+          return;
+        }
 
-        setOptions((prev) => (reset ? res.data ?? [] : [...prev, ...(res.data ?? [])]));
+        const incomingOptions = Array.isArray(result.data)
+          ? result.data
+          : [];
+
+        setOptions((previous) => {
+          if (reset) {
+            /**
+             * Keep the selected item visible if it isn't
+             * included in the current search/page response.
+             */
+            const currentSelected =
+              previous.find((item) =>
+                sameId(item[valueField], value)
+              ) ??
+              (
+                selectedItem &&
+                sameId(selectedItem[valueField], value)
+                  ? selectedItem
+                  : null
+              );
+
+            if (
+              currentSelected &&
+              !incomingOptions.some((item) =>
+                sameId(
+                  item[valueField],
+                  currentSelected[valueField]
+                )
+              )
+            ) {
+              return [
+                currentSelected,
+                ...incomingOptions,
+              ];
+            }
+
+            return incomingOptions;
+          }
+
+          const merged = [...previous];
+
+          for (const item of incomingOptions) {
+            const exists = merged.some((existing) =>
+              sameId(
+                existing[valueField],
+                item[valueField]
+              )
+            );
+
+            if (!exists) {
+              merged.push(item);
+            }
+          }
+
+          return merged;
+        });
 
         setPage(pageNum);
-
-        setTotal(res.total ?? null);
+        setTotal(result.total ?? null);
       } catch (err) {
-        console.error(err);
+        if (
+          !mountedRef.current ||
+          requestId !== requestIdRef.current
+        ) {
+          return;
+        }
+
+        console.error(
+          "AsyncDropdown: failed to load options",
+          err
+        );
 
         setError("Failed to load data");
       } finally {
-        if (mountedRef.current) {
+        if (
+          mountedRef.current &&
+          requestId === requestIdRef.current
+        ) {
           setLoading(false);
         }
       }
     },
-    [fetchData, pageSize]
+    [
+      fetchData,
+      pageSize,
+      selectedItem,
+      value,
+      valueField,
+    ]
   );
 
-  /* =========================
+  /* =========================================================
      INITIAL LOAD + SEARCH
-  ========================= */
+  ========================================================= */
 
   useEffect(() => {
     mountedRef.current = true;
 
     const timer = setTimeout(() => {
-      loadOptions(1, search, true);
+      void loadOptions(1, search, true);
     }, debounceTime);
 
     return () => {
       clearTimeout(timer);
-
-      mountedRef.current = false;
+      requestIdRef.current += 1;
     };
   }, [search, loadOptions, debounceTime]);
 
-  /* =========================
-     LOAD SELECTED ITEM
-  ========================= */
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+      requestIdRef.current += 1;
+    };
+  }, []);
+
+  /* =========================================================
+     SYNCHRONIZE CONTROLLED VALUE
+  ========================================================= */
+
+  /**
+   * Clear stale selected objects when the parent clears the value
+   * or selects a different ID.
+   */
+  useEffect(() => {
+    if (value == null) {
+      setSelectedItem(null);
+      return;
+    }
+
+    setSelectedItem((previous) => {
+      if (
+        previous &&
+        !sameId(previous[valueField], value)
+      ) {
+        return null;
+      }
+
+      return previous;
+    });
+  }, [value, valueField]);
+
+  /* =========================================================
+     LOAD SELECTED ITEM BY ID
+  ========================================================= */
 
   useEffect(() => {
-    if (value == null || !fetchItemById) return;
+    if (value == null || !fetchItemById) {
+      return;
+    }
 
     let active = true;
 
-    (async () => {
+    const loadSelectedItem = async () => {
       try {
         const item = await fetchItemById(value);
 
-        if (!active || !item) return;
+        if (!active || !item) {
+          return;
+        }
 
         setSelectedItem(item);
 
-        setOptions((prev) => {
-          const exists = prev.some((p) => p[valueField] === item[valueField]);
+        setOptions((previous) => {
+          const exists = previous.some((option) =>
+            sameId(
+              option[valueField],
+              item[valueField]
+            )
+          );
 
-          return exists ? prev : [item, ...prev];
+          if (exists) {
+            return previous;
+          }
+
+          return [item, ...previous];
         });
       } catch (err) {
-        console.error(err);
+        if (active) {
+          console.error(
+            "AsyncDropdown: failed to load selected item",
+            err
+          );
+        }
       }
-    })();
+    };
+
+    void loadSelectedItem();
 
     return () => {
       active = false;
     };
   }, [value, fetchItemById, valueField]);
 
-  /* =========================
+  /* =========================================================
      INFINITE SCROLL
-  ========================= */
+  ========================================================= */
 
-  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    const el = e.currentTarget;
+  const handleScroll = (
+    event: React.UIEvent<HTMLDivElement>
+  ) => {
+    const element = event.currentTarget;
+
+    const reachedBottom =
+      element.scrollTop + element.clientHeight >=
+      element.scrollHeight - 20;
 
     if (
-      el.scrollTop + el.clientHeight >= el.scrollHeight - 20 &&
+      reachedBottom &&
       !loading &&
       total !== null &&
       options.length < total
     ) {
-      loadOptions(page + 1, search);
+      void loadOptions(page + 1, search);
     }
   };
 
-  /* =========================
+  /* =========================================================
      SELECT
-  ========================= */
+  ========================================================= */
 
   const handleSelect = (item: T) => {
-    const val = item[valueField] as V;
+    const selectedValue = item[valueField] as V;
 
     setSelectedItem(item);
 
-    onChange(val, item);
+    onChange(selectedValue, item);
 
     setOpen(false);
   };
 
-  /* =========================
+  /* =========================================================
      UI
-  ========================= */
+  ========================================================= */
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={setOpen}
+    >
       <PopoverTrigger asChild>
         <Button
+          type="button"
           variant="outline"
           role="combobox"
+          aria-expanded={open}
           disabled={disabled}
-          className="h-11 w-full justify-between gap-2 px-3 text-left rounded-sm"
+          className="h-11 w-full justify-between gap-2 rounded-sm px-3 text-left"
         >
           <span className="truncate text-sm font-medium">
-            {resolvedSelected ? truncateText(getLabelText(resolvedSelected), 60) : placeholder}
+            {resolvedSelected
+              ? truncateText(
+                  getLabelText(resolvedSelected),
+                  60
+                )
+              : placeholder}
           </span>
 
           <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
@@ -341,11 +515,18 @@ export const AsyncDropdown = <T extends Record<string, any>, V extends string | 
       >
         <Command>
           <div className="border-b p-2">
-            <CommandInput placeholder="Search..." value={search} onValueChange={setSearch} />
+            <CommandInput
+              placeholder="Search..."
+              value={search}
+              onValueChange={setSearch}
+            />
           </div>
 
           <CommandList>
-            <ScrollArea className="max-h-72" onScroll={handleScroll}>
+            <ScrollArea
+              className="max-h-72"
+              onScroll={handleScroll}
+            >
               {loading && options.length === 0 && (
                 <div className="flex items-center justify-center gap-2 p-4 text-sm text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -360,28 +541,43 @@ export const AsyncDropdown = <T extends Record<string, any>, V extends string | 
                 </div>
               )}
 
-              {!loading && options.length === 0 && !error && (
-                <div className="flex items-center gap-2 p-4 text-sm text-muted-foreground">
-                  <Info className="h-4 w-4" />
-                  No results found
-                </div>
-              )}
+              {!loading &&
+                options.length === 0 &&
+                !error && (
+                  <div className="flex items-center gap-2 p-4 text-sm text-muted-foreground">
+                    <Info className="h-4 w-4" />
+                    No results found
+                  </div>
+                )}
 
               <CommandGroup>
                 {options.map((item) => {
-                  const isSelected = item[valueField] === value;
+                  const itemId = item[valueField];
+
+                  const isSelected = sameId(
+                    itemId,
+                    value
+                  );
 
                   return (
                     <CommandItem
-                      key={String(item[valueField])}
+                      key={String(itemId)}
+                      value={`${getLabelText(item)} ${String(itemId)}`}
                       onSelect={() => handleSelect(item)}
                       className="flex items-start gap-3 py-3 text-sm"
                     >
                       <Check
-                        className={cn("mt-0.5 h-4 w-4", isSelected ? "opacity-100" : "opacity-0")}
+                        className={cn(
+                          "mt-0.5 h-4 w-4 shrink-0",
+                          isSelected
+                            ? "opacity-100"
+                            : "opacity-0"
+                        )}
                       />
 
-                      <span className="line-clamp-2 break-words">{getOptionNode(item)}</span>
+                      <span className="line-clamp-2 break-words">
+                        {getOptionNode(item)}
+                      </span>
                     </CommandItem>
                   );
                 })}

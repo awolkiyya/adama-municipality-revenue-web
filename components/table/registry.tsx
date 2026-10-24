@@ -206,7 +206,7 @@ export const CommentTableRegistry: Record<
       "description",
       "usersCount",
       "permissionsCount",
-      "created_at",
+      "createdAt",
     ],
 
     actions: {
@@ -266,7 +266,6 @@ export const CommentTableRegistry: Record<
     columns: [
       "avatar",
       "name",
-      "email",
       "phone",
       "role",
       "level",
@@ -280,7 +279,7 @@ export const CommentTableRegistry: Record<
         enabled: true,
         permission: {
           resource: "users",
-          action: "read",
+          action: "view",
         },
       },
 
@@ -335,7 +334,7 @@ export const CommentTableRegistry: Record<
   taxpayer: {
     columns: [
       "citizen_uid",
-      "full_name",
+      // "full_name",
       "national_id",
       "phone",
       "gender",
@@ -363,7 +362,7 @@ export const CommentTableRegistry: Record<
       },
 
       delete: {
-        enabled: true,
+        enabled: false,
         permission: {
           resource: "citizens",
           action: "delete",
@@ -375,7 +374,11 @@ export const CommentTableRegistry: Record<
       },
 
       toggleStatus: {
-        enabled: false,
+        enabled: true,
+        permission: {
+          resource: "citizens",
+          action: "update",
+        },
       },
 
       updatePassword: {
@@ -392,118 +395,9 @@ export const CommentTableRegistry: Record<
     },
   },
 
-  /*
-  |--------------------------------------------------------------------------
-  | REVENUE CATEGORIES
-  |--------------------------------------------------------------------------
-  */
 
-  revenueCategory: {
-    columns: [
-      "name",
-      "revenueDomain",
-      "codeRange",
-      "codesCount",
-      "status",
-      "created_at",
-    ],
 
-    actions: {
-      view: {
-        enabled: true,
-        permission: {
-          resource: "revenue_categorys",
-          action: "view",
-        },
-      },
-
-      edit: {
-        enabled: true,
-        permission: {
-          resource: "revenue_categorys",
-          action: "update",
-        },
-      },
-
-      delete: {
-        enabled: false,
-      },
-
-      create: {
-        enabled: false,
-      },
-
-      toggleStatus: {
-        enabled: false,
-      },
-
-      updatePassword: {
-        enabled: false,
-      },
-
-      updateRole: {
-        enabled: false,
-      },
-
-      updateHierarchy: {
-        enabled: false,
-      },
-    },
-  },
-
-  /*
-  |--------------------------------------------------------------------------
-  | REVENUE SERVICES
-  |--------------------------------------------------------------------------
-  */
-
-  revenueService: {
-    columns: [
-      "name",
-      "revenueCode",
-      "serviceType",
-      "collectionMode",
-      "requiredFields",
-      "status",
-      "createdAt",
-    ],
-
-    actions: {
-      view: {
-        enabled: true,
-        permission: {
-          resource: "revenue_services",
-          action: "read",
-        },
-      },
-
-      edit: {
-        enabled: true,
-        permission: {
-          resource: "revenue_services",
-          action: "update",
-        },
-      },
-
-      delete: {
-        enabled: false,
-      },
-
-      toggleStatus: {
-        enabled: false,
-      },
-
-      manageAccess: {
-        enabled: true,
-        permission: {
-          resource: "revenue_services",
-          action: "manage",
-        },
-      },
-    },
-  },
-
-  /*
+    /*
   |--------------------------------------------------------------------------
   | BASE FIELDS
   |--------------------------------------------------------------------------
@@ -634,6 +528,126 @@ export const CommentTableRegistry: Record<
       },
     },
   },
+
+
+
+
+
+
+
+  
+
+  /*
+  |--------------------------------------------------------------------------
+  | REVENUE CATEGORIES
+  |--------------------------------------------------------------------------
+  */
+
+  revenueCategory: {
+    columns: [
+      "name",
+      "revenueDomain",
+      "codeRange",
+      "codesCount",
+      "status",
+      "created_at",
+    ],
+
+    actions: {
+      view: {
+        enabled: true,
+        permission: {
+          resource: "revenue_categorys",
+          action: "view",
+        },
+      },
+
+      edit: {
+        enabled: true,
+        permission: {
+          resource: "revenue_categorys",
+          action: "update",
+        },
+      },
+
+      delete: {
+        enabled: false,
+      },
+
+      create: {
+        enabled: false,
+      },
+
+      toggleStatus: {
+        enabled: false,
+      },
+
+      updatePassword: {
+        enabled: false,
+      },
+
+      updateRole: {
+        enabled: false,
+      },
+
+      updateHierarchy: {
+        enabled: false,
+      },
+    },
+  },
+
+  /*
+  |--------------------------------------------------------------------------
+  | REVENUE SERVICES
+  |--------------------------------------------------------------------------
+  */
+
+  revenueService: {
+    columns: [
+      "name",
+      "revenueCode",
+      "serviceType",
+      "collectionMode",
+      "requiredFields",
+      "status",
+      "createdAt",
+    ],
+
+    actions: {
+      view: {
+        enabled: true,
+        permission: {
+          resource: "revenue_services",
+          action: "read",
+        },
+      },
+
+      edit: {
+        enabled: true,
+        permission: {
+          resource: "revenue_services",
+          action: "update",
+        },
+      },
+
+      delete: {
+        enabled: false,
+      },
+
+      toggleStatus: {
+        enabled: false,
+      },
+
+      manageAccess: {
+        enabled: true,
+        permission: {
+          resource: "revenue_services",
+          action: "manage",
+        },
+      },
+    },
+  },
+
 
   /*
   |--------------------------------------------------------------------------

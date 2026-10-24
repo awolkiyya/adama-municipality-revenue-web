@@ -1,3 +1,5 @@
+import { Role } from "./access-management";
+
 export type UserRole =
   
   | "SYSTEM_ADMIN"
@@ -223,4 +225,37 @@ export type UserFormData = {
   sector_id?: string;
 
   administrative_unit_id: string;
+};
+
+
+export type UserResponse = {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  label: string;
+  user_type: string;
+  avatar: string;
+  is_active: boolean;
+
+  role: Role | null;
+
+  lastLoginAt: string | null;
+
+  sector: {
+    id: string;
+    name: string;
+  } | null;
+
+  administrative_unit: {
+    id: string;
+    name: string;
+    level: AdministrativeLevel;
+    parent_id: string | null;
+  } | null;
+
+  is_phone_verified: boolean;
+  created_at: string;
+  updated_at: string;
+  email_verified_at: string | null;
 };

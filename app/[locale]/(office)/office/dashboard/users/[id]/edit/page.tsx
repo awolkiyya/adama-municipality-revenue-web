@@ -3,8 +3,9 @@
 import React from "react";
 import { useParams, useRouter } from "next/navigation";
 import { UserForm } from "@/components/forms/UserForm";
-import { useUser, useUpdateUser } from "@/hooks/useUser.hook";
+import { useUser, useUpdateUser } from "@/hooks/user/useUser.hook";
 import { AlertTriangle, RefreshCcw } from "lucide-react";
+import { UserFormData } from "@/types/user";
 
 export default function EditUserPage() {
   const { id } = useParams();
@@ -16,6 +17,20 @@ export default function EditUserPage() {
     isError,
     refetch,
   } = useUser(id as string);
+  
+  const formData: UserFormData | null = user
+    ? {
+        name: user.name,
+        email: user.email,
+        phone: user.phone ?? "",
+        avatar: user.avatar ?? "",
+        role_id: user.role?.id ?? null,
+        level: user.administrative_unit?.level ?? "WEREDA",
+        is_active: user.is_active,
+        sector_id: user.sector?.id ?? "",
+        administrative_unit_id: user.administrative_unit?.id ?? "",
+      }
+    : null;
 
   const { mutateAsync: updateUser, isPending } = useUpdateUser();
 
@@ -117,7 +132,7 @@ export default function EditUserPage() {
   // =========================
   // NO DATA FOUND STATE
   // =========================
-  if (!user) {
+  if (!formData) {
     return (
       <div className="max-w-4xl mx-auto p-6 space-y-4">
         <div className="text-xl font-semibold text-muted-foreground">
@@ -138,18 +153,20 @@ export default function EditUserPage() {
     );
   }
 
+  console.log("formData",formData);
+
   // =========================
   // MAIN UI
   // =========================
   return (
-    <div className="max-w-4xl mx-auto p-6">
+    <div className="max-w-4xl mx-auto md:p-6">
       <h1 className="text-2xl font-semibold mb-6">
         Update User
       </h1>
 
       <UserForm
         mode="edit"
-        initialData={user}
+        initialData={formData}
         onSubmit={handleSubmit}
         loading={isPending}
       />

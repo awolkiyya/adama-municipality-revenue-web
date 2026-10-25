@@ -1,6 +1,6 @@
 "use client";
 
-import { formatDate, formatEthiopianDate } from "@/lib/utils";
+import {  formatEthiopianDate } from "@/lib/utils";
 import { PaymentView } from "@/types/payment/ui";
 import { label, TERMINAL_FAILURES } from "@/utils/helpers";
 import {

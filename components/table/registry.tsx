@@ -203,7 +203,6 @@ export const CommentTableRegistry: Record<
   role: {
     columns: [
       "name",
-      "description",
       "usersCount",
       "permissionsCount",
       "createdAt",
@@ -496,7 +495,7 @@ export const CommentTableRegistry: Record<
       },
 
       delete: {
-        enabled: true,
+        enabled: false,
         permission: {
           resource: "measurement_units",
           action: "delete",
@@ -528,14 +527,6 @@ export const CommentTableRegistry: Record<
       },
     },
   },
-
-
-
-
-
-
-
-  
 
   /*
   |--------------------------------------------------------------------------
@@ -659,7 +650,6 @@ export const CommentTableRegistry: Record<
     columns: [
       "code",
       "name",
-      "serviceName",
       "revenueCode",
       "calculationType",
       "amount",
@@ -762,7 +752,7 @@ assessment: {
     },
 
     delete: {
-      enabled: true,
+      enabled: false,
       permission: {
         resource: "assessment",
         action: "delete",
@@ -811,7 +801,7 @@ assessment: {
 
 
     return: {
-      enabled: true,
+      enabled: false,
       permission: {
         resource: "assessment",
         action: "return",
@@ -819,7 +809,7 @@ assessment: {
     },
 
     approve: {
-      enabled: true,
+      enabled: false,
       permission: {
         resource: "assessment",
         action: "approve",

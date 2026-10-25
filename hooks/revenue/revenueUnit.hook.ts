@@ -20,35 +20,33 @@ import {
 import { measurementUnitService } from "@/services/revenue/revenueUnit.service";
 
 
+
 /* --------------------------------------
    Measurement Units
 -------------------------------------- */
 
 export const useMeasurementUnits = (
-  params?: MeasurementUnitFilters
+  params?: MeasurementUnitFilters,
 ) => {
+  const queryParams = {
+    page: params?.page,
+    per_page: params?.per_page,
+    search: params?.search,
+    is_active: params?.isActive,
+  };
 
   return useQuery<ListResponse<MeasurementUnit>>({
-
-    queryKey: [
-      "measurement-units",
-      params,
-    ],
+    queryKey: ["measurement-units", queryParams],
 
     queryFn: () =>
-      measurementUnitService.getUnits(
-        params
-      ),
+      measurementUnitService.getUnits(queryParams),
 
-    staleTime:
-      1000 * 60 * 5,
+    staleTime: 1000 * 60 * 5,
 
-    placeholderData:
-      (previousData) => previousData,
-
+    placeholderData: (previousData) => previousData,
   });
-
 };
+
 
 
 /* --------------------------------------

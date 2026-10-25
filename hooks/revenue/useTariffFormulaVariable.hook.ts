@@ -6,8 +6,6 @@ import {
   
   import {
     TariffFormulaVariable,
-    CreateTariffFormulaVariableRequest,
-    UpdateTariffFormulaVariableRequest,
     TariffFormulaVariableApiPayload,
   } from "@/types/revenue/tariff-formula-variable";
   

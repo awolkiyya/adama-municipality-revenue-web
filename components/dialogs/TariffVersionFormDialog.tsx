@@ -1,14 +1,15 @@
+
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
-    Sheet,
-    SheetContent,
-    SheetDescription,
-    SheetFooter,
-    SheetHeader,
-    SheetTitle,
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
 } from "@/components/ui/sheet";
 
 import { Input } from "@/components/ui/input";
@@ -18,13 +19,14 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 
 import {
-    AlertCircle,
-    AlertTriangle,
-    Loader2,
-    CalendarClock,
-    Layers,
-    CalendarRange,
-    Sparkles,
+  AlertCircle,
+  AlertTriangle,
+  Loader2,
+  CalendarClock,
+  Layers,
+  CalendarRange,
+  Sparkles,
+  X,
 } from "lucide-react";
 
 import { EthiopianDatePicker } from "../input/EthiopianDatePicker";
@@ -34,157 +36,183 @@ import { EthiopianDatePicker } from "../input/EthiopianDatePicker";
 // ============================================================================
 
 export interface TariffVersionFormValues {
-    year: string;
-    name: string;
-    description: string;
-    effective_from: string;
-    effective_to: string;
-    isActive: boolean;
+  year: string;
+  name: string;
+  description: string;
+  effective_from: string;
+  effective_to: string;
+  isActive: boolean;
 }
-
-// ============================================================================
-// INITIAL VALUES
-// ============================================================================
 
 export interface TariffVersionFormInitialValues {
-    year?: string;
-    name?: string;
-    description?: string;
-    effective_from?: string;
-    effective_to?: string;
-    isActive?: boolean;
+  year?: string;
+  name?: string;
+  description?: string;
+  effective_from?: string;
+  effective_to?: string;
+  isActive?: boolean;
 }
+
+type FormErrors = Partial<
+  Record<
+    | "year"
+    | "name"
+    | "effectiveFrom"
+    | "effectiveTo"
+    | "submit",
+    string
+  >
+>;
 
 // ============================================================================
 // DATE HELPERS
 // ============================================================================
 
 /**
- * Convert a YYYY-MM-DD string to a Date.
+ * Parse a Gregorian YYYY-MM-DD date into a local Date.
  *
- * EthiopianDatePicker works with Date objects while the form/API
- * boundary uses YYYY-MM-DD strings.
+ * ISO datetime strings are supported by extracting their date portion.
+ * Local construction avoids UTC timezone shifts.
  */
-function parseDate(
-    value: string
-): Date | undefined {
-    if (!value) {
-        return undefined;
-    }
+function parseDate(value?: string): Date | undefined {
+  if (!value) {
+    return undefined;
+  }
 
-    /**
-     * If the backend accidentally sends an ISO datetime such as:
-     *
-     * 2026-01-01T00:00:00.000Z
-     *
-     * normalize it to the date portion first.
-     */
-    const normalized =
-        value.length >= 10
-            ? value.substring(0, 10)
-            : value;
+  const normalized = value.substring(0, 10);
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(normalized);
 
-    const parsed = new Date(
-        `${normalized}T00:00:00`
-    );
+  if (!match) {
+    return undefined;
+  }
 
-    return Number.isNaN(
-        parsed.getTime()
-    )
-        ? undefined
-        : parsed;
+  const [, yearString, monthString, dayString] = match;
+
+  const year = Number(yearString);
+  const month = Number(monthString);
+  const day = Number(dayString);
+
+  const date = new Date(year, month - 1, day);
+
+  if (
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  ) {
+    return undefined;
+  }
+
+  return date;
 }
 
 /**
- * Convert a Date object into YYYY-MM-DD.
+ * Convert a local Date to Gregorian YYYY-MM-DD.
  *
- * IMPORTANT:
- * We intentionally do not use toISOString() here because that can
- * shift the calendar date depending on timezone.
+ * The API stores Gregorian dates even though the UI displays
+ * Ethiopian calendar dates.
  */
-function formatDateForForm(
-    date: Date | undefined
-): string {
-    if (!date) {
-        return "";
-    }
+function formatDateForForm(date?: Date): string {
+  if (!date || Number.isNaN(date.getTime())) {
+    return "";
+  }
 
-    const year =
-        date.getFullYear();
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
 
-    const month =
-        String(
-            date.getMonth() + 1
-        ).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
 
-    const day =
-        String(
-            date.getDate()
-        ).padStart(2, "0");
+/**
+ * Normalize API date values to YYYY-MM-DD.
+ */
+function normalizeDate(value?: string | null): string {
+  if (!value) {
+    return "";
+  }
 
-    return `${year}-${month}-${day}`;
+  return value.substring(0, 10);
 }
 
 // ============================================================================
 // DEFAULT VALUES
 // ============================================================================
 
-const nextYear =
-    new Date().getFullYear() + 1;
+function buildDefaultValues(
+  existingYears: number[],
+): TariffVersionFormValues {
+  const validYears = existingYears.filter(
+    (year) => Number.isInteger(year) && year >= 1900 && year <= 3000,
+  );
 
-const DEFAULT_VALUES:
-    TariffVersionFormValues = {
-    year: String(nextYear),
+  const latestYear =
+    validYears.length > 0
+      ? Math.max(...validYears)
+      : new Date().getFullYear();
 
-    name:
-        `${nextYear} Standard Tariff`,
+  const suggestedYear = Math.min(latestYear + 1, 3000);
 
+  return {
+    year: String(suggestedYear),
+    name: `${suggestedYear} Standard Tariff`,
     description: "",
-
-    effective_from:
-        `${nextYear}-01-01`,
-
+    effective_from: `${suggestedYear}-01-01`,
     effective_to: "",
-
     isActive: false,
-};
+  };
+}
+
+function buildInitialValues(
+  initialValues?: TariffVersionFormInitialValues,
+  existingYears: number[] = [],
+): TariffVersionFormValues {
+  if (!initialValues) {
+    return buildDefaultValues(existingYears);
+  }
+
+  const year = initialValues.year ?? "";
+
+  return {
+    year,
+    name: initialValues.name ?? (
+      year ? `${year} Standard Tariff` : ""
+    ),
+    description: initialValues.description ?? "",
+    effective_from: normalizeDate(initialValues.effective_from),
+    effective_to: normalizeDate(initialValues.effective_to),
+    isActive: initialValues.isActive ?? false,
+  };
+}
 
 // ============================================================================
 // PROPS
 // ============================================================================
 
 interface TariffVersionFormSheetProps {
-    open: boolean;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 
-    onOpenChange: (
-        open: boolean
-    ) => void;
+  /**
+   * Existing tariff years.
+   * The parent excludes the currently edited version.
+   */
+  existingYears: number[];
 
-    /**
-     * Existing tariff years.
-     *
-     * The parent excludes the currently edited version.
-     */
-    existingYears: number[];
+  /**
+   * Whether an active tariff version currently exists.
+   */
+  hasActiveVersion: boolean;
 
-    /**
-     * Whether another tariff version is currently active.
-     */
-    hasActiveVersion: boolean;
+  /**
+   * Existing values when editing.
+   * Undefined means CREATE mode.
+   */
+  initialValues?: TariffVersionFormInitialValues;
 
-    /**
-     * Existing values when editing a tariff version.
-     *
-     * Undefined = CREATE mode.
-     */
-    initialValues?: TariffVersionFormInitialValues;
-
-    /**
-     * Submit handler used by both create and update.
-     */
-    onSubmit: (
-        values: TariffVersionFormValues
-    ) => Promise<void>;
+  /**
+   * Shared create/update submit handler.
+   */
+  onSubmit: (values: TariffVersionFormValues) => Promise<void>;
 }
 
 // ============================================================================
@@ -192,19 +220,18 @@ interface TariffVersionFormSheetProps {
 // ============================================================================
 
 function SectionLabel({
-    icon: Icon,
-    children,
+  icon: Icon,
+  children,
 }: {
-    icon: typeof Layers;
-    children: React.ReactNode;
+  icon: typeof Layers;
+  children: React.ReactNode;
 }) {
-    return (
-        <div className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            <Icon className="h-3.5 w-3.5" />
-
-            {children}
-        </div>
-    );
+  return (
+    <div className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+      <Icon className="h-3.5 w-3.5" />
+      {children}
+    </div>
+  );
 }
 
 // ============================================================================
@@ -212,822 +239,590 @@ function SectionLabel({
 // ============================================================================
 
 export function TariffVersionFormSheet({
-    open,
-    onOpenChange,
-    existingYears,
-    hasActiveVersion,
-    initialValues,
-    onSubmit,
+  open,
+  onOpenChange,
+  existingYears,
+  hasActiveVersion,
+  initialValues,
+  onSubmit,
 }: TariffVersionFormSheetProps) {
-    // --------------------------------------------------------------------------
-    // Mode
-    // --------------------------------------------------------------------------
+  const isEditMode = Boolean(initialValues);
 
-    const isEditMode =
-        Boolean(initialValues);
+  const [values, setValues] = useState<TariffVersionFormValues>(() =>
+    buildInitialValues(initialValues, existingYears),
+  );
 
-    // --------------------------------------------------------------------------
-    // Form state
-    // --------------------------------------------------------------------------
+  const [errors, setErrors] = useState<FormErrors>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [nameTouched, setNameTouched] = useState(false);
 
-    const [values, setValues] =
-        useState<TariffVersionFormValues>(
-            DEFAULT_VALUES
-        );
+  /**
+   * Track each open/edit session so changing array references during
+   * ordinary renders cannot reset the user's unsaved form values.
+   */
+  const previousSessionRef = useRef<{
+    open: boolean;
+    initialValues: TariffVersionFormInitialValues | undefined;
+  }>({
+    open: false,
+    initialValues: undefined,
+  });
 
-    // --------------------------------------------------------------------------
-    // Validation
-    // --------------------------------------------------------------------------
+  // ==========================================================================
+  // SET FIELD
+  // ==========================================================================
 
-    const [errors, setErrors] =
-        useState<
-            Record<string, string>
-        >({});
+  const setField = <K extends keyof TariffVersionFormValues>(
+    key: K,
+    value: TariffVersionFormValues[K],
+  ) => {
+    setValues((previous) => ({
+      ...previous,
+      [key]: value,
+    }));
 
-    // --------------------------------------------------------------------------
-    // Submit state
-    // --------------------------------------------------------------------------
+    setErrors((previous) => {
+      const next = { ...previous };
+      delete next[key as keyof FormErrors];
+      delete next.submit;
 
-    const [isSubmitting, setIsSubmitting] =
-        useState(false);
+      if (key === "effective_from") {
+        delete next.effectiveTo;
+      }
 
-    // --------------------------------------------------------------------------
-    // Name state
-    // --------------------------------------------------------------------------
+      if (key === "year") {
+        delete next.year;
+      }
 
-    /**
-     * Once the user manually edits the name, automatic year-based
-     * name generation stops.
-     */
-    const [nameTouched, setNameTouched] =
-        useState(false);
+      return next;
+    });
+  };
 
-    // ==========================================================================
-    // SET FIELD
-    // ==========================================================================
+  // ==========================================================================
+  // RESET FORM
+  // ==========================================================================
 
-    const setField = <
-        K extends keyof TariffVersionFormValues
-    >(
-        key: K,
-        value: TariffVersionFormValues[K]
-    ) => {
-        setValues(
-            (previous) => ({
-                ...previous,
-                [key]: value,
-            })
-        );
+  const resetForm = () => {
+    setValues(buildInitialValues(undefined, existingYears));
+    setErrors({});
+    setNameTouched(false);
+  };
 
-        setErrors(
-            (previous) => ({
-                ...previous,
-                [key]: "",
-            })
-        );
-    };
+  // ==========================================================================
+  // INITIALIZE FORM
+  // ==========================================================================
 
-    // ==========================================================================
-    // RESET FORM
-    // ==========================================================================
-
-    const resetForm = () => {
-        setValues(
-            DEFAULT_VALUES
-        );
-
-        setErrors({});
-
-        setNameTouched(false);
-
-        setIsSubmitting(false);
-    };
-
-    // ==========================================================================
-    // CREATE DEFAULT VALUES
-    // ==========================================================================
-
-    const buildCreateValues =
-        (): TariffVersionFormValues => {
-            /**
-             * existingYears already excludes the currently edited
-             * version in the parent component.
-             *
-             * Therefore the maximum existing year can be used to
-             * determine the next suggested year.
-             */
-            const latestYear =
-                existingYears.length > 0
-                    ? Math.max(
-                          ...existingYears
-                      )
-                    : new Date().getFullYear();
-
-            const suggestedYear =
-                latestYear + 1;
-
-            return {
-                year:
-                    String(
-                        suggestedYear
-                    ),
-
-                name:
-                    `${suggestedYear} Standard Tariff`,
-
-                description: "",
-
-                effective_from:
-                    `${suggestedYear}-01-01`,
-
-                effective_to: "",
-
-                isActive: false,
-            };
-        };
-
-    // ==========================================================================
-    // INITIALIZE FORM
-    // ==========================================================================
-
-    useEffect(() => {
-        if (!open) {
-            return;
-        }
-
-        // ----------------------------------------------------------------------
-        // EDIT MODE
-        // ----------------------------------------------------------------------
-
-        if (initialValues) {
-            const year =
-                initialValues.year ??
-                "";
-
-            setValues({
-                year,
-
-                name:
-                    initialValues.name ??
-                    (year
-                        ? `${year} Standard Tariff`
-                        : ""),
-
-                description:
-                    initialValues.description ??
-                    "",
-
-                effective_from:
-                    initialValues.effective_from ??
-                    "",
-
-                effective_to:
-                    initialValues.effective_to ??
-                    "",
-
-                isActive:
-                    initialValues.isActive ??
-                    false,
-            });
-
-            /**
-             * Existing name is considered already touched so changing
-             * the year while editing does not unexpectedly replace it.
-             */
-            setNameTouched(
-                Boolean(
-                    initialValues.name
-                )
-            );
-
-            setErrors({});
-
-            return;
-        }
-
-        // ----------------------------------------------------------------------
-        // CREATE MODE
-        // ----------------------------------------------------------------------
-
-        setValues(
-            buildCreateValues()
-        );
-
-        setNameTouched(false);
-
-        setErrors({});
-    }, [
-        open,
+  useEffect(() => {
+    if (!open) {
+      previousSessionRef.current = {
+        open: false,
         initialValues,
-        existingYears,
-    ]);
+      };
 
-    // ==========================================================================
-    // YEAR CHANGE
-    // ==========================================================================
+      return;
+    }
 
-    const handleYearChange = (
-        year: string
-    ) => {
-        setField(
-            "year",
-            year
-        );
+    const previousSession = previousSessionRef.current;
 
-        /**
-         * Only automatically generate the effective-from date when
-         * the user has entered a complete 4-digit year.
-         */
-        if (
-            year.length === 4 &&
-            /^\d{4}$/.test(year)
-        ) {
-            setField(
-                "effective_from",
-                `${year}-01-01`
-            );
+    const isNewSession =
+      !previousSession.open ||
+      previousSession.initialValues !== initialValues;
 
-            if (!nameTouched) {
-                setField(
-                    "name",
-                    `${year} Standard Tariff`
-                );
-            }
-        }
+    previousSessionRef.current = {
+      open: true,
+      initialValues,
     };
 
-    // ==========================================================================
-    // VALIDATION
-    // ==========================================================================
-
-    const validate =
-        (): boolean => {
-            const next:
-                Record<
-                    string,
-                    string
-                > = {};
-
-            // ------------------------------------------------------------------
-            // Year
-            // ------------------------------------------------------------------
-
-            const numericYear =
-                Number(values.year);
-
-            if (
-                !values.year.trim()
-            ) {
-                next.year =
-                    "Year is required.";
-            } else if (
-                !Number.isInteger(
-                    numericYear
-                )
-            ) {
-                next.year =
-                    "Year must be a valid whole number.";
-            } else if (
-                numericYear < 1900 ||
-                numericYear > 3000
-            ) {
-                next.year =
-                    "Please enter a valid year.";
-            } else if (
-                existingYears.includes(
-                    numericYear
-                )
-            ) {
-                next.year =
-                    "A tariff version for this year already exists.";
-            }
-
-            // ------------------------------------------------------------------
-            // Name
-            // ------------------------------------------------------------------
-
-            if (
-                !values.name.trim()
-            ) {
-                next.name =
-                    "Name is required.";
-            }
-
-            // ------------------------------------------------------------------
-            // Effective from
-            // ------------------------------------------------------------------
-
-            if (
-                !values.effective_from
-            ) {
-                next.effectiveFrom =
-                    "Start date is required.";
-            }
-
-            // ------------------------------------------------------------------
-            // Effective to
-            // ------------------------------------------------------------------
-
-            if (
-                values.effective_to &&
-                values.effective_from &&
-                values.effective_to <
-                    values.effective_from
-            ) {
-                next.effectiveTo =
-                    "End date must be after the start date.";
-            }
-
-            // ------------------------------------------------------------------
-            // Store errors
-            // ------------------------------------------------------------------
-
-            setErrors(next);
-
-            return (
-                Object.keys(
-                    next
-                ).length === 0
-            );
-        };
-
-    // ==========================================================================
-    // SUBMIT
-    // ==========================================================================
-
-    const handleSubmit =
-        async () => {
-            if (!validate()) {
-                return;
-            }
-
-            setIsSubmitting(
-                true
-            );
-
-            try {
-                /**
-                 * Always submit a clean object.
-                 *
-                 * This ensures no undefined properties are accidentally
-                 * sent to the parent/API.
-                 */
-                await onSubmit({
-                    year:
-                        values.year.trim(),
-
-                    name:
-                        values.name.trim(),
-
-                    description:
-                        values.description.trim(),
-
-                    effective_from:
-                        values.effective_from,
-
-                    effective_to:
-                        values.effective_to,
-
-                    isActive:
-                        values.isActive,
-                });
-
-                /**
-                 * Parent closes the sheet after successful mutation.
-                 */
-                resetForm();
-            } finally {
-                setIsSubmitting(
-                    false
-                );
-            }
-        };
-
-    // ==========================================================================
-    // SHEET OPEN CHANGE
-    // ==========================================================================
-
-    const handleOpenChange = (
-        next: boolean
-    ) => {
-        /**
-         * Do not allow the sheet to close while a request is running.
-         */
-        if (
-            isSubmitting
-        ) {
-            return;
-        }
-
-        onOpenChange(next);
-
-        if (!next) {
-            resetForm();
-        }
-    };
-
-    // ==========================================================================
-    // RENDER
-    // ==========================================================================
-
-    return (
-        <Sheet
-            open={open}
-            onOpenChange={
-                handleOpenChange
-            }
-        >
-            <SheetContent
-                side="right"
-                className="flex w-full flex-col sm:max-w-xl p-4"
-            >
-                {/* ================================================================= */}
-                {/* Header */}
-                {/* ================================================================= */}
-
-                <SheetHeader className="border-b pb-4">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                        <CalendarClock className="h-5 w-5" />
-                    </div>
-
-                    <SheetTitle>
-                        {isEditMode
-                            ? "Edit Tariff Version"
-                            : "New Tariff Version"}
-                    </SheetTitle>
-
-                    <SheetDescription>
-                        {isEditMode
-                            ? "Update the yearly tariff version and its effective period."
-                            : "Create a new yearly pricing container. You can add individual pricing rules to it afterward."}
-                    </SheetDescription>
-                </SheetHeader>
-
-                {/* ================================================================= */}
-                {/* Scrollable Form */}
-                {/* ================================================================= */}
-
-                <div className="min-h-0 flex-1 overflow-y-auto px-1 py-4">
-                    <div className="space-y-6">
-                        {/* ========================================================= */}
-                        {/* Version Details */}
-                        {/* ========================================================= */}
-
-                        <div className="space-y-3">
-                            <SectionLabel icon={Layers}>
-                                Version details
-                            </SectionLabel>
-
-                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-[100px_1fr]">
-                                {/* ------------------------------------------------- */}
-                                {/* Year */}
-                                {/* ------------------------------------------------- */}
-
-                                <div className="space-y-1.5">
-                                    <Label htmlFor="year">
-                                        Year{" "}
-                                        <span className="text-red-500">
-                                            *
-                                        </span>
-                                    </Label>
-
-                                    <Input
-                                        id="year"
-                                        type="number"
-                                        value={
-                                            values.year
-                                        }
-                                        onChange={(
-                                            event
-                                        ) =>
-                                            handleYearChange(
-                                                event
-                                                    .target
-                                                    .value
-                                            )
-                                        }
-                                        placeholder="2027"
-                                        disabled={
-                                            isSubmitting
-                                        }
-                                        className={
-                                            errors.year
-                                                ? "border-red-400 focus-visible:ring-red-400"
-                                                : ""
-                                        }
-                                    />
-                                </div>
-
-                                {/* ------------------------------------------------- */}
-                                {/* Name */}
-                                {/* ------------------------------------------------- */}
-
-                                <div className="space-y-1.5">
-                                    <Label htmlFor="name">
-                                        Name{" "}
-                                        <span className="text-red-500">
-                                            *
-                                        </span>
-                                    </Label>
-
-                                    <Input
-                                        id="name"
-                                        value={
-                                            values.name
-                                        }
-                                        onChange={(
-                                            event
-                                        ) => {
-                                            setNameTouched(
-                                                true
-                                            );
-
-                                            setField(
-                                                "name",
-                                                event
-                                                    .target
-                                                    .value
-                                            );
-                                        }}
-                                        placeholder={`${values.year || nextYear} Standard Tariff`}
-                                        disabled={
-                                            isSubmitting
-                                        }
-                                        className={
-                                            errors.name
-                                                ? "border-red-400 focus-visible:ring-red-400"
-                                                : ""
-                                        }
-                                    />
-                                </div>
-                            </div>
-
-                            {/* ----------------------------------------------------- */}
-                            {/* Year / Name Errors */}
-                            {/* ----------------------------------------------------- */}
-
-                            {(errors.year ||
-                                errors.name) && (
-                                <div className="space-y-1">
-                                    {errors.year && (
-                                        <p className="flex items-center gap-1 text-xs text-red-500">
-                                            <AlertCircle className="h-3 w-3" />
-
-                                            {
-                                                errors.year
-                                            }
-                                        </p>
-                                    )}
-
-                                    {errors.name && (
-                                        <p className="flex items-center gap-1 text-xs text-red-500">
-                                            <AlertCircle className="h-3 w-3" />
-
-                                            {
-                                                errors.name
-                                            }
-                                        </p>
-                                    )}
-                                </div>
-                            )}
-
-                            {/* ----------------------------------------------------- */}
-                            {/* Description */}
-                            {/* ----------------------------------------------------- */}
-
-                            <div className="space-y-1.5">
-                                <Label htmlFor="description">
-                                    Description{" "}
-                                    <span className="text-muted-foreground">
-                                        (optional)
-                                    </span>
-                                </Label>
-
-                                <Textarea
-                                    id="description"
-                                    value={
-                                        values.description
-                                    }
-                                    onChange={(
-                                        event
-                                    ) =>
-                                        setField(
-                                            "description",
-                                            event
-                                                .target
-                                                .value
-                                        )
-                                    }
-                                    placeholder="Internal note about what changed in this version…"
-                                    rows={3}
-                                    disabled={
-                                        isSubmitting
-                                    }
-                                    className="resize-none"
-                                />
-                            </div>
-                        </div>
-
-                        {/* ========================================================= */}
-                        {/* Effective Period */}
-                        {/* ========================================================= */}
-
-                        <div className="space-y-3">
-                            <SectionLabel icon={CalendarRange}>
-                                Effective period
-                            </SectionLabel>
-
-                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                                {/* ------------------------------------------------- */}
-                                {/* Effective From */}
-                                {/* ------------------------------------------------- */}
-
-                                <div className="space-y-1.5">
-                                    <Label htmlFor="effectiveFrom">
-                                        Effective From{" "}
-                                        <span className="text-red-500">
-                                            *
-                                        </span>
-                                    </Label>
-
-                                    <EthiopianDatePicker
-                                        value={parseDate(
-                                            values.effective_from
-                                        )}
-                                        onChange={(
-                                            date: Date
-                                        ) =>
-                                            setField(
-                                                "effective_from",
-                                                formatDateForForm(
-                                                    date
-                                                )
-                                            )
-                                        }
-                                    />
-
-                                    {errors.effectiveFrom && (
-                                        <p className="flex items-center gap-1 text-xs text-red-500">
-                                            <AlertCircle className="h-3 w-3" />
-
-                                            {
-                                                errors.effectiveFrom
-                                            }
-                                        </p>
-                                    )}
-                                </div>
-
-                                {/* ------------------------------------------------- */}
-                                {/* Effective To */}
-                                {/* ------------------------------------------------- */}
-
-                                <div className="space-y-1.5">
-                                    <Label htmlFor="effectiveTo">
-                                        Effective To
-                                    </Label>
-
-                                    <EthiopianDatePicker
-                                        value={parseDate(
-                                            values.effective_to
-                                        )}
-                                        onChange={(
-                                            date: Date
-                                        ) =>
-                                            setField(
-                                                "effective_to",
-                                                formatDateForForm(
-                                                    date
-                                                )
-                                            )
-                                        }
-                                    />
-
-                                    {errors.effectiveTo ? (
-                                        <p className="flex items-center gap-1 text-xs text-red-500">
-                                            <AlertCircle className="h-3 w-3" />
-
-                                            {
-                                                errors.effectiveTo
-                                            }
-                                        </p>
-                                    ) : (
-                                        <p className="text-[11px] text-muted-foreground">
-                                            Leave blank for an open-ended version
-                                        </p>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* ========================================================= */}
-                        {/* Status */}
-                        {/* ========================================================= */}
-
-                        <div className="space-y-3">
-                            <SectionLabel icon={Sparkles}>
-                                Status
-                            </SectionLabel>
-
-                            <div className="flex items-center justify-between rounded-lg border bg-muted/30 px-4 py-3">
-                                <div className="min-w-0 pr-4">
-                                    <Label
-                                        htmlFor="isActive"
-                                        className="text-sm"
-                                    >
-                                        Set as active version
-                                    </Label>
-
-                                    <p className="text-xs text-muted-foreground">
-                                        New assessments will use this version&apos;s pricing
-                                    </p>
-                                </div>
-
-                                <Switch
-                                    id="isActive"
-                                    checked={
-                                        values.isActive
-                                    }
-                                    onCheckedChange={(
-                                        checked
-                                    ) =>
-                                        setField(
-                                            "isActive",
-                                            checked
-                                        )
-                                    }
-                                    disabled={
-                                        isSubmitting
-                                    }
-                                />
-                            </div>
-
-                            {/* ----------------------------------------------------- */}
-                            {/* Active warning */}
-                            {/* ----------------------------------------------------- */}
-
-                            {values.isActive &&
-                                hasActiveVersion && (
-                                    <div className="flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-2.5 dark:border-amber-900/40 dark:bg-amber-950/20">
-                                        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600" />
-
-                                        <p className="text-xs text-amber-800 dark:text-amber-300">
-                                            Another version is currently active. Activating this one will automatically deactivate it.
-                                        </p>
-                                    </div>
-                                )}
-                        </div>
-                    </div>
+    if (!isNewSession) {
+      return;
+    }
+
+    setValues(buildInitialValues(initialValues, existingYears));
+    setNameTouched(Boolean(initialValues?.name));
+    setErrors({});
+  }, [open, initialValues, existingYears]);
+
+  // ==========================================================================
+  // YEAR CHANGE
+  // ==========================================================================
+
+  const handleYearChange = (year: string) => {
+    setValues((previous) => {
+      const isFourDigitYear = /^\d{4}$/.test(year);
+
+      const shouldUpdateStartDate =
+        isFourDigitYear &&
+        previous.effective_from.endsWith("-01-01");
+
+      return {
+        ...previous,
+        year,
+        name:
+          !nameTouched && isFourDigitYear
+            ? `${year} Standard Tariff`
+            : previous.name,
+        effective_from: shouldUpdateStartDate
+          ? `${year}-01-01`
+          : previous.effective_from,
+      };
+    });
+
+    setErrors((previous) => {
+      const next = { ...previous };
+      delete next.year;
+      delete next.submit;
+      return next;
+    });
+  };
+
+  // ==========================================================================
+  // VALIDATION
+  // ==========================================================================
+
+  const validate = (): boolean => {
+    const next: FormErrors = {};
+
+    // Year
+
+    const trimmedYear = values.year.trim();
+    const numericYear = Number(trimmedYear);
+
+    if (!trimmedYear) {
+      next.year = "Year is required.";
+    } else if (!/^\d{4}$/.test(trimmedYear)) {
+      next.year = "Year must be a valid four-digit year.";
+    } else if (
+      !Number.isInteger(numericYear) ||
+      numericYear < 1900 ||
+      numericYear > 3000
+    ) {
+      next.year = "Please enter a valid year between 1900 and 3000.";
+    } else if (existingYears.includes(numericYear)) {
+      next.year = "A tariff version for this year already exists.";
+    }
+
+    // Name
+
+    if (!values.name.trim()) {
+      next.name = "Name is required.";
+    }
+
+    // Effective from
+
+    const startDate = parseDate(values.effective_from);
+
+    if (!values.effective_from) {
+      next.effectiveFrom = "Start date is required.";
+    } else if (!startDate) {
+      next.effectiveFrom = "Please select a valid start date.";
+    }
+
+    // Effective to
+
+    if (values.effective_to) {
+      const endDate = parseDate(values.effective_to);
+
+      if (!endDate) {
+        next.effectiveTo = "Please select a valid end date.";
+      } else if (
+        startDate &&
+        formatDateForForm(endDate) < formatDateForForm(startDate)
+      ) {
+        next.effectiveTo =
+          "End date must be on or after the start date.";
+      }
+    }
+
+    setErrors(next);
+
+    return Object.keys(next).length === 0;
+  };
+
+  // ==========================================================================
+  // SUBMIT
+  // ==========================================================================
+
+  const handleSubmit = async () => {
+    if (isSubmitting || !validate()) {
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    setErrors((previous) => {
+      const next = { ...previous };
+      delete next.submit;
+      return next;
+    });
+
+    try {
+      await onSubmit({
+        year: values.year.trim(),
+        name: values.name.trim(),
+        description: values.description.trim(),
+        effective_from: values.effective_from,
+        effective_to: values.effective_to,
+        isActive: values.isActive,
+      });
+
+      resetForm();
+    } catch (error) {
+      // Keep the sheet open and preserve the entered values.
+      setErrors((previous) => ({
+        ...previous,
+        submit:
+          error instanceof Error
+            ? error.message
+            : "Unable to save this tariff version. Please try again.",
+      }));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // ==========================================================================
+  // SHEET OPEN CHANGE
+  // ==========================================================================
+
+  const handleOpenChange = (next: boolean) => {
+    if (isSubmitting) {
+      return;
+    }
+
+    onOpenChange(next);
+
+    if (!next) {
+      resetForm();
+    }
+  };
+
+  // ==========================================================================
+  // RENDER
+  // ==========================================================================
+
+  return (
+    <Sheet open={open} onOpenChange={handleOpenChange}>
+      <SheetContent
+        side="right"
+        className="flex w-full flex-col p-4 sm:max-w-xl"
+      >
+        {/* Header */}
+
+        <SheetHeader className="border-b pb-4">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <CalendarClock className="h-5 w-5" />
+          </div>
+
+          <SheetTitle>
+            {isEditMode ? "Edit Tariff Version" : "New Tariff Version"}
+          </SheetTitle>
+
+          <SheetDescription>
+            {isEditMode
+              ? "Update the tariff version details and effective period."
+              : "Create a yearly tariff version. Add its pricing rules and formulas afterward."}
+          </SheetDescription>
+        </SheetHeader>
+
+        {/* Scrollable form */}
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-1 py-4">
+          <div className="space-y-6">
+            {/* Version details */}
+
+            <section className="space-y-3">
+              <SectionLabel icon={Layers}>
+                Version details
+              </SectionLabel>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-[100px_1fr]">
+                {/* Year */}
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="tariff-year">
+                    Year <span className="text-red-500">*</span>
+                  </Label>
+
+                  <Input
+                    id="tariff-year"
+                    type="number"
+                    min={1900}
+                    max={3000}
+                    step={1}
+                    value={values.year}
+                    onChange={(event) =>
+                      handleYearChange(event.target.value)
+                    }
+                    placeholder="2027"
+                    disabled={isSubmitting}
+                    aria-invalid={Boolean(errors.year)}
+                    aria-describedby={
+                      errors.year ? "tariff-year-error" : undefined
+                    }
+                    className={
+                      errors.year
+                        ? "border-red-400 focus-visible:ring-red-400"
+                        : ""
+                    }
+                  />
+
+                  {errors.year && (
+                    <p
+                      id="tariff-year-error"
+                      className="flex items-center gap-1 text-xs text-red-500"
+                    >
+                      <AlertCircle className="h-3 w-3 shrink-0" />
+                      {errors.year}
+                    </p>
+                  )}
                 </div>
 
-                {/* ================================================================= */}
-                {/* Footer */}
-                {/* ================================================================= */}
+                {/* Name */}
 
-                <SheetFooter className="border-t pt-4">
-                    {/* Cancel */}
-                    <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() =>
-                            handleOpenChange(
-                                false
-                            )
-                        }
-                        disabled={
-                            isSubmitting
-                        }
+                <div className="space-y-1.5">
+                  <Label htmlFor="tariff-name">
+                    Name <span className="text-red-500">*</span>
+                  </Label>
+
+                  <Input
+                    id="tariff-name"
+                    value={values.name}
+                    onChange={(event) => {
+                      setNameTouched(true);
+                      setField("name", event.target.value);
+                    }}
+                    placeholder={`${values.year || new Date().getFullYear() + 1} Standard Tariff`}
+                    disabled={isSubmitting}
+                    aria-invalid={Boolean(errors.name)}
+                    aria-describedby={
+                      errors.name ? "tariff-name-error" : undefined
+                    }
+                    className={
+                      errors.name
+                        ? "border-red-400 focus-visible:ring-red-400"
+                        : ""
+                    }
+                  />
+
+                  {errors.name && (
+                    <p
+                      id="tariff-name-error"
+                      className="flex items-center gap-1 text-xs text-red-500"
                     >
-                        Cancel
-                    </Button>
+                      <AlertCircle className="h-3 w-3 shrink-0" />
+                      {errors.name}
+                    </p>
+                  )}
+                </div>
+              </div>
 
-                    {/* Submit */}
-                    <Button
+              {/* Description */}
+
+              <div className="space-y-1.5">
+                <Label htmlFor="tariff-description">
+                  Description{" "}
+                  <span className="text-muted-foreground">
+                    (optional)
+                  </span>
+                </Label>
+
+                <Textarea
+                  id="tariff-description"
+                  value={values.description}
+                  onChange={(event) =>
+                    setField("description", event.target.value)
+                  }
+                  placeholder="Internal note about this tariff version..."
+                  rows={3}
+                  disabled={isSubmitting}
+                  className="resize-none"
+                />
+              </div>
+            </section>
+
+            {/* Effective period */}
+
+            <section className="space-y-3">
+              <SectionLabel icon={CalendarRange}>
+                Effective period
+              </SectionLabel>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {/* Effective from */}
+
+                <div className="space-y-1.5">
+                  <Label>
+                    Effective From{" "}
+                    <span className="text-red-500">*</span>
+                  </Label>
+
+                  <EthiopianDatePicker
+                    value={parseDate(values.effective_from)}
+                    onChange={(date: Date) =>
+                      setField(
+                        "effective_from",
+                        formatDateForForm(date),
+                      )
+                    }
+                    placeholder="Select start date"
+                    disabled={isSubmitting}
+                    searchable
+                    yearMode="FULL"
+                    minYear={1900}
+                    maxYear={2200}
+                  />
+
+                  {errors.effectiveFrom && (
+                    <p className="flex items-center gap-1 text-xs text-red-500">
+                      <AlertCircle className="h-3 w-3 shrink-0" />
+                      {errors.effectiveFrom}
+                    </p>
+                  )}
+                </div>
+
+                {/* Effective to */}
+
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <Label>
+                      Effective To{" "}
+                      <span className="text-muted-foreground">
+                        (optional)
+                      </span>
+                    </Label>
+
+                    {values.effective_to && (
+                      <Button
                         type="button"
-                        onClick={
-                            handleSubmit
-                        }
-                        disabled={
-                            isSubmitting
-                        }
-                    >
-                        {isSubmitting ? (
-                            <>
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-xs text-muted-foreground"
+                        onClick={() => setField("effective_to", "")}
+                        disabled={isSubmitting}
+                      >
+                        <X className="mr-1 h-3.5 w-3.5" />
+                        Clear date
+                      </Button>
+                    )}
+                  </div>
 
-                                {isEditMode
-                                    ? "Updating..."
-                                    : "Creating..."}
-                            </>
-                        ) : (
-                            <>
-                                {isEditMode
-                                    ? "Update Version"
-                                    : "Create Version"}
-                            </>
-                        )}
-                    </Button>
-                </SheetFooter>
-            </SheetContent>
-        </Sheet>
-    );
+                  <EthiopianDatePicker
+                    value={parseDate(values.effective_to)}
+                    onChange={(date: Date) =>
+                      setField(
+                        "effective_to",
+                        formatDateForForm(date),
+                      )
+                    }
+                    placeholder="Select end date"
+                    disabled={isSubmitting}
+                    searchable
+                    yearMode="FULL"
+                    minYear={1900}
+                    maxYear={2200}
+                  />
+
+                  {errors.effectiveTo ? (
+                    <p className="flex items-center gap-1 text-xs text-red-500">
+                      <AlertCircle className="h-3 w-3 shrink-0" />
+                      {errors.effectiveTo}
+                    </p>
+                  ) : (
+                    <p className="text-[11px] text-muted-foreground">
+                      Leave blank for an open-ended version.
+                    </p>
+                  )}
+                </div>
+              </div>
+            </section>
+
+            {/* Status */}
+
+            <section className="space-y-3">
+              <SectionLabel icon={Sparkles}>
+                Status
+              </SectionLabel>
+
+              <div className="flex items-center justify-between rounded-lg border bg-muted/30 px-4 py-3">
+                <div className="min-w-0 pr-4">
+                  <Label
+                    htmlFor="tariff-is-active"
+                    className="text-sm"
+                  >
+                    Set as active version
+                  </Label>
+
+                  <p className="text-xs text-muted-foreground">
+                    New assessments may use this version's pricing once
+                    activation is accepted by the server.
+                  </p>
+                </div>
+
+                <Switch
+                  id="tariff-is-active"
+                  checked={values.isActive}
+                  onCheckedChange={(checked) =>
+                    setField("isActive", checked)
+                  }
+                  disabled={isSubmitting}
+                />
+              </div>
+
+              {values.isActive && hasActiveVersion && (
+                <div className="flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-2.5 dark:border-amber-900/40 dark:bg-amber-950/20">
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600" />
+
+                  <p className="text-xs text-amber-800 dark:text-amber-300">
+                    Another tariff version is currently active. The server
+                    must validate activation and ensure only the permitted
+                    version remains active.
+                  </p>
+                </div>
+              )}
+            </section>
+
+            {/* Submission error */}
+
+            {errors.submit && (
+              <div
+                role="alert"
+                className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3.5 py-3 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/20 dark:text-red-300"
+              >
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                <p>{errors.submit}</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Footer */}
+
+        <SheetFooter className="border-t pt-4">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => handleOpenChange(false)}
+            disabled={isSubmitting}
+          >
+            Cancel
+          </Button>
+
+          <Button
+            type="button"
+            onClick={handleSubmit}
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                {isEditMode ? "Updating..." : "Creating..."}
+              </>
+            ) : (
+              isEditMode ? "Update Version" : "Create Version"
+            )}
+          </Button>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
+  );
 }

@@ -22,8 +22,6 @@ import {
   CommandItem,
 } from "@/components/ui/command";
 
-import { ScrollArea } from "@/components/ui/scroll-area";
-
 import {
   Check,
   ChevronsUpDown,
@@ -39,10 +37,7 @@ import { Button } from "@/components/ui/button";
    TYPES
 ========================================================= */
 
-interface AsyncDropdownProps<
-  T,
-  V extends string | number
-> {
+interface AsyncDropdownProps<T, V extends string | number> {
   value: V | null;
 
   onChange: (value: V, item: T) => void;
@@ -79,27 +74,17 @@ interface AsyncDropdownProps<
    HELPERS
 ========================================================= */
 
-const truncateText = (
-  text: string,
-  max = 60
-): string => {
+const truncateText = (text: string, max = 60): string => {
   if (!text) return "";
-
-  return text.length > max
-    ? `${text.slice(0, max)}...`
-    : text;
+  return text.length > max ? `${text.slice(0, max)}...` : text;
 };
 
 /**
  * Normalize IDs for comparisons.
- *
- * This supports API IDs returned as either 4 or "4",
- * while still treating null and undefined as unselected.
+ * Supports API IDs returned as either 4 or "4",
+ * while treating null and undefined as unselected.
  */
-const sameId = (
-  first: unknown,
-  second: unknown
-): boolean => {
+const sameId = (first: unknown, second: unknown): boolean => {
   if (first == null || second == null) {
     return first == null && second == null;
   }
@@ -137,16 +122,26 @@ export const AsyncDropdown = <
   const [error, setError] = useState<string | null>(null);
 
   /**
-   * Store the selected object for cases where the selected item
-   * is fetched individually or is not present in the current page.
-   *
-   * The controlled value remains the source of truth.
+   * Selected object for cases where the selected item is fetched
+   * individually or isn't in the current page.
+   * The controlled `value` remains the source of truth.
    */
-  const [selectedItem, setSelectedItem] =
-    useState<T | null>(null);
+  const [selectedItem, setSelectedItem] = useState<T | null>(null);
 
   const mountedRef = useRef(false);
   const requestIdRef = useRef(0);
+
+  /**
+   * Refs mirror the latest value/selectedItem so that loadOptions
+   * can read them WITHOUT depending on them. Otherwise every
+   * selection changes loadOptions' identity, which re-triggers the
+   * fetch effect and causes an unwanted refetch.
+   */
+  const valueRef = useRef<V | null>(value);
+  const selectedItemRef = useRef<T | null>(selectedItem);
+
+  valueRef.current = value;
+  selectedItemRef.current = selectedItem;
 
   /* =========================================================
      LABEL HELPERS
@@ -161,10 +156,7 @@ export const AsyncDropdown = <
       if (displayField) {
         const raw = item[displayField];
 
-        if (
-          typeof raw === "string" ||
-          typeof raw === "number"
-        ) {
+        if (typeof raw === "string" || typeof raw === "number") {
           return String(raw);
         }
       }
@@ -189,12 +181,6 @@ export const AsyncDropdown = <
      RESOLVE CURRENT SELECTION
   ========================================================= */
 
-  /**
-   * Always prefer an option matching the current controlled value.
-   *
-   * This fixes the edit-form case where value is already 4 but
-   * the dropdown options arrive asynchronously.
-   */
   const resolvedSelected = useMemo(() => {
     if (value == null) {
       return null;
@@ -208,10 +194,7 @@ export const AsyncDropdown = <
       return matchingOption;
     }
 
-    if (
-      selectedItem &&
-      sameId(selectedItem[valueField], value)
-    ) {
+    if (selectedItem && sameId(selectedItem[valueField], value)) {
       return selectedItem;
     }
 
@@ -223,11 +206,7 @@ export const AsyncDropdown = <
   ========================================================= */
 
   const loadOptions = useCallback(
-    async (
-      pageNum: number,
-      searchText: string,
-      reset = false
-    ) => {
+    async (pageNum: number, searchText: string, reset = false) => {
       const requestId = ++requestIdRef.current;
 
       setLoading(true);
@@ -240,10 +219,7 @@ export const AsyncDropdown = <
           pageSize,
         });
 
-        if (
-          !mountedRef.current ||
-          requestId !== requestIdRef.current
-        ) {
+        if (!mountedRef.current || requestId !== requestIdRef.current) {
           return;
         }
 
@@ -253,34 +229,29 @@ export const AsyncDropdown = <
 
         setOptions((previous) => {
           if (reset) {
+            const currentValue = valueRef.current;
+            const currentSelectedItem = selectedItemRef.current;
+
             /**
-             * Keep the selected item visible if it isn't
-             * included in the current search/page response.
+             * Keep the selected item visible if it isn't included
+             * in the current search/page response.
              */
             const currentSelected =
               previous.find((item) =>
-                sameId(item[valueField], value)
+                sameId(item[valueField], currentValue)
               ) ??
-              (
-                selectedItem &&
-                sameId(selectedItem[valueField], value)
-                  ? selectedItem
-                  : null
-              );
+              (currentSelectedItem &&
+              sameId(currentSelectedItem[valueField], currentValue)
+                ? currentSelectedItem
+                : null);
 
             if (
               currentSelected &&
               !incomingOptions.some((item) =>
-                sameId(
-                  item[valueField],
-                  currentSelected[valueField]
-                )
+                sameId(item[valueField], currentSelected[valueField])
               )
             ) {
-              return [
-                currentSelected,
-                ...incomingOptions,
-              ];
+              return [currentSelected, ...incomingOptions];
             }
 
             return incomingOptions;
@@ -290,10 +261,7 @@ export const AsyncDropdown = <
 
           for (const item of incomingOptions) {
             const exists = merged.some((existing) =>
-              sameId(
-                existing[valueField],
-                item[valueField]
-              )
+              sameId(existing[valueField], item[valueField])
             );
 
             if (!exists) {
@@ -307,55 +275,28 @@ export const AsyncDropdown = <
         setPage(pageNum);
         setTotal(result.total ?? null);
       } catch (err) {
-        if (
-          !mountedRef.current ||
-          requestId !== requestIdRef.current
-        ) {
+        if (!mountedRef.current || requestId !== requestIdRef.current) {
           return;
         }
 
-        console.error(
-          "AsyncDropdown: failed to load options",
-          err
-        );
-
+        console.error("AsyncDropdown: failed to load options", err);
         setError("Failed to load data");
       } finally {
-        if (
-          mountedRef.current &&
-          requestId === requestIdRef.current
-        ) {
+        if (mountedRef.current && requestId === requestIdRef.current) {
           setLoading(false);
         }
       }
     },
-    [
-      fetchData,
-      pageSize,
-      selectedItem,
-      value,
-      valueField,
-    ]
+    [fetchData, pageSize, valueField]
   );
 
   /* =========================================================
-     INITIAL LOAD + SEARCH
+     MOUNT TRACKING
   ========================================================= */
 
   useEffect(() => {
     mountedRef.current = true;
 
-    const timer = setTimeout(() => {
-      void loadOptions(1, search, true);
-    }, debounceTime);
-
-    return () => {
-      clearTimeout(timer);
-      requestIdRef.current += 1;
-    };
-  }, [search, loadOptions, debounceTime]);
-
-  useEffect(() => {
     return () => {
       mountedRef.current = false;
       requestIdRef.current += 1;
@@ -363,13 +304,23 @@ export const AsyncDropdown = <
   }, []);
 
   /* =========================================================
+     INITIAL LOAD + SEARCH
+  ========================================================= */
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      void loadOptions(1, search, true);
+    }, debounceTime);
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [search, loadOptions, debounceTime]);
+
+  /* =========================================================
      SYNCHRONIZE CONTROLLED VALUE
   ========================================================= */
 
-  /**
-   * Clear stale selected objects when the parent clears the value
-   * or selects a different ID.
-   */
   useEffect(() => {
     if (value == null) {
       setSelectedItem(null);
@@ -377,10 +328,7 @@ export const AsyncDropdown = <
     }
 
     setSelectedItem((previous) => {
-      if (
-        previous &&
-        !sameId(previous[valueField], value)
-      ) {
+      if (previous && !sameId(previous[valueField], value)) {
         return null;
       }
 
@@ -411,10 +359,7 @@ export const AsyncDropdown = <
 
         setOptions((previous) => {
           const exists = previous.some((option) =>
-            sameId(
-              option[valueField],
-              item[valueField]
-            )
+            sameId(option[valueField], item[valueField])
           );
 
           if (exists) {
@@ -444,9 +389,7 @@ export const AsyncDropdown = <
      INFINITE SCROLL
   ========================================================= */
 
-  const handleScroll = (
-    event: React.UIEvent<HTMLDivElement>
-  ) => {
+  const handleScroll = (event: React.UIEvent<HTMLDivElement>) => {
     const element = event.currentTarget;
 
     const reachedBottom =
@@ -464,6 +407,19 @@ export const AsyncDropdown = <
   };
 
   /* =========================================================
+     OPEN / CLOSE
+  ========================================================= */
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    setOpen(nextOpen);
+
+    // Reset the search when closing so the next open starts fresh.
+    if (!nextOpen && search) {
+      setSearch("");
+    }
+  };
+
+  /* =========================================================
      SELECT
   ========================================================= */
 
@@ -471,10 +427,8 @@ export const AsyncDropdown = <
     const selectedValue = item[valueField] as V;
 
     setSelectedItem(item);
-
     onChange(selectedValue, item);
-
-    setOpen(false);
+    handleOpenChange(false);
   };
 
   /* =========================================================
@@ -484,7 +438,10 @@ export const AsyncDropdown = <
   return (
     <Popover
       open={open}
-      onOpenChange={setOpen}
+      onOpenChange={handleOpenChange}
+      // Required when rendered inside a Sheet/Dialog: lets the
+      // popover manage its own scroll and pointer events.
+      modal
     >
       <PopoverTrigger asChild>
         <Button
@@ -497,10 +454,7 @@ export const AsyncDropdown = <
         >
           <span className="truncate text-sm font-medium">
             {resolvedSelected
-              ? truncateText(
-                  getLabelText(resolvedSelected),
-                  60
-                )
+              ? truncateText(getLabelText(resolvedSelected), 60)
               : placeholder}
           </span>
 
@@ -512,84 +466,78 @@ export const AsyncDropdown = <
         align="start"
         sideOffset={6}
         className="w-[var(--radix-popover-trigger-width)] min-w-[280px] p-0"
+        // Safety net: keep wheel/touch events away from the
+        // Sheet's scroll lock (react-remove-scroll).
+        onWheel={(event) => event.stopPropagation()}
+        onTouchMove={(event) => event.stopPropagation()}
       >
-        <Command>
-          <div className="border-b p-2">
-            <CommandInput
-              placeholder="Search..."
-              value={search}
-              onValueChange={setSearch}
-            />
-          </div>
+        {/* shouldFilter={false}: search is handled by the server */}
+        <Command shouldFilter={false}>
+          <CommandInput
+            placeholder="Search..."
+            value={search}
+            onValueChange={setSearch}
+          />
 
-          <CommandList>
-            <ScrollArea
-              className="max-h-72"
-              onScroll={handleScroll}
-            >
-              {loading && options.length === 0 && (
-                <div className="flex items-center justify-center gap-2 p-4 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Loading...
-                </div>
-              )}
+          {/* CommandList itself is the scroll container */}
+          <CommandList
+            className="max-h-72 overflow-y-auto overscroll-contain"
+            onScroll={handleScroll}
+          >
+            {loading && options.length === 0 && (
+              <div className="flex items-center justify-center gap-2 p-4 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading...
+              </div>
+            )}
 
-              {error && (
-                <div className="flex items-center gap-2 p-4 text-sm text-red-500">
-                  <AlertCircle className="h-4 w-4" />
-                  {error}
-                </div>
-              )}
+            {error && (
+              <div className="flex items-center gap-2 p-4 text-sm text-red-500">
+                <AlertCircle className="h-4 w-4" />
+                {error}
+              </div>
+            )}
 
-              {!loading &&
-                options.length === 0 &&
-                !error && (
-                  <div className="flex items-center gap-2 p-4 text-sm text-muted-foreground">
-                    <Info className="h-4 w-4" />
-                    No results found
-                  </div>
-                )}
+            {!loading && options.length === 0 && !error && (
+              <div className="flex items-center gap-2 p-4 text-sm text-muted-foreground">
+                <Info className="h-4 w-4" />
+                No results found
+              </div>
+            )}
 
-              <CommandGroup>
-                {options.map((item) => {
-                  const itemId = item[valueField];
+            <CommandGroup>
+              {options.map((item) => {
+                const itemId = item[valueField];
+                const isSelected = sameId(itemId, value);
 
-                  const isSelected = sameId(
-                    itemId,
-                    value
-                  );
+                return (
+                  <CommandItem
+                    key={String(itemId)}
+                    value={`${getLabelText(item)} ${String(itemId)}`}
+                    onSelect={() => handleSelect(item)}
+                    className="flex items-start gap-3 py-3 text-sm"
+                  >
+                    <Check
+                      className={cn(
+                        "mt-0.5 h-4 w-4 shrink-0",
+                        isSelected ? "opacity-100" : "opacity-0"
+                      )}
+                    />
 
-                  return (
-                    <CommandItem
-                      key={String(itemId)}
-                      value={`${getLabelText(item)} ${String(itemId)}`}
-                      onSelect={() => handleSelect(item)}
-                      className="flex items-start gap-3 py-3 text-sm"
-                    >
-                      <Check
-                        className={cn(
-                          "mt-0.5 h-4 w-4 shrink-0",
-                          isSelected
-                            ? "opacity-100"
-                            : "opacity-0"
-                        )}
-                      />
+                    <span className="line-clamp-2 break-words">
+                      {getOptionNode(item)}
+                    </span>
+                  </CommandItem>
+                );
+              })}
+            </CommandGroup>
 
-                      <span className="line-clamp-2 break-words">
-                        {getOptionNode(item)}
-                      </span>
-                    </CommandItem>
-                  );
-                })}
-              </CommandGroup>
-
-              {loading && options.length > 0 && (
-                <div className="flex items-center justify-center gap-2 p-3 text-xs text-muted-foreground">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  Loading more...
-                </div>
-              )}
-            </ScrollArea>
+            {loading && options.length > 0 && (
+              <div className="flex items-center justify-center gap-2 p-3 text-xs text-muted-foreground">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Loading more...
+              </div>
+            )}
           </CommandList>
         </Command>
       </PopoverContent>

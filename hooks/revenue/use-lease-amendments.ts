@@ -39,20 +39,6 @@ function isRecord(value: unknown): value is ApiRecord {
   );
 }
 
-function getErrorResponse(error: unknown): ApiRecord | null {
-  if (!isRecord(error)) {
-    return null;
-  }
-
-  const response = error.response;
-
-  if (!isRecord(response) || !isRecord(response.data)) {
-    return null;
-  }
-
-  return response.data;
-}
-
 function getErrorText(value: unknown): string[] {
   if (typeof value === "string") {
     const trimmed = value.trim();

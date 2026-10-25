@@ -1121,4 +1121,227 @@ PAYMENT_SCHEDULE_RULES_VIEW_HISTORY: {
   action: "view_history",
 },
 
+
+
+  /*
+  |--------------------------------------------------------------------------
+  | Bank Accounts
+  |--------------------------------------------------------------------------
+  */
+
+  BANK_ACCOUNTS_VIEW: {
+    resource: "bank_accounts",
+    action: "view",
+  },
+
+  BANK_ACCOUNTS_CREATE: {
+    resource: "bank_accounts",
+    action: "create",
+  },
+
+  BANK_ACCOUNTS_UPDATE: {
+    resource: "bank_accounts",
+    action: "update",
+  },
+
+  BANK_ACCOUNTS_ACTIVATE: {
+    resource: "bank_accounts",
+    action: "activate",
+  },
+
+  BANK_ACCOUNTS_DEACTIVATE: {
+    resource: "bank_accounts",
+    action: "deactivate",
+  },
+
+  BANK_ACCOUNTS_VIEW_HISTORY: {
+    resource: "bank_accounts",
+    action: "view_history",
+  },
+
+  /*
+  |--------------------------------------------------------------------------
+  | Payment Providers
+  |--------------------------------------------------------------------------
+  */
+
+  PAYMENT_PROVIDERS_VIEW: {
+    resource: "payment_providers",
+    action: "view",
+  },
+
+  PAYMENT_PROVIDERS_CREATE: {
+    resource: "payment_providers",
+    action: "create",
+  },
+
+  PAYMENT_PROVIDERS_UPDATE: {
+    resource: "payment_providers",
+    action: "update",
+  },
+
+  PAYMENT_PROVIDERS_ACTIVATE: {
+    resource: "payment_providers",
+    action: "activate",
+  },
+
+  PAYMENT_PROVIDERS_DEACTIVATE: {
+    resource: "payment_providers",
+    action: "deactivate",
+  },
+
+  PAYMENT_PROVIDERS_VIEW_HISTORY: {
+    resource: "payment_providers",
+    action: "view_history",
+  },
+
+  /*
+  |--------------------------------------------------------------------------
+  | Lease Amendments
+  |--------------------------------------------------------------------------
+  */
+
+  LEASE_AMENDMENTS_VIEW: {
+    resource: "lease_amendments",
+    action: "view",
+  },
+
+  LEASE_AMENDMENTS_CREATE: {
+    resource: "lease_amendments",
+    action: "create",
+  },
+
+  LEASE_AMENDMENTS_UPDATE: {
+    resource: "lease_amendments",
+    action: "update",
+  },
+
+  LEASE_AMENDMENTS_SUBMIT: {
+    resource: "lease_amendments",
+    action: "submit",
+  },
+
+  LEASE_AMENDMENTS_APPROVE: {
+    resource: "lease_amendments",
+    action: "approve",
+  },
+
+  LEASE_AMENDMENTS_REJECT: {
+    resource: "lease_amendments",
+    action: "reject",
+  },
+
+  LEASE_AMENDMENTS_APPLY: {
+    resource: "lease_amendments",
+    action: "apply",
+  },
+
+  LEASE_AMENDMENTS_CANCEL: {
+    resource: "lease_amendments",
+    action: "cancel",
+  },
+
+  LEASE_AMENDMENTS_VIEW_HISTORY: {
+    resource: "lease_amendments",
+    action: "view_history",
+  },
+
+  /*
+  |--------------------------------------------------------------------------
+  | Field Collection
+  |--------------------------------------------------------------------------
+  */
+
+  FIELD_COLLECTION_VIEW: {
+    resource: "field_collection",
+    action: "view",
+  },
+
+  FIELD_COLLECTION_CREATE: {
+    resource: "field_collection",
+    action: "create",
+  },
+
+  FIELD_COLLECTION_SUBMIT: {
+    resource: "field_collection",
+    action: "submit",
+  },
+
+  FIELD_COLLECTION_VIEW_HISTORY: {
+    resource: "field_collection",
+    action: "view_history",
+  },
+
+  /*
+  |--------------------------------------------------------------------------
+  | Cash Reconciliation
+  |--------------------------------------------------------------------------
+  */
+
+  CASH_RECONCILIATIONS_VIEW: {
+    resource: "cash_reconciliations",
+    action: "view",
+  },
+
+  CASH_RECONCILIATIONS_CREATE: {
+    resource: "cash_reconciliations",
+    action: "create",
+  },
+
+  CASH_RECONCILIATIONS_SUBMIT: {
+    resource: "cash_reconciliations",
+    action: "submit",
+  },
+
+  CASH_RECONCILIATIONS_REVIEW: {
+    resource: "cash_reconciliations",
+    action: "review",
+  },
+
+  CASH_RECONCILIATIONS_RECONCILE: {
+    resource: "cash_reconciliations",
+    action: "reconcile",
+  },
+
+  CASH_RECONCILIATIONS_RETURN: {
+    resource: "cash_reconciliations",
+    action: "return",
+  },
+
+  CASH_RECONCILIATIONS_VIEW_HISTORY: {
+    resource: "cash_reconciliations",
+    action: "view_history",
+  },
+
+  /*
+  |--------------------------------------------------------------------------
+  | Mobile App Management
+  |--------------------------------------------------------------------------
+  */
+
+  MOBILE_APP_RELEASES_VIEW: {
+    resource: "mobile_app_releases",
+    action: "view",
+  },
+
+  MOBILE_APP_RELEASES_CREATE: {
+    resource: "mobile_app_releases",
+    action: "create",
+  },
+
+  MOBILE_APP_RELEASES_UPDATE: {
+    resource: "mobile_app_releases",
+    action: "update",
+  },
+
+  MOBILE_APP_RELEASES_PUBLISH: {
+    resource: "mobile_app_releases",
+    action: "publish",
+  },
+
+  MOBILE_APP_RELEASES_DEACTIVATE: {
+    resource: "mobile_app_releases",
+    action: "deactivate",
+  },
+
 } satisfies Record<string, AppPermission>;

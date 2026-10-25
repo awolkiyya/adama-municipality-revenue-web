@@ -138,6 +138,9 @@ const normalizeFieldType = (
 /**
  * Convert an API RevenueServiceField into the
  * RevenueField structure used by AssessmentForm.
+ *
+ * This is only an adapter between API/domain shapes.
+ * Financial calculation remains backend-owned.
  */
 const mapRevenueServiceField = (
   field: ApiRevenueServiceField,
@@ -153,6 +156,15 @@ const mapRevenueServiceField = (
           dataType?: string;
           data_type?: string;
           type?: string;
+
+          inputSource?:
+            | "MANUAL"
+            | "AI"
+            | "MANUAL_OR_AI";
+          input_source?:
+            | "MANUAL"
+            | "AI"
+            | "MANUAL_OR_AI";
 
           options?: unknown;
 
@@ -209,6 +221,11 @@ const mapRevenueServiceField = (
     measurementUnit?.name ??
     undefined;
 
+  const inputSource =
+    baseField?.inputSource ??
+    baseField?.input_source ??
+    "MANUAL";
+
   const rawOptions =
     baseField?.options;
 
@@ -222,8 +239,7 @@ const mapRevenueServiceField = (
               string,
               unknown
             > =>
-              typeof option ===
-                "object" &&
+              typeof option === "object" &&
               option !== null,
           )
           .sort(
@@ -267,12 +283,11 @@ const mapRevenueServiceField = (
                   0,
               ),
 
-              isDefault:
-                Boolean(
-                  option.isDefault ??
-                    option.is_default ??
-                    false,
-                ),
+              isDefault: Boolean(
+                option.isDefault ??
+                  option.is_default ??
+                  false,
+              ),
             }),
           )
           .filter(
@@ -296,12 +311,15 @@ const mapRevenueServiceField = (
       field.isRequired,
     ),
 
+    baseField: {
+      inputSource,
+    },
+
     min: validationRules.min,
 
     max: validationRules.max,
 
-    ...(options &&
-    options.length > 0
+    ...(options && options.length > 0
       ? {
           options,
         }
@@ -331,54 +349,30 @@ const mapRevenueServiceField = (
 export const mapRevenueService = (
   service: ApiRevenueService,
 ): RevenueService => {
-  const revenueCode =
-    service.revenueCode;
+  const revenueCode = service.revenueCode;
 
   const serviceCode =
-    revenueCode?.code ??
-    service.id;
+    revenueCode?.code ?? service.id;
 
   const category =
-    revenueCode?.name ??
-    "Revenue Service";
+    revenueCode?.name ?? "Revenue Service";
 
-  const fields: RevenueField[] =
-    (service.fields ?? [])
-      .filter(
-        (field) =>
-          field.isActive !== false,
-      )
-      .sort(
-        (a, b) =>
-          Number(
-            a.sortOrder ?? 0,
-          ) -
-          Number(
-            b.sortOrder ?? 0,
-          ),
-      )
-      .map(
-        (field) =>
-          mapRevenueServiceField(
-            field,
-          ),
-      );
+  const fields: RevenueField[] = (service.fields ?? [])
+    .filter((field) => field.isActive !== false)
+    .sort(
+      (a, b) =>
+        Number(a.sortOrder ?? 0) -
+        Number(b.sortOrder ?? 0),
+    )
+    .map((field) => mapRevenueServiceField(field));
 
   return {
     id: service.id,
-
     code: serviceCode,
-
     category,
-
     name: service.name,
-
-    description:
-      service.description ?? "",
-
-    collectionMode:
-      service.collectionMode ?? "",
-
+    description: service.description ?? "",
+    collectionMode: service.collectionMode ?? "",
     fields,
   };
 };

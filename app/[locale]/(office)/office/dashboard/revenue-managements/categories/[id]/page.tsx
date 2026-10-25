@@ -273,7 +273,7 @@ export default function EditRevenueCategoryPage(){
 
                     <IconBadge
 
-                        className="p-3 text-xs bg-black/20 text-white gap-2 rounded-full"
+                        className="p-3 text-xs gap-2 rounded-full"
 
                         icon={
                             <Layers className="w-4 h-4"/>
@@ -309,10 +309,7 @@ export default function EditRevenueCategoryPage(){
 
 
 
-                overlayClassName="bg-gradient-to-r from-primary/95 via-primary/80 to-primary/50"
-
-
-                className="text-white"
+                overlayClassName="bg-transparent"
 
             />
 

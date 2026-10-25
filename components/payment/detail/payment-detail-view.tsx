@@ -236,17 +236,7 @@ export function PaymentDetailView({
     ? tab
     : "overview";
 
-  async function confirmCash() {
-    if (!onCompleteCash || isCompleting) return;
-
-    try {
-      await onCompleteCash();
-      setDialogOpen(false);
-    } catch {
-      // The parent handles the error message.
-      // Keep the confirmation dialog open so the user can retry.
-    }
-  }
+ 
 
   const body = (
     <div className="space-y-6">

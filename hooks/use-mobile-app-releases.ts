@@ -14,7 +14,6 @@ import {
 
 import type {
   CreateMobileAppReleasePayload,
-  MobileAppRelease,
   MobileAppReleaseFilters,
   PublishMobileAppReleasePayload,
   UpdateMobileAppReleasePayload,

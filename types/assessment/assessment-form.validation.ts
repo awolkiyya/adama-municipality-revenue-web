@@ -1,7 +1,6 @@
 import type { RevenueField, RevenueService } from "@/types/revenue/assessment";
 
 import {
-  getFieldOptions,
   hasExistingFiles,
   isEmptyValue,
   isValidSelectValue,
@@ -333,7 +332,6 @@ export const isStepComplete = ({
   selectedServiceIds,
   selectedServices,
   serviceFieldValues,
-  notes,
   editMode,
 }: {
   stepKey:

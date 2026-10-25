@@ -1889,9 +1889,6 @@ export function CollectionForm({
                 onChange={
                   handleTaxpayerChange
                 }
-                taxpayers={
-                  taxpayers
-                }
               />
 
             </div>

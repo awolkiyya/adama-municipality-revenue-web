@@ -6,7 +6,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Banknote, IdCard, ShieldCheck, Sparkles } from "lucide-react";
 import { StatusBadge } from "../commen/StatusBadge";
-import { DotField } from "../design/DotField";
 import { FloatingChip } from "../commen/FloatingChip";
 import { GridLines } from "../design/GridLines";
 

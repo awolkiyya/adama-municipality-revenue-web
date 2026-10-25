@@ -8,7 +8,6 @@ import type {
   
   import type {
     FieldValue,
-    InitialAssessment,
     ServiceFieldValues,
   } from "./assessment-form.types";
   

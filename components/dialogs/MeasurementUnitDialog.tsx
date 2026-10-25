@@ -339,7 +339,7 @@ export function MeasurementUnitDialog({
           max-w-lg
           gap-0
           overflow-hidden
-          p-0
+          p-2
         "
       >
         {/* ==================================================

@@ -21,7 +21,6 @@ import {
     Smartphone,
     Target,
     Users,
-    Wallet,
   } from "lucide-react";
 import { PermissionAction } from "./user";
 

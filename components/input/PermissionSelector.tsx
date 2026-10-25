@@ -7,7 +7,6 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Accordion } from "@/components/ui/accordion";
-import { Skeleton } from "@/components/ui/skeleton";
 
 import type { PermissionSelectorProps } from "@/types/permission.types";
 import { PermissionModuleCard } from "../cards/PermissionModuleCard";

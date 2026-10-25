@@ -3,85 +3,166 @@
 import React, {
   useCallback,
   useEffect,
-  useMemo,
-  useRef,
   useState,
 } from "react";
 
+import { useRouter } from "next/navigation";
+
 import {
-  Hash,
-  Divide,
-  Percent,
-  Type as TypeIcon,
-  Calendar,
-  ToggleLeft,
-  ListChecks,
-  FileText,
-  Search,
   Plus,
   Pencil,
+  Eye,
   Trash2,
-  X,
-  ChevronLeft,
-  ChevronRight,
-  SlidersHorizontal,
   CircleCheck,
   CircleSlash,
   Ruler,
-  AlertTriangle,
   Inbox,
   Loader2,
+  Bot,
+  UserRound,
+  Workflow,
+  Check,
+  X,
+  FileText,
+  ListChecks,
 } from "lucide-react";
 
-import {
+import type {
   BaseField,
   BaseFieldDataType,
   BaseFieldFilters,
 } from "@/types/revenue/revenue-baseField";
 
-import { MeasurementUnit } from "@/types/revenue/revenue-unit";
-import { MeasurementUnitDropdown } from "@/components/input/MeasurmentUnitDropDown";
-
 import {
   useBaseFields,
-  useCreateBaseField,
-  useUpdateBaseField,
   useActivateBaseField,
   useDeactivateBaseField,
   useDeleteBaseField,
 } from "@/hooks/revenue/revenueBaseField.hook";
 
 import { toast } from "sonner";
-import FieldPanel, { DATA_TYPE_META, DATA_TYPES, FieldFormState } from "@/components/dialogs/FieldPanel";
+
+import {
+  DATA_TYPE_META,
+  DATA_TYPES,
+} from "@/components/revenue/base-fields/BaseFieldDataTypePicker";
+
 import { Banner } from "@/components/banner/topBanner";
 import { IconBadge } from "@/components/commen/icon-badge";
 import { FloatingParticles } from "@/components/design/FloatingParticles";
 import { Button } from "@/components/ui/button";
 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+
+import AppFilterBar from "@/components/app-filter-bar";
+import { DataTablePagination } from "@/components/table/data-pagination";
+import Can from "@/components/access/Can";
+
 // ============================================================
-// DATA TYPE PRESENTATION
+// TYPES
 // ============================================================
-// NOTE: "FILE" was added here. It must also exist on the
-// BaseFieldDataType union in "@/types/revenue/revenue-baseField",
-// and on whatever type-selection UI FieldPanel renders internally
-// (see the callout at the bottom of this file).
 
+type BaseFieldStatusFilter = "ALL" | "ACTIVE" | "INACTIVE";
 
+type BaseFieldDraftFilters = {
+  dataType: BaseFieldDataType | "ALL";
+  status: BaseFieldStatusFilter;
+};
 
+type BaseFieldInputSource =
+  | "MANUAL"
+  | "AI"
+  | "MANUAL_OR_AI";
 
 // ============================================================
-// ERROR HELPER
+// CONSTANTS
+// ============================================================
+
+const DEFAULT_PAGE = 1;
+const DEFAULT_PAGE_SIZE = 10;
+const SEARCH_DEBOUNCE_MS = 300;
+
+const BASE_FIELD_RESOURCE = "base_fields";
+
+const INITIAL_FILTERS: BaseFieldFilters = {
+  page: DEFAULT_PAGE,
+  per_page: DEFAULT_PAGE_SIZE,
+  search: "",
+  dataType: undefined,
+  isActive: undefined,
+};
+
+const INITIAL_DRAFT_FILTERS: BaseFieldDraftFilters = {
+  dataType: "ALL",
+  status: "ALL",
+};
+
+// ============================================================
+// HELPERS
 // ============================================================
 
 function getErrorMessage(
-  error: any,
+  error: unknown,
   fallback: string,
 ): string {
-  return (
-    error?.response?.data?.message ??
-    error?.message ??
-    fallback
-  );
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "response" in error
+  ) {
+    const response = error.response;
+
+    if (
+      typeof response === "object" &&
+      response !== null &&
+      "data" in response
+    ) {
+      const data = response.data;
+
+      if (
+        typeof data === "object" &&
+        data !== null &&
+        "message" in data &&
+        typeof data.message === "string"
+      ) {
+        return data.message;
+      }
+    }
+  }
+
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  return fallback;
+}
+
+function normalizeInputSource(
+  value: unknown,
+): BaseFieldInputSource {
+  if (
+    value === "AI" ||
+    value === "MANUAL_OR_AI" ||
+    value === "MANUAL"
+  ) {
+    return value;
+  }
+
+  return "MANUAL";
 }
 
 // ============================================================
@@ -97,7 +178,7 @@ function DataTypeBadge({
 
   if (!meta) {
     return (
-      <span className="inline-flex items-center rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-700">
+      <span className="inline-flex items-center rounded-md border border-border bg-muted px-2 py-1 text-xs font-medium text-muted-foreground">
         {type}
       </span>
     );
@@ -106,14 +187,66 @@ function DataTypeBadge({
   const Icon = meta.icon;
 
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-700">
+    <span className="inline-flex items-center gap-1.5 rounded-md border border-border bg-muted px-2 py-1 text-xs font-medium text-foreground">
       <Icon
         size={13}
         strokeWidth={2}
-        className="text-teal-700"
+        className="text-primary"
+        aria-hidden="true"
       />
-
       {meta.label}
+    </span>
+  );
+}
+
+// ============================================================
+// INPUT SOURCE BADGE
+// ============================================================
+
+function InputSourceBadge({
+  source,
+}: {
+  source: unknown;
+}) {
+  const normalizedSource = normalizeInputSource(source);
+
+  const config = {
+    MANUAL: {
+      label: "Manual",
+      description: "Entered by a user",
+      Icon: UserRound,
+      className:
+        "border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300",
+    },
+    AI: {
+      label: "AI",
+      description: "Provided by an AI process",
+      Icon: Bot,
+      className:
+        "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-300",
+    },
+    MANUAL_OR_AI: {
+      label: "Manual or AI",
+      description: "Either input method is allowed",
+      Icon: Workflow,
+      className:
+        "border-teal-200 bg-teal-50 text-teal-700 dark:border-teal-800 dark:bg-teal-950/40 dark:text-teal-300",
+    },
+  }[normalizedSource];
+
+  const Icon = config.Icon;
+
+  return (
+    <span
+      title={config.description}
+      className={[
+        "inline-flex max-w-full items-center gap-1.5",
+        "rounded-md border px-2 py-1 text-xs font-medium",
+        config.className,
+      ].join(" ")}
+    >
+      <Icon size={13} aria-hidden="true" />
+      <span>{config.label}</span>
     </span>
   );
 }
@@ -131,12 +264,12 @@ function StatusBadge({
 }) {
   if (loading) {
     return (
-      <span className="inline-flex items-center gap-1.5 rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-500">
+      <span className="inline-flex items-center gap-1.5 rounded-md border border-border bg-muted px-2 py-1 text-xs font-medium text-muted-foreground">
         <Loader2
           size={13}
           className="animate-spin"
+          aria-hidden="true"
         />
-
         Updating...
       </span>
     );
@@ -144,24 +277,24 @@ function StatusBadge({
 
   if (active) {
     return (
-      <span className="inline-flex items-center gap-1.5 rounded-md bg-teal-50 px-2 py-1 text-xs font-medium text-teal-800">
+      <span className="inline-flex items-center gap-1.5 rounded-md border border-primary/20 bg-primary/10 px-2 py-1 text-xs font-medium text-primary">
         <CircleCheck
           size={13}
           strokeWidth={2}
+          aria-hidden="true"
         />
-
         Active
       </span>
     );
   }
 
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-md bg-amber-50 px-2 py-1 text-xs font-medium text-amber-800">
+    <span className="inline-flex items-center gap-1.5 rounded-md border border-border bg-muted px-2 py-1 text-xs font-medium text-muted-foreground">
       <CircleSlash
         size={13}
         strokeWidth={2}
+        aria-hidden="true"
       />
-
       Inactive
     </span>
   );
@@ -191,22 +324,335 @@ function IconButton({
       title={label}
       onClick={onClick}
       disabled={disabled}
-      className={
-        "inline-flex h-8 w-8 items-center justify-center rounded-md border border-transparent text-slate-500 transition-colors " +
-        "hover:border-slate-200 hover:bg-slate-100 hover:text-slate-900 " +
-        "disabled:cursor-not-allowed disabled:opacity-50 " +
-        (tone === "danger"
-          ? "hover:!border-red-200 hover:!bg-red-50 hover:!text-red-700"
-          : "")
-      }
+      className={[
+        "inline-flex size-8 items-center justify-center rounded-md",
+        "border border-transparent text-muted-foreground transition-colors",
+        "hover:border-border hover:bg-muted hover:text-foreground",
+        "focus-visible:outline-none focus-visible:ring-2",
+        "focus-visible:ring-ring focus-visible:ring-offset-2",
+        "focus-visible:ring-offset-background",
+        "disabled:pointer-events-none disabled:opacity-50",
+        tone === "danger"
+          ? "hover:border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
+          : "",
+      ].join(" ")}
     >
-      <Icon
-        size={16}
-        strokeWidth={2}
-      />
+      <Icon size={16} strokeWidth={2} aria-hidden="true" />
     </button>
   );
 }
+
+// ============================================================
+// DETAIL ITEM
+// ============================================================
+
+function DetailItem({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="min-w-0 space-y-1.5">
+      <p className="text-xs font-medium text-muted-foreground">
+        {label}
+      </p>
+
+      <div className="break-words text-sm text-foreground">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// VIEW DETAILS SHEET
+// ============================================================
+
+function BaseFieldDetailsSheet({
+  field,
+  open,
+  onOpenChange,
+  onEdit,
+}: {
+  field: BaseField | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onEdit: (field: BaseField) => void;
+}) {
+  const options = [...(field?.options ?? [])].sort(
+    (a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0),
+  );
+
+  const description = field?.description?.trim();
+
+  const inputSource = normalizeInputSource(
+    field?.input_source,
+  );
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent
+        side="right"
+        className="flex w-full flex-col gap-0 overflow-y-auto p-0 sm:max-w-lg"
+      >
+        {field && (
+          <>
+            <div className="border-b border-border px-6 py-5">
+              <SheetHeader className="space-y-3 text-left">
+                <div className="flex size-11 items-center justify-center rounded-xl border border-border bg-muted">
+                  <Eye
+                    size={20}
+                    className="text-primary"
+                    aria-hidden="true"
+                  />
+                </div>
+
+                <div>
+                  <SheetTitle className="text-lg">
+                    Base field details
+                  </SheetTitle>
+
+                  <SheetDescription className="mt-1">
+                    Review the field configuration and input
+                    behavior.
+                  </SheetDescription>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                  <StatusBadge active={field.is_active} />
+                  <DataTypeBadge type={field.data_type} />
+                </div>
+              </SheetHeader>
+            </div>
+
+            <div className="flex-1 space-y-6 px-6 py-5">
+              <section className="space-y-4">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Field information
+                </h3>
+
+                <div className="grid grid-cols-2 gap-x-4 gap-y-5">
+                  <DetailItem label="Field name">
+                    <span className="font-medium">
+                      {field.name}
+                    </span>
+                  </DetailItem>
+
+                  <DetailItem label="Field code">
+                    <span className="break-all font-mono text-xs">
+                      {field.code}
+                    </span>
+                  </DetailItem>
+
+                  <DetailItem label="Data type">
+                    {DATA_TYPE_META[field.data_type]?.label ??
+                      field.data_type}
+                  </DetailItem>
+
+                  <DetailItem label="Measurement unit">
+                    {field.unit_code || "No unit assigned"}
+                  </DetailItem>
+                </div>
+
+                <DetailItem label="Description">
+                  {description || (
+                    <span className="italic text-muted-foreground">
+                      No description provided
+                    </span>
+                  )}
+                </DetailItem>
+              </section>
+
+              <div className="border-t border-border" />
+
+              <section className="space-y-4">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Input configuration
+                </h3>
+
+                <div className="rounded-lg border border-border bg-muted/30 p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-border bg-background">
+                      {inputSource === "AI" ? (
+                        <Bot
+                          size={17}
+                          className="text-violet-600"
+                          aria-hidden="true"
+                        />
+                      ) : inputSource === "MANUAL_OR_AI" ? (
+                        <Workflow
+                          size={17}
+                          className="text-teal-600"
+                          aria-hidden="true"
+                        />
+                      ) : (
+                        <UserRound
+                          size={17}
+                          className="text-slate-600"
+                          aria-hidden="true"
+                        />
+                      )}
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium">
+                        Input source
+                      </p>
+
+                      <div className="mt-2">
+                        <InputSourceBadge
+                          source={field.input_source}
+                        />
+                      </div>
+
+                      <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                        {inputSource === "AI"
+                          ? "This field is intended to be populated by an AI process."
+                          : inputSource === "MANUAL_OR_AI"
+                            ? "This field can be populated manually or by an AI process."
+                            : "This field is intended to be entered manually by a user."}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section className="space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Field options
+                  </h3>
+
+                  <span className="rounded-full border border-border bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                    {options.length}
+                  </span>
+                </div>
+
+                {options.length > 0 ? (
+                  <div className="overflow-hidden rounded-lg border border-border">
+                    {options.map((option, index) => (
+                      <div
+                        key={
+                          option.id ??
+                          `${option.value}-${index}`
+                        }
+                        className={[
+                          "flex items-start justify-between gap-3 px-3 py-3",
+                          index > 0
+                            ? "border-t border-border"
+                            : "",
+                        ].join(" ")}
+                      >
+                        <div className="flex min-w-0 items-start gap-2.5">
+                          <div className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+                            <ListChecks
+                              size={14}
+                              aria-hidden="true"
+                            />
+                          </div>
+
+                          <div className="min-w-0">
+                            <p className="break-words text-sm font-medium">
+                              {option.label}
+                            </p>
+
+                            <p className="mt-0.5 break-all font-mono text-xs text-muted-foreground">
+                              {option.value}
+                            </p>
+                          </div>
+                        </div>
+
+                        {option.is_default && (
+                          <span className="inline-flex shrink-0 items-center gap-1 rounded-md bg-primary/10 px-2 py-1 text-xs font-medium text-primary">
+                            <Check size={12} aria-hidden="true" />
+                            Default
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-dashed border-border px-4 py-5 text-center">
+                    <FileText
+                      size={20}
+                      className="mx-auto text-muted-foreground"
+                      aria-hidden="true"
+                    />
+
+                    <p className="mt-2 text-sm font-medium">
+                      No options configured
+                    </p>
+
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {[
+                        "SELECT",
+                        "RADIO",
+                        "CHECKBOX",
+                      ].includes(field.data_type)
+                        ? "Edit this field to add its selectable options."
+                        : "This data type does not require selectable options."}
+                    </p>
+                  </div>
+                )}
+              </section>
+
+              <section className="space-y-3 border-t border-border pt-5">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Record information
+                </h3>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <DetailItem label="Created">
+                    {field.created_at
+                      ? new Date(
+                          field.created_at,
+                        ).toLocaleDateString()
+                      : "—"}
+                  </DetailItem>
+
+                  <DetailItem label="Last updated">
+                    {field.updated_at
+                      ? new Date(
+                          field.updated_at,
+                        ).toLocaleDateString()
+                      : "—"}
+                  </DetailItem>
+                </div>
+              </section>
+            </div>
+
+            <div className="sticky bottom-0 flex items-center justify-between gap-3 border-t border-border bg-background px-6 py-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+              >
+                <X size={15} aria-hidden="true" />
+                Close
+              </Button>
+
+              <Can
+                resource={BASE_FIELD_RESOURCE}
+                action="update"
+              >
+                <Button
+                  type="button"
+                  onClick={() => onEdit(field)}
+                >
+                  <Pencil size={15} aria-hidden="true" />
+                  Edit field
+                </Button>
+              </Can>
+            </div>
+          </>
+        )}
+      </SheetContent>
+    </Sheet>
+  );
+}
+
 // ============================================================
 // DELETE CONFIRMATION
 // ============================================================
@@ -224,65 +670,69 @@ function DeleteConfirm({
 }) {
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4"
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-foreground/40 px-4 py-6"
       onClick={onCancel}
     >
       <div
         role="alertdialog"
         aria-modal="true"
-        className="w-full max-w-sm rounded-lg bg-white p-5 shadow-2xl"
-        onClick={(event) =>
-          event.stopPropagation()
-        }
+        aria-labelledby="delete-field-title"
+        aria-describedby="delete-field-description"
+        className="w-full max-w-sm rounded-xl border border-border bg-background p-5 text-foreground shadow-2xl"
+        onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-start gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-50 text-red-600">
-            <Trash2 size={16} />
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+            <Trash2 size={17} aria-hidden="true" />
           </div>
 
-          <div>
-            <h3 className="text-sm font-semibold text-slate-900">
+          <div className="min-w-0">
+            <h3
+              id="delete-field-title"
+              className="text-sm font-semibold"
+            >
               Delete this field?
             </h3>
 
-            <p className="mt-1 text-sm text-slate-500">
-              <span className="font-mono text-slate-700">
+            <p
+              id="delete-field-description"
+              className="mt-1 text-sm leading-5 text-muted-foreground"
+            >
+              <span className="font-mono font-medium text-foreground">
                 {field.code}
               </span>{" "}
-              will be permanently removed.
-              Reports or forms referencing
-              it may break.
+              will be removed. Forms or reports referencing this
+              field may be affected.
             </p>
           </div>
         </div>
 
         <div className="mt-5 flex justify-end gap-2">
-          <button
+          <Button
             type="button"
+            variant="outline"
             onClick={onCancel}
             disabled={isLoading}
-            className="rounded-md border border-slate-300 px-3.5 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Cancel
-          </button>
+          </Button>
 
-          <button
+          <Button
             type="button"
+            variant="destructive"
             onClick={onConfirm}
             disabled={isLoading}
-            className="inline-flex items-center rounded-md bg-red-600 px-3.5 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isLoading && (
               <Loader2
                 size={14}
-                className="mr-2 animate-spin"
+                className="animate-spin"
+                aria-hidden="true"
               />
             )}
 
-            {isLoading
-              ? "Deleting..."
-              : "Delete field"}
-          </button>
+            {isLoading ? "Deleting..." : "Delete field"}
+          </Button>
         </div>
       </div>
     </div>
@@ -290,45 +740,94 @@ function DeleteConfirm({
 }
 
 // ============================================================
-// MAIN MANAGER
+// ACCESS DENIED
+// ============================================================
+
+function BaseFieldAccessDenied() {
+  return (
+    <div className="min-h-[50vh] bg-background px-4 py-12 text-foreground sm:px-8">
+      <div className="mx-auto max-w-lg rounded-xl border border-border bg-card p-8 text-center">
+        <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-muted">
+          <Eye
+            size={22}
+            className="text-muted-foreground"
+            aria-hidden="true"
+          />
+        </div>
+
+        <h2 className="mt-4 text-base font-semibold">
+          Access denied
+        </h2>
+
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">
+          You do not have permission to view base fields.
+          Contact your system administrator if you need access.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// PAGE PERMISSION GATE
 // ============================================================
 
 export default function BaseFieldManager() {
-  // ==========================================================
-  // SERVER STATE
-  // ==========================================================
+  return (
+    <Can
+      resource={BASE_FIELD_RESOURCE}
+      action="view"
+      fallback={<BaseFieldAccessDenied />}
+    >
+      <BaseFieldManagerContent />
+    </Can>
+  );
+}
 
-  const [filters, setFilters] =
-    useState<BaseFieldFilters>({
-      page: 1,
-      per_page: 8,
-      search: "",
-      dataType: undefined,
-      isActive: undefined,
+// ============================================================
+// MAIN MANAGER CONTENT
+// ============================================================
+
+function BaseFieldManagerContent() {
+  const router = useRouter();
+
+  // FILTERS
+
+  const [filters, setFilters] = useState<BaseFieldFilters>({
+    ...INITIAL_FILTERS,
+  });
+
+  const [draftFilters, setDraftFilters] =
+    useState<BaseFieldDraftFilters>({
+      ...INITIAL_DRAFT_FILTERS,
     });
 
-  const [searchInput, setSearchInput] =
-    useState("");
+  const [appliedDraftFilters, setAppliedDraftFilters] =
+    useState<BaseFieldDraftFilters>({
+      ...INITIAL_DRAFT_FILTERS,
+    });
 
-  // ==========================================================
-  // UI STATE
-  // ==========================================================
+  const [searchInput, setSearchInput] = useState("");
 
-  const [panelOpen, setPanelOpen] =
-    useState(false);
-
-  const [editingField, setEditingField] =
-    useState<BaseField | null>(null);
+  // ACTION AND DETAIL STATE
 
   const [pendingDelete, setPendingDelete] =
     useState<BaseField | null>(null);
 
+  const [selectedField, setSelectedField] =
+    useState<BaseField | null>(null);
+
+  const [detailsOpen, setDetailsOpen] = useState(false);
+
   const [statusUpdatingId, setStatusUpdatingId] =
     useState<string | null>(null);
 
-  // ==========================================================
+  // PAGINATION
+
+  const currentPage = filters.page ?? DEFAULT_PAGE;
+  const pageSize = filters.per_page ?? DEFAULT_PAGE_SIZE;
+
   // QUERY
-  // ==========================================================
 
   const {
     data,
@@ -336,236 +835,186 @@ export default function BaseFieldManager() {
     isFetching,
   } = useBaseFields(filters);
 
-  const fields =
-    data?.data ?? [];
+  const fields = data?.data ?? [];
+  const meta = data?.meta;
 
-  const meta =
-    data?.meta;
+  const displayedPage = meta?.current_page ?? currentPage;
+  const total = meta?.total ?? 0;
 
-  // ==========================================================
   // MUTATIONS
-  // ==========================================================
 
-  const createBaseField =
-    useCreateBaseField();
+  const activateBaseField = useActivateBaseField();
+  const deactivateBaseField = useDeactivateBaseField();
+  const deleteBaseField = useDeleteBaseField();
 
-  const updateBaseField =
-    useUpdateBaseField();
+  const isUpdatingStatus =
+    statusUpdatingId !== null ||
+    activateBaseField.isPending ||
+    deactivateBaseField.isPending;
 
-  const activateBaseField =
-    useActivateBaseField();
+  const isDeleting = deleteBaseField.isPending;
 
-  const deactivateBaseField =
-    useDeactivateBaseField();
+  const isMutationRunning =
+    isUpdatingStatus || isDeleting;
 
-  const deleteBaseField =
-    useDeleteBaseField();
-
-  // ==========================================================
   // DEBOUNCED SEARCH
-  // ==========================================================
 
   useEffect(() => {
-    const timer =
-      setTimeout(() => {
-        setFilters((current) => ({
-          ...current,
-          search:
-            searchInput.trim() || undefined,
-          page: 1,
-        }));
-      }, 300);
+    const timeoutId = window.setTimeout(() => {
+      const nextSearch = searchInput.trim();
 
-    return () =>
-      clearTimeout(timer);
+      setFilters((current) => {
+        const currentSearch = current.search?.trim() ?? "";
+
+        if (
+          currentSearch === nextSearch &&
+          current.page === DEFAULT_PAGE
+        ) {
+          return current;
+        }
+
+        return {
+          ...current,
+          search: nextSearch,
+          page: DEFAULT_PAGE,
+        };
+      });
+    }, SEARCH_DEBOUNCE_MS);
+
+    return () => window.clearTimeout(timeoutId);
   }, [searchInput]);
 
-  // ==========================================================
-  // EXISTING CODES
-  // ==========================================================
+  // FILTER COUNTS AND DIRTY STATE
 
-  const existingCodes =
-    useMemo(
-      () =>
-        new Set(
-          fields.map(
-            (field) =>
-              field.code,
-          ),
-        ),
-      [fields],
-    );
+  const activeFilterCount =
+    (appliedDraftFilters.dataType !== "ALL" ? 1 : 0) +
+    (appliedDraftFilters.status !== "ALL" ? 1 : 0);
 
-  // ==========================================================
+  const hasAppliedFilters =
+    Boolean(filters.search?.trim()) ||
+    filters.dataType !== undefined ||
+    filters.isActive !== undefined;
+
+  const hasPendingChanges =
+    draftFilters.dataType !== appliedDraftFilters.dataType ||
+    draftFilters.status !== appliedDraftFilters.status;
+
+  const hasSearchInput = Boolean(searchInput.trim());
+
+  // APPLY FILTERS
+
+  const applyFilters = useCallback(() => {
+    const nextDataType =
+      draftFilters.dataType === "ALL"
+        ? undefined
+        : draftFilters.dataType;
+
+    const nextIsActive =
+      draftFilters.status === "ALL"
+        ? undefined
+        : draftFilters.status === "ACTIVE";
+
+    setAppliedDraftFilters({ ...draftFilters });
+
+    setFilters((current) => ({
+      ...current,
+      page: DEFAULT_PAGE,
+      per_page: current.per_page ?? DEFAULT_PAGE_SIZE,
+      search: searchInput.trim(),
+      dataType: nextDataType,
+      isActive: nextIsActive,
+    }));
+  }, [draftFilters, searchInput]);
+
+  // CLEAR FILTERS
+
+  const clearFilters = useCallback(() => {
+    setSearchInput("");
+    setDraftFilters({ ...INITIAL_DRAFT_FILTERS });
+    setAppliedDraftFilters({ ...INITIAL_DRAFT_FILTERS });
+    setFilters({ ...INITIAL_FILTERS });
+  }, []);
+
   // PAGINATION
-  // ==========================================================
 
-  const currentPage =
-    meta?.current_page ??
-    filters.page ??
-    1;
+  const handlePageChange = useCallback((pageIndex: number) => {
+    const nextPage = pageIndex + 1;
 
-  const lastPage =
-    meta?.last_page ??
-    1;
+    setFilters((current) => {
+      if (current.page === nextPage) {
+        return current;
+      }
 
-  const total =
-    meta?.total ?? 0;
+      return {
+        ...current,
+        page: nextPage,
+      };
+    });
+  }, []);
 
-  const perPage =
-    meta?.per_page ??
-    filters.per_page ??
-    8;
+  const handlePageSizeChange = useCallback(
+    (nextPageSize: number) => {
+      if (
+        !Number.isFinite(nextPageSize) ||
+        nextPageSize < 1
+      ) {
+        return;
+      }
 
-  // ==========================================================
-  // OPEN CREATE
-  // ==========================================================
+      setFilters((current) => ({
+        ...current,
+        page: DEFAULT_PAGE,
+        per_page: nextPageSize,
+      }));
+    },
+    [],
+  );
 
-  function openCreate() {
-    setEditingField(null);
-    setPanelOpen(true);
-  }
+  // NAVIGATION: CREATE
 
-  // ==========================================================
-  // OPEN EDIT
-  // ==========================================================
+  const openCreate = useCallback(() => {
+    if (isMutationRunning) return;
 
-  function openEdit(
-    field: BaseField,
-  ) {
-    setEditingField(field);
-    setPanelOpen(true);
-  }
+    router.push(
+      "/en/office/dashboard/revenue-managements/base-fields/create",
+    );
+  }, [router, isMutationRunning]);
 
-  // ==========================================================
-  // CLOSE PANEL
-  // ==========================================================
+  // NAVIGATION: EDIT
 
-  function closePanel() {
-    if (
-      createBaseField.isPending ||
-      updateBaseField.isPending
-    ) {
-      return;
-    }
+  const openEdit = useCallback(
+    (field: BaseField) => {
+      if (isMutationRunning) return;
 
-    setPanelOpen(false);
-    setEditingField(null);
-  }
+      setDetailsOpen(false);
 
-  // ==========================================================
-  // SAVE
-  // ==========================================================
-
-  function handleSave(
-    formData: FieldFormState,
-  ) {
-    const payload: Partial<BaseField> = {
-      name: formData.name.trim(),
-      code: formData.code.trim().toUpperCase(),
-      data_type: formData.data_type,
-      measurement_unit_id: formData.measurement_unit_id || undefined,
-      description: formData.description.trim() || undefined,
-      is_active: formData.is_active,
-    
-      ...(DATA_TYPE_META[formData.data_type].needsOptions
-        ? { options: formData.options }
-        : {}),
-    };
-
-    // ========================================================
-    // UPDATE
-    // ========================================================
-
-    if (editingField) {
-      updateBaseField.mutate(
-        {
-          id: editingField.id,
-          data: payload,
-        },
-        {
-          onSuccess: () => {
-            toast.success(
-              "Base field updated successfully",
-            );
-
-            setPanelOpen(false);
-            setEditingField(null);
-          },
-
-          onError: (
-            error: any,
-          ) => {
-            toast.error(
-              getErrorMessage(
-                error,
-                "Failed to update base field",
-              ),
-            );
-          },
-        },
+      router.push(
+        `/en/office/dashboard/revenue-managements/base-fields/${encodeURIComponent(field.id)}/edit`,
       );
+    },
+    [router, isMutationRunning],
+  );
 
-      return;
-    }
+  // VIEW DETAILS
 
-    // ========================================================
-    // CREATE
-    // ========================================================
+  const openDetails = useCallback((field: BaseField) => {
+    setSelectedField(field);
+    setDetailsOpen(true);
+  }, []);
 
-    createBaseField.mutate(
-      payload,
-      {
-        onSuccess: () => {
-          toast.success(
-            "Base field created successfully",
-          );
-
-          setPanelOpen(false);
-          setEditingField(null);
-        },
-
-        onError: (
-          error: any,
-        ) => {
-          toast.error(
-            getErrorMessage(
-              error,
-              "Failed to create base field",
-            ),
-          );
-        },
-      },
-    );
-  }
-
-  // ==========================================================
   // TOGGLE ACTIVE
-  // ==========================================================
 
-  function toggleActive(
-    field: BaseField,
-  ) {
-    if (
-      statusUpdatingId !== null ||
-      activateBaseField.isPending ||
-      deactivateBaseField.isPending
-    ) {
-      return;
-    }
+  const toggleActive = useCallback(
+    (field: BaseField) => {
+      if (isMutationRunning) return;
 
-    setStatusUpdatingId(
-      field.id,
-    );
+      setStatusUpdatingId(field.id);
 
-    const mutation =
-      field.is_active
+      const mutation = field.is_active
         ? deactivateBaseField
         : activateBaseField;
 
-    mutation.mutate(
-      field.id,
-      {
+      mutation.mutate(field.id, {
         onSuccess: () => {
           toast.success(
             field.is_active
@@ -573,10 +1022,7 @@ export default function BaseFieldManager() {
               : "Base field activated successfully",
           );
         },
-
-        onError: (
-          error: any,
-        ) => {
+        onError: (error: unknown) => {
           toast.error(
             getErrorMessage(
               error,
@@ -584,149 +1030,87 @@ export default function BaseFieldManager() {
             ),
           );
         },
-
         onSettled: () => {
-          setStatusUpdatingId(
-            null,
-          );
+          setStatusUpdatingId(null);
         },
-      },
-    );
-  }
+      });
+    },
+    [
+      isMutationRunning,
+      activateBaseField,
+      deactivateBaseField,
+    ],
+  );
 
-  // ==========================================================
   // DELETE
-  // ==========================================================
 
-  function confirmDelete() {
-    if (!pendingDelete) {
-      return;
-    }
+  const confirmDelete = useCallback(() => {
+    if (!pendingDelete || isDeleting) return;
 
-    deleteBaseField.mutate(
-      pendingDelete.id,
-      {
-        onSuccess: () => {
-          toast.success(
-            "Base field deleted successfully",
+    deleteBaseField.mutate(pendingDelete.id, {
+      onSuccess: () => {
+        toast.success("Base field deleted successfully");
+        setPendingDelete(null);
+
+        if (selectedField?.id === pendingDelete.id) {
+          setDetailsOpen(false);
+          setSelectedField(null);
+        }
+
+        setFilters((current) => {
+          const currentPage =
+            current.page ?? DEFAULT_PAGE;
+
+          const currentPageSize =
+            current.per_page ?? DEFAULT_PAGE_SIZE;
+
+          const remainingTotal = Math.max(0, total - 1);
+
+          const lastPage = Math.max(
+            DEFAULT_PAGE,
+            Math.ceil(remainingTotal / currentPageSize),
           );
 
-          setPendingDelete(null);
-        },
-
-        onError: (
-          error: any,
-        ) => {
-          toast.error(
-            getErrorMessage(
-              error,
-              "Failed to delete base field",
-            ),
-          );
-        },
-      },
-    );
-  }
-
-  // ==========================================================
-  // FILTER COUNT
-  // ==========================================================
-
-  const activeFilterCount =
-    (filters.dataType
-      ? 1
-      : 0) +
-    (filters.isActive !== undefined
-      ? 1
-      : 0);
-
-  // ==========================================================
-  // CLEAR FILTERS
-  // ==========================================================
-
-  function clearFilters() {
-    setSearchInput("");
-
-    setFilters(
-      (current) => ({
-        ...current,
-        search: undefined,
-        dataType:
-          undefined,
-        isActive:
-          undefined,
-        page: 1,
-      }),
-    );
-  }
-
-  // ==========================================================
-  // PAGE CHANGE
-  // ==========================================================
-
-  const setPage =
-    useCallback(
-      (page: number) => {
-        setFilters(
-          (current) => ({
+          return {
             ...current,
-            page: Math.max(
-              1,
-              Math.min(
-                page,
-                lastPage,
-              ),
-            ),
-          }),
+            page: Math.min(currentPage, lastPage),
+          };
+        });
+      },
+      onError: (error: unknown) => {
+        toast.error(
+          getErrorMessage(
+            error,
+            "Failed to delete base field",
+          ),
         );
       },
-      [lastPage],
-    );
+    });
+  }, [
+    pendingDelete,
+    isDeleting,
+    deleteBaseField,
+    total,
+    selectedField,
+  ]);
 
-  // ==========================================================
-  // EMPTY
-  // ==========================================================
+  // EMPTY STATE
 
-  const isEmpty =
-    !isLoading &&
-    fields.length === 0;
+  const isEmpty = !isLoading && fields.length === 0;
 
-  // ==========================================================
   // RENDER
-  // ==========================================================
 
   return (
-    <div className="min-h-screen bg-slate-50 px-4 py-8 font-sans sm:px-8">
-      <div className="mx-auto max-w-6xl">
-
-        {/* ====================================================
-            HEADER
-        ==================================================== */}
+    <div className="min-h-screen bg-background px-4 py-8 font-sans text-foreground sm:px-8">
+      <div className="mx-auto max-w-7xl">
+        {/* HEADER */}
 
         <Banner
-          description="
-          Reusable field definitions
-          available across forms,
-          templates, and reports.
-          "
+          description="Reusable field definitions available across forms, templates, and reports."
           badge={
             <IconBadge
-              className="
-                gap-2
-                rounded-full
-                bg-black/20
-                p-3
-                text-[10px]
-                text-white
-              "
-              icon={
-                <Ruler
-                  className="
-                    h-3
-                    w-3
-                  "
-                />
-              }
+              className="gap-2 rounded-full p-3 text-[10px]"
+              icon={<Ruler className="size-3" />}
             >
               Base fields
             </IconBadge>
@@ -741,548 +1125,375 @@ export default function BaseFieldManager() {
             />
           }
           actions={
-            <Button
-              variant="outline"
-              onClick={openCreate}
+            <Can
+              resource={BASE_FIELD_RESOURCE}
+              action="create"
             >
-              <Plus
-                className="
-                  h-4
-                  w-4
-                "
-              />
-
-              Create New
-            </Button>
+              <Button
+                variant="default"
+                onClick={openCreate}
+                disabled={isMutationRunning}
+              >
+                <Plus className="size-4" />
+                Create New
+              </Button>
+            </Can>
           }
-          overlayClassName="
-            bg-gradient-to-r
-            from-primary/95
-            via-primary/80
-            to-primary/50
-          "
-          className="
-            text-white
-          "
+          overlayClassName="bg-transparent"
         />
 
-        {/* ====================================================
-            TOOLBAR
-        ==================================================== */}
+        {/* FILTERS */}
 
-        <div className="mb-4 flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-3 sm:flex-row sm:items-center">
+        <AppFilterBar
+          search={searchInput}
+          onSearchChange={setSearchInput}
+          searchPlaceholder="Search by field name or code..."
+          searchLabel="Search base fields"
+          title="Search and filter"
+          description="Search updates automatically. Select filters and click Apply."
+          activeFilterCount={activeFilterCount}
+          hasFilters={
+            hasAppliedFilters ||
+            hasPendingChanges ||
+            hasSearchInput
+          }
+          onApply={applyFilters}
+          onClear={clearFilters}
+          className="py-5"
+        >
+          <div className="space-y-2">
+            <label className="text-sm font-medium">
+              Data type
+            </label>
 
-          {/* SEARCH */}
-
-          <div className="relative flex-1">
-            <Search
-              size={15}
-              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-            />
-
-            <input
-              type="text"
-              value={searchInput}
-              onChange={(event) =>
-                setSearchInput(
-                  event.target.value,
-                )
-              }
-              placeholder="Search by name or code"
-              className="w-full rounded-md border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-teal-500 focus:bg-white focus:ring-2 focus:ring-teal-500/20"
-            />
-          </div>
-
-          {/* FILTERS */}
-
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-1.5 text-xs text-slate-400">
-              <SlidersHorizontal size={13} />
-            </div>
-
-            {/* DATA TYPE */}
-
-            <select
-              value={
-                filters.dataType ??
-                ""
-              }
-              onChange={(event) =>
-                setFilters(
-                  (current) => ({
-                    ...current,
-
-                    dataType:
-                      event.target
-                        .value
-                        ? (event.target
-                            .value as BaseFieldDataType)
-                        : undefined,
-
-                    page: 1,
-                  }),
-                )
-              }
-              className="rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm text-slate-700 outline-none focus:border-teal-500"
+            <Select
+              value={draftFilters.dataType}
+              onValueChange={(value) => {
+                setDraftFilters((current) => ({
+                  ...current,
+                  dataType:
+                    value === "ALL"
+                      ? "ALL"
+                      : (value as BaseFieldDataType),
+                }));
+              }}
             >
-              <option value="">
-                All types
-              </option>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="All types" />
+              </SelectTrigger>
 
-              {DATA_TYPES.map(
-                (dataType) => (
-                  <option
+              <SelectContent>
+                <SelectItem value="ALL">
+                  All types
+                </SelectItem>
+
+                {DATA_TYPES.map((dataType) => (
+                  <SelectItem
                     key={dataType}
                     value={dataType}
                   >
-                    {
-                      DATA_TYPE_META[
-                        dataType
-                      ].label
-                    }
-                  </option>
-                ),
-              )}
-            </select>
-
-            {/* STATUS */}
-
-            <select
-              value={
-                filters.isActive ===
-                undefined
-                  ? ""
-                  : filters.isActive
-                    ? "active"
-                    : "inactive"
-              }
-              onChange={(event) =>
-                setFilters(
-                  (current) => ({
-                    ...current,
-
-                    isActive:
-                      event.target
-                        .value === ""
-                        ? undefined
-                        : event.target
-                              .value ===
-                            "active",
-
-                    page: 1,
-                  }),
-                )
-              }
-              className="rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm text-slate-700 outline-none focus:border-teal-500"
-            >
-              <option value="">
-                Any status
-              </option>
-
-              <option value="active">
-                Active
-              </option>
-
-              <option value="inactive">
-                Inactive
-              </option>
-            </select>
-
-            {/* CLEAR */}
-
-            {activeFilterCount >
-              0 && (
-              <button
-                type="button"
-                onClick={
-                  clearFilters
-                }
-                className="inline-flex items-center gap-1 rounded-md px-2 py-2 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-700"
-              >
-                <X size={12} />
-
-                Clear
-              </button>
-            )}
+                    {DATA_TYPE_META[dataType].label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-        </div>
 
-        {/* ====================================================
-            TABLE
-        ==================================================== */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium">
+              Status
+            </label>
 
-        <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+            <Select
+              value={draftFilters.status}
+              onValueChange={(value) => {
+                if (
+                  value !== "ALL" &&
+                  value !== "ACTIVE" &&
+                  value !== "INACTIVE"
+                ) {
+                  return;
+                }
 
-          {/* LOADING */}
+                setDraftFilters((current) => ({
+                  ...current,
+                  status: value,
+                }));
+              }}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="All statuses" />
+              </SelectTrigger>
+
+              <SelectContent>
+                <SelectItem value="ALL">
+                  All statuses
+                </SelectItem>
+                <SelectItem value="ACTIVE">
+                  Active
+                </SelectItem>
+                <SelectItem value="INACTIVE">
+                  Inactive
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </AppFilterBar>
+
+        {/* TABLE */}
+
+        <div className="mt-4 overflow-hidden rounded-xl border border-border bg-card">
+          {!isLoading && isFetching && (
+            <div
+              role="status"
+              className="flex items-center gap-2 border-b border-border bg-muted/40 px-4 py-2 text-xs text-muted-foreground"
+            >
+              <Loader2
+                size={13}
+                className="animate-spin"
+                aria-hidden="true"
+              />
+              Updating results...
+            </div>
+          )}
 
           {isLoading ? (
             <div className="flex flex-col items-center justify-center gap-3 px-6 py-20 text-center">
               <Loader2
                 size={28}
-                className="animate-spin text-teal-700"
+                className="animate-spin text-primary"
+                aria-hidden="true"
               />
 
               <div>
-                <p className="text-sm font-medium text-slate-700">
+                <p className="text-sm font-medium">
                   Loading base fields
                 </p>
-
-                <p className="mt-1 text-xs text-slate-400">
+                <p className="mt-1 text-xs text-muted-foreground">
                   Please wait...
                 </p>
               </div>
             </div>
           ) : isEmpty ? (
-            /* ==================================================
-               EMPTY
-            ================================================== */
-
             <div className="flex flex-col items-center justify-center gap-2 px-6 py-16 text-center">
-              <Inbox
-                size={28}
-                className="text-slate-300"
-              />
+              <div className="flex size-12 items-center justify-center rounded-full bg-muted">
+                <Inbox
+                  size={24}
+                  className="text-muted-foreground"
+                  aria-hidden="true"
+                />
+              </div>
 
-              <p className="text-sm font-medium text-slate-700">
-                No fields match these
-                filters
+              <p className="text-sm font-medium">
+                No fields match these filters
               </p>
 
-              <p className="text-xs text-slate-400">
-                Try a different search
-                term or clear your
-                filters.
+              <p className="max-w-sm text-xs leading-5 text-muted-foreground">
+                Try a different search term or clear your filters
+                to see more results.
               </p>
 
               {(filters.search ||
-                activeFilterCount >
-                  0) && (
-                <button
+                filters.dataType ||
+                filters.isActive !== undefined ||
+                hasPendingChanges ||
+                hasSearchInput) && (
+                <Button
                   type="button"
-                  onClick={
-                    clearFilters
-                  }
-                  className="mt-1 text-xs font-medium text-teal-700 hover:underline"
+                  variant="outline"
+                  size="sm"
+                  onClick={clearFilters}
+                  className="mt-2"
                 >
-                  Reset search and
-                  filters
-                </button>
+                  Reset search and filters
+                </Button>
               )}
             </div>
           ) : (
-            /* ==================================================
-               DATA
-            ================================================== */
-
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead>
-                  <tr className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-                    <th className="px-4 py-3 font-medium">
+                  <tr className="border-b border-border bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
+                    <th scope="col" className="px-4 py-3 font-medium">
                       Field
                     </th>
-
-                    <th className="px-4 py-3 font-medium">
+                    <th scope="col" className="px-4 py-3 font-medium">
                       Type
                     </th>
-
-                    <th className="px-4 py-3 font-medium">
+                    <th scope="col" className="px-4 py-3 font-medium">
+                      Input source
+                    </th>
+                    <th scope="col" className="px-4 py-3 font-medium">
                       Unit
                     </th>
-
-                    <th className="px-4 py-3 font-medium">
+                    <th scope="col" className="px-4 py-3 font-medium">
                       Status
                     </th>
-
-                    <th className="px-4 py-3 font-medium">
+                    <th scope="col" className="px-4 py-3 font-medium">
                       Updated
                     </th>
-
-                    <th className="px-4 py-3 text-right font-medium">
+                    <th
+                      scope="col"
+                      className="px-4 py-3 text-right font-medium"
+                    >
                       Actions
                     </th>
                   </tr>
                 </thead>
 
-                <tbody>
-                  {fields.map(
-                    (field) => {
-                      const statusLoading =
-                        statusUpdatingId ===
-                        field.id;
+                <tbody className="divide-y divide-border">
+                  {fields.map((field) => {
+                    const statusLoading =
+                      statusUpdatingId === field.id;
 
-                      return (
-                        <tr
-                          key={
-                            field.id
-                          }
-                          className="border-b border-slate-100 last:border-0 hover:bg-slate-50/60"
-                        >
-                          {/* FIELD */}
+                    return (
+                      <tr
+                        key={field.id}
+                        className="transition-colors hover:bg-muted/40"
+                      >
+                        <td className="px-4 py-3">
+                          <div className="font-medium text-foreground">
+                            {field.name}
+                          </div>
 
-                          <td className="px-4 py-3">
-                            <div className="font-medium text-slate-900">
-                              {
-                                field.name
-                              }
-                            </div>
+                          <div className="mt-0.5 font-mono text-xs text-muted-foreground">
+                            {field.code}
+                          </div>
+                        </td>
 
-                            <div className="font-mono text-xs text-slate-400">
-                              {
-                                field.code
-                              }
-                            </div>
-                          </td>
+                        <td className="px-4 py-3">
+                          <DataTypeBadge type={field.data_type} />
+                        </td>
 
-                          {/* TYPE */}
+                        <td className="px-4 py-3">
+                          <InputSourceBadge
+                            source={field.input_source}
+                          />
+                        </td>
 
-                          <td className="px-4 py-3">
-                            <DataTypeBadge
-                              type={
-                                field.data_type
-                              }
-                            />
-                          </td>
+                        <td className="px-4 py-3 text-muted-foreground">
+                          {field.unit_code ? (
+                            <span className="font-mono text-xs">
+                              {field.unit_code}
+                            </span>
+                          ) : (
+                            <span aria-label="No unit">—</span>
+                          )}
+                        </td>
 
-                          {/* UNIT */}
-
-                          <td className="px-4 py-3 text-slate-500">
-                            {field.unit_code ? (
-                              <span className="font-mono text-xs">
-                                {
-                                  field.unit_code
-                                }
-                              </span>
-                            ) : (
-                              <span className="text-slate-300">
-                                —
-                              </span>
-                            )}
-                          </td>
-
-                          {/* STATUS */}
-
-                          <td className="px-4 py-3">
+                        <td className="px-4 py-3">
+                          <Can
+                            resource={BASE_FIELD_RESOURCE}
+                            action="update"
+                            fallback={
+                              <StatusBadge
+                                active={field.is_active}
+                              />
+                            }
+                          >
                             <button
                               type="button"
-                              onClick={() =>
-                                toggleActive(
-                                  field,
-                                )
-                              }
-                              disabled={
-                                statusLoading ||
-                                statusUpdatingId !==
-                                  null
-                              }
-                              className="cursor-pointer disabled:cursor-not-allowed"
+                              onClick={() => toggleActive(field)}
+                              disabled={isMutationRunning}
+                              className="rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-60"
                               title={
                                 field.is_active
                                   ? "Deactivate field"
                                   : "Activate field"
                               }
+                              aria-label={
+                                field.is_active
+                                  ? `Deactivate ${field.name}`
+                                  : `Activate ${field.name}`
+                              }
                             >
                               <StatusBadge
-                                active={
-                                  field.is_active
-                                }
-                                loading={
-                                  statusLoading
-                                }
+                                active={field.is_active}
+                                loading={statusLoading}
                               />
                             </button>
-                          </td>
+                          </Can>
+                        </td>
 
-                          {/* UPDATED */}
+                        <td className="whitespace-nowrap px-4 py-3 text-xs text-muted-foreground">
+                          {field.updated_at
+                            ? new Date(
+                                field.updated_at,
+                              ).toLocaleDateString()
+                            : "—"}
+                        </td>
 
-                          <td className="px-4 py-3 text-xs text-slate-400">
-                            {field.updated_at
-                              ? new Date(
-                                  field.updated_at,
-                                ).toLocaleDateString()
-                              : "—"}
-                          </td>
-
-                          {/* ACTIONS */}
-
-                          <td className="px-4 py-3">
-                            <div className="flex items-center justify-end gap-1">
+                        <td className="px-4 py-3">
+                          <div className="flex items-center justify-end gap-1">
+                            <Can
+                              resource={BASE_FIELD_RESOURCE}
+                              action="view"
+                            >
                               <IconButton
-                                icon={
-                                  Pencil
-                                }
+                                icon={Eye}
+                                label={`View ${field.name}`}
+                                onClick={() => openDetails(field)}
+                              />
+                            </Can>
+
+                            <Can
+                              resource={BASE_FIELD_RESOURCE}
+                              action="update"
+                            >
+                              <IconButton
+                                icon={Pencil}
                                 label={`Edit ${field.name}`}
-                                onClick={() =>
-                                  openEdit(
-                                    field,
-                                  )
-                                }
-                                disabled={
-                                  statusLoading ||
-                                  statusUpdatingId !==
-                                    null
-                                }
+                                onClick={() => openEdit(field)}
+                                disabled={isMutationRunning}
                               />
-
-                              <IconButton
-                                icon={
-                                  Trash2
-                                }
-                                label={`Delete ${field.name}`}
-                                tone="danger"
-                                onClick={() =>
-                                  setPendingDelete(
-                                    field,
-                                  )
-                                }
-                                disabled={
-                                  statusLoading ||
-                                  statusUpdatingId !==
-                                    null
-                                }
-                              />
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    },
-                  )}
+                            </Can>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
           )}
 
-          {/* ==================================================
-              PAGINATION
-          ================================================== */}
-
-          {!isLoading &&
-            total > 0 && (
-              <div className="flex flex-col items-center justify-between gap-2 border-t border-slate-200 px-4 py-3 sm:flex-row">
-                <p className="text-xs text-slate-500">
-                  Showing{" "}
-                  <span className="font-medium text-slate-700">
-                    {Math.min(
-                      (currentPage -
-                        1) *
-                        perPage +
-                        1,
-                      total,
-                    )}
-                  </span>
-                  –
-                  <span className="font-medium text-slate-700">
-                    {Math.min(
-                      currentPage *
-                        perPage,
-                      total,
-                    )}
-                  </span>{" "}
-                  of{" "}
-                  <span className="font-medium text-slate-700">
-                    {total}
-                  </span>{" "}
-                  fields
-                </p>
-
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setPage(
-                        currentPage -
-                          1,
-                      )
-                    }
-                    disabled={
-                      currentPage <=
-                        1 ||
-                      isFetching
-                    }
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-slate-500 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    <ChevronLeft
-                      size={15}
-                    />
-                  </button>
-
-                  <span className="px-2 text-xs font-medium text-slate-600">
-                    Page{" "}
-                    {currentPage}{" "}
-                    of{" "}
-                    {lastPage}
-                  </span>
-
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setPage(
-                        currentPage +
-                          1,
-                      )
-                    }
-                    disabled={
-                      currentPage >=
-                        lastPage ||
-                      isFetching
-                    }
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 text-slate-500 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    <ChevronRight
-                      size={15}
-                    />
-                  </button>
-                </div>
-              </div>
-            )}
+          <DataTablePagination
+            page={displayedPage}
+            pageSize={pageSize}
+            total={total}
+            onPageChange={handlePageChange}
+            onPageSizeChange={handlePageSizeChange}
+          />
         </div>
       </div>
 
-      {/* ======================================================
-          CREATE / EDIT PANEL
-      ====================================================== */}
+      {/* VIEW DETAILS SHEET */}
 
-      <FieldPanel
-        open={panelOpen}
-        editing={editingField}
-        existingCodes={
-          existingCodes
-        }
-        isLoading={
-          createBaseField.isPending ||
-          updateBaseField.isPending
-        }
-        onClose={
-          closePanel
-        }
-        onSave={
-          handleSave
-        }
-      />
-
-      {/* ======================================================
-          DELETE CONFIRMATION
-      ====================================================== */}
-
-      {pendingDelete && (
-        <DeleteConfirm
-          field={
-            pendingDelete
-          }
-          isLoading={
-            deleteBaseField.isPending
-          }
-          onCancel={() =>
-            !deleteBaseField.isPending &&
-            setPendingDelete(
-              null,
-            )
-          }
-          onConfirm={
-            confirmDelete
-          }
+      <Can resource={BASE_FIELD_RESOURCE} action="view">
+        <BaseFieldDetailsSheet
+          field={selectedField}
+          open={detailsOpen}
+          onOpenChange={setDetailsOpen}
+          onEdit={openEdit}
         />
-      )}
+      </Can>
+
+      {/* DELETE CONFIRMATION */}
+
+      <Can resource={BASE_FIELD_RESOURCE} action="delete">
+        {pendingDelete && (
+          <DeleteConfirm
+            field={pendingDelete}
+            isLoading={isDeleting}
+            onCancel={() => {
+              if (!isDeleting) {
+                setPendingDelete(null);
+              }
+            }}
+            onConfirm={confirmDelete}
+          />
+        )}
+      </Can>
     </div>
   );
 }

@@ -1,9 +1,7 @@
 import { api } from "@/lib/api";
 import { normalizeApiError } from "@/lib/api-error";
 import { PaginatedResponse, SingleResponse } from "@/types/api";
-import { AuthUser, UserFormData, UserQueryParams, UserResponse } from "@/types/user";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
+import { AuthUser, UserQueryParams, UserResponse } from "@/types/user";
 
 
 export async function fetchPrivateImage(path: string): Promise<string> {

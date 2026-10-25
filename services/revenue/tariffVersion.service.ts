@@ -11,6 +11,7 @@ import {
   CreateTariffVersionPayload,
   UpdateTariffVersionPayload,
   CurrentActiveTariffSummary,
+  DuplicateTariffVersionPayload,
 } from "@/types/revenue/tariff-version";
 
 
@@ -354,5 +355,36 @@ export const tariffVersionService = {
     }
 
   },
+
+
+
+  /**
+   * DUPLICATE TARIFF VERSION
+   *
+   * Creates a new tariff version by copying the source version,
+   * including its tariff rules and formula variables.
+   *
+   * The backend must create the duplicated version as a draft
+   * and assign new IDs to the copied records.
+   *
+   * Endpoint contract:
+   * POST /revenue/tariff-versions/{id}/duplicate
+   */
+  duplicateTariffVersion: async (
+    id: string,
+    data: DuplicateTariffVersionPayload
+  ): Promise<ApiResponse<TariffVersion>> => {
+    try {
+      const res = await api.post<ApiResponse<TariffVersion>>(
+        `/revenue/tariff-versions/${id}/duplicate`,
+        data
+      );
+
+      return res.data;
+    } catch (error) {
+      throw normalizeApiError(error);
+    }
+  },
+
 
 };

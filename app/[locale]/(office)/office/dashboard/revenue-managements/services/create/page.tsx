@@ -223,7 +223,7 @@ export default function CreateRevenueServicePage() {
                 description="Define a billable service under a revenue code, including how it's collected and what data it requires."
                 badge={
                     <IconBadge
-                        className="gap-2 rounded-full bg-black/20 p-3 text-xs text-white"
+                        className="gap-2 rounded-full p-3 text-xs"
                         icon={
                             <Briefcase className="h-4 w-4" />
                         }
@@ -231,6 +231,8 @@ export default function CreateRevenueServicePage() {
                         New Revenue Service
                     </IconBadge>
                 }
+                overlayClassName="bg-transparent"
+
                 background={
                     <FloatingParticles
                         color="#040404"
@@ -240,8 +242,6 @@ export default function CreateRevenueServicePage() {
                         position="bottom-right"
                     />
                 }
-                overlayClassName="bg-gradient-to-r from-primary/95 via-primary/80 to-primary/50"
-                className="text-white"
             />
 
             <RevenueServiceForm

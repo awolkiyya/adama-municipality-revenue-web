@@ -24,6 +24,7 @@
 // =====================================================
 
 import { AuthUser } from "../user";
+import { BaseFieldInputSource } from "./revenue-baseField";
 
 
 export type AssessmentSourceType =
@@ -77,6 +78,7 @@ export type FieldOption = {
 // REVENUE FIELD
 // =====================================================
 
+
 export type RevenueField = {
   id: string;
 
@@ -105,6 +107,11 @@ export type RevenueField = {
   accept?: string;
 
   multiple?: boolean;
+
+  // Source configuration from the backend BaseField resource.
+  baseField?: {
+    inputSource?: BaseFieldInputSource;
+  };
 };
 
 

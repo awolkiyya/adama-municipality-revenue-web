@@ -18,13 +18,11 @@ import {
 
 import type {
   ApiResponse,
-  ListResponse,
 } from "@/types/api";
 
 import type {
   Assessment,
   AssessmentFilters,
-  AssessmentSummary,
 } from "@/types/revenue/assessment";
 
 import {
@@ -80,22 +78,6 @@ export const existingLizzKeys = {
 
 };
 
-
-// =====================================================
-// GET EXISTING LIZZ
-// =====================================================
-//
-// GET /existing-lizz
-//
-// Existing LIZZ records are already filtered by the
-// backend. No sourceType needs to be manually added
-// by the frontend.
-// =====================================================
-
-type UseExistingLizzOptions = {
-  params?: AssessmentFilters;
-  pending?: boolean;
-};
 
 
 // =====================================================

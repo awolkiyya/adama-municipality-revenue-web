@@ -9,7 +9,6 @@ import {
 
 import type { Citizen } from "@/types/citizen";
 import type {
-  RevenueField,
   RevenueService,
   SubmissionResult,
 } from "@/types/revenue/assessment";

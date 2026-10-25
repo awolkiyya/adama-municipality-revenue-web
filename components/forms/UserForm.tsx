@@ -43,7 +43,6 @@ import {
 import {
   AdministrativeLevel,
   UserFormData,
-  UserRole,
 } from "@/types/user";
 
 import { Role } from "@/types/access-management";
@@ -261,21 +260,6 @@ export function UserForm({
 
   const level =
     watch("level");
-
-
-  /*
-  |--------------------------------------------------------------------------
-  | Current Role Name
-  |--------------------------------------------------------------------------
-  |
-  | Role ID is submitted to backend.
-  |
-  | Role name is used only for frontend UI rules.
-  |
-  */
-
-  const roleName =
-    selectedRole?.name as UserRole | undefined;
 
 
   /*

@@ -12,7 +12,6 @@ import {
   TariffRuleFormType,
 } from "@/types/revenue/tariff-form";
 
-import TariffRuleForm from "@/components/forms/TariffRuleForm";
 
 import {
   useTariffRule,
@@ -20,6 +19,7 @@ import {
 } from "@/hooks/revenue/revenueTariffRule.hook";
 
 import { useTariffVersion } from "@/hooks/revenue/revenueVersion.hook";
+import TariffRuleForm from "@/components/forms/tariff-rule/TariffRuleForm";
 
 // ---------------------------------------------------------------------------
 // Page
@@ -275,7 +275,7 @@ export default function EditTariffRulePage() {
       /*
       |--------------------------------------------------------------------------
       | Sibling rules
-      |--------------------------------------------------------------------------
+      |-------------------------------------------------------------------------
       */
 
       existingRules={existingRules}

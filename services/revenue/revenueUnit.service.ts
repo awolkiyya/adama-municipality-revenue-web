@@ -13,43 +13,49 @@ import {
 
 export const measurementUnitService = {
 
-  /**
-   * GET ALL MEASUREMENT UNITS
-   */
-  getUnits: async (
-    params?: MeasurementUnitFilters
-  ): Promise<ListResponse<MeasurementUnit>> => {
-    try {
-      const cleanParams =
-        Object.entries(params || {}).reduce(
-          (acc, [key, value]) => {
-            if (
-              value !== undefined &&
-              value !== null &&
-              value !== "" &&
-              value !== "ALL"
-            ) {
-              acc[key] = value;
-            }
+/**
+ * GET ALL MEASUREMENT UNITS
+ */
+getUnits: async (
+  params?: MeasurementUnitFilters
+): Promise<ListResponse<MeasurementUnit>> => {
+  try {
+    const { isActive, ...restParams } = params ?? {};
 
-            return acc;
-          },
-          {} as Record<string, any>
-        );
+    const queryParams: Record<string, unknown> = {
+      ...restParams,
+      ...(isActive !== undefined
+        ? { is_active: isActive }
+        : {}),
+    };
 
-      const res =
-        await api.get<ListResponse<MeasurementUnit>>(
-          "/revenue/measurement-units",
-          {
-            params: cleanParams,
-          }
-        );
+    const cleanParams = Object.entries(queryParams).reduce<
+      Record<string, unknown>
+    >((acc, [key, value]) => {
+      if (
+        value !== undefined &&
+        value !== null &&
+        value !== "" &&
+        value !== "ALL"
+      ) {
+        acc[key] = value;
+      }
 
-      return res.data;
-    } catch (error) {
-      throw normalizeApiError(error);
-    }
-  },
+      return acc;
+    }, {});
+
+    const res = await api.get<ListResponse<MeasurementUnit>>(
+      "/revenue/measurement-units",
+      {
+        params: cleanParams,
+      }
+    );
+
+    return res.data;
+  } catch (error) {
+    throw normalizeApiError(error);
+  }
+},
 
   /**
    * GET UNIT DETAIL

@@ -80,7 +80,7 @@ function toFormValues(
             "",
 
         collectionMode:
-            service.collection_mode ??
+            service.collectionMode ??
             "ASSESSMENT_ONLY",
 
         isActive:
@@ -500,7 +500,7 @@ export default function EditRevenueServicePage() {
                     description="Update this service's details, collection mode, and required fields."
                     badge={
                         <IconBadge
-                            className="gap-2 rounded-full bg-black/20 p-3 text-xs text-white"
+                            className="gap-2 rounded-full  p-3 text-xs"
                             icon={
                                 <Briefcase className="h-4 w-4" />
                             }
@@ -517,8 +517,9 @@ export default function EditRevenueServicePage() {
                             position="bottom-right"
                         />
                     }
-                    overlayClassName="bg-gradient-to-r from-primary/95 via-primary/80 to-primary/50"
-                    className="text-white"
+                    overlayClassName="bg-transparent"
+
+
                 />
 
                 <div className="flex min-h-[300px] items-center justify-center gap-2 text-muted-foreground">
@@ -549,30 +550,31 @@ export default function EditRevenueServicePage() {
         return (
             <div className="space-y-6">
 
-                <Banner
-                    description="Update this service's details, collection mode, and required fields."
-                    badge={
-                        <IconBadge
-                            className="gap-2 rounded-full bg-black/20 p-3 text-xs text-white"
-                            icon={
-                                <Briefcase className="h-4 w-4" />
-                            }
-                        >
-                            Edit Revenue Service
-                        </IconBadge>
-                    }
-                    background={
-                        <FloatingParticles
-                            color="#040404"
-                            count={35}
-                            speed={0.2}
-                            connectDistance={100}
-                            position="bottom-right"
-                        />
-                    }
-                    overlayClassName="bg-gradient-to-r from-primary/95 via-primary/80 to-primary/50"
-                    className="text-white"
-                />
+                   <Banner
+                        description="Update this service's details, collection mode, and required fields."
+                        badge={
+                            <IconBadge
+                                className="gap-2 rounded-full  p-3 text-xs"
+                                icon={
+                                    <Briefcase className="h-4 w-4" />
+                                }
+                            >
+                                Edit Revenue Service
+                            </IconBadge>
+                        }
+                        background={
+                            <FloatingParticles
+                                color="#040404"
+                                count={35}
+                                speed={0.2}
+                                connectDistance={100}
+                                position="bottom-right"
+                            />
+                        }
+                        overlayClassName="bg-transparent"
+
+
+                    />
 
                 <div className="flex min-h-[300px] flex-col items-center justify-center gap-3 rounded-xl border text-center">
 
@@ -608,30 +610,32 @@ export default function EditRevenueServicePage() {
     return (
         <div className="mx-auto max-w-5xl space-y-6">
 
-            <Banner
-                description="Update this service's details, collection mode, and required fields."
-                badge={
-                    <IconBadge
-                        className="gap-2 rounded-full bg-black/20 p-3 text-xs text-white"
-                        icon={
-                            <Briefcase className="h-4 w-4" />
-                        }
-                    >
-                        Edit Revenue Service
-                    </IconBadge>
-                }
-                background={
-                    <FloatingParticles
-                        color="#040404"
-                        count={35}
-                        speed={0.2}
-                        connectDistance={100}
-                        position="bottom-right"
-                    />
-                }
-                overlayClassName="bg-gradient-to-r from-primary/95 via-primary/80 to-primary/50"
-                className="text-white"
-            />
+            
+               <Banner
+                    description="Update this service's details, collection mode, and required fields."
+                    badge={
+                        <IconBadge
+                            className="gap-2 rounded-full  p-3 text-xs"
+                            icon={
+                                <Briefcase className="h-4 w-4" />
+                            }
+                        >
+                            Edit Revenue Service
+                        </IconBadge>
+                    }
+                    background={
+                        <FloatingParticles
+                            color="#040404"
+                            count={35}
+                            speed={0.2}
+                            connectDistance={100}
+                            position="bottom-right"
+                        />
+                    }
+                    overlayClassName="bg-transparent"
+
+
+                />
 
             <RevenueServiceForm
                 mode="edit"

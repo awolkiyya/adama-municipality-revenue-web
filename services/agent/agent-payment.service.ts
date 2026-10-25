@@ -22,31 +22,7 @@ interface ApiPagination {
   has_more?: boolean;
 }
 
-interface ApiEnvelope<T = unknown> {
-  success?: boolean;
-  message?: string;
-  data?: T;
-  errors?: unknown;
-  meta?: ApiPagination & {
-    timestamp?: string;
-    request_id?: string;
-    version?: string;
-  };
-}
 
-interface LaravelResourceCollection {
-  data?: Payment[];
-  meta?: ApiPagination;
-
-  // Some API responses expose pagination at the root.
-  current_page?: number;
-  last_page?: number;
-  per_page?: number | string;
-  total?: number;
-  from?: number | null;
-  to?: number | null;
-  has_more?: boolean;
-}
 
 type NumericValue = number | string | null | undefined;
 

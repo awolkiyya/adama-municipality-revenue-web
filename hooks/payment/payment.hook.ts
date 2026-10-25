@@ -27,7 +27,6 @@ import {
 
 import type {
   Payment,
-  PaymentDetail,
   PaymentFilters,
   PaymentReceipt,
 } from "@/types/payment";

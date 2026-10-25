@@ -9,7 +9,6 @@ import {
     ListResponse,
   } from "@/types/api";
   
-  import { useRouter } from "next/navigation";
   import { toast } from "sonner";
 import { BaseField, BaseFieldFilters } from "@/types/revenue/revenue-baseField";
 import { baseFieldService } from "@/services/revenue/revenueBaseField.service";
@@ -18,41 +17,32 @@ import { baseFieldService } from "@/services/revenue/revenueBaseField.service";
   
   
   
-  /* --------------------------------------
-     Base Fields
-  -------------------------------------- */
-  
-  export const useBaseFields = (
-    params?: BaseFieldFilters
-  )=>{
-  
-  
-    return useQuery<ListResponse<BaseField>>({
-  
-      queryKey:[
-        "base-fields",
-        params,
-      ],
-  
-  
-      queryFn:()=> 
-        baseFieldService.getBaseFields(
-          params
-        ),
-  
-  
-      staleTime:
-        1000 * 60 * 5,
-  
-  
-      placeholderData:
-        (previousData)=>previousData,
-  
-    });
-  
-  
+/* --------------------------------------
+   Base Fields
+-------------------------------------- */
+
+export const useBaseFields = (
+  params?: BaseFieldFilters
+) => {
+  const normalizedParams: BaseFieldFilters = {
+    page: params?.page ?? 1,
+    per_page: params?.per_page ?? 8,
+    search: params?.search?.trim() || undefined,
+    dataType: params?.dataType,
+    isActive: params?.isActive,
   };
-  
+
+  return useQuery<ListResponse<BaseField>>({
+    queryKey: ["base-fields", normalizedParams],
+
+    queryFn: () =>
+      baseFieldService.getBaseFields(normalizedParams),
+
+    staleTime: 1000 * 60 * 5,
+
+    placeholderData: (previousData) => previousData,
+  });
+};
   
   
   
@@ -112,7 +102,6 @@ import { baseFieldService } from "@/services/revenue/revenueBaseField.service";
   export const useCreateBaseField = ()=>{
   
   
-    const router = useRouter();
   
     const queryClient =
       useQueryClient();

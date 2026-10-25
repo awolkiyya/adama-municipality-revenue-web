@@ -82,10 +82,8 @@ export function AssessmentHeader({
           className="
             gap-2
             rounded-full
-            bg-black/20
             p-3
             text-[10px]
-            text-white
           "
           icon={
             <config.icon
@@ -106,24 +104,14 @@ export function AssessmentHeader({
 
       background={
         <FloatingParticles
-          color="#040404"
           count={35}
           speed={0.2}
           connectDistance={100}
           position="bottom-right"
         />
       }
+      overlayClassName="bg-transparent"
 
-      overlayClassName="
-        bg-gradient-to-r
-        from-primary/95
-        via-primary/80
-        to-primary/50
-      "
-
-      className="
-        text-white
-      "
 
       actions={
         <div

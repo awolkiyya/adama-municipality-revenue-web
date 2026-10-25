@@ -1,7 +1,6 @@
 import { NavItem } from "@/lib/navigation";
 import {
     Bell,
-    CalendarDays,
     CreditCard,
     FileText,
     Home,

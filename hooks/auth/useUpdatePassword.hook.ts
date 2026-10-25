@@ -1,10 +1,8 @@
 import { useMutation } from "@tanstack/react-query";
 import { authService } from "@/services/auth.service";
-import { useDispatch } from "react-redux";
 import { useRouter } from "next/navigation";
 
 export const useUpdatePassword = () => {
-  const dispatch = useDispatch();
   const router = useRouter();
 
   return useMutation<

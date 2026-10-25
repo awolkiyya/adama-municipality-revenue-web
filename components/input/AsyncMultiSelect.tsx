@@ -1,8 +1,19 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+
 import {
   Command,
   CommandGroup,
@@ -10,31 +21,52 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import { ScrollArea } from "@/components/ui/scroll-area";
+
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { AlertCircle, Check, ChevronsUpDown, Info, Loader2, X } from "lucide-react";
+
+import {
+  AlertCircle,
+  Check,
+  ChevronsUpDown,
+  Info,
+  Loader2,
+  X,
+} from "lucide-react";
+
 import { cn } from "@/lib/utils";
 
 /* =========================================================
    TYPES
 ========================================================= */
 
-interface AsyncMultiSelectProps<T extends Record<string, any>, V extends string | number> {
+interface FetchDataParams {
+  search: string;
+  page: number;
+  pageSize: number;
+}
+
+interface FetchDataResponse<T> {
+  data: T[];
+  total?: number;
+}
+
+interface AsyncMultiSelectProps<
+  T extends Record<string, any>,
+  V extends string | number,
+> {
   value: V[];
   onChange: (values: V[], items: T[]) => void;
 
-  fetchData: (params: {
-    search: string;
-    page: number;
-    pageSize: number;
-  }) => Promise<{ data: T[]; total?: number }>;
+  fetchData: (
+    params: FetchDataParams,
+  ) => Promise<FetchDataResponse<T>>;
 
-  /** Resolves items for ids the picker hasn't seen yet (e.g. on initial load with a pre-set value). */
   fetchItemsByIds?: (ids: V[]) => Promise<T[]>;
 
   valueField: keyof T;
   displayField?: keyof T;
+
   renderLabel?: (item: T) => string;
   renderOption?: (item: T) => React.ReactNode;
 
@@ -43,17 +75,7 @@ interface AsyncMultiSelectProps<T extends Record<string, any>, V extends string 
   debounceTime?: number;
   disabled?: boolean;
   maxSelectedDisplay?: number;
-
-  /**
-   * When false, this behaves as a single-value picker: selecting an option
-   * REPLACES the current value (instead of appending to it) and closes the
-   * popover immediately. The trigger renders the single selected label as
-   * plain text instead of a removable-badge list. Defaults to true so
-   * existing multi-select call sites are unaffected.
-   */
   multiple?: boolean;
-
-  /** Only relevant when multiple=false. Shows a clear (x) affordance next to the selected value. */
   clearable?: boolean;
 }
 
@@ -61,16 +83,22 @@ interface AsyncMultiSelectProps<T extends Record<string, any>, V extends string 
    HELPERS
 ========================================================= */
 
-function truncateText(text: string, max: number = 40): string {
+function truncateText(text: string, max = 40): string {
   if (!text) return "";
-  return text.length > max ? `${text.slice(0, max)}...` : text;
+
+  return text.length > max
+    ? `${text.slice(0, max)}...`
+    : text;
 }
 
 /* =========================================================
    COMPONENT
 ========================================================= */
 
-export function AsyncMultiSelect<T extends Record<string, any>, V extends string | number>({
+export function AsyncMultiSelect<
+  T extends Record<string, any>,
+  V extends string | number,
+>({
   value,
   onChange,
   fetchData,
@@ -95,43 +123,77 @@ export function AsyncMultiSelect<T extends Record<string, any>, V extends string
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Every item this component has ever seen (current page, prior pages,
-  // and items resolved by id) lives here, keyed by its id. Rendering reads
-  // from this cache rather than the current `options` page, so a badge for
-  // an already-selected item never disappears just because a new search
-  // replaced the visible result list.
   const itemsCacheRef = useRef<Map<V, T>>(new Map());
   const [, forceRerender] = useState(0);
 
-  const mountedRef = useRef(true);
-  // Guards against out-of-order responses: only the most recent search
-  // request is allowed to commit its results.
+  const mountedRef = useRef(false);
   const latestRequestIdRef = useRef(0);
+  const loadingMoreRef = useRef(false);
+  const requestedPagesRef = useRef<Set<number>>(new Set());
+
+  const searchRef = useRef(search);
+  const pageRef = useRef(page);
+  const totalRef = useRef<number | null>(total);
+  const optionCountRef = useRef(0);
+
+  useEffect(() => {
+    searchRef.current = search;
+  }, [search]);
+
+  useEffect(() => {
+    pageRef.current = page;
+  }, [page]);
+
+  useEffect(() => {
+    totalRef.current = total;
+  }, [total]);
+
+  useEffect(() => {
+    optionCountRef.current = optionIds.length;
+  }, [optionIds]);
 
   useEffect(() => {
     mountedRef.current = true;
+
     return () => {
       mountedRef.current = false;
+      latestRequestIdRef.current += 1;
     };
   }, []);
 
-  const cacheItems = useCallback((items: T[]) => {
-    for (const item of items) {
-      itemsCacheRef.current.set(item[valueField] as V, item);
-    }
-  }, [valueField]);
+  /* =====================================================
+     CACHE
+  ===================================================== */
+
+  const cacheItems = useCallback(
+    (items: T[]) => {
+      for (const item of items) {
+        itemsCacheRef.current.set(
+          item[valueField] as V,
+          item,
+        );
+      }
+    },
+    [valueField],
+  );
 
   /* =====================================================
-     LABEL / OPTION RENDERING
+     LABELS
   ===================================================== */
 
   const getLabelText = useCallback(
     (item: T): string => {
-      if (renderLabel) return renderLabel(item);
+      if (renderLabel) {
+        return renderLabel(item);
+      }
 
       if (displayField) {
         const fieldValue = item[displayField];
-        if (typeof fieldValue === "string" || typeof fieldValue === "number") {
+
+        if (
+          typeof fieldValue === "string" ||
+          typeof fieldValue === "number"
+        ) {
           return String(fieldValue);
         }
       }
@@ -142,84 +204,210 @@ export function AsyncMultiSelect<T extends Record<string, any>, V extends string
   );
 
   const getOptionNode = useCallback(
-    (item: T) => (renderOption ? renderOption(item) : getLabelText(item)),
+    (item: T) =>
+      renderOption
+        ? renderOption(item)
+        : getLabelText(item),
     [renderOption, getLabelText],
   );
 
   /* =====================================================
-     LOAD OPTIONS (search + pagination)
+     LOAD OPTIONS
   ===================================================== */
 
   const loadOptions = useCallback(
-    async (pageNumber: number, searchText: string, reset = false) => {
+    async (
+      pageNumber: number,
+      searchText: string,
+      reset = false,
+    ) => {
+      if (!mountedRef.current) return;
+
+      if (reset) {
+        // Invalidate requests from the previous search.
+        latestRequestIdRef.current += 1;
+        requestedPagesRef.current.clear();
+        loadingMoreRef.current = false;
+
+        pageRef.current = 1;
+        totalRef.current = null;
+        optionCountRef.current = 0;
+
+        setOptionIds([]);
+        setPage(1);
+        setTotal(null);
+      } else {
+        if (loadingMoreRef.current) return;
+
+        const knownTotal = totalRef.current;
+
+        if (
+          knownTotal !== null &&
+          optionCountRef.current >= knownTotal
+        ) {
+          return;
+        }
+
+        if (requestedPagesRef.current.has(pageNumber)) {
+          return;
+        }
+
+        // Only request the next sequential page.
+        if (pageNumber !== pageRef.current + 1) {
+          return;
+        }
+      }
+
       const requestId = ++latestRequestIdRef.current;
+
+      requestedPagesRef.current.add(pageNumber);
+
+      if (!reset) {
+        loadingMoreRef.current = true;
+      }
+
       setLoading(true);
       setError(null);
 
       try {
-        const response = await fetchData({ search: searchText, page: pageNumber, pageSize });
+        const response = await fetchData({
+          search: searchText,
+          page: pageNumber,
+          pageSize,
+        });
 
-        // A newer request superseded this one, or the component unmounted
-        // while the request was in flight — drop this stale response.
-        if (!mountedRef.current || requestId !== latestRequestIdRef.current) return;
+        if (
+          !mountedRef.current ||
+          requestId !== latestRequestIdRef.current
+        ) {
+          return;
+        }
 
-        const fetched = response.data ?? [];
+        const fetched = Array.isArray(response?.data)
+          ? response.data
+          : [];
+
         cacheItems(fetched);
 
-        const fetchedIds = fetched.map((item) => item[valueField] as V);
-        setOptionIds((prev) => (reset ? fetchedIds : [...prev, ...fetchedIds]));
+        const fetchedIds = fetched.map(
+          (item) => item[valueField] as V,
+        );
+
+        setOptionIds((previousIds) => {
+          const merged = reset
+            ? new Set<V>()
+            : new Set<V>(previousIds);
+
+          for (const id of fetchedIds) {
+            merged.add(id);
+          }
+
+          const nextIds = [...merged];
+          optionCountRef.current = nextIds.length;
+
+          return nextIds;
+        });
+
+        pageRef.current = pageNumber;
         setPage(pageNumber);
-        setTotal(response.total ?? null);
+
+        const responseTotal =
+          typeof response?.total === "number"
+            ? response.total
+            : null;
+
+        totalRef.current = responseTotal;
+        setTotal(responseTotal);
+
+        // An empty page indicates there are no further results.
+        if (fetched.length === 0) {
+          totalRef.current = optionCountRef.current;
+          setTotal(optionCountRef.current);
+        }
       } catch (err) {
-        console.error(err);
-        if (mountedRef.current && requestId === latestRequestIdRef.current) {
+        console.error(
+          "Failed to load dropdown options:",
+          err,
+        );
+
+        if (
+          mountedRef.current &&
+          requestId === latestRequestIdRef.current
+        ) {
           setError("Failed to load data");
+
+          // Permit retrying a failed page.
+          requestedPagesRef.current.delete(pageNumber);
         }
       } finally {
-        if (mountedRef.current && requestId === latestRequestIdRef.current) {
+        if (
+          mountedRef.current &&
+          requestId === latestRequestIdRef.current
+        ) {
           setLoading(false);
+          loadingMoreRef.current = false;
         }
       }
     },
     [fetchData, pageSize, cacheItems, valueField],
   );
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      loadOptions(1, search, true);
-    }, debounceTime);
-
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, debounceTime]);
-
   /* =====================================================
-     RESOLVE PRE-SELECTED IDS NOT YET IN CACHE
+     INITIAL LOAD / SEARCH
   ===================================================== */
 
   useEffect(() => {
-    if (!fetchItemsByIds) return;
+    const timer = window.setTimeout(() => {
+      void loadOptions(1, search, true);
+    }, debounceTime);
 
-    const missingIds = value.filter((id) => !itemsCacheRef.current.has(id));
-    if (missingIds.length === 0) return;
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [search, debounceTime, loadOptions]);
+
+  /* =====================================================
+     HYDRATE PRE-SELECTED IDS
+  ===================================================== */
+
+  useEffect(() => {
+    if (!fetchItemsByIds || value.length === 0) {
+      return;
+    }
+
+    const missingIds = value.filter(
+      (id) => !itemsCacheRef.current.has(id),
+    );
+
+    if (missingIds.length === 0) {
+      return;
+    }
 
     let active = true;
 
-    (async () => {
+    const resolveItems = async () => {
       try {
         const items = await fetchItemsByIds(missingIds);
-        if (!active) return;
+
+        if (!active || !mountedRef.current) {
+          return;
+        }
+
         cacheItems(items);
-        forceRerender((n) => n + 1);
+        forceRerender((previous) => previous + 1);
       } catch (err) {
-        console.error(err);
+        console.error(
+          "Failed to resolve selected dropdown items:",
+          err,
+        );
       }
-    })();
+    };
+
+    void resolveItems();
 
     return () => {
       active = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value, fetchItemsByIds, cacheItems]);
 
   /* =====================================================
@@ -227,17 +415,26 @@ export function AsyncMultiSelect<T extends Record<string, any>, V extends string
   ===================================================== */
 
   const options = useMemo(
-    () => optionIds.map((id) => itemsCacheRef.current.get(id)).filter((x): x is T => Boolean(x)),
+    () =>
+      optionIds
+        .map((id) => itemsCacheRef.current.get(id))
+        .filter((item): item is T => Boolean(item)),
     [optionIds],
   );
 
   const selectedItems = useMemo(
-    () => value.map((id) => itemsCacheRef.current.get(id)).filter((x): x is T => Boolean(x)),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    () =>
+      value
+        .map((id) => itemsCacheRef.current.get(id))
+        .filter((item): item is T => Boolean(item)),
     [value, optionIds],
   );
 
-  const hasMore = total !== null ? options.length < total : optionIds.length % pageSize === 0 && optionIds.length > 0;
+  const hasMore =
+    total !== null
+      ? optionIds.length < total
+      : options.length > 0 &&
+        options.length % pageSize === 0;
 
   /* =====================================================
      SELECT / REMOVE
@@ -246,22 +443,27 @@ export function AsyncMultiSelect<T extends Record<string, any>, V extends string
   const toggleSelect = useCallback(
     (item: T) => {
       const id = item[valueField] as V;
+
       cacheItems([item]);
 
       if (!multiple) {
-        // Single-select: selecting always replaces the current value,
-        // even if the same item is clicked again (re-picking is a no-op,
-        // not a way to clear — use the clear affordance for that).
         onChange([id], [item]);
         setOpen(false);
         setSearch("");
         return;
       }
 
-      const newValues = value.includes(id) ? value.filter((x) => x !== id) : [...value, id];
+      const newValues = value.includes(id)
+        ? value.filter((existingId) => existingId !== id)
+        : [...value, id];
+
       const newItems = newValues
-        .map((v) => itemsCacheRef.current.get(v))
-        .filter((x): x is T => Boolean(x));
+        .map((selectedId) =>
+          itemsCacheRef.current.get(selectedId),
+        )
+        .filter((selectedItem): selectedItem is T =>
+          Boolean(selectedItem),
+        );
 
       onChange(newValues, newItems);
     },
@@ -270,10 +472,15 @@ export function AsyncMultiSelect<T extends Record<string, any>, V extends string
 
   const removeItem = useCallback(
     (id: V) => {
-      const newValues = value.filter((x) => x !== id);
+      const newValues = value.filter(
+        (existingId) => existingId !== id,
+      );
+
       const newItems = newValues
-        .map((v) => itemsCacheRef.current.get(v))
-        .filter((x): x is T => Boolean(x));
+        .map((selectedId) =>
+          itemsCacheRef.current.get(selectedId),
+        )
+        .filter((item): item is T => Boolean(item));
 
       onChange(newValues, newItems);
     },
@@ -281,8 +488,8 @@ export function AsyncMultiSelect<T extends Record<string, any>, V extends string
   );
 
   const clearSingle = useCallback(
-    (e: React.MouseEvent) => {
-      e.stopPropagation();
+    (event: React.MouseEvent<HTMLSpanElement>) => {
+      event.stopPropagation();
       onChange([], []);
     },
     [onChange],
@@ -293,27 +500,43 @@ export function AsyncMultiSelect<T extends Record<string, any>, V extends string
   ===================================================== */
 
   const handleScroll = useCallback(
-    (e: React.UIEvent<HTMLDivElement>) => {
-      const el = e.currentTarget;
-      const nearBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 20;
+    (event: React.UIEvent<HTMLDivElement>) => {
+      const element = event.currentTarget;
 
-      if (nearBottom && !loading && hasMore) {
-        loadOptions(page + 1, search);
+      const nearBottom =
+        element.scrollTop + element.clientHeight >=
+        element.scrollHeight - 24;
+
+      if (
+        !nearBottom ||
+        loading ||
+        loadingMoreRef.current ||
+        !hasMore
+      ) {
+        return;
       }
+
+      void loadOptions(
+        pageRef.current + 1,
+        searchRef.current,
+      );
     },
-    [loading, hasMore, page, search, loadOptions],
+    [loading, hasMore, loadOptions],
   );
 
   /* =====================================================
      UI
   ===================================================== */
 
-  const singleSelectedItem = !multiple ? selectedItems[0] : undefined;
+  const singleSelectedItem = multiple
+    ? undefined
+    : selectedItems[0];
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
+          type="button"
           variant="outline"
           disabled={disabled}
           className="min-h-11 w-full justify-between rounded-sm px-3"
@@ -321,25 +544,43 @@ export function AsyncMultiSelect<T extends Record<string, any>, V extends string
           {multiple ? (
             <div className="flex flex-wrap gap-1 text-left">
               {value.length === 0 ? (
-                <span className="text-sm text-muted-foreground">{placeholder}</span>
+                <span className="text-sm text-muted-foreground">
+                  {placeholder}
+                </span>
               ) : (
                 <>
-                  {selectedItems.slice(0, maxSelectedDisplay).map((item) => (
-                    <Badge key={String(item[valueField])} variant="secondary" className="gap-1">
-                      {truncateText(getLabelText(item))}
-                      <X
-                        className="h-3 w-3 cursor-pointer"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          removeItem(item[valueField] as V);
-                        }}
-                      />
-                    </Badge>
-                  ))}
+                  {selectedItems
+                    .slice(0, maxSelectedDisplay)
+                    .map((item) => (
+                      <Badge
+                        key={String(item[valueField])}
+                        variant="secondary"
+                        className="gap-1"
+                      >
+                        {truncateText(getLabelText(item))}
 
-                  {selectedItems.length > maxSelectedDisplay && (
-                    <Badge variant="outline" className="font-normal text-muted-foreground">
-                      +{selectedItems.length - maxSelectedDisplay} more
+                        <X
+                          className="h-3 w-3 cursor-pointer"
+                          onClick={(event) => {
+                            event.stopPropagation();
+
+                            removeItem(
+                              item[valueField] as V,
+                            );
+                          }}
+                        />
+                      </Badge>
+                    ))}
+
+                  {selectedItems.length >
+                    maxSelectedDisplay && (
+                    <Badge
+                      variant="outline"
+                      className="font-normal text-muted-foreground"
+                    >
+                      +{selectedItems.length -
+                        maxSelectedDisplay}{" "}
+                      more
                     </Badge>
                   )}
                 </>
@@ -350,80 +591,121 @@ export function AsyncMultiSelect<T extends Record<string, any>, V extends string
               {singleSelectedItem ? (
                 getLabelText(singleSelectedItem)
               ) : (
-                <span className="text-muted-foreground">{placeholder}</span>
+                <span className="text-muted-foreground">
+                  {placeholder}
+                </span>
               )}
             </span>
           )}
 
-          <div className="flex shrink-0 items-center gap-1">
+          <span className="flex shrink-0 items-center gap-1">
             {!multiple && clearable && singleSelectedItem && (
-              <X
-                className="h-3.5 w-3.5 cursor-pointer text-muted-foreground hover:text-foreground"
+              <span
+                role="button"
+                tabIndex={0}
+                aria-label="Clear selection"
+                className="rounded-sm p-0.5 text-muted-foreground hover:text-foreground"
                 onClick={clearSingle}
-              />
+                onKeyDown={(event) => {
+                  if (
+                    event.key === "Enter" ||
+                    event.key === " "
+                  ) {
+                    event.preventDefault();
+                    onChange([], []);
+                  }
+                }}
+              >
+                <X className="h-3.5 w-3.5" />
+              </span>
             )}
+
             <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
-          </div>
+          </span>
         </Button>
       </PopoverTrigger>
 
-      <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] p-0">
-        {/* shouldFilter=false: search is already handled server-side via
-            fetchData, so cmdk's own text-matching filter must be disabled —
-            otherwise it hides valid server results that don't textually
-            match the query, especially when renderOption returns non-text JSX. */}
+      {/* Wider, responsive dropdown */}
+      <PopoverContent
+        align="start"
+        side="bottom"
+        sideOffset={4}
+        className="w-[min(36rem,calc(100vw-2rem))] min-w-[min(24rem,calc(100vw-2rem))] p-0"
+      >
         <Command shouldFilter={false}>
-          <CommandInput placeholder="Search..." value={search} onValueChange={setSearch} />
+          <CommandInput
+            placeholder="Search..."
+            value={search}
+            onValueChange={setSearch}
+          />
 
-          <CommandList>
-            <ScrollArea className="max-h-72" onScroll={handleScroll}>
-              {loading && options.length === 0 && (
-                <div className="flex items-center gap-2 p-4 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Loading...
+          <CommandList
+            className="max-h-72 overflow-y-auto"
+            onScroll={handleScroll}
+          >
+            {loading && options.length === 0 && (
+              <div className="flex items-center gap-2 p-4 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading...
+              </div>
+            )}
+
+            {error && (
+              <div className="flex items-center gap-2 p-4 text-sm text-red-500">
+                <AlertCircle className="h-4 w-4" />
+                {error}
+              </div>
+            )}
+
+            {!loading && !error && options.length === 0 && (
+              <div className="flex items-center gap-2 p-4 text-sm text-muted-foreground">
+                <Info className="h-4 w-4" />
+                No results
+              </div>
+            )}
+
+            <CommandGroup>
+              {options.map((item) => {
+                const id = item[valueField] as V;
+                const selected = value.includes(id);
+
+                return (
+                  <CommandItem
+                    key={String(id)}
+                    value={String(id)}
+                    onSelect={() => toggleSelect(item)}
+                    className="flex gap-3 py-3"
+                  >
+                    <Check
+                      className={cn(
+                        "h-4 w-4",
+                        selected
+                          ? "opacity-100"
+                          : "opacity-0",
+                      )}
+                    />
+
+                    {getOptionNode(item)}
+                  </CommandItem>
+                );
+              })}
+
+              {loading && options.length > 0 && (
+                <div className="flex items-center justify-center gap-2 py-3 text-xs text-muted-foreground">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Loading more...
                 </div>
               )}
 
-              {error && (
-                <div className="flex items-center gap-2 p-4 text-sm text-red-500">
-                  <AlertCircle className="h-4 w-4" />
-                  {error}
-                </div>
-              )}
-
-              {!loading && !error && options.length === 0 && (
-                <div className="flex items-center gap-2 p-4 text-sm text-muted-foreground">
-                  <Info className="h-4 w-4" />
-                  No results
-                </div>
-              )}
-
-              <CommandGroup>
-                {options.map((item) => {
-                  const id = item[valueField] as V;
-                  const selected = value.includes(id);
-
-                  return (
-                    <CommandItem
-                      key={String(id)}
-                      value={String(id)}
-                      onSelect={() => toggleSelect(item)}
-                      className="flex gap-3 py-3"
-                    >
-                      <Check className={cn("h-4 w-4", selected ? "opacity-100" : "opacity-0")} />
-                      {getOptionNode(item)}
-                    </CommandItem>
-                  );
-                })}
-
-                {loading && options.length > 0 && (
-                  <div className="flex items-center justify-center gap-2 py-3 text-xs text-muted-foreground">
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                    Loading more...
+              {!loading &&
+                !error &&
+                options.length > 0 &&
+                !hasMore && (
+                  <div className="py-2 text-center text-xs text-muted-foreground">
+                    No more results
                   </div>
                 )}
-              </CommandGroup>
-            </ScrollArea>
+            </CommandGroup>
           </CommandList>
         </Command>
       </PopoverContent>

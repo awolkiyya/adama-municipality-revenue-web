@@ -62,7 +62,6 @@ type InterestRuleFormProps = {
 
 const FIXED_RATE_PERIOD = "YEAR";
 const FIXED_CALCULATION_METHOD = "SIMPLE";
-const FIXED_ACCRUAL_PERIOD = "MONTH";
 
 // =====================================================
 // SMALL UI COMPONENTS

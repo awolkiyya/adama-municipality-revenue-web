@@ -249,7 +249,6 @@ function safeEvaluateFormula(
   }
 
   try {
-    // eslint-disable-next-line no-new-func
     const result = Function(`"use strict"; return (${expression});`)();
     return typeof result === "number" && Number.isFinite(result) ? result : null;
   } catch {
@@ -641,9 +640,6 @@ export default function TariffRuleForm({
 
   const priorityCollision = existingRules.find((r) => r.priority === form.priority);
 
-  const executionOrderCollision = existingRules.find(
-    (r) => r.executionOrder === form.executionOrder
-  );
 
   // -------------------------------------------------------------------------
   // Conditions sentence
@@ -1513,8 +1509,8 @@ export default function TariffRuleForm({
                     <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
 
                     <span>
-                      This rule isn't ready to {mode === "create" ? "publish" : "save"} yet.
-                      Check that the rule name, calculation method, and any conditions you've
+                      This rule isnt ready to {mode === "create" ? "publish" : "save"} yet.
+                      Check that the rule name, calculation method, and any conditions youve
                       started are complete.
                     </span>
                   </div>

@@ -9,7 +9,6 @@ import {
   
   import {
     ApiResponse,
-    ListResponse,
   } from "@/types/api";
   
   

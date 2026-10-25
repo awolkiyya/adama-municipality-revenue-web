@@ -229,7 +229,7 @@ export const useCreateAssessment = () => {
       );
 
       router.push(
-        "/office/dashboard/revenue/assessments",
+        "/en/office/dashboard/assessments",
       );
 
     },
@@ -272,7 +272,7 @@ export const useSaveAssessmentDraft = () => {
       );
 
       router.push(
-        "/office/dashboard/revenue/assessments",
+        "/en/office/dashboard/assessments",
       );
 
     },
@@ -371,7 +371,7 @@ export const useSubmitAssessment = () => {
       );
 
       router.push(
-        "/office/dashboard/revenue/assessments",
+        "/en/office/dashboard/assessments",
       );
 
     },

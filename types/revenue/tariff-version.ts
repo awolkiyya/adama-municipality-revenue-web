@@ -77,3 +77,16 @@ export interface CurrentActiveTariffSummary {
     message: string;
 
 }
+
+export interface DuplicateTariffVersionPayload {
+    year: number;
+    name: string;
+    effective_from: string;
+    effective_to: string | null;
+  }
+
+  export interface DuplicateTariffVersionVariables {
+    id: string;
+    data: DuplicateTariffVersionPayload;
+  }
+  

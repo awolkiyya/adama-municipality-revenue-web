@@ -4,7 +4,6 @@ import {
   CheckCircle2,
   Clock3,
   XCircle,
-  AlertCircle,
 } from "lucide-react";
 
 export type PaymentResultStatus =

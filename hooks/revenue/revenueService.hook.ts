@@ -208,7 +208,7 @@ import { CreateRevenueServicePayload, RevenueService, RevenueServiceFilters, Rev
   
   
   
-      onSuccess:(_,variables)=>{
+      onSuccess:()=>{
   
   
         queryClient.invalidateQueries({

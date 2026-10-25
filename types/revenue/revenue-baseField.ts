@@ -31,11 +31,17 @@ export interface BaseFieldOption {
 
 
 
+export type BaseFieldInputSource =
+  | "MANUAL"
+  | "AI"
+  | "MANUAL_OR_AI";
+
 export interface BaseField {
   id: string;
   name: string;
   code: string;
   data_type: BaseFieldDataType;
+  inputSource: BaseFieldInputSource;
   measurement_unit_id?: string | null;
   unit_code?: string | null;
   description?: string | null;
@@ -51,12 +57,9 @@ export interface BaseField {
 
 export interface BaseFieldFilters {
   page?: number;
-
   per_page?: number;
-
   search?: string;
-
-  dataType?: BaseFieldDataType;
-
+  dataType?: string;
   isActive?: boolean;
+  ids?: string[];
 }

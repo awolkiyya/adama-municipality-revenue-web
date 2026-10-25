@@ -28,8 +28,6 @@ import {
   TariffFormulaVariable,
   TariffFormulaVariableSourceType,
   TariffFormulaVariableDataType,
-  CreateTariffFormulaVariableRequest,
-  UpdateTariffFormulaVariableRequest,
   TariffFormulaVariableApiPayload,
 } from "@/types/revenue/tariff-formula-variable";
 
@@ -245,8 +243,6 @@ export default function FormulaVariablesForm({
   onSaved,
   onCancel,
   variant = "page",
-  title = "Formula Variables",
-  description = "Define the inputs this tariff rule's formula can reference",
   className,
 }: FormulaVariablesFormProps) {
   const [rows, setRows] = useState<EditableVariable[]>([]);
@@ -453,21 +449,7 @@ export default function FormulaVariablesForm({
         className
       )}
     >
-      <div className="shrink-0 border-b px-5 py-4 sm:px-6">
-        <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-            <Sigma className="h-4.5 w-4.5" />
-          </div>
-          <div>
-            <h2 className="text-base font-semibold leading-none tracking-tight">
-              {title}
-            </h2>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {description}
-            </p>
-          </div>
-        </div>
-      </div>
+     
 
       <div
         className={cn(
@@ -519,7 +501,7 @@ export default function FormulaVariablesForm({
           </Button>
         </div>
 
-        <div className="flex-1 px-5 py-4 sm:px-6">
+        <div className="flex-1  py-4">
           {isLoading ? (
             <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />

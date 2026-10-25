@@ -64,6 +64,9 @@ export type PermissionAction =
   | "close"
   | "upload"
   | "portal_access"
+  |"duplicate"
+  | "publish"
+  |"reconcile"
   ;
 
 export interface UserPermission {

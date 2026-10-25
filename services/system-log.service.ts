@@ -4,7 +4,6 @@ import { api } from "@/lib/api";
 import { normalizeApiError } from "@/lib/api-error";
 import { ApiResponse, PaginatedResponse } from "@/types/api";
 import {
-  PaginatedData,
   SystemLog,
   SystemLogQuery,
 } from "@/types/auditLog";

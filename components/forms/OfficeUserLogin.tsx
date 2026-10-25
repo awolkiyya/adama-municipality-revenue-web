@@ -3,7 +3,7 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FormError } from "./form-error";
-import { Mail, Lock, LogIn, Sparkles, Loader2 } from "lucide-react";
+import { Mail, Lock, LogIn, Loader2 } from "lucide-react";
 import { officeLoginSchema, OfficeUserFormData } from "@/lib/zod-forms/officeLogin.schema";
 import { Button } from "../ui/button";
 import { useLogin } from "@/hooks/auth/useLogin";

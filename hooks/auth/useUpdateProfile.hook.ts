@@ -12,7 +12,7 @@ export const useUpdateProfile = () => {
       email: string;
     }) => authService.updateProfile(data),
 
-    onSuccess: (response) => {
+    onSuccess: () => {
       toast.success("Profile updated successfully");
 
       // ✅ refresh current user cache

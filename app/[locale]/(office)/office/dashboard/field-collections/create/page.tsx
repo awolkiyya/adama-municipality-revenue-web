@@ -78,7 +78,7 @@ export default function CreateFieldCollectionPage() {
      */
     if (collection.invoiceId) {
       router.push(
-        `/field-collection/${collection.invoiceId}`,
+        `/en/office/dashboard/field-collections/${collection.invoiceId}`,
       )
     }
   }
@@ -88,7 +88,7 @@ export default function CreateFieldCollectionPage() {
   // =========================================================
 
   function handleCancel() {
-    router.push("/field-collection")
+    router.push("/en/office/dashboard/field-collections")
   }
 
   // =========================================================
@@ -145,6 +145,7 @@ export default function CreateFieldCollectionPage() {
       </div>
     )
   }
+  console.log("revenueServices",revenueServices);
 
   // =========================================================
   // PAGE

@@ -2,7 +2,6 @@
 
 import {
   Bell,
-  CalendarDays,
   ChevronDown,
   CreditCard,
   FileText,
@@ -13,7 +12,6 @@ import {
   Sun,
   SunMoon,
   UserRound,
-  Zap,
 } from "lucide-react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";

@@ -580,7 +580,7 @@ export default function ServiceAccessPage() {
         description="Control which sectors are allowed to access this revenue service."
         badge={
           <IconBadge
-            className="gap-2 rounded-full bg-black/20 p-3 text-xs text-white"
+            className="gap-2 rounded-full p-3 text-xs"
             icon={
               <Wrench className="h-4 w-4" />
             }
@@ -588,6 +588,7 @@ export default function ServiceAccessPage() {
             Service Access
           </IconBadge>
         }
+        overlayClassName="bg-transparent"
         background={
           <FloatingParticles
             color="#040404"
@@ -597,8 +598,6 @@ export default function ServiceAccessPage() {
             position="bottom-right"
           />
         }
-        overlayClassName="bg-gradient-to-r from-primary/95 via-primary/80 to-primary/50"
-        className="text-white"
         actions={
           <div className="flex flex-wrap gap-2">
 
@@ -849,10 +848,6 @@ export default function ServiceAccessPage() {
                     Sector
                   </th>
 
-                  <th className="px-6 py-3 text-center">
-                    Access
-                  </th>
-
                   <th className="w-10" />
 
                 </tr>
@@ -977,54 +972,7 @@ export default function ServiceAccessPage() {
 
                       </td>
 
-                      {/* =========================================
-                          ACTIONS
-                      ========================================= */}
-
-                      <td className="px-6 py-4 text-right">
-
-                        <DropdownMenu>
-
-                          <DropdownMenuTrigger
-                            asChild
-                          >
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              aria-label="Row actions"
-                            >
-                              <MoreHorizontal
-                                size={16}
-                              />
-                            </Button>
-                          </DropdownMenuTrigger>
-
-                          <DropdownMenuContent align="end">
-
-                            {/* ALLOW / NOT ALLOW */}
-
-                            <DropdownMenuItem
-                              disabled={
-                                syncAccessRules.isPending
-                              }
-                              onClick={() =>
-                                handleBulkStatus(
-                                  !row.isActive
-                                )
-                              }
-                            >
-                              <Power className="mr-2 h-4 w-4" />
-
-                              {row.isActive
-                                ? "Not Allow"
-                                : "Allow"}
-                            </DropdownMenuItem>
-
-                          </DropdownMenuContent>
-
-                        </DropdownMenu>
-
-                      </td>
+                    
 
                     </tr>
                   ))

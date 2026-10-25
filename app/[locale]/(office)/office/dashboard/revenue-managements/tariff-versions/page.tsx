@@ -16,6 +16,7 @@ import {
   Eye,
   Pencil,
   Trash2,
+  Copy,
 } from "lucide-react";
 
 import { Banner } from "@/components/banner/topBanner";
@@ -34,26 +35,24 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-import {
-  TariffVersionFormSheet,
-  TariffVersionFormValues,
-} from "@/components/dialogs/TariffVersionFormDialog";
-
+import { DuplicateTariffVersionDialog } from "@/components/revenue/tariff-versions/DuplicateTariffVersionDialog";
 import DeleteModal from "@/components/dialogs/deleteModal";
+
+
 
 import {
   useActivateTariffVersion,
-  useCreateTariffVersion,
   useCurrentActiveTariff,
   useDeleteTariffVersion,
   useTariffVersions,
-  useUpdateTariffVersion,
 } from "@/hooks/revenue/revenueVersion.hook";
 
-import { TariffVersion } from "@/types/revenue/tariff-version";
+import type { TariffVersion } from "@/types/revenue/tariff-version";
 
 import { DataTablePagination } from "@/components/table/data-pagination";
 import { formatEthiopianDate } from "@/lib/utils";
+import ProtectedRoute from "@/components/access/ProtectedRoute";
+import Can from "@/components/access/Can";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -65,9 +64,7 @@ type VersionStatus = "active" | "scheduled" | "archived";
 // Helpers
 // ---------------------------------------------------------------------------
 
-function getVersionStatus(
-  version: TariffVersion
-): VersionStatus {
+function getVersionStatus(version: TariffVersion): VersionStatus {
   if (version.isActive) {
     return "active";
   }
@@ -77,12 +74,6 @@ function getVersionStatus(
   }
 
   return "scheduled";
-}
-
-function versionDisplayName(
-  year: number | string
-): string {
-  return `${year} Standard Tariff`;
 }
 
 // ---------------------------------------------------------------------------
@@ -113,55 +104,70 @@ const STATUS_META: Record<
 
   archived: {
     label: "Archived",
-    badgeClass:
-      "gap-1 bg-muted text-muted-foreground hover:bg-muted",
+    badgeClass: "gap-1 bg-muted text-muted-foreground hover:bg-muted",
     Icon: Archive,
   },
 };
 
 // ---------------------------------------------------------------------------
-// Page
+// Routes
+// ---------------------------------------------------------------------------
+
+const TARIFF_VERSIONS_ROUTE =
+  "/office/dashboard/revenue-managements/tariff-versions";
+
+const TARIFF_TRASH_ROUTE = `${TARIFF_VERSIONS_ROUTE}/trash`;
+
+function getEditRoute(id: string | number) {
+  return `${TARIFF_VERSIONS_ROUTE}/${id}/edit`;
+}
+
+function getDetailsRoute(id: string | number) {
+  return `${TARIFF_VERSIONS_ROUTE}/${id}`;
+}
+
+// ---------------------------------------------------------------------------
+// Protected page entry point
 // ---------------------------------------------------------------------------
 
 export default function TariffVersionsPage() {
+  return (
+    <ProtectedRoute resource="tariff_version" action="view">
+      <TariffVersionsPageContent />
+    </ProtectedRoute>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Page content
+// ---------------------------------------------------------------------------
+
+function TariffVersionsPageContent() {
   const router = useRouter();
 
   // -------------------------------------------------------------------------
-  // Dialog state
+  // Duplicate dialog
   // -------------------------------------------------------------------------
 
-  const [dialogOpen, setDialogOpen] =
-    useState(false);
-
-  const [editingVersion, setEditingVersion] =
+  const [duplicateOpen, setDuplicateOpen] = useState(false);
+  const [sourceVersion, setSourceVersion] =
     useState<TariffVersion | null>(null);
 
   // -------------------------------------------------------------------------
-  // Delete state
+  // Delete dialog
   // -------------------------------------------------------------------------
 
-  const [deleteOpen, setDeleteOpen] =
-    useState(false);
-
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [selectedVersion, setSelectedVersion] =
     useState<TariffVersion | null>(null);
 
   // -------------------------------------------------------------------------
-  // Search
+  // Search and pagination
   // -------------------------------------------------------------------------
 
-  const [query, setQuery] =
-    useState("");
-
-  // -------------------------------------------------------------------------
-  // Pagination
-  // -------------------------------------------------------------------------
-
-  const [page, setPage] =
-    useState(1);
-
-  const [pageSize, setPageSize] =
-    useState(10);
+  const [query, setQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   // -------------------------------------------------------------------------
   // API
@@ -170,274 +176,110 @@ export default function TariffVersionsPage() {
   const {
     data: tariffResponse,
     isLoading,
+    isError,
+    refetch,
   } = useTariffVersions({
     page,
     per_page: pageSize,
   });
 
-  const {
-    data: activeTariffResponse,
-  } = useCurrentActiveTariff();
+  const { data: activeTariffResponse } = useCurrentActiveTariff();
 
-  const createMutation =
-    useCreateTariffVersion();
-
-  const updateMutation =
-    useUpdateTariffVersion();
-
-  const deleteMutation =
-    useDeleteTariffVersion();
-
-  const activateMutation =
-    useActivateTariffVersion();
+  const deleteMutation = useDeleteTariffVersion();
+  const activateMutation = useActivateTariffVersion();
 
   // -------------------------------------------------------------------------
   // Normalize API response
   // -------------------------------------------------------------------------
-  //
-  // IMPORTANT:
-  //
-  // The current useTariffVersions() hook does not expose its generic
-  // response type correctly to TypeScript. Therefore TypeScript sees
-  // tariffResponse as NonNullable<TQueryFnData> instead of TariffVersion[].
-  //
-  // Runtime-wise, the API data used by this page is expected to be an array.
-  //
-  // This normalization prevents the page from spreading the incorrect
-  // generic type throughout the component.
-  // -------------------------------------------------------------------------
 
-  console.log(tariffResponse?.data);
+  const versions: TariffVersion[] = Array.isArray(tariffResponse?.data)
+    ? tariffResponse.data
+    : [];
 
-  const versions: TariffVersion[] =
-    Array.isArray(tariffResponse?.data)
-      ? (tariffResponse.data as TariffVersion[])
-      : [];
-
-  // -------------------------------------------------------------------------
-  // Active version
-  // -------------------------------------------------------------------------
-
-  const activeVersion =
-    useMemo<TariffVersion | undefined>(
-      () =>
-        versions.find(
-          (item: TariffVersion) =>
-            item.isActive
-        ),
-      [versions]
-    );
-
-  // -------------------------------------------------------------------------
-  // Existing years
-  // -------------------------------------------------------------------------
-  //
-  // TariffVersion.year can be string | number.
-  //
-  // TariffVersionFormDialog.existingYears expects number[].
-  //
-  // Therefore Number() is required here.
-  // -------------------------------------------------------------------------
-
-  const existingYears =
-    useMemo<number[]>(
-      () =>
-        versions
-          .filter(
-            (item: TariffVersion) =>
-              item.id !==
-              editingVersion?.id
-          )
-          .map(
-            (item: TariffVersion) =>
-              Number(item.year)
-          )
-          .filter(
-            (year: number) =>
-              Number.isFinite(year)
-          ),
-      [
-        versions,
-        editingVersion,
-      ]
-    );
+  const responseTotal =
+    typeof tariffResponse?.meta?.total === "number"
+      ? tariffResponse.meta.total
+      : versions.length;
 
   // -------------------------------------------------------------------------
   // Sort
   // -------------------------------------------------------------------------
 
-  const sortedVersions =
-    useMemo<TariffVersion[]>(
-      () =>
-        [...versions].sort(
-          (
-            a: TariffVersion,
-            b: TariffVersion
-          ) =>
-            Number(b.year) -
-            Number(a.year)
-        ),
-      [versions]
-    );
+  const sortedVersions = useMemo(
+    () => [...versions].sort((a, b) => Number(b.year) - Number(a.year)),
+    [versions],
+  );
 
   // -------------------------------------------------------------------------
   // Search
   // -------------------------------------------------------------------------
 
-  const filteredVersions =
-    useMemo<TariffVersion[]>(
-      () => {
-        const value =
-          query
-            .trim()
-            .toLowerCase();
+  const filteredVersions = useMemo(() => {
+    const value = query.trim().toLowerCase();
 
-        if (!value) {
-          return sortedVersions;
-        }
+    if (!value) {
+      return sortedVersions;
+    }
 
-        return sortedVersions.filter(
-          (item: TariffVersion) =>
-            String(item.year)
-              .toLowerCase()
-              .includes(value) ||
-            String(item.name ?? "")
-              .toLowerCase()
-              .includes(value)
-        );
-      },
-      [
-        query,
-        sortedVersions,
-      ]
+    return sortedVersions.filter(
+      (item) =>
+        String(item.year).toLowerCase().includes(value) ||
+        String(item.name ?? "").toLowerCase().includes(value) ||
+        `v${item.version ?? 1}`.includes(value),
     );
+  }, [query, sortedVersions]);
 
   // -------------------------------------------------------------------------
-  // Create dialog
+  // Create
   // -------------------------------------------------------------------------
 
-  const openCreateDialog =
-    () => {
-      setEditingVersion(null);
-      setDialogOpen(true);
-    };
-
-  // -------------------------------------------------------------------------
-  // Edit dialog
-  // -------------------------------------------------------------------------
-
-  const openEditDialog = (
-    version: TariffVersion
-  ) => {
-    setEditingVersion(version);
-    setDialogOpen(true);
+  const openCreatePage = () => {
+    router.push(`${TARIFF_VERSIONS_ROUTE}/new`);
   };
 
   // -------------------------------------------------------------------------
-  // Dialog open change
+  // Edit
   // -------------------------------------------------------------------------
 
-  const handleDialogOpenChange =
-    (next: boolean) => {
-      setDialogOpen(next);
-
-      if (!next) {
-        setEditingVersion(null);
-      }
-    };
+  const openEditPage = (version: TariffVersion) => {
+    router.push(getEditRoute(version.id));
+  };
 
   // -------------------------------------------------------------------------
-  // Create / Update
+  // Duplicate
   // -------------------------------------------------------------------------
 
-  const handleSubmitVersion =
-    async (
-      values: TariffVersionFormValues
-    ) => {
-      if (editingVersion) {
-        await updateMutation.mutateAsync({
-          id: editingVersion.id,
-
-          data: {
-            year: Number(
-              values.year
-            ),
-
-            name:
-              versionDisplayName(
-                values.year
-              ),
-
-            effective_from:
-              values.effective_from,
-
-            effective_to:
-              values.effective_to ||
-              null,
-
-            isActive:
-              values.isActive,
-          },
-        });
-      } else {
-        await createMutation.mutateAsync({
-          year: Number(
-            values.year
-          ),
-
-          version: 1,
-
-          name:
-            versionDisplayName(
-              values.year
-            ),
-
-          effective_from:
-            values.effective_from,
-
-          effective_to:
-            values.effective_to ||
-            null,
-
-          isActive:
-            values.isActive,
-        });
-      }
-
-      setDialogOpen(false);
-      setEditingVersion(null);
-    };
+  const openDuplicateDialog = (version: TariffVersion) => {
+    setSourceVersion(version);
+    setDuplicateOpen(true);
+  };
 
   // -------------------------------------------------------------------------
   // Delete
   // -------------------------------------------------------------------------
 
-  const handleDelete =
-    async () => {
-      if (!selectedVersion) {
-        return;
-      }
+  const handleDelete = async () => {
+    if (!selectedVersion) {
+      return;
+    }
 
-      await deleteMutation.mutateAsync(
-        selectedVersion.id
-      );
+    await deleteMutation.mutateAsync(selectedVersion.id);
 
-      setDeleteOpen(false);
-      setSelectedVersion(null);
-    };
+    setDeleteOpen(false);
+    setSelectedVersion(null);
+
+    await refetch();
+  };
 
   // -------------------------------------------------------------------------
   // Activate
   // -------------------------------------------------------------------------
 
-  const handleActivate =
-    async (
-      id: string
-    ) => {
-      await activateMutation.mutateAsync(
-        id
-      );
-    };
+  const handleActivate = async (id: string | number) => {
+    await activateMutation.mutateAsync(String(id));
+
+    await refetch();
+  };
 
   // -------------------------------------------------------------------------
   // Render
@@ -445,23 +287,19 @@ export default function TariffVersionsPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
-
-      {/* ================================================================= */}
-      {/* Banner */}
-      {/* ================================================================= */}
+      {/* Header */}
 
       <Banner
-        description="Manage yearly tariff versions. Each version keeps independent pricing rules for audit history and future changes."
+        description="Manage yearly tariff versions. Duplicate an existing version to carry forward its pricing rules and formulas without changing historical records."
         badge={
           <IconBadge
-            className="gap-2 rounded-full bg-black/20 p-3 text-xs text-white"
-            icon={
-              <CalendarClock className="h-4 w-4" />
-            }
+            className="gap-2 rounded-full p-3 text-xs"
+            icon={<CalendarClock className="h-4 w-4" />}
           >
             Tariff Versions
           </IconBadge>
         }
+        overlayClassName="bg-transparent"
         background={
           <FloatingParticles
             color="#040404"
@@ -471,511 +309,355 @@ export default function TariffVersionsPage() {
             position="bottom-right"
           />
         }
-        overlayClassName="bg-gradient-to-r from-primary/95 via-primary/80 to-primary/50"
-        className="text-white"
         actions={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            <Can resource="tariff_version" action="delete">
+              <Button
+                variant="outline"
+                onClick={() => router.push(TARIFF_TRASH_ROUTE)}
+              >
+                <Archive className="mr-2 h-4 w-4" />
+                Trash
+              </Button>
+            </Can>
 
-            <Button
-              variant="outline"
-              onClick={() =>
-                router.push(
-                  "/office/dashboard/revenue-managements/tariff-versions/trash"
-                )
-              }
-            >
-              <Archive className="mr-2 h-4 w-4" />
-              Trash
-            </Button>
-
-            <Button
-              onClick={
-                openCreateDialog
-              }
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              New Tariff Version
-            </Button>
-
+            <Can resource="tariff_version" action="create">
+              <Button onClick={openCreatePage}>
+                <Plus className="mr-2 h-4 w-4" />
+                New Tariff Version
+              </Button>
+            </Can>
           </div>
         }
       />
 
-      {/* ================================================================= */}
       {/* Active tariff status */}
-      {/* ================================================================= */}
 
-      {activeTariffResponse?.data
-        ?.message && (
-        <ActiveTariffStatus
-          message={
-            activeTariffResponse
-              .data.message
-          }
-        />
+      {activeTariffResponse?.data?.message && (
+        <ActiveTariffStatus message={activeTariffResponse.data.message} />
       )}
 
-      {/* ================================================================= */}
-      {/* Loading */}
-      {/* ================================================================= */}
+      {/* Error, loading, empty state, or table */}
 
-      {isLoading ? (
+      {isError ? (
+        <div className="flex flex-col items-center gap-3 rounded-xl border border-destructive/30 px-6 py-12 text-center">
+          <p className="text-sm font-semibold">
+            Unable to load tariff versions
+          </p>
+
+          <p className="text-sm text-muted-foreground">
+            Something went wrong while retrieving tariff versions.
+          </p>
+
+          <Button variant="outline" onClick={() => void refetch()}>
+            Try again
+          </Button>
+        </div>
+      ) : isLoading ? (
         <div className="space-y-4">
-
           <div className="h-20 animate-pulse rounded-xl border bg-muted/40" />
 
-          {Array.from({
-            length: 5,
-          }).map(
-            (
-              _,
-              index
-            ) => (
-              <div
-                key={index}
-                className="h-16 animate-pulse rounded-xl border bg-muted/40"
-              />
-            )
-          )}
-
+          {Array.from({ length: 5 }).map((_, index) => (
+            <div
+              key={index}
+              className="h-16 animate-pulse rounded-xl border bg-muted/40"
+            />
+          ))}
         </div>
-      ) : versions.length ===
-        0 ? (
-
-        /* =============================================================== */
-        /* Empty */
-        /* =============================================================== */
-
+      ) : versions.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed bg-card px-6 py-16 text-center">
-
           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
             <Inbox className="h-5 w-5 text-muted-foreground" />
           </div>
 
-          <p className="text-sm font-semibold">
-            No tariff versions yet
+          <p className="text-sm font-semibold">No tariff versions yet</p>
+
+          <p className="max-w-sm text-xs text-muted-foreground">
+            Create your first tariff version. Once you have configured its
+            rules and formulas, you can duplicate it for future years.
           </p>
 
-          <p className="text-xs text-muted-foreground">
-            Create your first tariff version.
-          </p>
-
-          <Button
-            size="sm"
-            onClick={
-              openCreateDialog
-            }
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            New Tariff Version
-          </Button>
-
+          <Can resource="tariff_version" action="create">
+            <Button size="sm" onClick={openCreatePage}>
+              <Plus className="mr-2 h-4 w-4" />
+              New Tariff Version
+            </Button>
+          </Can>
         </div>
       ) : (
-
-        /* =============================================================== */
-        /* List */
-        /* =============================================================== */
-
         <>
-          {/* ============================================================= */}
           {/* Search */}
-          {/* ============================================================= */}
 
           <div className="relative">
-
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
 
             <Input
               value={query}
-              onChange={(
-                event
-              ) => {
-                setQuery(
-                  event.target.value
-                );
-
+              onChange={(event) => {
+                setQuery(event.target.value);
                 setPage(1);
               }}
-              placeholder="Search tariff year..."
+              placeholder="Search tariff year or version..."
               className="py-5 pl-9"
             />
-
           </div>
 
-          {/* ============================================================= */}
-          {/* Search result */}
-          {/* ============================================================= */}
+          {/* Search results */}
 
-          {filteredVersions.length ===
-          0 ? (
-
+          {filteredVersions.length === 0 ? (
             <div className="rounded-xl border border-dashed px-6 py-10 text-center">
-
               <p className="text-sm text-muted-foreground">
-                No versions match
-                &quot;{query}&quot;
+                No versions match &quot;{query}&quot;
               </p>
-
             </div>
-
           ) : (
-
-            /* =========================================================== */
-            /* Table */
-            /* =========================================================== */
-
             <div className="overflow-hidden rounded-xl border bg-card">
-
               <div className="overflow-x-auto">
-
                 <table className="w-full text-sm">
-
                   <thead className="border-b bg-muted/40">
-
                     <tr>
-
                       <th className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground">
                         Year
                       </th>
-
                       <th className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground">
                         Version
                       </th>
-
                       <th className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground">
                         Effective Period
                       </th>
-
                       <th className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground">
                         Status
                       </th>
-
                       <th className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground">
                         Price Rules
                       </th>
-
                       <th className="px-5 py-3 text-right text-xs font-semibold text-muted-foreground">
                         Actions
                       </th>
-
                     </tr>
-
                   </thead>
 
                   <tbody>
+                    {filteredVersions.map((version) => {
+                      const status = getVersionStatus(version);
+                      const statusMeta = STATUS_META[status];
+                      const StatusIcon = statusMeta.Icon;
 
-                    {filteredVersions.map(
-                      (
-                        version: TariffVersion
-                      ) => {
-
-                        const status =
-                          getVersionStatus(
-                            version
-                          );
-
-                        const statusMeta =
-                          STATUS_META[
-                            status
-                          ];
-
-                        const StatusIcon =
-                          statusMeta.Icon;
-
-                        return (
-                          <tr
-                            key={
-                              version.id
-                            }
-                            className="border-b transition last:border-none hover:bg-muted/40"
-                          >
-
-                            {/* Year */}
-
-                            <td className="px-5 py-4">
-
-                              <div className="flex items-center gap-2">
-
-                                <div
-                                  className={`flex h-9 w-14 items-center justify-center rounded-lg text-sm font-bold ${
-                                    version.isActive
-                                      ? "bg-primary text-primary-foreground"
-                                      : "bg-muted"
-                                  }`}
-                                >
-                                  {
-                                    version.year
-                                  }
-                                </div>
-
-                                {version.isActive && (
-                                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                                )}
-
-                              </div>
-
-                            </td>
-
-                            {/* Version */}
-
-                            <td className="px-5 py-4">
-                              v
-                              {version.version ??
-                                1}
-                            </td>
-
-                            {/* Effective period */}
-
-                            <td className="px-5 py-4 text-muted-foreground">
-
-                              <div>
-                                {formatEthiopianDate(
-                                  version.effectiveFrom
-                                )}
-                              </div>
-
-                              <div className="text-xs">
-                                →{" "}
-                                {version.effectiveTo
-                                  ? formatEthiopianDate(
-                                      version.effectiveTo
-                                    )
-                                  : "Ongoing"}
-                              </div>
-
-                            </td>
-
-                            {/* Status */}
-
-                            <td className="px-5 py-4">
-
-                              <Badge
-                                className={
-                                  statusMeta.badgeClass
-                                }
+                      return (
+                        <tr
+                          key={version.id}
+                          className="border-b transition last:border-none hover:bg-muted/40"
+                        >
+                          <td className="px-5 py-4">
+                            <div className="flex items-center gap-2">
+                              <div
+                                className={`flex h-9 min-w-14 items-center justify-center rounded-lg px-2 text-sm font-bold ${
+                                  version.isActive
+                                    ? "bg-primary text-primary-foreground"
+                                    : "bg-muted"
+                                }`}
                               >
+                                {version.year}
+                              </div>
 
-                                <StatusIcon className="h-3 w-3" />
+                              {version.isActive && (
+                                <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                              )}
+                            </div>
+                          </td>
 
-                                {
-                                  statusMeta.label
-                                }
+                          <td className="px-5 py-4">
+                            v{version.version ?? 1}
+                          </td>
 
-                              </Badge>
+                          <td className="px-5 py-4 text-muted-foreground">
+                            <div>
+                              {version.effectiveFrom
+                                ? formatEthiopianDate(version.effectiveFrom)
+                                : "—"}
+                            </div>
 
-                            </td>
+                            <div className="text-xs">
+                              →{" "}
+                              {version.effectiveTo
+                                ? formatEthiopianDate(version.effectiveTo)
+                                : "Ongoing"}
+                            </div>
+                          </td>
 
-                            {/* Rules */}
+                          <td className="px-5 py-4">
+                            <Badge className={statusMeta.badgeClass}>
+                              <StatusIcon className="h-3 w-3" />
+                              {statusMeta.label}
+                            </Badge>
+                          </td>
 
-                            <td className="px-5 py-4">
-                              {
-                                version.tariffRulesCount ??
-                                0
-                              }
-                            </td>
+                          <td className="px-5 py-4">
+                            {version.tariffRulesCount ?? 0}
+                          </td>
 
-                            {/* Actions */}
-
-                            <td className="px-5 py-4 text-right">
-
-                              <DropdownMenu>
-
-                                <DropdownMenuTrigger
-                                  asChild
+                          <td className="px-5 py-4 text-right">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  aria-label={`Actions for ${version.year} version ${version.version ?? 1}`}
                                 >
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-8 w-8"
-                                  >
-                                    <MoreHorizontal className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
 
-                                <DropdownMenuContent
-                                  align="end"
-                                  className="w-48"
+                              <DropdownMenuContent
+                                align="end"
+                                className="w-52"
+                              >
+                                <Can
+                                  resource="tariff_version"
+                                  action="view"
                                 >
-
                                   <DropdownMenuItem
                                     onClick={() =>
-                                      router.push(
-                                        `/office/dashboard/revenue-managements/tariff-versions/${version.id}`
-                                      )
+                                      router.push(getDetailsRoute(version.id))
                                     }
                                   >
                                     <Eye className="mr-2 h-4 w-4" />
                                     View Details
                                   </DropdownMenuItem>
+                                </Can>
 
+                                <Can
+                                  resource="tariff_version"
+                                  action="update"
+                                >
                                   <DropdownMenuItem
-                                    onClick={() =>
-                                      openEditDialog(
-                                        version
-                                      )
-                                    }
+                                    onClick={() => openEditPage(version)}
                                   >
                                     <Pencil className="mr-2 h-4 w-4" />
                                     Edit Version
                                   </DropdownMenuItem>
+                                </Can>
 
-                                  {!version.isActive && (
-                                    <>
-                                      <DropdownMenuSeparator />
+                                <Can
+                                  resource="tariff_version"
+                                  action="duplicate"
+                                >
+                                  <DropdownMenuItem
+                                    onClick={() =>
+                                      openDuplicateDialog(version)
+                                    }
+                                    disabled={duplicateOpen}
+                                  >
+                                    <Copy className="mr-2 h-4 w-4" />
+                                    Duplicate Version
+                                  </DropdownMenuItem>
+                                </Can>
 
+                                {!version.isActive && (
+                                  <>
+                                    <DropdownMenuSeparator />
+
+                                    {/* Use approve only if activation is part
+                                        of your approval workflow. */}
+
+                                    <Can
+                                      resource="tariff_version"
+                                      action="approve"
+                                    >
                                       <DropdownMenuItem
                                         className="text-emerald-600"
                                         onClick={() =>
-                                          handleActivate(
-                                            version.id
-                                          )
+                                          void handleActivate(version.id)
                                         }
-                                        disabled={
-                                          activateMutation.isPending
-                                        }
+                                        disabled={activateMutation.isPending}
                                       >
                                         <CheckCircle2 className="mr-2 h-4 w-4" />
-
                                         {activateMutation.isPending
                                           ? "Activating..."
                                           : "Activate"}
                                       </DropdownMenuItem>
+                                    </Can>
 
+                                    <Can
+                                      resource="tariff_version"
+                                      action="delete"
+                                    >
                                       <DropdownMenuItem
                                         className="text-red-600"
                                         onClick={() => {
-                                          setSelectedVersion(
-                                            version
-                                          );
-
-                                          setDeleteOpen(
-                                            true
-                                          );
+                                          setSelectedVersion(version);
+                                          setDeleteOpen(true);
                                         }}
-                                        disabled={
-                                          deleteMutation.isPending
-                                        }
+                                        disabled={deleteMutation.isPending}
                                       >
                                         <Trash2 className="mr-2 h-4 w-4" />
                                         Delete
                                       </DropdownMenuItem>
-                                    </>
-                                  )}
-
-                                </DropdownMenuContent>
-
-                              </DropdownMenu>
-
-                            </td>
-
-                          </tr>
-                        );
-                      }
-                    )}
-
+                                    </Can>
+                                  </>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
-
                 </table>
-
               </div>
-
-              {/* Pagination */}
 
               <DataTablePagination
                 page={page}
                 pageSize={pageSize}
-                total={
-                  versions.length
-                }
-                onPageChange={
-                  setPage
-                }
-                onPageSizeChange={(
-                  size: number
-                ) => {
-                  setPageSize(
-                    size
-                  );
-
+                total={responseTotal}
+                onPageChange={setPage}
+                onPageSizeChange={(size: number) => {
+                  setPageSize(size);
                   setPage(1);
                 }}
               />
-
             </div>
           )}
-
         </>
       )}
 
-      {/* ================================================================= */}
-      {/* Create / Edit dialog */}
-      {/* ================================================================= */}
+      {/* Duplicate dialog */}
 
-      <TariffVersionFormSheet
-        open={dialogOpen}
-        onOpenChange={
-          handleDialogOpenChange
-        }
-        existingYears={
-          existingYears
-        }
-        hasActiveVersion={
-          !!activeVersion
-        }
-        initialValues={
-          editingVersion
-            ? {
-                year: String(
-                  editingVersion.year
-                ),
-
-                effective_from:
-                  editingVersion.effectiveFrom,
-
-                effective_to:
-                  editingVersion.effectiveTo ??
-                  "",
-
-                isActive:
-                  editingVersion.isActive,
-              }
-            : undefined
-        }
-        onSubmit={
-          handleSubmitVersion
-        }
-      />
-
-      {/* ================================================================= */}
-      {/* Delete modal */}
-      {/* ================================================================= */}
-
-      <DeleteModal
-        isOpen={deleteOpen}
-        onClose={(
-          open: boolean
-        ) => {
-          setDeleteOpen(open);
+      <DuplicateTariffVersionDialog
+        open={duplicateOpen}
+        onOpenChange={(open) => {
+          setDuplicateOpen(open);
 
           if (!open) {
-            setSelectedVersion(
-              null
-            );
+            setSourceVersion(null);
           }
         }}
-        action={
-          handleDelete
-        }
+        sourceVersion={sourceVersion}
       />
 
+      {/* Delete confirmation */}
+
+      <Can resource="tariff_version" action="delete">
+        <DeleteModal
+          isOpen={deleteOpen}
+          onClose={(open: boolean) => {
+            setDeleteOpen(open);
+
+            if (!open) {
+              setSelectedVersion(null);
+            }
+          }}
+          action={handleDelete}
+        />
+      </Can>
     </div>
   );
 }
 
-// ===========================================================================
-// Active Tariff Status
-// ===========================================================================
+// ---------------------------------------------------------------------------
+// Active tariff status
+// ---------------------------------------------------------------------------
 
 interface ActiveTariffStatusProps {
   message?: string | null;
@@ -988,62 +670,34 @@ export function ActiveTariffStatus({
     return null;
   }
 
-  const yearMatch =
-    message.match(
-      /^\d{4}/
-    );
+  const yearMatch = message.match(/^\d{4}/);
+  const year = yearMatch?.[0];
 
-  const year =
-    yearMatch?.[0];
+  const parts = message.split("—").map((item) => item.trim());
+  const headline = parts[0] ?? "";
+  const detail = parts[1];
 
-  const parts =
-    message
-      .split("—")
-      .map(
-        (
-          item: string
-        ) => item.trim()
-      );
-
-  const headline =
-    parts[0] ?? "";
-
-  const detail =
-    parts[1];
-
-  const headlineWithoutYear =
-    year
-      ? headline
-          .replace(
-            year,
-            ""
-          )
-          .trim()
-      : headline;
+  const headlineWithoutYear = year
+    ? headline.replace(year, "").trim()
+    : headline;
 
   return (
     <div className="relative overflow-hidden rounded-xl border border-emerald-200 bg-emerald-50 px-5 py-4 dark:border-emerald-900/40 dark:bg-emerald-950/20">
-
       <span className="absolute inset-y-0 left-0 w-1 bg-emerald-500" />
 
       <div className="flex items-start gap-3">
-
         <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600">
-
           <Sparkles className="h-5 w-5" />
 
           <span className="absolute right-0 top-0 h-2.5 w-2.5 animate-pulse rounded-full bg-emerald-500 ring-2 ring-emerald-50 dark:ring-emerald-950" />
-
         </div>
 
         <div className="min-w-0 space-y-1">
-
           <p className="text-[11px] font-medium uppercase tracking-wide text-emerald-700/80 dark:text-emerald-400/80">
             Active tariff
           </p>
 
           <p className="text-sm text-emerald-900 dark:text-emerald-200">
-
             {year && (
               <span className="mr-2 inline-flex rounded-md bg-emerald-600 px-2 py-0.5 text-xs font-semibold text-white">
                 {year}
@@ -1051,11 +705,8 @@ export function ActiveTariffStatus({
             )}
 
             <span className="font-medium">
-              {
-                headlineWithoutYear
-              }
+              {headlineWithoutYear}
             </span>
-
           </p>
 
           {detail && (
@@ -1063,11 +714,8 @@ export function ActiveTariffStatus({
               {detail}
             </p>
           )}
-
         </div>
-
       </div>
-
     </div>
   );
 }

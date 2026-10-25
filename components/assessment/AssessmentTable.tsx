@@ -273,35 +273,6 @@ export function AssessmentTable({
             : undefined
         }
 
-        // -------------------------------------------
-        // DELETE
-        // -------------------------------------------
-
-        onDelete={
-          canDelete
-            ? onDelete
-            : undefined
-        }
-
-        // -------------------------------------------
-        // APPROVE
-        // -------------------------------------------
-
-        onApprove={
-          canApprove
-            ? onApprove
-            : undefined
-        }
-
-        // -------------------------------------------
-        // RETURN
-        // -------------------------------------------
-
-        onReturn={
-          canReturn
-            ? onReturn
-            : undefined
-        }
 
         // -------------------------------------------
         // GENERIC ACTIONS

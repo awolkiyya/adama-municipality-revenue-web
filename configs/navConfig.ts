@@ -8,9 +8,6 @@ import {
   Settings,
   ShieldCheck,
   FileText,
-  Target,
-  Inbox,
-  CheckCircle2,
   Calculator,
   Wallet,
   CreditCard,
@@ -27,54 +24,27 @@ import { APP_PERMISSIONS } from "@/lib/authorization";
  * APPLICATION NAVIGATION
  * =========================================================
  *
- * Navigation is PERMISSION-DRIVEN, NOT ROLE-DRIVEN.
+ * Navigation is permission-driven, not role-driven.
  *
- * Backend authorization:
+ * Ordering:
+ * 1. Dashboard
+ * 2. Administrative Structure
+ * 3. User Access
+ * 4. Revenue Configuration
+ * 5. Calculation Setup
+ * 6. Revenue Operations
+ * 7. Assessment Decisions
+ * 8. Reports
+ * 9. Mobile App Management
+ * 10. System Settings
+ * 11. Audit Logs
  *
- *     User
- *       ↓
- *     Roles
- *       ↓
- *     Permissions
- *
- * Frontend:
- *
- *     User Permissions
- *       ↓
- *     NAV_ITEMS
- *       ↓
- *     Sidebar
- *
- * A role does NOT appear anywhere in this file.
- *
- * Example:
- *
- *     REVENUE_COLLECTOR
- *          ↓
- *     payment.view
- *     payment.create
- *     receipt.view
- *          ↓
- *     Payments
- *     Receipts
- *
- * If another role is created in the backend and receives
- * the same permissions, the frontend automatically shows
- * the same navigation.
- *
- * IMPORTANT:
- * ---------------------------------------------------------
- * Frontend navigation is ONLY a UX layer.
- *
- * Backend authorization remains the real security boundary.
- * Every API endpoint/action must be authorized by the backend.
- * =========================================================
+ * Backend authorization remains the security boundary.
  */
 
 export const NAV_ITEMS: NavItem[] = [
-
   // =========================================================
-  // DASHBOARD
+  // 1. DASHBOARD
   // =========================================================
 
   {
@@ -85,21 +55,19 @@ export const NAV_ITEMS: NavItem[] = [
   },
 
   // =========================================================
-  // ADMINISTRATIVE STRUCTURE
+  // 2. ADMINISTRATIVE STRUCTURE
   // =========================================================
 
   {
     title: "administrative_structure",
     url: "#",
     icon: Building2,
-
     items: [
       {
         title: "administrative_units",
         url: "/office/dashboard/administrative",
         permission: APP_PERMISSIONS.ADMINISTRATIVE_UNITS_VIEW,
       },
-
       {
         title: "sectors",
         url: "/office/dashboard/sectors",
@@ -109,33 +77,24 @@ export const NAV_ITEMS: NavItem[] = [
   },
 
   // =========================================================
-  // USER ACCESS
+  // 3. USER ACCESS
   // =========================================================
 
   {
     title: "user_access",
     url: "#",
     icon: Users,
-
     items: [
       {
         title: "users",
         url: "/office/dashboard/users",
         permission: APP_PERMISSIONS.USERS_VIEW,
       },
-
       {
         title: "taxpayers",
         url: "/office/dashboard/taxpayers",
         permission: APP_PERMISSIONS.CITIZENS_VIEW,
       },
-
-      // {
-      //   title: "agents",
-      //   url: "/office/dashboard/agents",
-      //   permission: APP_PERMISSIONS.AGENTS_VIEW,
-      // },
-
       {
         title: "roles",
         url: "/office/dashboard/access-managements",
@@ -144,23 +103,77 @@ export const NAV_ITEMS: NavItem[] = [
     ],
   },
 
+  // =========================================================
+  // 4. REVENUE CONFIGURATION
+  // =========================================================
+
+  {
+    title: "revenue_configuration",
+    url: "#",
+    icon: ClipboardList,
+    items: [
+      {
+        title: "revenue_categories",
+        url: "/office/dashboard/revenue-managements/categories",
+        permission: APP_PERMISSIONS.REVENUE_CATEGORY_VIEW,
+      },
+      {
+        title: "revenue_services",
+        url: "/office/dashboard/revenue-managements/services",
+        permission: APP_PERMISSIONS.REVENUE_SERVICES_VIEW,
+      },
+      {
+        title: "tariff_management",
+        url: "/office/dashboard/revenue-managements/tariff-versions",
+        permission: APP_PERMISSIONS.TARIFF_VIEW,
+      },
+      {
+        title: "penalty_rules",
+        url: "/office/dashboard/revenue-managements/penalty-rules",
+        icon: ShieldCheck,
+        permission: APP_PERMISSIONS.PENALTY_RULES_VIEW,
+      },
+      {
+        title: "interest_rates",
+        url: "/office/dashboard/revenue-managements/interest-rules",
+        icon: Landmark,
+        permission: APP_PERMISSIONS.INTEREST_RULES_VIEW,
+      },
+      {
+        title: "payment_schedule_rules",
+        url: "/office/dashboard/revenue-managements/payment-schedule-rules",
+        icon: CalendarClock,
+        permission: APP_PERMISSIONS.PAYMENT_SCHEDULE_RULES_VIEW,
+      },
+      {
+        title: "payment_providers",
+        url: "/office/dashboard/revenue-managements/payment-providers",
+        icon: CreditCard,
+        permission: APP_PERMISSIONS.PAYMENT_PROVIDERS_VIEW,
+      },
+      {
+        title: "bank_accounts",
+        url: "/office/dashboard/revenue-managements/bank-accounts",
+        icon: Landmark,
+        permission: APP_PERMISSIONS.BANK_ACCOUNTS_VIEW,
+      },
+    ],
+  },
 
   // =========================================================
-  // CALCULATION SETUP
+  // 5. CALCULATION SETUP
   // =========================================================
 
   {
     title: "calculation_setup",
     url: "#",
     icon: Calculator,
-
     items: [
       {
         title: "measurement_units",
         url: "/office/dashboard/revenue-managements/measurement-units",
         permission: APP_PERMISSIONS.MEASUREMENT_UNIT_VIEW,
       },
-
       {
         title: "base_fields",
         url: "/office/dashboard/revenue-managements/base-fields",
@@ -169,150 +182,119 @@ export const NAV_ITEMS: NavItem[] = [
     ],
   },
 
- // =========================================================
-// REVENUE CONFIGURATION
-// =========================================================
+  // =========================================================
+  // 6. REVENUE OPERATIONS
+  // =========================================================
 
-{
-  title: "revenue_configuration",
-  url: "#",
-  icon: ClipboardList,
+  {
+    title: "revenue_operations",
+    url: "#",
+    icon: Wallet,
+    items: [
+      {
+        title: "assessments",
+        url: "/office/dashboard/assessments",
+        permission: APP_PERMISSIONS.ASSESSMENT_VIEW,
+      },
+      {
+        title: "lease_amendments",
+        url: "/office/dashboard/lease-amendments",
+        icon: FileText,
+        permission: APP_PERMISSIONS.LEASE_AMENDMENTS_VIEW,
+      },
+      {
+        title: "invoices",
+        url: "/office/dashboard/invoices",
+        permission: APP_PERMISSIONS.INVOICE_VIEW,
+      },
+      {
+        title: "payments",
+        url: "/office/dashboard/payments",
+        icon: CreditCard,
+        permission: APP_PERMISSIONS.PAYMENTS_VIEW,
+      },
+      {
+        title: "field_collection",
+        url: "/office/dashboard/field-collections",
+        icon: Wallet,
+        permission: APP_PERMISSIONS.FIELD_COLLECTION_VIEW,
+      },
+      // {
+      //   title: "penalties",
+      //   url: "/office/dashboard/penalties",
+      //   permission: APP_PERMISSIONS.PENALTY_VIEW,
+      // },
+      {
+        title: "penalty_discount_requests",
+        url: "/office/dashboard/penalty-discount-requests",
+        icon: FileText,
+        permission: APP_PERMISSIONS.PENALTY_DISCOUNT_REQUESTS_VIEW,
+      },
+      // {
+      //   title: "revenue_adjustments",
+      //   url: "/office/dashboard/revenue-adjustments",
+      //   permission: APP_PERMISSIONS.REVENUE_ADJUSTMENTS_VIEW,
+      // },
+      // {
+      //   title: "revenue_complaints",
+      //   url: "/office/dashboard/revenue-complaints",
+      //   permission: APP_PERMISSIONS.REVENUE_COMPLAINTS_VIEW,
+      // },
+      {
+        title: "cash_reconciliation",
+        url: "/office/dashboard/cash-reconciliations",
+        icon: ClipboardCheck,
+        permission: APP_PERMISSIONS.CASH_RECONCILIATIONS_VIEW,
+      },
+    ],
+  },
 
-  items: [
-    {
-      title: "revenue_categories",
-      url: "/office/dashboard/revenue-managements/categories",
-      permission: APP_PERMISSIONS.REVENUE_CATEGORY_VIEW,
-    },
+  // =========================================================
+  // 7. ASSESSMENT DECISIONS
+  // =========================================================
 
-    {
-      title: "revenue_services",
-      url: "/office/dashboard/revenue-managements/services",
-      permission: APP_PERMISSIONS.REVENUE_SERVICES_VIEW,
-    },
+  // {
+  //   title: "assessment_decisions",
+  //   url: "#",
+  //   icon: CheckCircle2,
+  //   items: [
+  //     {
+  //       title: "pending_assessments",
+  //       url: "/office/dashboard/assessments/pendings",
+  //       permission: APP_PERMISSIONS.ASSESSMENT_VIEW,
+  //     },
+  //     {
+  //       title: "decision_history",
+  //       url: "/office/dashboard/assessments/history",
+  //       permission: APP_PERMISSIONS.ASSESSMENT_VIEW_HISTORY,
+  //     },
+  //   ],
+  // },
 
-    {
-      title: "tariff_management",
-      url: "/office/dashboard/revenue-managements/tariff-versions",
-      permission: APP_PERMISSIONS.TARIFF_VIEW,
-    },
+  // =========================================================
+  // 8. REPORTS
+  // =========================================================
 
-    {
-      title: "penalty_rules",
-      url: "/office/dashboard/revenue-managements/penalty-rules",
-      icon: ShieldCheck,
-      permission: APP_PERMISSIONS.PENALTY_RULES_VIEW,
-    },
+  {
+    title: "reports",
+    url: "/office/dashboard/reports",
+    icon: FileText,
+    permission: APP_PERMISSIONS.MOBILE_APP_RELEASES_VIEW,
+  },
 
-    {
-      title: "interest_rates",
-      url: "/office/dashboard/revenue-managements/interest-rules",
-      icon: Landmark,
-      permission: APP_PERMISSIONS.INTEREST_RULES_VIEW,
-    },
+  // =========================================================
+  // 9. MOBILE APP MANAGEMENT
+  // =========================================================
 
-    {
-      title: "payment_schedule_rules",
-      url: "/office/dashboard/revenue-managements/payment-schedule-rules",
-      icon: CalendarClock,
-      permission: APP_PERMISSIONS.PAYMENT_SCHEDULE_RULES_VIEW,
-    },
+  {
+    title: "mobile_app_management",
+    url: "/office/dashboard/mobile-app-releases",
+    icon: Smartphone,
+    permission: APP_PERMISSIONS.MOBILE_APP_RELEASES_VIEW,
+  },
 
-    {
-      title: "bank_accounts",
-      url: "/office/dashboard/revenue-managements/bank-accounts",
-      icon: Landmark,
-      permission: APP_PERMISSIONS.BANK_ACCOUNTS_VIEW,
-    },
-
-    {
-      title: "payment_providers",
-      url: "/office/dashboard/revenue-managements/payment-providers",
-      icon: CreditCard,
-      permission: APP_PERMISSIONS.PAYMENT_PROVIDERS_VIEW,
-    },
-  ],
-},
-
-// =========================================================
-// REVENUE OPERATIONS
-// =========================================================
-
-{
-  title: "revenue_operations",
-  url: "#",
-  icon: ClipboardList,
-
-  items: [
-    {
-      title: "assessments",
-      url: "/office/dashboard/assessments",
-      permission: APP_PERMISSIONS.ASSESSMENT_VIEW,
-    },
-
-    {
-      title: "lease_amendments",
-      url: "/office/dashboard/lease-amendments",
-      icon: FileText,
-      permission: APP_PERMISSIONS.LEASE_AMENDMENTS_VIEW,
-    },
-
-    {
-      title: "invoices",
-      url: "/office/dashboard/invoices",
-      permission: APP_PERMISSIONS.INVOICE_VIEW,
-    },
-
-    {
-      title: "payments",
-      url: "/office/dashboard/payments",
-      icon: CreditCard,
-      permission: APP_PERMISSIONS.PAYMENTS_VIEW,
-    },
-
-    {
-      title: "field_collection",
-      url: "/office/dashboard/field-collections",
-      icon: Wallet,
-      permission: APP_PERMISSIONS.FIELD_COLLECTION_VIEW,
-    },
-
-    {
-      title: "penalties",
-      url: "/office/dashboard/penalties",
-      permission: APP_PERMISSIONS.PENALTY_VIEW,
-    },
-
-    {
-      title: "penalty_discount_requests",
-      url: "/office/dashboard/penalty-discount-requests",
-      icon: FileText,
-      permission: APP_PERMISSIONS.PENALTY_DISCOUNT_REQUESTS_VIEW,
-    },
-
-    {
-      title: "revenue_adjustments",
-      url: "/office/dashboard/revenue-adjustments",
-      permission: APP_PERMISSIONS.REVENUE_ADJUSTMENTS_VIEW,
-    },
-
-    {
-      title: "revenue_complaints",
-      url: "/office/dashboard/revenue-complaints",
-      permission: APP_PERMISSIONS.REVENUE_COMPLAINTS_VIEW,
-    },
-
-    {
-      title: "cash_reconciliation",
-      url: "/office/dashboard/cash-reconciliations",
-      icon: ClipboardCheck,
-      permission: APP_PERMISSIONS.CASH_RECONCILIATIONS_VIEW,
-    },
-  ],
-},
-
-    // =========================================================
-  // SYSTEM SETTINGS
+  // =========================================================
+  // 10. SYSTEM SETTINGS
   // =========================================================
 
   {
@@ -323,7 +305,7 @@ export const NAV_ITEMS: NavItem[] = [
   },
 
   // =========================================================
-  // AUDIT
+  // 11. AUDIT LOGS
   // =========================================================
 
   {
@@ -332,52 +314,12 @@ export const NAV_ITEMS: NavItem[] = [
     icon: ShieldCheck,
     permission: APP_PERMISSIONS.AUDIT_VIEW,
   },
-
-  // =========================================================
-  // ASSESSMENT DECISIONS
-  // =========================================================
-
-  {
-    title: "assessment_decisions",
-    url: "#",
-    icon: CheckCircle2,
-
-    items: [
-      {
-        title: "pending_assessments",
-        url: "/office/dashboard/assessments/pendings",
-        permission: APP_PERMISSIONS.ASSESSMENT_VIEW,
-      },
-
-      {
-        title: "decision_history",
-        url: "/office/dashboard/assessments/history",
-        permission: APP_PERMISSIONS.ASSESSMENT_VIEW_HISTORY,
-      },
-    ]
-    
-  },
+];
 
 
-  {
-    title: "mobile_app_management",
-    url: "/office/dashboard/mobile-app-releases",
-    icon: Smartphone,
-    permission: APP_PERMISSIONS.MOBILE_APP_RELEASES_VIEW,
-    },
-    
 
-// =========================================================
-// REPORTS
-// =========================================================
 
-{
-  title: "reports",
-  url: "/office/dashboard/reports",
-  icon: FileText,
-  permission: APP_PERMISSIONS.MOBILE_APP_RELEASES_VIEW,
-},
-  
+
 
 
 
@@ -621,4 +563,3 @@ export const NAV_ITEMS: NavItem[] = [
   //   icon: FileText,
   //   permission: APP_PERMISSIONS.REPORTS_VIEW,
   // },
-];

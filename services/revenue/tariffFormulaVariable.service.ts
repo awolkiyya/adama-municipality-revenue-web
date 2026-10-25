@@ -5,8 +5,6 @@ import { ApiResponse, ListResponse } from "@/types/api";
 
 import {
   TariffFormulaVariable,
-  CreateTariffFormulaVariableRequest,
-  UpdateTariffFormulaVariableRequest,
   TariffFormulaVariableApiPayload,
 } from "@/types/revenue/tariff-formula-variable";
 

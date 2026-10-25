@@ -12,61 +12,58 @@ import { BaseField, BaseFieldFilters } from "@/types/revenue/revenue-baseField";
 
 export const baseFieldService = {
 
-
   /**
-   * GET ALL BASE FIELDS
-   */
-  getBaseFields: async(
-    params?: BaseFieldFilters
-  ): Promise<ListResponse<BaseField>>=>{
+ * GET ALL BASE FIELDS
+ */
+getBaseFields: async (
+  params?: BaseFieldFilters,
+): Promise<ListResponse<BaseField>> => {
+  try {
+    const cleanParams: Record<
+      string,
+      string | number | boolean
+    > = {};
 
-
-    try{
-
-
-      const cleanParams =
-        Object.entries(params || {})
-        .reduce((acc,[key,value])=>{
-
-
-          if(
-            value !== undefined &&
-            value !== null &&
-            value !== "" &&
-            value !== "ALL"
-          ){
-
-            acc[key] = value;
-
-          }
-
-
-          return acc;
-
-
-        },{} as Record<string,any>);
-
-
-
-      const res =
-        await api.get<ListResponse<BaseField>>(
-          "/revenue/base-fields",
-          {
-            params: cleanParams
-          }
-        );
-
-
-      return res.data;
-
-
-    }catch(error){
-
-      throw normalizeApiError(error);
-
+    if (params?.page !== undefined) {
+      cleanParams.page = params.page;
     }
 
-  },
+    if (params?.per_page !== undefined) {
+      cleanParams.per_page = params.per_page;
+    }
+
+    if (params?.search?.trim()) {
+      cleanParams.search = params.search.trim();
+    }
+
+    // Map frontend camelCase to Laravel snake_case.
+    if (params?.dataType) {
+      cleanParams.data_type = params.dataType;
+    }
+
+    // Preserve false to allow filtering inactive records.
+    if (params?.isActive !== undefined) {
+      cleanParams.is_active = params.isActive;
+    }
+
+    // Include requested IDs when provided.
+    if (params?.ids?.length) {
+      cleanParams.ids = params.ids.join(",");
+    }
+
+    const res = await api.get<ListResponse<BaseField>>(
+      "/revenue/base-fields",
+      {
+        params: cleanParams,
+      },
+    );
+
+    return res.data;
+  } catch (error) {
+    throw normalizeApiError(error);
+  }
+},
+
 
 
 
@@ -87,7 +84,7 @@ export const baseFieldService = {
 
       const res =
         await api.get<ApiResponse<BaseField>>(
-          `/base-fields/${id}`
+          `/revenue/base-fields/${id}`
         );
 
 

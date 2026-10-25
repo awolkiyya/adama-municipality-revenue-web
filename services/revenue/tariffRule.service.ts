@@ -3,7 +3,6 @@ import { normalizeApiError } from "@/lib/api-error";
 
 import {
   ApiResponse,
-  ListResponse,
 } from "@/types/api";
 import { CreateTariffRulePayload, TariffRuleRecord, UpdateTariffRulePayload } from "@/types/revenue/tariff-form";
 

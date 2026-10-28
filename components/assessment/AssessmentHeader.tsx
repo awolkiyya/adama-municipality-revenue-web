@@ -129,16 +129,10 @@ export function AssessmentHeader({
 
           <Button
             type="button"
+            variant="default"
             onClick={
               onCreate
             }
-            className="
-              gap-2
-              bg-white
-              text-primary
-              shadow-sm
-              hover:bg-white/90
-            "
           >
             <FilePlus2
               className="
@@ -162,16 +156,7 @@ export function AssessmentHeader({
             >
               <Button
                 type="button"
-                variant="outline"
-                className="
-                  gap-2
-                  border-white/30
-                  bg-white/10
-                  text-white
-                  backdrop-blur-sm
-                  hover:bg-white
-                  hover:text-primary
-                "
+                variant="secondary"
               >
                 Actions
 

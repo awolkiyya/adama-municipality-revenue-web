@@ -613,7 +613,7 @@ export default function CreateAssessmentPage() {
       <Banner
         badge={
           <IconBadge
-            className="gap-2 rounded-full bg-black/20 p-3 text-[10px] text-white"
+            className="gap-2 rounded-full  p-3 text-[10px"
             icon={
               <ClipboardList className="h-4 w-4" />
             }
@@ -631,8 +631,8 @@ export default function CreateAssessmentPage() {
             position="bottom-right"
           />
         }
-        overlayClassName="bg-gradient-to-r from-primary/95 via-primary/80 to-primary/50"
-        className="text-white"
+        overlayClassName="bg-transparent"
+
         actions={
           <Button
             type="button"

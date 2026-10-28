@@ -12,6 +12,7 @@ import {
   Download,
   FileText,
   Loader2,
+  MapPin,
   Menu,
   Receipt,
   Search,
@@ -20,7 +21,7 @@ import {
   Stamp,
   UserCheck,
   Users2,
-  X,
+  WifiOff,
   XCircle,
   type LucideIcon,
 } from "lucide-react";
@@ -185,12 +186,27 @@ const CONTENT: Record<
     nav: [
       { href: "#workflow", label: "How it works" },
       { href: "#services", label: "Services" },
+      { href: "#field-app", label: "Field app" },
       { href: "#verify", label: "Verify receipt" },
     ],
   },
 };
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
+
+/**
+ * Field collection app (revenue office). PLACEHOLDER values: replace the url,
+ * version, size and requirements with the real release details when the APK
+ * is ready. Set `available: false` to show a disabled "Coming soon" button.
+ */
+const FIELD_APP = {
+  available: true,
+  name: "Adama Field Collection",
+  url: "/downloads/adama-field-collection.apk", // TODO: replace with real download link
+  version: "0.0.0 (placeholder)", // TODO
+  size: "— MB", // TODO
+  platform: "Android 8.0 or later", // TODO
+} as const;
 
 /* -------------------------------------------------------------------------- */
 /* Helpers                                                                    */
@@ -390,6 +406,68 @@ function HeroWaves() {
           }
         }
       `}</style>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Field collection app download (office only, placeholder)                   */
+/* -------------------------------------------------------------------------- */
+
+function FieldAppDownload() {
+  const details = [
+    ["Version", FIELD_APP.version],
+    ["Size", FIELD_APP.size],
+    ["Platform", FIELD_APP.platform],
+  ];
+
+  return (
+    <div>
+      <div className="flex items-center gap-3">
+        <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+          <Smartphone className="size-5" />
+        </span>
+        <div className="min-w-0">
+          <p className="truncate text-sm font-bold">{FIELD_APP.name}</p>
+          <p className="text-xs text-muted-foreground">
+            For authorized revenue officers
+          </p>
+        </div>
+      </div>
+
+      <dl className="mt-4 grid gap-px overflow-hidden rounded-xl border bg-border sm:grid-cols-3">
+        {details.map(([label, value]) => (
+          <div key={label} className="bg-card px-3 py-2.5">
+            <dt className="text-xs text-muted-foreground">{label}</dt>
+            <dd className="mt-0.5 break-words text-sm font-semibold">{value}</dd>
+          </div>
+        ))}
+      </dl>
+
+      {FIELD_APP.available ? (
+        <a
+          href={FIELD_APP.url}
+          download
+          className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
+        >
+          <Download className="size-4" />
+          Download for Android
+        </a>
+      ) : (
+        <button
+          type="button"
+          disabled
+          className="mt-4 inline-flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground opacity-60"
+        >
+          <Download className="size-4" />
+          Coming soon
+        </button>
+      )}
+
+      <p className="mt-3 text-xs leading-5 text-muted-foreground">
+        Sign in with your office account. If Android blocks the install, allow
+        installs from this source in your phone settings.
+      </p>
     </div>
   );
 }
@@ -909,6 +987,76 @@ export default function LandingPage() {
 
         <div className="rounded-2xl bg-card p-4 text-card-foreground">
           <TaxpayerAppDownload />
+        </div>
+      </div>
+    </div>
+  </section>
+)}
+
+
+{/* Office: field collection app */}
+{!isCitizen && (
+  <section id="field-app" className="scroll-mt-20 px-4 pb-16 sm:px-6">
+    <div className="relative mx-auto max-w-6xl overflow-hidden rounded-3xl bg-primary p-6 text-primary-foreground sm:p-10">
+      {/* Background */}
+      <div
+        aria-hidden
+        className="absolute inset-0 [mask-image:linear-gradient(to_right,black,transparent_85%)]"
+      >
+        <DotGrid
+          baseColor="#ffffff"
+          activeColor="#ffffff"
+          shape="circle"
+          dotSize={4}
+          gap={20}
+          proximity={140}
+          strength={1}
+          bounce={0.6}
+          tension={0.4}
+          returnDuration={0.8}
+          shockRadius={320}
+          shockStrength={5}
+          swell={0.8}
+          stretch={0.5}
+          glow={0.5}
+          fade={0}
+          intro
+          opacity={0.18}
+          mouseInteraction
+          clickShock
+        />
+      </div>
+
+      {/* Content */}
+      <div className="relative z-10 grid items-center gap-8 lg:grid-cols-2">
+        <div>
+          <p className="text-sm font-semibold text-primary-foreground/70">
+            Field collection app
+          </p>
+          <h2 className="mt-2 font-serif text-3xl font-bold tracking-tight">
+            Collect revenue directly in the field.
+          </h2>
+          <p className="mt-3 max-w-md text-sm leading-6 text-primary-foreground/70">
+            Give your field officers the Android app to look up taxpayers, record
+            payments on the spot, and issue receipts. Everything syncs with the
+            office portal.
+          </p>
+          <ul className="mt-5 space-y-2 text-sm text-primary-foreground/80">
+            {[
+              { icon: MapPin, label: "Collect payments where taxpayers are" },
+              { icon: WifiOff, label: "Keeps working with a weak connection" },
+              { icon: Receipt, label: "Issue verifiable receipts on the spot" },
+            ].map(({ icon: Icon, label }) => (
+              <li key={label} className="flex items-center gap-2">
+                <Icon className="size-4 shrink-0" />
+                {label}
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div className="rounded-2xl bg-card p-4 text-card-foreground">
+          <FieldAppDownload />
         </div>
       </div>
     </div>

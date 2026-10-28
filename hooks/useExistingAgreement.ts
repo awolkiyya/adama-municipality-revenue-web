@@ -1,3 +1,4 @@
+
 "use client";
 
 import {
@@ -48,35 +49,10 @@ export type ServiceFieldValues = Record<
   Record<string, ServiceFieldValue>
 >;
 
-/*
-|--------------------------------------------------------------------------
-| Actual Uploaded Files
-|--------------------------------------------------------------------------
-|
-| Files are deliberately separate from serviceFieldValues.
-|
-| Shape:
-|
-| {
-|   [serviceId]: {
-|     [frontendFieldKey]: File
-|   }
-| }
-|
-| File objects are appended to FormData, never JSON.stringify'd.
-|--------------------------------------------------------------------------
-*/
-
 export type ServiceFileValues = Record<
   string,
   Record<string, File>
 >;
-
-/*
-|--------------------------------------------------------------------------
-| Validation Types
-|--------------------------------------------------------------------------
-*/
 
 export type ValidationErrors = {
   agreement?: Record<string, string>;
@@ -84,24 +60,12 @@ export type ValidationErrors = {
   service?: Record<string, Record<string, string>>;
 };
 
-/*
-|--------------------------------------------------------------------------
-| Hook Options
-|--------------------------------------------------------------------------
-*/
-
 export interface UseExistingAgreementOptions {
   taxpayers: Citizen[];
   revenueServices: RevenueService[];
   assessmentId?: string;
   initialData?: unknown;
 }
-
-/*
-|--------------------------------------------------------------------------
-| Generic API Types
-|--------------------------------------------------------------------------
-*/
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -150,28 +114,37 @@ function firstValue(
   return undefined;
 }
 
-/*
-|--------------------------------------------------------------------------
-| Normalize Service Field Value
-|--------------------------------------------------------------------------
-*/
+function normalizeIdentifier(value: unknown): string {
+  if (value === undefined || value === null) {
+    return "";
+  }
+
+  return String(value).trim();
+}
 
 function normalizeServiceFieldValue(
   value: unknown,
 ): ServiceFieldValue {
-  if (typeof value === "boolean") {
-    return value;
-  }
-
-  if (typeof value === "number") {
-    return value;
-  }
-
-  if (typeof value === "string") {
+  if (
+    typeof value === "boolean" ||
+    typeof value === "number" ||
+    typeof value === "string"
+  ) {
     return value;
   }
 
   return String(value ?? "");
+}
+
+function identifiersMatch(
+  left: string,
+  right: string,
+): boolean {
+  return (
+    Boolean(left) &&
+    Boolean(right) &&
+    left.trim().toLowerCase() === right.trim().toLowerCase()
+  );
 }
 
 /*
@@ -189,12 +162,6 @@ function getAssessmentServices(
 
   return data.services.filter(isRecord);
 }
-
-/*
-|--------------------------------------------------------------------------
-| Revenue Service ID
-|--------------------------------------------------------------------------
-*/
 
 function resolveRevenueServiceId(
   services: UnknownRecord[],
@@ -217,7 +184,7 @@ function resolveRevenueServiceId(
 
 /*
 |--------------------------------------------------------------------------
-| Find Matching Revenue Service
+| Revenue Service
 |--------------------------------------------------------------------------
 */
 
@@ -231,16 +198,10 @@ function findRevenueService(
 
   return (
     revenueServices.find(
-      (service) => String(service.id) === String(serviceId),
+      (service) => String(service.id) === serviceId,
     ) ?? null
   );
 }
-
-/*
-|--------------------------------------------------------------------------
-| Revenue Service Fields
-|--------------------------------------------------------------------------
-*/
 
 function getRevenueServiceFields(
   service: RevenueService | null,
@@ -255,32 +216,10 @@ function getRevenueServiceFields(
     }
   ).fields;
 
-  if (!Array.isArray(fields)) {
-    return [];
-  }
-
-  return fields.filter(isRecord);
+  return Array.isArray(fields)
+    ? fields.filter(isRecord)
+    : [];
 }
-
-/*
-|--------------------------------------------------------------------------
-| Normalize Identifier
-|--------------------------------------------------------------------------
-*/
-
-function normalizeIdentifier(value: unknown): string {
-  if (value === undefined || value === null) {
-    return "";
-  }
-
-  return String(value).trim();
-}
-
-/*
-|--------------------------------------------------------------------------
-| Frontend Field Key
-|--------------------------------------------------------------------------
-*/
 
 function getFrontendFieldKey(
   field: UnknownRecord,
@@ -306,12 +245,6 @@ function getFrontendFieldKey(
   );
 }
 
-/*
-|--------------------------------------------------------------------------
-| Field Identifiers
-|--------------------------------------------------------------------------
-*/
-
 function getFieldIdentifiers(
   field: UnknownRecord,
 ): string[] {
@@ -326,41 +259,16 @@ function getFieldIdentifiers(
     field.field_id,
   ];
 
-  const identifiers: string[] = [];
-
-  for (const candidate of candidates) {
-    const normalized = normalizeIdentifier(candidate);
-
-    if (normalized && !identifiers.includes(normalized)) {
-      identifiers.push(normalized);
-    }
-  }
-
-  return identifiers;
+  return candidates
+    .map(normalizeIdentifier)
+    .filter((value, index, values) =>
+      Boolean(value) && values.indexOf(value) === index,
+    );
 }
 
 /*
 |--------------------------------------------------------------------------
-| Case-Insensitive Identifier Match
-|--------------------------------------------------------------------------
-*/
-
-function identifiersMatch(
-  left: string,
-  right: string,
-): boolean {
-  if (!left || !right) {
-    return false;
-  }
-
-  return (
-    left.trim().toLowerCase() === right.trim().toLowerCase()
-  );
-}
-
-/*
-|--------------------------------------------------------------------------
-| Resolve Persisted Field → Frontend Field Key
+| Persisted Field → Frontend Field Key
 |--------------------------------------------------------------------------
 */
 
@@ -393,7 +301,7 @@ function resolveFormFieldKey(
 
   if (persistedFieldId) {
     for (const field of fields) {
-      const uuidIdentifiers = [
+      const identifiers = [
         field.id,
         field.fieldId,
         field.field_id,
@@ -402,7 +310,7 @@ function resolveFormFieldKey(
         .filter(Boolean);
 
       if (
-        uuidIdentifiers.some((identifier) =>
+        identifiers.some((identifier) =>
           identifiersMatch(identifier, persistedFieldId),
         )
       ) {
@@ -413,10 +321,8 @@ function resolveFormFieldKey(
 
   if (persistedFieldCode) {
     for (const field of fields) {
-      const identifiers = getFieldIdentifiers(field);
-
       if (
-        identifiers.some((identifier) =>
+        getFieldIdentifiers(field).some((identifier) =>
           identifiersMatch(identifier, persistedFieldCode),
         )
       ) {
@@ -432,7 +338,7 @@ function resolveFormFieldKey(
 
 /*
 |--------------------------------------------------------------------------
-| Extract Actual API Service Values
+| Extract Persisted Service Values
 |--------------------------------------------------------------------------
 */
 
@@ -461,13 +367,7 @@ function extractServiceFieldValues(
     );
   });
 
-  if (!assessmentService) {
-    return result;
-  }
-
-  const persistedValues = assessmentService.values;
-
-  if (!Array.isArray(persistedValues)) {
+  if (!assessmentService || !Array.isArray(assessmentService.values)) {
     return result;
   }
 
@@ -477,10 +377,9 @@ function extractServiceFieldValues(
   );
 
   const serviceFields = getRevenueServiceFields(revenueService);
-
   const values: Record<string, ServiceFieldValue> = {};
 
-  for (const persistedValue of persistedValues) {
+  for (const persistedValue of assessmentService.values) {
     if (!isRecord(persistedValue)) {
       continue;
     }
@@ -493,10 +392,7 @@ function extractServiceFieldValues(
     );
 
     const fieldCode = toStringValue(
-      firstValue(persistedValue, [
-        "fieldCode",
-        "field_code",
-      ]),
+      firstValue(persistedValue, ["fieldCode", "field_code"]),
     );
 
     const rawValue = persistedValue.value;
@@ -526,7 +422,7 @@ function extractServiceFieldValues(
 
 /*
 |--------------------------------------------------------------------------
-| Resolve Financial Value
+| Financial Values
 |--------------------------------------------------------------------------
 */
 
@@ -549,11 +445,9 @@ function resolveFinancialValue(
 
   const serviceValue = firstValue(service, keys);
 
-  if (!isEmptyValue(serviceValue)) {
-    return toStringValue(serviceValue);
-  }
-
-  return "";
+  return isEmptyValue(serviceValue)
+    ? ""
+    : toStringValue(serviceValue);
 }
 
 /*
@@ -561,14 +455,16 @@ function resolveFinancialValue(
 | Build Backend Service Fields
 |--------------------------------------------------------------------------
 |
-| Frontend:
-|   LAND_AREA: 2000
+| Ordinary value:
+|   FIELD_UUID: 2000
 |
-| Backend:
-|   "<RevenueServiceField UUID>": 2000
+| New upload:
+|   FIELD_UUID: {
+|     __file: "file__SERVICE_UUID__FIELD_UUID"
+|   }
 |
-| When a new file has been selected for a field, that field is
-| omitted from service_fields. The actual File is sent separately.
+| Existing file values remain in the persisted value map unless
+| the user explicitly removes them.
 |--------------------------------------------------------------------------
 */
 
@@ -576,12 +472,12 @@ function buildBackendServiceFields(
   service: RevenueService | null,
   values: Record<string, ServiceFieldValue>,
   selectedFiles: Record<string, File>,
-): Record<string, ServiceFieldValue> {
+): Record<string, unknown> {
   if (!service) {
     return {};
   }
 
-  const result: Record<string, ServiceFieldValue> = {};
+  const result: Record<string, unknown> = {};
   const fields = getRevenueServiceFields(service);
 
   for (const field of fields) {
@@ -595,29 +491,21 @@ function buildBackendServiceFields(
       continue;
     }
 
-    /*
-     * Do not submit a filename or stale field value alongside
-     * a newly selected upload. The File is sent separately.
-     */
-    if (
-      Object.prototype.hasOwnProperty.call(
-        selectedFiles,
-        fieldKey,
-      )
-    ) {
+    const selectedFile = selectedFiles[fieldKey];
+
+    if (selectedFile instanceof File) {
+      result[fieldId] = {
+        __file: `file__${String(service.id)}__${fieldId}`,
+      };
+
       continue;
     }
 
     if (
-      !Object.prototype.hasOwnProperty.call(
-        values,
-        fieldKey,
-      )
+      Object.prototype.hasOwnProperty.call(values, fieldKey)
     ) {
-      continue;
+      result[fieldId] = values[fieldKey];
     }
-
-    result[fieldId] = values[fieldKey];
   }
 
   return result;
@@ -635,68 +523,40 @@ export function useExistingAgreement({
   assessmentId,
   initialData,
 }: UseExistingAgreementOptions) {
-  /*
-   * Mode
-   */
-
   const isEditMode = Boolean(assessmentId);
 
-  /*
-   * Workflow
-   */
-
   const [currentStep, setCurrentStep] = useState<Step>(1);
-
-  /*
-   * Agreement
-   */
 
   const [agreement, setAgreement] =
     useState<ExistingAgreementForm>(INITIAL_AGREEMENT);
 
-  /*
-   * Financial Position
-   */
-
   const [financial, setFinancial] =
     useState<ExistingFinancialPosition>(INITIAL_FINANCIAL);
 
-  /*
-   * Dynamic Service Fields
-   */
-
   const [serviceFieldValues, setServiceFieldValues] =
     useState<ServiceFieldValues>({});
-
-  /*
-   * Actual uploaded files.
-   *
-   * Do not put File objects or newly selected filenames
-   * into serviceFieldValues.
-   */
 
   const [serviceFiles, setServiceFiles] =
     useState<ServiceFileValues>({});
 
   /*
-   * Validation
+   * Explicitly removed existing attachments are tracked separately
+   * from newly selected files. The backend must implement removal
+   * semantics for this list before these removals can be persisted.
    */
+  const [removedFiles, setRemovedFiles] = useState<
+    Record<string, string[]>
+  >({});
 
   const [validationErrors, setValidationErrors] =
     useState<ValidationErrors>({});
 
   /*
-   *----------------------------------------------------------------------
    * Edit Hydration
-   *----------------------------------------------------------------------
    */
 
   useEffect(() => {
-    if (!isEditMode) {
-      return;
-    }
-
-    if (!isRecord(initialData)) {
+    if (!isEditMode || !isRecord(initialData)) {
       return;
     }
 
@@ -716,11 +576,7 @@ export function useExistingAgreement({
       resolveRevenueServiceId(services);
 
     const source = toStringValue(
-      firstValue(data, [
-        "sourceType",
-        "source_type",
-        "source",
-      ]),
+      firstValue(data, ["sourceType", "source_type", "source"]),
     );
 
     const notes = toStringValue(
@@ -734,57 +590,46 @@ export function useExistingAgreement({
       notes,
     });
 
-    const originalObligation = resolveFinancialValue(
-      data,
-      services,
-      [
-        "originalObligation",
-        "original_obligation",
-        "computedAmount",
-        "computed_amount",
-      ],
-    );
-
-    const amountAlreadyPaid = resolveFinancialValue(
-      data,
-      services,
-      [
-        "paidAmount",
-        "paid_amount",
-        "amountAlreadyPaid",
-        "amount_already_paid",
-      ],
-    );
-
-    const balanceAsOfDate = resolveFinancialValue(
-      data,
-      services,
-      [
-        "balanceAsOfDate",
-        "balance_as_of_date",
-      ],
-    );
-
     setFinancial({
-      originalObligation,
-      amountAlreadyPaid,
-      balanceAsOfDate,
+      originalObligation: resolveFinancialValue(
+        data,
+        services,
+        [
+          "originalObligation",
+          "original_obligation",
+          "computedAmount",
+          "computed_amount",
+        ],
+      ),
+      amountAlreadyPaid: resolveFinancialValue(
+        data,
+        services,
+        [
+          "paidAmount",
+          "paid_amount",
+          "amountAlreadyPaid",
+          "amount_already_paid",
+        ],
+      ),
+      balanceAsOfDate: resolveFinancialValue(
+        data,
+        services,
+        ["balanceAsOfDate", "balance_as_of_date"],
+      ),
     });
 
-    const hydratedServiceFields =
+    setServiceFieldValues(
       extractServiceFieldValues(
         services,
         revenueServiceId,
         revenueServices,
-      );
+      ),
+    );
 
-    setServiceFieldValues(hydratedServiceFields);
+    setServiceFiles({});
+    setRemovedFiles({});
     setValidationErrors({});
-  }, [
-    isEditMode,
-    initialData,
-    revenueServices,
-  ]);
+  }, [isEditMode, initialData, revenueServices]);
 
   /*
    * Selected Taxpayer
@@ -798,8 +643,7 @@ export function useExistingAgreement({
     return (
       taxpayers.find(
         (taxpayer) =>
-          String(taxpayer.id) ===
-          String(agreement.taxpayerId),
+          String(taxpayer.id) === String(agreement.taxpayerId),
       ) ?? null
     );
   }, [taxpayers, agreement.taxpayerId]);
@@ -809,19 +653,14 @@ export function useExistingAgreement({
    */
 
   const selectedRevenueService =
-    useMemo<RevenueService | null>(() => {
-      return findRevenueService(
-        revenueServices,
-        agreement.revenueServiceId,
-      );
-    }, [
-      revenueServices,
-      agreement.revenueServiceId,
-    ]);
-
-  /*
-   * Revenue Code
-   */
+    useMemo<RevenueService | null>(
+      () =>
+        findRevenueService(
+          revenueServices,
+          agreement.revenueServiceId,
+        ),
+      [revenueServices, agreement.revenueServiceId],
+    );
 
   const revenueCode =
     (
@@ -832,17 +671,14 @@ export function useExistingAgreement({
     )?.code ?? "";
 
   /*
-   * Outstanding Balance
+   * Display-Only Outstanding Balance
    */
 
   const outstandingBalance = useMemo(() => {
     const original = Number(financial.originalObligation);
     const paid = Number(financial.amountAlreadyPaid);
 
-    if (
-      !Number.isFinite(original) ||
-      !Number.isFinite(paid)
-    ) {
+    if (!Number.isFinite(original) || !Number.isFinite(paid)) {
       return 0;
     }
 
@@ -856,59 +692,47 @@ export function useExistingAgreement({
    * Clear Agreement Error
    */
 
-  const clearAgreementError = useCallback(
-    (field: string) => {
-      setValidationErrors((previous) => {
-        if (!previous.agreement?.[field]) {
-          return previous;
-        }
+  const clearAgreementError = useCallback((field: string) => {
+    setValidationErrors((previous) => {
+      if (!previous.agreement?.[field]) {
+        return previous;
+      }
 
-        const agreementErrors = {
-          ...previous.agreement,
-        };
+      const agreementErrors = { ...previous.agreement };
+      delete agreementErrors[field];
 
-        delete agreementErrors[field];
-
-        return {
-          ...previous,
-          agreement:
-            Object.keys(agreementErrors).length > 0
-              ? agreementErrors
-              : undefined,
-        };
-      });
-    },
-    [],
-  );
+      return {
+        ...previous,
+        agreement:
+          Object.keys(agreementErrors).length > 0
+            ? agreementErrors
+            : undefined,
+      };
+    });
+  }, []);
 
   /*
    * Clear Financial Error
    */
 
-  const clearFinancialError = useCallback(
-    (field: string) => {
-      setValidationErrors((previous) => {
-        if (!previous.financial?.[field]) {
-          return previous;
-        }
+  const clearFinancialError = useCallback((field: string) => {
+    setValidationErrors((previous) => {
+      if (!previous.financial?.[field]) {
+        return previous;
+      }
 
-        const financialErrors = {
-          ...previous.financial,
-        };
+      const financialErrors = { ...previous.financial };
+      delete financialErrors[field];
 
-        delete financialErrors[field];
-
-        return {
-          ...previous,
-          financial:
-            Object.keys(financialErrors).length > 0
-              ? financialErrors
-              : undefined,
-        };
-      });
-    },
-    [],
-  );
+      return {
+        ...previous,
+        financial:
+          Object.keys(financialErrors).length > 0
+            ? financialErrors
+            : undefined,
+      };
+    });
+  }, []);
 
   /*
    * Update Agreement
@@ -949,7 +773,7 @@ export function useExistingAgreement({
   );
 
   /*
-   * Select Taxpayer
+   * Select / Clear Taxpayer
    */
 
   const selectTaxpayer = useCallback(
@@ -963,10 +787,6 @@ export function useExistingAgreement({
     },
     [clearAgreementError],
   );
-
-  /*
-   * Clear Taxpayer
-   */
 
   const clearTaxpayer = useCallback(() => {
     setAgreement((previous) => ({
@@ -991,6 +811,7 @@ export function useExistingAgreement({
       if (!revenueServiceId) {
         setServiceFieldValues({});
         setServiceFiles({});
+        setRemovedFiles({});
 
         setValidationErrors((previous) => ({
           ...previous,
@@ -1008,13 +829,6 @@ export function useExistingAgreement({
       }));
 
       setValidationErrors((previous) => {
-        const currentErrors =
-          previous.service?.[revenueServiceId];
-
-        if (!currentErrors) {
-          return previous;
-        }
-
         const serviceErrors = {
           ...(previous.service ?? {}),
         };
@@ -1054,118 +868,13 @@ export function useExistingAgreement({
       }));
 
       setValidationErrors((previous) => {
-        const serviceErrors =
-          previous.service?.[serviceId];
-
-        if (!serviceErrors?.[field]) {
-          return previous;
-        }
-
-        const updatedErrors = {
-          ...serviceErrors,
-        };
-
-        delete updatedErrors[field];
-
-        const nextServiceErrors = {
-          ...(previous.service ?? {}),
-          [serviceId]: updatedErrors,
-        };
-
-        if (Object.keys(updatedErrors).length > 0) {
-          return {
-            ...previous,
-            service: nextServiceErrors,
-          };
-        }
-
-        const copy = {
-          ...(previous.service ?? {}),
-        };
-
-        delete copy[serviceId];
-
-        return {
-          ...previous,
-          service:
-            Object.keys(copy).length > 0
-              ? copy
-              : undefined,
-        };
-      });
-    },
-    [],
-  );
-
-  /*
-   *----------------------------------------------------------------------
-   * Handle Actual File Upload
-   *----------------------------------------------------------------------
-   *
-   * Store the actual File object in serviceFiles.
-   *
-   * IMPORTANT:
-   * - Do not set file.name in serviceFieldValues.
-   * - buildFormData() will upload the File separately.
-   */
-
-  const handleFileChange = useCallback(
-    (
-      serviceId: string,
-      field: string,
-      file: File | null,
-    ) => {
-      setServiceFiles((previous) => {
-        const serviceFilesForService = {
-          ...(previous[serviceId] ?? {}),
-        };
-
-        if (file) {
-          serviceFilesForService[field] = file;
-        } else {
-          delete serviceFilesForService[field];
-        }
-
-        const next = {
-          ...previous,
-        };
-
-        if (
-          Object.keys(serviceFilesForService).length > 0
-        ) {
-          next[serviceId] = serviceFilesForService;
-        } else {
-          delete next[serviceId];
-        }
-
-        return next;
-      });
-
-      /*
-       * Clear the previous field value when removing a file.
-       * For a newly selected file, do not save its filename
-       * in serviceFieldValues.
-       */
-      if (!file) {
-        setServiceFieldValue(serviceId, field, "");
-        return;
-      }
-
-      /*
-       * Clear a required-field error when a real File is selected.
-       */
-      setValidationErrors((previous) => {
-        const fieldErrors =
-          previous.service?.[serviceId];
+        const fieldErrors = previous.service?.[serviceId];
 
         if (!fieldErrors?.[field]) {
           return previous;
         }
 
-        const updatedErrors = {
-          ...fieldErrors,
-        };
-
+        const updatedErrors = { ...fieldErrors };
         delete updatedErrors[field];
 
         const nextServiceErrors = {
@@ -1187,33 +896,115 @@ export function useExistingAgreement({
         };
       });
     },
-    [setServiceFieldValue],
+    [],
   );
 
   /*
-   * Remove File
+   * File Helpers
+   */
+
+  const clearFileFieldError = useCallback(
+    (serviceId: string, field: string) => {
+      setValidationErrors((previous) => {
+        const fieldErrors = previous.service?.[serviceId];
+
+        if (!fieldErrors?.[field]) {
+          return previous;
+        }
+
+        const updatedErrors = { ...fieldErrors };
+        delete updatedErrors[field];
+
+        const nextServiceErrors = {
+          ...(previous.service ?? {}),
+        };
+
+        if (Object.keys(updatedErrors).length > 0) {
+          nextServiceErrors[serviceId] = updatedErrors;
+        } else {
+          delete nextServiceErrors[serviceId];
+        }
+
+        return {
+          ...previous,
+          service:
+            Object.keys(nextServiceErrors).length > 0
+              ? nextServiceErrors
+              : undefined,
+        };
+      });
+    },
+    [],
+  );
+
+  /*
+   * Handle Newly Selected File
+   */
+
+  const handleFileChange = useCallback(
+    (
+      serviceId: string,
+      field: string,
+      file: File | null,
+    ) => {
+      if (!file) {
+        /*
+         * Clearing the browser's file input is not treated as
+         * removing an existing server attachment.
+         */
+        setServiceFiles((previous) => {
+          const current = { ...(previous[serviceId] ?? {}) };
+          delete current[field];
+
+          const next = { ...previous };
+
+          if (Object.keys(current).length > 0) {
+            next[serviceId] = current;
+          } else {
+            delete next[serviceId];
+          }
+
+          return next;
+        });
+
+        return;
+      }
+
+      setServiceFiles((previous) => ({
+        ...previous,
+        [serviceId]: {
+          ...(previous[serviceId] ?? {}),
+          [field]: file,
+        },
+      }));
+
+      clearFileFieldError(serviceId, field);
+    },
+    [clearFileFieldError],
+  );
+
+  /*
+   * Explicitly Remove Existing File
+   *
+   * Pass the persisted file UUID/ID from the attachment UI.
+   * The backend must implement `removed_file_ids` semantics
+   * before this operation can delete a server-side attachment.
    */
 
   const removeFile = useCallback(
     (
       serviceId: string,
       field: string,
+      existingFileId?: string,
     ) => {
       setServiceFiles((previous) => {
-        const serviceFilesForService = {
-          ...(previous[serviceId] ?? {}),
-        };
+        const current = { ...(previous[serviceId] ?? {}) };
+        delete current[field];
 
-        delete serviceFilesForService[field];
+        const next = { ...previous };
 
-        const next = {
-          ...previous,
-        };
-
-        if (
-          Object.keys(serviceFilesForService).length > 0
-        ) {
-          next[serviceId] = serviceFilesForService;
+        if (Object.keys(current).length > 0) {
+          next[serviceId] = current;
         } else {
           delete next[serviceId];
         }
@@ -1221,9 +1012,27 @@ export function useExistingAgreement({
         return next;
       });
 
-      setServiceFieldValue(serviceId, field, "");
+      if (existingFileId) {
+        setRemovedFiles((previous) => {
+          const current = previous[serviceId] ?? [];
+
+          if (current.includes(existingFileId)) {
+            return previous;
+          }
+
+          return {
+            ...previous,
+            [serviceId]: [...current, existingFileId],
+          };
+        });
+      }
+
+      /*
+       * Do not clear the existing persisted value here. Removing
+       * a server attachment is a separate, explicit operation.
+       */
     },
-    [setServiceFieldValue],
+    [],
   );
 
   /*
@@ -1233,30 +1042,24 @@ export function useExistingAgreement({
   const removeService = useCallback(
     (serviceId: string) => {
       setServiceFieldValues((previous) => {
-        const next = {
-          ...previous,
-        };
-
+        const next = { ...previous };
         delete next[serviceId];
-
         return next;
       });
 
       setServiceFiles((previous) => {
-        const next = {
-          ...previous,
-        };
-
+        const next = { ...previous };
         delete next[serviceId];
+        return next;
+      });
 
+      setRemovedFiles((previous) => {
+        const next = { ...previous };
+        delete next[serviceId];
         return next;
       });
 
       setValidationErrors((previous) => {
-        if (!previous.service?.[serviceId]) {
-          return previous;
-        }
-
         const serviceErrors = {
           ...(previous.service ?? {}),
         };
@@ -1281,10 +1084,7 @@ export function useExistingAgreement({
         clearAgreementError("revenueServiceId");
       }
     },
-    [
-      agreement.revenueServiceId,
-      clearAgreementError,
-    ],
+    [agreement.revenueServiceId, clearAgreementError],
   );
 
   /*
@@ -1310,20 +1110,15 @@ export function useExistingAgreement({
       const serviceId = agreement.revenueServiceId;
 
       if (service && serviceId) {
-        const values =
-          serviceFieldValues[serviceId] ?? {};
-
-        const selectedFiles =
-          serviceFiles[serviceId] ?? {};
-
+        const values = serviceFieldValues[serviceId] ?? {};
+        const selectedFiles = serviceFiles[serviceId] ?? {};
         const fields = getRevenueServiceFields(service);
 
         for (const field of fields) {
-          const required =
-            field.required === true ||
-            field.is_required === true;
-
-          if (!required) {
+          if (
+            field.required !== true &&
+            field.is_required !== true
+          ) {
             continue;
           }
 
@@ -1336,10 +1131,6 @@ export function useExistingAgreement({
           const value = values[fieldKey];
           const selectedFile = selectedFiles[fieldKey];
 
-          /*
-           * A real selected File satisfies a required file field.
-           * Ordinary fields continue to use serviceFieldValues.
-           */
           if (
             selectedFile instanceof File ||
             !isEmptyValue(value)
@@ -1437,13 +1228,9 @@ export function useExistingAgreement({
           "Amount already paid cannot exceed the original obligation.";
       }
 
-      if (Object.keys(errors).length === 0) {
-        return {};
-      }
-
-      return {
-        financial: errors,
-      };
+      return Object.keys(errors).length > 0
+        ? { financial: errors }
+        : {};
     },
     [
       financial.originalObligation,
@@ -1452,31 +1239,18 @@ export function useExistingAgreement({
     ],
   );
 
-  /*
-   * Validate Review
-   */
-
-  const validateReviewStep = useCallback(
-    (): ValidationErrors => ({}),
-    [],
-  );
-
-  /*
-   * Validate Step
-   */
+  const validateReviewStep =
+    useCallback((): ValidationErrors => ({}), []);
 
   const validateStep = useCallback(
     (step: Step): ValidationErrors => {
       switch (step) {
         case 1:
           return validateAgreementStep();
-
         case 2:
           return validateFinancialStep();
-
         case 3:
           return validateReviewStep();
-
         default:
           return {};
       }
@@ -1487,10 +1261,6 @@ export function useExistingAgreement({
       validateReviewStep,
     ],
   );
-
-  /*
-   * Has Validation Errors
-   */
 
   const hasValidationErrors = useCallback(
     (errors: ValidationErrors): boolean => {
@@ -1519,10 +1289,6 @@ export function useExistingAgreement({
     },
     [],
   );
-
-  /*
-   * Validate All
-   */
 
   const validateAll = useCallback((): boolean => {
     const agreementErrors = validateAgreementStep();
@@ -1559,7 +1325,7 @@ export function useExistingAgreement({
   ]);
 
   /*
-   * Next Step
+   * Step Navigation
    */
 
   const nextStep = useCallback(() => {
@@ -1573,45 +1339,21 @@ export function useExistingAgreement({
     setValidationErrors({});
 
     setCurrentStep((previous) => {
-      if (previous === 1) {
-        return 2;
-      }
-
-      if (previous === 2) {
-        return 3;
-      }
-
+      if (previous === 1) return 2;
+      if (previous === 2) return 3;
       return previous;
     });
-  }, [
-    currentStep,
-    validateStep,
-    hasValidationErrors,
-  ]);
-
-  /*
-   * Previous Step
-   */
+  }, [currentStep, validateStep, hasValidationErrors]);
 
   const previousStep = useCallback(() => {
     setValidationErrors({});
 
     setCurrentStep((previous) => {
-      if (previous === 3) {
-        return 2;
-      }
-
-      if (previous === 2) {
-        return 1;
-      }
-
+      if (previous === 3) return 2;
+      if (previous === 2) return 1;
       return previous;
     });
   }, []);
-
-  /*
-   * Go To Step
-   */
 
   const goToStep = useCallback(
     (targetStep: Step) => {
@@ -1625,17 +1367,12 @@ export function useExistingAgreement({
         return;
       }
 
-      for (
-        let step = currentStep;
-        step < targetStep;
-        step++
-      ) {
-        const stepNumber = step as Step;
-        const errors = validateStep(stepNumber);
+      for (let step = currentStep; step < targetStep; step++) {
+        const errors = validateStep(step as Step);
 
         if (hasValidationErrors(errors)) {
           setValidationErrors(errors);
-          setCurrentStep(stepNumber);
+          setCurrentStep(step as Step);
           return;
         }
       }
@@ -1643,20 +1380,11 @@ export function useExistingAgreement({
       setValidationErrors({});
       setCurrentStep(targetStep);
     },
-    [
-      currentStep,
-      validateStep,
-      hasValidationErrors,
-    ],
+    [currentStep, validateStep, hasValidationErrors],
   );
 
   /*
-   *----------------------------------------------------------------------
    * Build JSON-Compatible Payload
-   *----------------------------------------------------------------------
-   *
-   * This payload contains only ordinary fields.
-   * Binary files are appended separately in buildFormData().
    */
 
   const buildPayload = useCallback(() => {
@@ -1667,7 +1395,7 @@ export function useExistingAgreement({
       serviceId,
     );
 
-    const frontendServiceFields = serviceId
+    const values = serviceId
       ? serviceFieldValues[serviceId] ?? {}
       : {};
 
@@ -1675,22 +1403,24 @@ export function useExistingAgreement({
       ? serviceFiles[serviceId] ?? {}
       : {};
 
-    const backendServiceFields =
-      buildBackendServiceFields(
-        selectedService,
-        frontendServiceFields,
-        selectedFiles,
-      );
+    const serviceFields = buildBackendServiceFields(
+      selectedService,
+      values,
+      selectedFiles,
+    );
 
     return {
       taxpayer_id: agreement.taxpayerId,
       revenue_service_id: serviceId,
-      service_fields: backendServiceFields,
+      service_fields: serviceFields,
       source: agreement.source,
       notes: agreement.notes,
       original_obligation: financial.originalObligation,
       amount_already_paid: financial.amountAlreadyPaid,
       balance_as_of_date: financial.balanceAsOfDate,
+      removed_file_ids: serviceId
+        ? removedFiles[serviceId] ?? []
+        : [],
     };
   }, [
     agreement,
@@ -1698,19 +1428,21 @@ export function useExistingAgreement({
     revenueServices,
     serviceFieldValues,
     serviceFiles,
+    removedFiles,
   ]);
 
   /*
-   *----------------------------------------------------------------------
-   * Build FormData
-   *----------------------------------------------------------------------
+   * Build Multipart FormData
    *
-   * Example:
+   * File field:
+   *   file__SERVICE_UUID__FIELD_UUID
    *
-   * service_files[01a12dc6-2b29-71c6-bc13-add423653d27]
-   *   = actual PDF File object
-   *
-   * Do not append the filename to service_fields.
+   * JSON reference:
+   *   {
+   *     "FIELD_UUID": {
+   *       "__file": "file__SERVICE_UUID__FIELD_UUID"
+   *     }
+   *   }
    */
 
   const buildFormData = useCallback((): FormData => {
@@ -1718,40 +1450,33 @@ export function useExistingAgreement({
     const formData = new FormData();
 
     formData.append("taxpayer_id", payload.taxpayer_id);
-
     formData.append(
       "revenue_service_id",
       payload.revenue_service_id,
     );
-
     formData.append(
       "service_fields",
       JSON.stringify(payload.service_fields),
     );
-
     formData.append("source", payload.source);
     formData.append("notes", payload.notes);
-
     formData.append(
       "original_obligation",
       payload.original_obligation,
     );
-
     formData.append(
       "amount_already_paid",
       payload.amount_already_paid,
     );
-
     formData.append(
       "balance_as_of_date",
       payload.balance_as_of_date,
     );
+    formData.append(
+      "removed_file_ids",
+      JSON.stringify(payload.removed_file_ids),
+    );
 
-    /*
-     * Append actual selected files.
-     *
-     * Frontend field key → RevenueServiceField UUID.
-     */
     const serviceId = agreement.revenueServiceId;
 
     const selectedService = findRevenueService(
@@ -1763,15 +1488,9 @@ export function useExistingAgreement({
       ? serviceFiles[serviceId] ?? {}
       : {};
 
-    const fields = getRevenueServiceFields(selectedService);
-
-    for (const field of fields) {
+    for (const field of getRevenueServiceFields(selectedService)) {
       const fieldId = normalizeIdentifier(
-        firstValue(field, [
-          "id",
-          "fieldId",
-          "field_id",
-        ]),
+        firstValue(field, ["id", "fieldId", "field_id"]),
       );
 
       const fieldKey = getFrontendFieldKey(field);
@@ -1787,7 +1506,7 @@ export function useExistingAgreement({
       }
 
       formData.append(
-        `service_files[${fieldId}]`,
+        `file__${serviceId}__${fieldId}`,
         file,
         file.name,
       );
@@ -1807,88 +1526,52 @@ export function useExistingAgreement({
 
   const resetForm = useCallback(() => {
     setCurrentStep(1);
-
-    setAgreement({
-      ...INITIAL_AGREEMENT,
-    });
-
-    setFinancial({
-      ...INITIAL_FINANCIAL,
-    });
-
+    setAgreement({ ...INITIAL_AGREEMENT });
+    setFinancial({ ...INITIAL_FINANCIAL });
     setServiceFieldValues({});
     setServiceFiles({});
+    setRemovedFiles({});
     setValidationErrors({});
   }, []);
 
   /*
-   * Return API
+   * Public Hook API
    */
 
   return {
-    /*
-     * Mode
-     */
     isEditMode,
     assessmentId,
 
-    /*
-     * Workflow
-     */
     currentStep,
     nextStep,
     previousStep,
     goToStep,
 
-    /*
-     * Validation
-     */
     validationErrors,
     validateStep,
     validateAll,
 
-    /*
-     * Payload
-     */
     buildPayload,
     buildFormData,
 
-    /*
-     * Reset
-     */
     resetForm,
 
-    /*
-     * Agreement
-     */
     agreement,
     updateAgreement,
 
-    /*
-     * Financial
-     */
     financial,
     updateFinancial,
 
-    /*
-     * Taxpayer
-     */
     taxpayers,
     selectedTaxpayer,
     selectTaxpayer,
     clearTaxpayer,
 
-    /*
-     * Revenue service
-     */
     revenueServices,
     selectedRevenueService,
     revenueCode,
     selectRevenueService,
 
-    /*
-     * Dynamic service fields
-     */
     serviceFieldValues,
     serviceFiles,
     setServiceFieldValue,
@@ -1896,10 +1579,6 @@ export function useExistingAgreement({
     removeFile,
     removeService,
 
-    /*
-     * Financial calculation for display only.
-     * Backend remains authoritative.
-     */
     outstandingBalance,
   };
 }

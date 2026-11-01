@@ -22,6 +22,10 @@ COPY . .
 
 ENV NEXT_TELEMETRY_DISABLED=1
 
+# Public API URL (available during Next.js build)
+ARG NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+
 RUN npm run build
 
 
@@ -45,7 +49,7 @@ RUN groupadd -r nodejs \
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
-# Only copy public if the directory exists
+# Copy public assets
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 
 USER nextjs

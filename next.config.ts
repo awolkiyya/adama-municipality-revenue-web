@@ -1,9 +1,13 @@
+
 import type { NextConfig } from "next";
 import createNextIntlPlugin from "next-intl/plugin";
 
 const withNextIntl = createNextIntlPlugin("./i18n/request.ts");
 
 const nextConfig: NextConfig = {
+  // Generate a minimal production deployment package.
+  output: "standalone",
+
   reactStrictMode: true,
 
   poweredByHeader: false,

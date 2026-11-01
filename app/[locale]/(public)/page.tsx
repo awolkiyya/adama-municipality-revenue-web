@@ -415,12 +415,15 @@ function HeroWaves() {
 }
 
 
+
 /* -------------------------------------------------------------------------- */
 /* Field collection app download (office only)                                */
 /* -------------------------------------------------------------------------- */
 
+// Make sure this matches the real file name/extension in /public/images
 const PREVIEW_SRC = "/images/fieldcollectionpreview.png";
-const PREVIEW_ALT = "Adama Field Collection Android application preview";
+const PREVIEW_ALT =
+  "Handheld Android POS terminal with built-in receipt printer running the Adama Field Collection app";
 
 function FieldAppDownload() {
   const [open, setOpen] = useState(false);
@@ -447,47 +450,47 @@ function FieldAppDownload() {
   return (
     <div className="space-y-5">
       {/* ------------------------------ Preview ------------------------------ */}
-      <div className="relative overflow-hidden rounded-2xl border bg-gradient-to-b from-primary/10 via-muted/40 to-muted/20">
-        {/* Header */}
-        <div className="flex items-start justify-between gap-3 px-4 pt-4">
-          <div className="min-w-0">
-            <p className="text-sm font-bold text-foreground">App preview</p>
-            <p className="text-xs text-muted-foreground">
-              Field collection mobile application
-            </p>
-          </div>
-          <span className="shrink-0 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
-            Android
-          </span>
-        </div>
-
-        {/* Phone frame (cropped, top aligned) */}
+      <div className="overflow-hidden rounded-2xl border bg-card shadow-sm">
+        {/* Image panel: white to blend with the photo background */}
         <button
           type="button"
           onClick={() => setOpen(true)}
-          aria-label="View full app preview"
-          className="group relative mx-auto mt-4 block h-[220px] w-[190px] overflow-hidden rounded-t-[2rem] border-x-[6px] border-t-[6px] border-foreground/85 bg-background shadow-xl transition-transform duration-300 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          aria-label="Enlarge device preview"
+          className="group relative block aspect-[16/11] w-full bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
         >
-          {/* Notch */}
-          <span className="absolute left-1/2 top-1.5 z-10 h-1.5 w-12 -translate-x-1/2 rounded-full bg-foreground/80" />
-
           <Image
             src={PREVIEW_SRC}
             alt={PREVIEW_ALT}
             fill
-            sizes="190px"
-            className="object-cover object-top"
+            sizes="(max-width: 640px) 100vw, 420px"
+            className="object-contain p-2 transition-transform duration-300 group-hover:scale-[1.03]"
           />
 
-          {/* Bottom fade */}
-          <span className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-background via-background/70 to-transparent" />
+          {/* Platform badge */}
+          <span className="absolute left-3 top-3 rounded-full bg-primary px-2.5 py-1 text-[11px] font-semibold text-primary-foreground shadow-sm">
+            Android
+          </span>
 
-          {/* Expand hint */}
-          <span className="absolute bottom-3 left-1/2 z-10 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-foreground/90 px-3 py-1.5 text-[11px] font-semibold text-background shadow-md transition group-hover:bg-primary group-hover:text-primary-foreground">
+          {/* Enlarge hint */}
+          <span className="absolute bottom-3 right-3 inline-flex items-center gap-1.5 rounded-full bg-foreground/85 px-3 py-1.5 text-[11px] font-semibold text-background opacity-90 shadow-md backdrop-blur transition group-hover:bg-primary group-hover:text-primary-foreground">
             <Expand className="size-3" />
-            View full preview
+            Enlarge
           </span>
         </button>
+
+        {/* Caption */}
+        <div className="flex items-center justify-between gap-3 border-t px-4 py-3">
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-foreground">App preview</p>
+            <p className="truncate text-xs text-muted-foreground">
+              Runs on Android handheld terminals
+            </p>
+          </div>
+          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary">
+            <Printer className="size-3" />
+            Receipt printing
+          </span>
+        </div>
       </div>
 
       {/* ------------------------------- App info ---------------------------- */}
@@ -555,7 +558,7 @@ function FieldAppDownload() {
         <div
           role="dialog"
           aria-modal="true"
-          aria-label="Full app preview"
+          aria-label="Device preview"
           onClick={() => setOpen(false)}
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
         >
@@ -570,13 +573,13 @@ function FieldAppDownload() {
 
           <div
             onClick={(e) => e.stopPropagation()}
-            className="relative h-[85vh] w-full max-w-sm overflow-hidden rounded-2xl bg-background shadow-2xl"
+            className="relative aspect-square w-full max-w-[min(90vw,80vh,560px)] overflow-hidden rounded-2xl bg-white shadow-2xl"
           >
             <Image
               src={PREVIEW_SRC}
               alt={PREVIEW_ALT}
               fill
-              sizes="(max-width: 640px) 100vw, 384px"
+              sizes="(max-width: 640px) 90vw, 560px"
               className="object-contain"
             />
           </div>

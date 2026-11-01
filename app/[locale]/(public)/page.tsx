@@ -2,6 +2,7 @@
 
 import { useRef, useState, type CSSProperties, type FormEvent } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import {
   ArrowRight,
   BarChart3,
@@ -422,51 +423,97 @@ function FieldAppDownload() {
   ];
 
   return (
-    <div>
+    <div className="space-y-5">
+
+      {/* Application preview */}
+      <div className="relative overflow-hidden rounded-2xl border bg-muted/40 p-3">
+
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-bold text-foreground">
+              App preview
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Field collection mobile application
+            </p>
+          </div>
+
+          <span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
+            Android
+          </span>
+        </div>
+
+        <div className="relative mx-auto h-[360px] w-full max-w-[280px] overflow-hidden rounded-xl bg-background shadow-lg">
+          <Image
+            src="/images/fieldcollectionpreview.png"
+            alt="Adama Field Collection Android application preview"
+            fill
+            priority={false}
+            sizes="(max-width: 768px) 280px, 280px"
+            className="object-contain"
+          />
+        </div>
+
+        <p className="mt-3 text-center text-xs text-muted-foreground">
+          Preview of the Adama Field Collection application
+        </p>
+      </div>
+
+      {/* Application information */}
       <div className="flex items-center gap-3">
         <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground">
           <Smartphone className="size-5" />
         </span>
+
         <div className="min-w-0">
-          <p className="truncate text-sm font-bold">{FIELD_APP.name}</p>
+          <p className="truncate text-sm font-bold text-foreground">
+            {FIELD_APP.name}
+          </p>
           <p className="text-xs text-muted-foreground">
             For authorized revenue officers
           </p>
         </div>
       </div>
 
-      <dl className="mt-4 grid gap-px overflow-hidden rounded-xl border bg-border sm:grid-cols-3">
+      {/* App specifications */}
+      <dl className="grid grid-cols-3 gap-px overflow-hidden rounded-xl border bg-border">
         {details.map(([label, value]) => (
-          <div key={label} className="bg-card px-3 py-2.5">
-            <dt className="text-xs text-muted-foreground">{label}</dt>
-            <dd className="mt-0.5 break-words text-sm font-semibold">{value}</dd>
+          <div key={label} className="min-w-0 bg-card px-2 py-3">
+            <dt className="text-xs text-muted-foreground">
+              {label}
+            </dt>
+            <dd className="mt-1 break-words text-sm font-semibold text-foreground">
+              {value}
+            </dd>
           </div>
         ))}
       </dl>
 
+      {/* Download */}
       {FIELD_APP.available ? (
         <a
           href={FIELD_APP.url}
           download
-          className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
+          className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3.5 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
           <Download className="size-4" />
           Download for Android
+          <ArrowRight className="ml-auto size-4" />
         </a>
       ) : (
         <button
           type="button"
           disabled
-          className="mt-4 inline-flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground opacity-60"
+          className="inline-flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3.5 text-sm font-semibold text-primary-foreground opacity-60"
         >
           <Download className="size-4" />
           Coming soon
         </button>
       )}
 
-      <p className="mt-3 text-xs leading-5 text-muted-foreground">
-        Sign in with your office account. If Android blocks the install, allow
-        installs from this source in your phone settings.
+      <p className="text-xs leading-5 text-muted-foreground">
+        Sign in using your authorized revenue officer account.
+        Install the official APK on a compatible Android device.
       </p>
     </div>
   );

@@ -25,7 +25,10 @@ import {
   WifiOff,
   XCircle,
   type LucideIcon,
+  Expand,
+  X,
 } from "lucide-react";
+
 
 
 import TaxpayerAppDownload from "@/components/TaxpayerAppDownload";
@@ -411,60 +414,87 @@ function HeroWaves() {
   );
 }
 
+
 /* -------------------------------------------------------------------------- */
-/* Field collection app download (office only, placeholder)                   */
+/* Field collection app download (office only)                                */
 /* -------------------------------------------------------------------------- */
 
+const PREVIEW_SRC = "/images/fieldcollectionpreview.png";
+const PREVIEW_ALT = "Adama Field Collection Android application preview";
+
 function FieldAppDownload() {
+  const [open, setOpen] = useState(false);
+
   const details = [
-    ["Version", FIELD_APP.version],
-    ["Size", FIELD_APP.size],
-    ["Platform", FIELD_APP.platform],
+    { label: "Version", value: FIELD_APP.version },
+    { label: "Size", value: FIELD_APP.size },
+    { label: "Platform", value: FIELD_APP.platform },
   ];
+
+  // Close lightbox with Escape + lock page scroll while open
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [open]);
 
   return (
     <div className="space-y-5">
-
-      {/* Application preview */}
-      <div className="relative overflow-hidden rounded-2xl border bg-muted/40 p-3">
-
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <div>
-            <p className="text-sm font-bold text-foreground">
-              App preview
-            </p>
+      {/* ------------------------------ Preview ------------------------------ */}
+      <div className="relative overflow-hidden rounded-2xl border bg-gradient-to-b from-primary/10 via-muted/40 to-muted/20">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-3 px-4 pt-4">
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-foreground">App preview</p>
             <p className="text-xs text-muted-foreground">
               Field collection mobile application
             </p>
           </div>
-
-          <span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
+          <span className="shrink-0 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
             Android
           </span>
         </div>
 
-        <div className="relative mx-auto h-[360px] w-full max-w-[280px] overflow-hidden rounded-xl bg-background shadow-lg">
-          <Image
-            src="/images/fieldcollectionpreview.png"
-            alt="Adama Field Collection Android application preview"
-            fill
-            priority={false}
-            sizes="(max-width: 768px) 280px, 280px"
-            className="object-contain"
-          />
-        </div>
+        {/* Phone frame (cropped, top aligned) */}
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          aria-label="View full app preview"
+          className="group relative mx-auto mt-4 block h-[220px] w-[190px] overflow-hidden rounded-t-[2rem] border-x-[6px] border-t-[6px] border-foreground/85 bg-background shadow-xl transition-transform duration-300 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        >
+          {/* Notch */}
+          <span className="absolute left-1/2 top-1.5 z-10 h-1.5 w-12 -translate-x-1/2 rounded-full bg-foreground/80" />
 
-        <p className="mt-3 text-center text-xs text-muted-foreground">
-          Preview of the Adama Field Collection application
-        </p>
+          <Image
+            src={PREVIEW_SRC}
+            alt={PREVIEW_ALT}
+            fill
+            sizes="190px"
+            className="object-cover object-top"
+          />
+
+          {/* Bottom fade */}
+          <span className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-background via-background/70 to-transparent" />
+
+          {/* Expand hint */}
+          <span className="absolute bottom-3 left-1/2 z-10 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-foreground/90 px-3 py-1.5 text-[11px] font-semibold text-background shadow-md transition group-hover:bg-primary group-hover:text-primary-foreground">
+            <Expand className="size-3" />
+            View full preview
+          </span>
+        </button>
       </div>
 
-      {/* Application information */}
+      {/* ------------------------------- App info ---------------------------- */}
       <div className="flex items-center gap-3">
-        <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+        <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
           <Smartphone className="size-5" />
         </span>
-
         <div className="min-w-0">
           <p className="truncate text-sm font-bold text-foreground">
             {FIELD_APP.name}
@@ -475,11 +505,11 @@ function FieldAppDownload() {
         </div>
       </div>
 
-      {/* App specifications */}
-      <dl className="grid grid-cols-3 gap-px overflow-hidden rounded-xl border bg-border">
-        {details.map(([label, value]) => (
-          <div key={label} className="min-w-0 bg-card px-2 py-3">
-            <dt className="text-xs text-muted-foreground">
+      {/* ------------------------------- Specs ------------------------------- */}
+      <dl className="grid grid-cols-3 divide-x overflow-hidden rounded-xl border bg-card">
+        {details.map(({ label, value }) => (
+          <div key={label} className="min-w-0 px-3 py-3 text-center">
+            <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
               {label}
             </dt>
             <dd className="mt-1 break-words text-sm font-semibold text-foreground">
@@ -489,12 +519,12 @@ function FieldAppDownload() {
         ))}
       </dl>
 
-      {/* Download */}
+      {/* ------------------------------ Download ----------------------------- */}
       {FIELD_APP.available ? (
         <a
           href={FIELD_APP.url}
           download
-          className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3.5 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3.5 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
           <Download className="size-4" />
           Download for Android
@@ -511,10 +541,47 @@ function FieldAppDownload() {
         </button>
       )}
 
-      <p className="text-xs leading-5 text-muted-foreground">
-        Sign in using your authorized revenue officer account.
-        Install the official APK on a compatible Android device.
-      </p>
+      {/* -------------------------------- Note ------------------------------- */}
+      <div className="flex items-start gap-2.5 rounded-xl bg-muted/50 p-3">
+        <ShieldCheck className="mt-0.5 size-4 shrink-0 text-primary" />
+        <p className="text-xs leading-5 text-muted-foreground">
+          Sign in using your authorized revenue officer account. Install the
+          official APK on a compatible Android device.
+        </p>
+      </div>
+
+      {/* ------------------------------ Lightbox ----------------------------- */}
+      {open && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Full app preview"
+          onClick={() => setOpen(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+        >
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            aria-label="Close preview"
+            className="absolute right-4 top-4 flex size-10 items-center justify-center rounded-full bg-background/90 text-foreground shadow-lg transition hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <X className="size-5" />
+          </button>
+
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="relative h-[85vh] w-full max-w-sm overflow-hidden rounded-2xl bg-background shadow-2xl"
+          >
+            <Image
+              src={PREVIEW_SRC}
+              alt={PREVIEW_ALT}
+              fill
+              sizes="(max-width: 640px) 100vw, 384px"
+              className="object-contain"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

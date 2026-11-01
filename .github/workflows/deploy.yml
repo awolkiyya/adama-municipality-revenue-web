@@ -21,17 +21,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # ==========================================
-      # CHECKOUT
-      # ==========================================
-
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      # ==========================================
-      # DEPLOY TO FRONTEND SERVER
-      # ==========================================
-
       - name: Deploy using Docker Compose
         uses: appleboy/ssh-action@v1.0.3
 
@@ -49,6 +38,7 @@ jobs:
             set -Eeuo pipefail
 
             APP_DIR="/opt/adama-revenue/web_app"
+            PUBLIC_IP="196.190.216.41"
 
             echo "======================================"
             echo "Adama Revenue Frontend Deployment"
@@ -59,6 +49,7 @@ jobs:
             echo "Checking deployment prerequisites..."
 
             command -v docker
+            command -v curl
             docker compose version
 
             test -f Dockerfile
@@ -87,48 +78,66 @@ jobs:
 
             docker compose exec -T nginx nginx -s reload
 
-            echo "Checking frontend health..."
+            echo "Waiting for frontend container health..."
 
             HEALTHY=0
 
             for i in $(seq 1 30); do
 
-              if curl -fsS http://127.0.0.1/health \
-                -o /dev/null; then
+              STATUS=$(docker inspect \
+                --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' \
+                frontend-app 2>/dev/null || true)
 
+              echo "Frontend status: ${STATUS:-unknown}"
+
+              if [ "$STATUS" = "healthy" ]; then
                 HEALTHY=1
                 break
-
               fi
 
               sleep 5
-
             done
 
             if [ "$HEALTHY" -ne 1 ]; then
 
-              echo "Deployment health check failed."
+              echo "Frontend container health check failed."
 
               docker compose ps
-
               docker compose logs --tail=100 frontend nginx
 
               exit 1
-
             fi
 
-            echo "Checking frontend response..."
+            echo "Checking HTTPS application response..."
 
-            curl -fsSI http://127.0.0.1/
+            HTTP_STATUS=$(curl \
+              --connect-timeout 10 \
+              --max-time 30 \
+              --silent \
+              --show-error \
+              --fail \
+              --location \
+              --resolve "${PUBLIC_IP}:443:127.0.0.1" \
+              --output /dev/null \
+              --write-out "%{http_code}" \
+              "https://${PUBLIC_IP}/")
+
+            echo "HTTPS response status: ${HTTP_STATUS}"
+
+            if [ "$HTTP_STATUS" != "200" ]; then
+
+              echo "HTTPS application health check failed."
+
+              docker compose ps
+              docker compose logs --tail=100 frontend nginx
+
+              exit 1
+            fi
 
             echo "======================================"
             echo "Deployment successful"
             echo "======================================"
 
             docker compose ps
-
-            echo "Cleaning unused Docker build cache..."
-
-            docker builder prune -f
 
             echo "Deployment completed successfully."

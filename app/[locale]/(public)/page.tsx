@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type CSSProperties, type FormEvent } from "react";
+import { useRef,useEffect, useState, type CSSProperties, type FormEvent } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import {

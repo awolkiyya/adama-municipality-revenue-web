@@ -11,10 +11,12 @@ import {
   ClipboardList,
   CreditCard,
   Download,
+  Expand,
   FileText,
   Loader2,
   MapPin,
   Menu,
+  Printer, // added: used by the "Receipt printing" chip
   Receipt,
   Search,
   ShieldCheck,
@@ -23,10 +25,9 @@ import {
   UserCheck,
   Users2,
   WifiOff,
+  X,
   XCircle,
   type LucideIcon,
-  Expand,
-  X,
 } from "lucide-react";
 
 

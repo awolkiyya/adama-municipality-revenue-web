@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  useEffect,
   useMemo,
   useState,
   type ElementType,
@@ -149,12 +148,6 @@ const NAVIGATION: {
     description: "Assessment behavior",
     icon: FileCheck2,
   },
-  // {
-  //   id: "lizz",
-  //   label: "Lizz",
-  //   description: "Lizz installment policy",
-  //   icon: Landmark,
-  // },
   {
     id: "invoice",
     label: "Invoice",
@@ -181,18 +174,6 @@ const NAVIGATION: {
 |--------------------------------------------------------------------------
 */
 
-/**
- * Parse the database representation:
- *
- *     "08-30"
- *
- * into:
- *
- *     { month: 8, day: 30 }
- *
- * The year is intentionally absent because this is
- * a recurring annual date.
- */
 function parseAnnualPaymentDueDate(
   value: string | null | undefined,
 ): {
@@ -222,17 +203,10 @@ function parseAnnualPaymentDueDate(
   };
 }
 
-/**
- * Ethiopian month 1-12 have 30 days.
- * Ethiopian month 13 (Pagume) has 1-6 days.
- */
 function getMaxDay(month: number): number {
   return month === 13 ? 6 : 30;
 }
 
-/**
- * Validate Ethiopian month/day.
- */
 function isValidEthiopianDate(
   month: number | null | undefined,
   day: number | null | undefined,
@@ -257,11 +231,6 @@ function isValidEthiopianDate(
   return true;
 }
 
-/**
- * Validate the API/database representation:
- *
- *     MM-DD
- */
 function isValidAnnualPaymentDueDate(
   value: string | null | undefined,
 ): boolean {
@@ -272,15 +241,6 @@ function isValidAnnualPaymentDueDate(
   return parseAnnualPaymentDueDate(value) !== null;
 }
 
-/**
- * Convert:
- *
- *     month + day
- *
- * into:
- *
- *     "MM-DD"
- */
 function buildAnnualPaymentDueDate(
   month: number,
   day: number,
@@ -291,25 +251,10 @@ function buildAnnualPaymentDueDate(
   )}`;
 }
 
-/**
- * Return the Ethiopian month name.
- */
 function monthName(month: number): string {
   return ETH_MONTHS[month - 1] ?? `Month ${month}`;
 }
 
-/**
- * Format:
- *
- *     "08-30"
- *
- * as:
- *
- *     "Hamle 30"
- *
- * The year is intentionally not displayed because
- * annual_payment_due_date is recurring every Ethiopian year.
- */
 function formatAnnualPaymentDueDate(
   value: string | null | undefined,
 ): string {
@@ -326,15 +271,6 @@ function formatAnnualPaymentDueDate(
   return `${monthName(parsed.month)} ${parsed.day}`;
 }
 
-/**
- * Convert the annual MM-DD value into a Gregorian Date
- * that can be supplied to EthiopianDatePicker.
- *
- * IMPORTANT:
- *
- * The Ethiopian year used here is only a UI carrier.
- * It is NOT part of the persisted configuration.
- */
 function annualPaymentDueDateToGregorian(
   value: string | null | undefined,
 ): Date | undefined {
@@ -345,7 +281,6 @@ function annualPaymentDueDateToGregorian(
   }
 
   const today = new Date();
-
   const currentEthYear = gregorianToEth(today).year;
 
   const calendar = generateEthCalendar(
@@ -503,24 +438,24 @@ export default function RevenueGeneralSettingsPage() {
 
   /*
   |--------------------------------------------------------------------------
-  | Active Section
+  | Track Previous Server Configuration
   |--------------------------------------------------------------------------
+  |
+  | Synchronize API data into local editable state when the server
+  | configuration reference changes.
+  |
+  | This guarded render-time update replaces the previous useEffect
+  | that synchronously called setSettings and setSavedSettings.
+  |
   */
 
-  const [activeSection, setActiveSection] =
-    useState<SettingsSection>("overview");
+  const [previousServerSettings, setPreviousServerSettings] =
+    useState(serverSettings);
 
-  /*
-  |--------------------------------------------------------------------------
-  | Sync API -> Local State
-  |--------------------------------------------------------------------------
-  */
-
-  useEffect(() => {
-    if (!serverSettings) {
-      return;
-    }
-
+  if (
+    serverSettings &&
+    serverSettings !== previousServerSettings
+  ) {
     const normalized: RevenueSettingResource = {
       ...serverSettings,
 
@@ -531,23 +466,23 @@ export default function RevenueGeneralSettingsPage() {
           ? serverSettings.enabled_payment_methods
           : [],
 
-      /*
-      |--------------------------------------------------------------------------
-      | Lizz
-      |--------------------------------------------------------------------------
-      |
-      | The API may return the decimal value as a string depending
-      | on the Laravel resource/cast configuration.
-      |
-      */
       lizz_first_installment_percentage:
         serverSettings.lizz_first_installment_percentage ?? null,
     };
 
+    setPreviousServerSettings(serverSettings);
     setSettings(cloneSettings(normalized));
-
     setSavedSettings(cloneSettings(normalized));
-  }, [serverSettings]);
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Active Section
+  |--------------------------------------------------------------------------
+  */
+
+  const [activeSection, setActiveSection] =
+    useState<SettingsSection>("overview");
 
   /*
   |--------------------------------------------------------------------------
@@ -582,15 +517,6 @@ export default function RevenueGeneralSettingsPage() {
 
   /*
   |--------------------------------------------------------------------------
-  | Lizz First Installment Percentage
-  |--------------------------------------------------------------------------
-  */
-
-  const lizzFirstInstallmentPercentage =
-    settings?.lizz_first_installment_percentage;
-
-  /*
-  |--------------------------------------------------------------------------
   | Validation
   |--------------------------------------------------------------------------
   */
@@ -602,12 +528,6 @@ export default function RevenueGeneralSettingsPage() {
 
     const errors: string[] = [];
 
-    /*
-    |--------------------------------------------------------------------------
-    | Annual Payment Due Date
-    |--------------------------------------------------------------------------
-    */
-
     if (
       !isValidAnnualPaymentDueDate(
         settings.annual_payment_due_date,
@@ -617,12 +537,6 @@ export default function RevenueGeneralSettingsPage() {
         "Annual payment due date is invalid. Use a valid Ethiopian calendar MM-DD date.",
       );
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Lizz First Installment Percentage
-    |--------------------------------------------------------------------------
-    */
 
     const lizzPercentage =
       settings.lizz_first_installment_percentage;
@@ -645,12 +559,6 @@ export default function RevenueGeneralSettingsPage() {
       }
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Invoice Prefix
-    |--------------------------------------------------------------------------
-    */
-
     if (
       settings.invoice_auto_numbering &&
       !settings.invoice_prefix.trim()
@@ -660,12 +568,6 @@ export default function RevenueGeneralSettingsPage() {
       );
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Receipt Prefix
-    |--------------------------------------------------------------------------
-    */
-
     if (
       settings.receipt_auto_numbering &&
       !settings.receipt_prefix.trim()
@@ -674,12 +576,6 @@ export default function RevenueGeneralSettingsPage() {
         "Receipt prefix is required when automatic receipt numbering is enabled.",
       );
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Payment Methods
-    |--------------------------------------------------------------------------
-    */
 
     if (
       !settings.enabled_payment_methods ||
@@ -786,20 +682,8 @@ export default function RevenueGeneralSettingsPage() {
     current: RevenueSettingResource,
   ): UpdateRevenueSettingPayload {
     return {
-      /*
-      |--------------------------------------------------------------------------
-      | Annual Payment Due Date
-      |--------------------------------------------------------------------------
-      */
-
       annual_payment_due_date:
         current.annual_payment_due_date,
-
-      /*
-      |--------------------------------------------------------------------------
-      | Penalty / Interest
-      |--------------------------------------------------------------------------
-      */
 
       penalty_enabled:
         current.penalty_enabled,
@@ -807,20 +691,8 @@ export default function RevenueGeneralSettingsPage() {
       interest_enabled:
         current.interest_enabled,
 
-      /*
-      |--------------------------------------------------------------------------
-      | Lizz
-      |--------------------------------------------------------------------------
-      */
-
       lizz_first_installment_percentage:
         current.lizz_first_installment_percentage,
-
-      /*
-      |--------------------------------------------------------------------------
-      | Assessment
-      |--------------------------------------------------------------------------
-      */
 
       assessment_auto_calculation:
         current.assessment_auto_calculation,
@@ -834,12 +706,6 @@ export default function RevenueGeneralSettingsPage() {
       assessment_reassessment_allowed:
         current.assessment_reassessment_allowed,
 
-      /*
-      |--------------------------------------------------------------------------
-      | Invoice
-      |--------------------------------------------------------------------------
-      */
-
       invoice_auto_numbering:
         current.invoice_auto_numbering,
 
@@ -852,12 +718,6 @@ export default function RevenueGeneralSettingsPage() {
       invoice_allow_overdue_payment:
         current.invoice_allow_overdue_payment,
 
-      /*
-      |--------------------------------------------------------------------------
-      | Payment
-      |--------------------------------------------------------------------------
-      */
-
       payment_confirmation_required:
         current.payment_confirmation_required,
 
@@ -868,12 +728,6 @@ export default function RevenueGeneralSettingsPage() {
         ...current.enabled_payment_methods,
       ],
 
-      /*
-      |--------------------------------------------------------------------------
-      | Receipt
-      |--------------------------------------------------------------------------
-      */
-
       receipt_auto_numbering:
         current.receipt_auto_numbering,
 
@@ -882,12 +736,6 @@ export default function RevenueGeneralSettingsPage() {
 
       receipt_allow_reprint:
         current.receipt_allow_reprint,
-
-      /*
-      |--------------------------------------------------------------------------
-      | Metadata
-      |--------------------------------------------------------------------------
-      */
 
       legal_reference:
         current.legal_reference,
@@ -937,12 +785,6 @@ export default function RevenueGeneralSettingsPage() {
 
     const exists =
       currentMethods.includes(method);
-
-    /*
-    |--------------------------------------------------------------------------
-    | Never allow zero payment methods
-    |--------------------------------------------------------------------------
-    */
 
     if (
       exists &&
@@ -1066,9 +908,7 @@ export default function RevenueGeneralSettingsPage() {
 
   return (
     <div className="min-h-screen bg-muted/20">
-      {/* ==========================================================
-          HEADER
-      =========================================================== */}
+      {/* HEADER */}
 
       <header className="border-b bg-background">
         <div className="mx-auto max-w-[1500px] px-6 py-5">
@@ -1176,14 +1016,10 @@ export default function RevenueGeneralSettingsPage() {
         </div>
       </header>
 
-      {/* ==========================================================
-          MAIN
-      =========================================================== */}
+      {/* MAIN */}
 
       <main className="mx-auto max-w-[1500px] px-6 py-6">
-        {/* ========================================================
-            VALIDATION
-        ========================================================= */}
+        {/* VALIDATION */}
 
         {isDirty && hasValidationErrors && (
           <Card className="mb-6 border-destructive/30">
@@ -1214,13 +1050,9 @@ export default function RevenueGeneralSettingsPage() {
           </Card>
         )}
 
-        {/* ========================================================
-            SUMMARY
-        ========================================================= */}
+        {/* SUMMARY */}
 
         <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {/* Annual Payment Due Date */}
-
           <button
             type="button"
             onClick={() =>
@@ -1256,8 +1088,6 @@ export default function RevenueGeneralSettingsPage() {
               </CardContent>
             </Card>
           </button>
-
-          {/* Penalty */}
 
           <Card className="h-full">
             <CardContent className="p-5">
@@ -1296,8 +1126,6 @@ export default function RevenueGeneralSettingsPage() {
             </CardContent>
           </Card>
 
-          {/* Interest */}
-
           <Card className="h-full">
             <CardContent className="p-5">
               <div className="flex items-start justify-between">
@@ -1335,47 +1163,6 @@ export default function RevenueGeneralSettingsPage() {
             </CardContent>
           </Card>
 
-          {/* Lizz */}
-
-          {/* <button
-            type="button"
-            onClick={() => navigate("lizz")}
-            className="text-left"
-          >
-            <Card className="h-full transition-shadow hover:shadow-sm">
-              <CardContent className="p-5">
-                <div className="flex items-start justify-between">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-lg border bg-muted/40">
-                    <Landmark className="h-4 w-4 text-muted-foreground" />
-                  </div>
-
-                  <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                </div>
-
-                <div className="mt-4">
-                  <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                    Lizz Policy
-                  </p>
-
-                  <p className="mt-1 text-sm font-semibold">
-                    {lizzFirstInstallmentPercentage !==
-                    null &&
-                    lizzFirstInstallmentPercentage !==
-                      undefined
-                      ? `${lizzFirstInstallmentPercentage}%`
-                      : "Not configured"}
-                  </p>
-
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    First installment percentage
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          </button> */}
-
-          {/* Payment Methods */}
-
           <button
             type="button"
             onClick={() => navigate("payment")}
@@ -1398,9 +1185,7 @@ export default function RevenueGeneralSettingsPage() {
 
                   <p className="mt-1 text-sm font-semibold">
                     {
-                      settings
-                        .enabled_payment_methods
-                        .length
+                      settings.enabled_payment_methods.length
                     }{" "}
                     enabled
                   </p>
@@ -1414,14 +1199,10 @@ export default function RevenueGeneralSettingsPage() {
           </button>
         </div>
 
-        {/* ========================================================
-            WORKSPACE
-        ========================================================= */}
+        {/* WORKSPACE */}
 
         <div className="grid gap-6 lg:grid-cols-[250px_minmax(0,1fr)]">
-          {/* ======================================================
-              SIDEBAR
-          ======================================================= */}
+          {/* SIDEBAR */}
 
           <aside className="h-fit lg:sticky lg:top-6">
             <Card>
@@ -1509,14 +1290,10 @@ export default function RevenueGeneralSettingsPage() {
             </Card>
           </aside>
 
-          {/* ======================================================
-              CONTENT
-          ======================================================= */}
+          {/* CONTENT */}
 
           <section className="min-w-0">
-            {/* ====================================================
-                OVERVIEW
-            ===================================================== */}
+            {/* OVERVIEW */}
 
             {activeSection === "overview" && (
               <div className="space-y-6">
@@ -1586,27 +1363,6 @@ export default function RevenueGeneralSettingsPage() {
                         </div>
                       </div>
 
-                      {/* <div className="rounded-xl border bg-muted/20 p-5">
-                        <div className="flex items-center gap-3">
-                          <Landmark className="h-4 w-4 text-muted-foreground" />
-
-                          <div>
-                            <p className="text-xs text-muted-foreground">
-                              Lizz First Installment
-                            </p>
-
-                            <p className="mt-1 text-sm font-semibold">
-                              {lizzFirstInstallmentPercentage !==
-                                null &&
-                              lizzFirstInstallmentPercentage !==
-                                undefined
-                                ? `${lizzFirstInstallmentPercentage}%`
-                                : "Not configured"}
-                            </p>
-                          </div>
-                        </div>
-                      </div> */}
-
                       <div className="rounded-xl border bg-muted/20 p-5">
                         <div className="flex items-center gap-3">
                           <WalletCards className="h-4 w-4 text-muted-foreground" />
@@ -1618,9 +1374,7 @@ export default function RevenueGeneralSettingsPage() {
 
                             <p className="mt-1 text-sm font-semibold">
                               {
-                                settings
-                                  .enabled_payment_methods
-                                  .length
+                                settings.enabled_payment_methods.length
                               }{" "}
                               enabled
                             </p>
@@ -1630,8 +1384,6 @@ export default function RevenueGeneralSettingsPage() {
                     </div>
                   </CardContent>
                 </Card>
-
-                {/* Configuration Status */}
 
                 <Card>
                   <CardHeader>
@@ -1647,41 +1399,33 @@ export default function RevenueGeneralSettingsPage() {
                   <CardContent className="space-y-1">
                     {[
                       {
-                        label:
-                          "Annual payment due date",
+                        label: "Annual payment due date",
                         status:
                           isValidAnnualPaymentDueDate(
                             settings.annual_payment_due_date,
                           ),
                       },
                       {
-                        label:
-                          "Assessment configuration",
+                        label: "Assessment configuration",
                         status:
                           settings.assessment_auto_calculation,
                       },
                       {
-                        label:
-                          "Invoice configuration",
+                        label: "Invoice configuration",
                         status:
                           settings.invoice_auto_numbering &&
-                          settings.invoice_prefix.trim()
-                            .length > 0,
+                          settings.invoice_prefix.trim().length > 0,
                       },
                       {
-                        label:
-                          "Payment configuration",
+                        label: "Payment configuration",
                         status:
-                          settings.enabled_payment_methods
-                            .length > 0,
+                          settings.enabled_payment_methods.length > 0,
                       },
                       {
-                        label:
-                          "Receipt configuration",
+                        label: "Receipt configuration",
                         status:
                           settings.receipt_auto_numbering &&
-                          settings.receipt_prefix.trim()
-                            .length > 0,
+                          settings.receipt_prefix.trim().length > 0,
                       },
                     ].map((item) => (
                       <div
@@ -1712,8 +1456,6 @@ export default function RevenueGeneralSettingsPage() {
                     ))}
                   </CardContent>
                 </Card>
-
-                {/* Information */}
 
                 <div className="rounded-xl border bg-background p-4">
                   <div className="flex gap-3">
@@ -1750,9 +1492,7 @@ export default function RevenueGeneralSettingsPage() {
               </div>
             )}
 
-            {/* ====================================================
-                PAYMENT DUE DATE
-            ===================================================== */}
+            {/* PAYMENT DUE DATE */}
 
             {activeSection === "payment-due-date" && (
               <div className="space-y-6">
@@ -1792,18 +1532,14 @@ export default function RevenueGeneralSettingsPage() {
                             ? gregorianToEth(
                                 annualPaymentDueDate,
                               ).year
-                            : gregorianToEth(
-                                new Date(),
-                              ).year
+                            : gregorianToEth(new Date()).year
                         }
                         maxYear={
                           annualPaymentDueDate
                             ? gregorianToEth(
                                 annualPaymentDueDate,
                               ).year
-                            : gregorianToEth(
-                                new Date(),
-                              ).year
+                            : gregorianToEth(new Date()).year
                         }
                       />
 
@@ -1881,8 +1617,6 @@ export default function RevenueGeneralSettingsPage() {
                   </CardContent>
                 </Card>
 
-                {/* Penalty / Interest */}
-
                 <Card>
                   <CardHeader>
                     <SectionHeader
@@ -1899,14 +1633,9 @@ export default function RevenueGeneralSettingsPage() {
                       description="Allow active penalty policies to be applied to overdue revenue obligations."
                     >
                       <Switch
-                        checked={
-                          settings.penalty_enabled
-                        }
+                        checked={settings.penalty_enabled}
                         onCheckedChange={(value) =>
-                          update(
-                            "penalty_enabled",
-                            value,
-                          )
+                          update("penalty_enabled", value)
                         }
                       />
                     </SettingRow>
@@ -1918,14 +1647,9 @@ export default function RevenueGeneralSettingsPage() {
                       description="Allow active interest policies to be applied according to their configured calculation basis."
                     >
                       <Switch
-                        checked={
-                          settings.interest_enabled
-                        }
+                        checked={settings.interest_enabled}
                         onCheckedChange={(value) =>
-                          update(
-                            "interest_enabled",
-                            value,
-                          )
+                          update("interest_enabled", value)
                         }
                       />
                     </SettingRow>
@@ -1934,9 +1658,7 @@ export default function RevenueGeneralSettingsPage() {
               </div>
             )}
 
-            {/* ====================================================
-                ASSESSMENT
-            ===================================================== */}
+            {/* ASSESSMENT */}
 
             {activeSection === "assessment" && (
               <Card>
@@ -2027,235 +1749,7 @@ export default function RevenueGeneralSettingsPage() {
               </Card>
             )}
 
-            {/* ====================================================
-                LIZZ
-            ===================================================== */}
-
-            {/* {activeSection === "lizz" && (
-              <div className="space-y-6">
-                <Card>
-                  <CardHeader>
-                    <SectionHeader
-                      icon={Landmark}
-                      eyebrow="Lizz Policy"
-                      title="Lizz First Installment"
-                      description="Configure the global percentage used to calculate the first installment for Lizz assessments."
-                    />
-                  </CardHeader>
-
-                  <CardContent>
-                    <div className="max-w-xl">
-                      <div className="rounded-xl border bg-muted/20 p-5">
-                        <div className="flex items-start gap-4">
-                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border bg-background">
-                            <Landmark className="h-4 w-4 text-muted-foreground" />
-                          </div>
-
-                          <div className="min-w-0 flex-1">
-                            <Label htmlFor="lizz-first-installment-percentage">
-                              First Installment Percentage
-                            </Label>
-
-                            <p className="mt-1 text-sm leading-5 text-muted-foreground">
-                              Percentage of the total Lizz amount
-                              required as the first installment
-                              when the assessment has{" "}
-                              <strong className="font-medium text-foreground">
-                                first_installment_required
-                              </strong>{" "}
-                              enabled.
-                            </p>
-
-                            <div className="relative mt-4 max-w-xs">
-                              <Input
-                                id="lizz-first-installment-percentage"
-                                type="number"
-                                min="0.01"
-                                max="100"
-                                step="0.01"
-                                inputMode="decimal"
-                                value={
-                                  lizzFirstInstallmentPercentage ??
-                                  ""
-                                }
-                                onChange={(event) => {
-                                  const value =
-                                    event.target.value;
-
-                                  update(
-                                    "lizz_first_installment_percentage",
-                                    value === ""
-                                      ? null
-                                      : Number(value),
-                                  );
-                                }}
-                                placeholder="e.g. 10"
-                                className="pr-10"
-                              />
-
-                              <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-muted-foreground">
-                                %
-                              </span>
-                            </div>
-
-                            {lizzFirstInstallmentPercentage !==
-                              null &&
-                              lizzFirstInstallmentPercentage !==
-                                undefined &&
-                              (Number(
-                                lizzFirstInstallmentPercentage,
-                              ) <= 0 ||
-                                Number(
-                                  lizzFirstInstallmentPercentage,
-                                ) > 100 ||
-                                !Number.isFinite(
-                                  Number(
-                                    lizzFirstInstallmentPercentage,
-                                  ),
-                                )) && (
-                                <p className="mt-2 text-xs text-destructive">
-                                  Enter a value greater than 0
-                                  and not greater than 100.
-                                </p>
-                              )}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="mt-4 flex gap-3 rounded-lg border bg-muted/30 p-4">
-                        <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-
-                        <div className="text-sm leading-5 text-muted-foreground">
-                          <p>
-                            This setting is a global Lizz policy.
-                            It does not determine whether an
-                            individual assessment requires a first
-                            installment.
-                          </p>
-
-                          <p className="mt-2">
-                            The assessment-level field{" "}
-                            <strong className="font-medium text-foreground">
-                              first_installment_required
-                            </strong>{" "}
-                            determines whether the first installment
-                            applies to that assessment.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    <Separator className="my-6" />
-
-                    <div className="rounded-xl border bg-background p-5">
-                      <div className="flex items-start gap-3">
-                        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-
-                        <div>
-                          <p className="text-sm font-medium">
-                            Calculation model
-                          </p>
-
-                          <div className="mt-2 space-y-1 text-sm leading-6 text-muted-foreground">
-                            <p>
-                              Total Lizz amount:
-                            </p>
-
-                            <p className="font-mono text-xs text-foreground">
-                              LAND_AREA × 3.70 × LIZZ_PERIOD
-                            </p>
-
-                            <p className="pt-2">
-                              First installment:
-                            </p>
-
-                            <p className="font-mono text-xs text-foreground">
-                              TOTAL_LIZZ_AMOUNT × FIRST_INSTALLMENT_PERCENTAGE
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="mt-4 rounded-xl border bg-muted/20 p-5">
-                      <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                        Example
-                      </p>
-
-                      <div className="mt-3 space-y-2 text-sm">
-                        <div className="flex items-center justify-between gap-4">
-                          <span className="text-muted-foreground">
-                            Land area
-                          </span>
-
-                          <span className="font-medium">
-                            1,000 m²
-                          </span>
-                        </div>
-
-                        <div className="flex items-center justify-between gap-4">
-                          <span className="text-muted-foreground">
-                            Rate
-                          </span>
-
-                          <span className="font-medium">
-                            3.70 ETB
-                          </span>
-                        </div>
-
-                        <div className="flex items-center justify-between gap-4">
-                          <span className="text-muted-foreground">
-                            Lizz period
-                          </span>
-
-                          <span className="font-medium">
-                            12 years
-                          </span>
-                        </div>
-
-                        <Separator />
-
-                        <div className="flex items-center justify-between gap-4">
-                          <span className="text-muted-foreground">
-                            Total Lizz amount
-                          </span>
-
-                          <span className="font-semibold">
-                            44,400.00 ETB
-                          </span>
-                        </div>
-
-                        <div className="flex items-center justify-between gap-4">
-                          <span className="text-muted-foreground">
-                            First installment at 10%
-                          </span>
-
-                          <span className="font-semibold">
-                            4,440.00 ETB
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <div className="flex gap-3 rounded-xl border bg-background p-4">
-                  <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-
-                  <p className="text-sm leading-6 text-muted-foreground">
-                    Changing this global percentage affects new
-                    Lizz assessments that resolve the current
-                    policy. For historical consistency, the
-                    resolved percentage should be snapshotted on
-                    the assessment when it is created.
-                  </p>
-                </div>
-              </div>
-            )} */}
-
-            {/* ====================================================
-                INVOICE
-            ===================================================== */}
+            {/* INVOICE */}
 
             {activeSection === "invoice" && (
               <Card>
@@ -2274,9 +1768,7 @@ export default function RevenueGeneralSettingsPage() {
                     description="Generate invoice numbers automatically."
                   >
                     <Switch
-                      checked={
-                        settings.invoice_auto_numbering
-                      }
+                      checked={settings.invoice_auto_numbering}
                       onCheckedChange={(value) =>
                         update(
                           "invoice_auto_numbering",
@@ -2299,9 +1791,7 @@ export default function RevenueGeneralSettingsPage() {
 
                     <Input
                       className="mt-3"
-                      value={
-                        settings.invoice_prefix
-                      }
+                      value={settings.invoice_prefix}
                       onChange={(event) =>
                         update(
                           "invoice_prefix",
@@ -2360,9 +1850,7 @@ export default function RevenueGeneralSettingsPage() {
               </Card>
             )}
 
-            {/* ====================================================
-                PAYMENT
-            ===================================================== */}
+            {/* PAYMENT */}
 
             {activeSection === "payment" && (
               <div className="space-y-6">
@@ -2401,9 +1889,7 @@ export default function RevenueGeneralSettingsPage() {
                       description="Generate a receipt automatically after successful payment."
                     >
                       <Switch
-                        checked={
-                          settings.payment_auto_receipt
-                        }
+                        checked={settings.payment_auto_receipt}
                         onCheckedChange={(value) =>
                           update(
                             "payment_auto_receipt",
@@ -2414,8 +1900,6 @@ export default function RevenueGeneralSettingsPage() {
                     </SettingRow>
                   </CardContent>
                 </Card>
-
-                {/* Payment Methods */}
 
                 <Card>
                   <CardHeader>
@@ -2442,9 +1926,7 @@ export default function RevenueGeneralSettingsPage() {
 
                           const lastEnabledMethod =
                             checked &&
-                            settings
-                              .enabled_payment_methods
-                              .length === 1;
+                            settings.enabled_payment_methods.length === 1;
 
                           return (
                             <label
@@ -2458,9 +1940,7 @@ export default function RevenueGeneralSettingsPage() {
                             >
                               <Checkbox
                                 checked={checked}
-                                disabled={
-                                  lastEnabledMethod
-                                }
+                                disabled={lastEnabledMethod}
                                 onCheckedChange={() =>
                                   togglePaymentMethod(
                                     method.id,
@@ -2489,9 +1969,7 @@ export default function RevenueGeneralSettingsPage() {
                                 </div>
 
                                 <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                                  {
-                                    method.description
-                                  }
+                                  {method.description}
                                 </p>
                               </div>
                             </label>
@@ -2514,9 +1992,7 @@ export default function RevenueGeneralSettingsPage() {
               </div>
             )}
 
-            {/* ====================================================
-                RECEIPT
-            ===================================================== */}
+            {/* RECEIPT */}
 
             {activeSection === "receipt" && (
               <Card>
@@ -2535,9 +2011,7 @@ export default function RevenueGeneralSettingsPage() {
                     description="Generate receipt numbers automatically after successful payment."
                   >
                     <Switch
-                      checked={
-                        settings.receipt_auto_numbering
-                      }
+                      checked={settings.receipt_auto_numbering}
                       onCheckedChange={(value) =>
                         update(
                           "receipt_auto_numbering",
@@ -2560,9 +2034,7 @@ export default function RevenueGeneralSettingsPage() {
 
                     <Input
                       className="mt-3"
-                      value={
-                        settings.receipt_prefix
-                      }
+                      value={settings.receipt_prefix}
                       onChange={(event) =>
                         update(
                           "receipt_prefix",
@@ -2587,9 +2059,7 @@ export default function RevenueGeneralSettingsPage() {
                     description="Allow authorized users to reprint previously issued receipts."
                   >
                     <Switch
-                      checked={
-                        settings.receipt_allow_reprint
-                      }
+                      checked={settings.receipt_allow_reprint}
                       onCheckedChange={(value) =>
                         update(
                           "receipt_allow_reprint",
@@ -2605,9 +2075,7 @@ export default function RevenueGeneralSettingsPage() {
         </div>
       </main>
 
-      {/* ==========================================================
-          STICKY SAVE BAR
-      =========================================================== */}
+      {/* STICKY SAVE BAR */}
 
       {isDirty && (
         <div className="sticky bottom-0 z-30 border-t bg-background/95 backdrop-blur">

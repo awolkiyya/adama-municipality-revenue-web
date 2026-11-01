@@ -1,3 +1,4 @@
+
 import type { ApiResponse } from "@/types/api";
 
 /*
@@ -50,15 +51,12 @@ export interface RevenueSetting {
   | Annual Payment Due Date
   |--------------------------------------------------------------------------
   |
-  | Format:
-  |
-  |     MM-DD
+  | Format: MM-DD
   |
   | Examples:
-  |
-  |     "01-15"
-  |     "10-30"
-  |     "13-06"
+  | "01-15"
+  | "10-30"
+  | "13-06"
   |
   | Month 13 represents Pagume.
   |
@@ -82,22 +80,9 @@ export interface RevenueSetting {
   |
   | Global Lizz policy.
   |
-  | Example:
-  |
-  |     10.00
-  |
-  | means the first installment is 10% of the calculated
-  | total Lizz amount when first_installment_required = true.
-  |
-  | IMPORTANT:
-  |
-  | This setting does NOT determine whether a first installment
-  | is required. That decision belongs to the assessment:
-  |
-  |     first_installment_required
-  |
-  | The percentage is only the global policy used when that
-  | assessment-level flag is enabled.
+  | Example: 10.00 means the first installment is 10% of the
+  | calculated total Lizz amount when first_installment_required
+  | is true.
   |
   */
 
@@ -178,8 +163,7 @@ export interface RevenueSetting {
 |
 */
 
-export interface RevenueSettingResource
-  extends RevenueSetting {}
+export type RevenueSettingResource = RevenueSetting;
 
 /*
 |--------------------------------------------------------------------------
@@ -219,18 +203,6 @@ export interface UpdateRevenueSettingPayload {
   |--------------------------------------------------------------------------
   | Lizz First Installment
   |--------------------------------------------------------------------------
-  |
-  | Global Lizz policy percentage.
-  |
-  | Example:
-  |
-  |     10.00
-  |
-  | means:
-  |
-  |     first_installment_amount =
-  |         total_lizz_amount * 10%
-  |
   */
 
   lizz_first_installment_percentage: number | null;

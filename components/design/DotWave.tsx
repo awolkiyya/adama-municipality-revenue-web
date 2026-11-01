@@ -56,7 +56,6 @@ export function DotWave({
     let width = 0;
     let height = 0;
     let raf = 0;
-    const start = performance.now();
 
     const resize = () => {
       const dpr = Math.min(window.devicePixelRatio || 1, 2);

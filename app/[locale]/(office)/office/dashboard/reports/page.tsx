@@ -1,18 +1,18 @@
+
 "use client";
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import {
-  AlertCircle,
   ArrowRight,
   BarChart3,
   CreditCard,
   FileBarChart,
-  Landmark,
   Search,
   X,
 } from "lucide-react";
+import { useSelector } from "react-redux";
 
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -20,14 +20,14 @@ import {
   Card,
   CardContent,
 } from "@/components/ui/card";
+
 import { APP_PERMISSIONS } from "@/lib/authorization";
+import type { RootState } from "@/lib/store/store";
+
 import { Banner } from "@/components/banner/topBanner";
 import { FloatingParticles } from "@/components/design/FloatingParticles";
 
-type ReportCategory =
-  | "revenue"
-  | "transactions"
-  | "control";
+type ReportCategory = "revenue" | "transactions";
 
 type CategoryFilter = "all" | ReportCategory;
 
@@ -40,35 +40,16 @@ type ReportItem = {
   icon: typeof BarChart3;
 };
 
-/*
-|--------------------------------------------------------------------------
-| MVP Reports
-|--------------------------------------------------------------------------
-|
-| 1. Revenue Collection:
-|    Monitor revenue actually collected.
-|
-| 2. Payment Report:
-|    Monitor payment transactions and their statuses.
-|
-| 3. Outstanding Revenue:
-|    Monitor unpaid, partially paid, and overdue invoices.
-|
-| 4. Cash Reconciliation:
-|    Monitor revenue collectors' daily cash closings and discrepancies.
-|
-| Assessment management and invoice details remain in their operational
-| modules for the MVP.
-|
-*/
+/* -------------------------------------------------------------------------- */
+/* Reports                                                                    */
+/* -------------------------------------------------------------------------- */
 
 const REPORTS: ReportItem[] = [
   {
     title: "revenue_collection_report",
     description: "revenue_collection_report_description",
     url: "/office/dashboard/reports/revenue-collection",
-    permission:
-      APP_PERMISSIONS.REPORTS_REVENUE_COLLECTION_VIEW,
+    permission: APP_PERMISSIONS.COLLECTION_REPORT_VIEW.resource,
     category: "revenue",
     icon: BarChart3,
   },
@@ -76,7 +57,7 @@ const REPORTS: ReportItem[] = [
     title: "payment_report",
     description: "payment_report_description",
     url: "/office/dashboard/reports/payments",
-    permission: APP_PERMISSIONS.REPORTS_PAYMENTS_VIEW,
+    permission: APP_PERMISSIONS.PAYMENTS_VIEW.resource,
     category: "transactions",
     icon: CreditCard,
   },
@@ -100,52 +81,76 @@ const CATEGORIES: {
   },
 ];
 
+/* -------------------------------------------------------------------------- */
+/* Page                                                                       */
+/* -------------------------------------------------------------------------- */
+
 function ReportsPage() {
   const t = useTranslations("reports");
   const locale = useLocale();
 
+  const user = useSelector((state: RootState) => state.auth.user);
+
   const [search, setSearch] = useState("");
-  const [category, setCategory] =
-    useState<CategoryFilter>("all");
+  const [category, setCategory] = useState<CategoryFilter>("all");
 
-  /*
-  |--------------------------------------------------------------------------
-  | Permission Integration
-  |--------------------------------------------------------------------------
-  |
-  | Replace this preview implementation with your existing permission hook.
-  | Hiding a report in the frontend is not authorization; Laravel must
-  | independently enforce report permissions on the API endpoints.
-  |
-  */
+  /* ------------------------------------------------------------------------ */
+  /* Permissions                                                              */
+  /* ------------------------------------------------------------------------ */
 
-  const hasPermission = (_permission: string): boolean => true;
-
-  const permittedReports = useMemo(
+  const userPermissions = useMemo(
     () =>
-      REPORTS.filter((report) =>
-        hasPermission(report.permission),
-      ),
-    // Re-evaluate when the real permission source changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [hasPermission],
+      Array.isArray(user?.permissions)
+        ? user.permissions
+        : [],
+    [user?.permissions],
   );
 
+  const permittedReports = useMemo(() => {
+    return REPORTS.filter((report) =>
+      userPermissions.some((permission) => {
+        if (typeof permission === "string") {
+          return permission === report.permission;
+        }
+
+        if (
+          permission &&
+          typeof permission === "object" &&
+          "name" in permission
+        ) {
+          return permission.name === report.permission;
+        }
+
+        if (
+          permission &&
+          typeof permission === "object" &&
+          "resource" in permission &&
+          "action" in permission
+        ) {
+          return (
+            permission.resource === report.permission &&
+            permission.action === "view"
+          );
+        }
+
+        return false;
+      }),
+    );
+  }, [userPermissions]);
+
+  /* ------------------------------------------------------------------------ */
+  /* Filters                                                                  */
+  /* ------------------------------------------------------------------------ */
+
   const filteredReports = useMemo(() => {
-    const query = search
-      .trim()
-      .toLocaleLowerCase(locale);
+    const query = search.trim().toLocaleLowerCase(locale);
 
     return permittedReports.filter((report) => {
       const matchesCategory =
-        category === "all" ||
-        report.category === category;
+        category === "all" || report.category === category;
 
-      const title = t(report.title)
-        .toLocaleLowerCase(locale);
-
-      const description = t(report.description)
-        .toLocaleLowerCase(locale);
+      const title = t(report.title).toLocaleLowerCase(locale);
+      const description = t(report.description).toLocaleLowerCase(locale);
 
       const matchesSearch =
         !query ||
@@ -154,18 +159,16 @@ function ReportsPage() {
 
       return matchesCategory && matchesSearch;
     });
-  }, [
-    permittedReports,
-    category,
-    search,
-    t,
-    locale,
-  ]);
+  }, [permittedReports, category, search, t, locale]);
 
   const clearFilters = () => {
     setSearch("");
     setCategory("all");
   };
+
+  /* ------------------------------------------------------------------------ */
+  /* Render                                                                   */
+  /* ------------------------------------------------------------------------ */
 
   return (
     <main className="mx-auto flex w-full min-w-0 max-w-[1600px] flex-col gap-6 p-4 sm:p-6 lg:p-8">
@@ -196,9 +199,7 @@ function ReportsPage() {
 
           <Input
             value={search}
-            onChange={(event) =>
-              setSearch(event.target.value)
-            }
+            onChange={(event) => setSearch(event.target.value)}
             placeholder={t("search_reports")}
             aria-label={t("search_reports")}
             className="h-10 w-full bg-background pl-9 pr-9"

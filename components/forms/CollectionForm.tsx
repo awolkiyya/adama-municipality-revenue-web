@@ -10,7 +10,6 @@ import {
 
 import {
   useCallback,
-  useEffect,
   useMemo,
   useState,
 } from "react"
@@ -190,6 +189,24 @@ const STEPS = [
 */
 
 /**
+ * Create a stable component key from the initial form data.
+ *
+ * When the parent loads a different collection or switches
+ * between create/edit mode, React remounts the form content.
+ *
+ * This replaces effect-based state synchronization.
+ */
+function getCollectionFormKey(
+  mode: DirectCollectionFormMode,
+  initialData: DirectCollectionFormData | null | undefined,
+): string {
+  return JSON.stringify({
+    mode,
+    initialData: initialData ?? null,
+  })
+}
+
+/**
  * Get the backend RevenueServiceField ID.
  *
  * IMPORTANT:
@@ -220,12 +237,10 @@ function normalizeDirectCollectionFields(
     return {}
   }
 
-  const normalized: DirectCollectionFields =
-    {}
+  const normalized: DirectCollectionFields = {}
 
   for (const field of service.fields ?? []) {
-    const fieldId =
-      getServiceFieldId(field)
+    const fieldId = getServiceFieldId(field)
 
     if (!fieldId) {
       continue
@@ -242,8 +257,7 @@ function normalizeDirectCollectionFields(
         fieldId,
       )
     ) {
-      normalized[fieldId] =
-        values[fieldId]
+      normalized[fieldId] = values[fieldId]
 
       continue
     }
@@ -261,8 +275,7 @@ function normalizeDirectCollectionFields(
         field.key,
       )
     ) {
-      normalized[fieldId] =
-        values[field.key]
+      normalized[fieldId] = values[field.key]
     }
   }
 
@@ -347,43 +360,33 @@ function getErrorMessage(
     error &&
     typeof error === "object"
   ) {
-    const record =
-      error as Record<string, unknown>
+    const record = error as Record<string, unknown>
 
     /*
      * Axios-style:
      *
      * error.response.data.message
      */
-    const response =
-      record.response
+    const response = record.response
 
     if (
       response &&
       typeof response === "object"
     ) {
       const responseRecord =
-        response as Record<
-          string,
-          unknown
-        >
+        response as Record<string, unknown>
 
-      const payload =
-        responseRecord.data
+      const payload = responseRecord.data
 
       if (
         payload &&
         typeof payload === "object"
       ) {
         const payloadRecord =
-          payload as Record<
-            string,
-            unknown
-          >
+          payload as Record<string, unknown>
 
         if (
-          typeof payloadRecord.message ===
-            "string" &&
+          typeof payloadRecord.message === "string" &&
           payloadRecord.message.trim()
         ) {
           return payloadRecord.message
@@ -394,41 +397,29 @@ function getErrorMessage(
          */
         if (
           payloadRecord.errors &&
-          typeof payloadRecord.errors ===
-            "object"
+          typeof payloadRecord.errors === "object"
         ) {
           const validationErrors =
-            payloadRecord.errors as Record<
-              string,
-              unknown
-            >
+            payloadRecord.errors as Record<string, unknown>
 
-          const messages =
-            Object.values(
-              validationErrors,
-            ).flatMap((value) =>
-              Array.isArray(value)
-                ? value
-                : [value],
-            )
+          const messages = Object.values(
+            validationErrors,
+          ).flatMap((value) =>
+            Array.isArray(value)
+              ? value
+              : [value],
+          )
 
-          const textMessages =
-            messages.filter(
-              (
-                value,
-              ): value is string =>
-                typeof value ===
-                  "string" &&
-                value.trim()
-                  .length > 0,
-            )
+          const textMessages = messages.filter(
+            (
+              value,
+            ): value is string =>
+              typeof value === "string" &&
+              value.trim().length > 0,
+          )
 
-          if (
-            textMessages.length > 0
-          ) {
-            return textMessages.join(
-              " ",
-            )
+          if (textMessages.length > 0) {
+            return textMessages.join(" ")
           }
         }
       }
@@ -440,8 +431,7 @@ function getErrorMessage(
      * error.message
      */
     if (
-      typeof record.message ===
-        "string" &&
+      typeof record.message === "string" &&
       record.message.trim()
     ) {
       return record.message
@@ -465,9 +455,7 @@ function formatFieldValue(
     return "—"
   }
 
-  if (
-    typeof value === "boolean"
-  ) {
+  if (typeof value === "boolean") {
     return value ? "Yes" : "No"
   }
 
@@ -477,9 +465,7 @@ function formatFieldValue(
       : "—"
   }
 
-  if (
-    typeof value === "object"
-  ) {
+  if (typeof value === "object") {
     try {
       return JSON.stringify(value)
     } catch {
@@ -494,11 +480,7 @@ function formatFieldValue(
  * Format monetary values consistently.
  */
 function formatAmount(
-  amount:
-    | string
-    | number
-    | null
-    | undefined,
+  amount: string | number | null | undefined,
   currency = "ETB",
 ): string {
   if (
@@ -509,14 +491,9 @@ function formatAmount(
     return "—"
   }
 
-  const numericAmount =
-    Number(amount)
+  const numericAmount = Number(amount)
 
-  if (
-    !Number.isFinite(
-      numericAmount,
-    )
-  ) {
+  if (!Number.isFinite(numericAmount)) {
     return `${String(amount)} ${currency}`
   }
 
@@ -531,11 +508,43 @@ function formatAmount(
 
 /*
 |--------------------------------------------------------------------------
-| Component
+| Public Component
+|--------------------------------------------------------------------------
+|
+| The wrapper uses a key to reset the inner form when its
+| initial record changes. No useEffect or effect-based
+| setState synchronization is required.
 |--------------------------------------------------------------------------
 */
 
-export function CollectionForm({
+export function CollectionForm(
+  props: DirectCollectionFormProps,
+) {
+  const {
+    initialData = null,
+    mode = "create",
+  } = props
+
+  return (
+    <CollectionFormContent
+      key={getCollectionFormKey(
+        mode,
+        initialData,
+      )}
+      {...props}
+      initialData={initialData}
+      mode={mode}
+    />
+  )
+}
+
+/*
+|--------------------------------------------------------------------------
+| Internal Form Component
+|--------------------------------------------------------------------------
+*/
+
+function CollectionFormContent({
   initialData = null,
   taxpayers,
   revenueServices,
@@ -550,28 +559,21 @@ export function CollectionForm({
   */
 
   const {
-    mutateAsync:
-      calculateDirectCollection,
+    mutateAsync: calculateDirectCollection,
     isPending: isCalculating,
-  } =
-    useCalculateDirectCollection()
+  } = useCalculateDirectCollection()
 
   const {
-    mutateAsync:
-      createDirectCollection,
+    mutateAsync: createDirectCollection,
     isPending: isCreating,
-  } =
-    useCreateDirectCollection()
+  } = useCreateDirectCollection()
 
   const {
-    mutateAsync:
-      updateDirectCollection,
+    mutateAsync: updateDirectCollection,
     isPending: isUpdating,
-  } =
-    useUpdateDirectCollection()
+  } = useUpdateDirectCollection()
 
-  const isEditMode =
-    mode === "edit"
+  const isEditMode = mode === "edit"
 
   const isSubmitting =
     isCalculating ||
@@ -584,18 +586,16 @@ export function CollectionForm({
   |--------------------------------------------------------------------------
   */
 
-  const [step, setStep] =
-    useState<Step>(1)
+  const [step, setStep] = useState<Step>(1)
 
   const [
     furthestStep,
     setFurthestStep,
   ] = useState<Step>(1)
 
-  const [taxpayerId, setTaxpayerId] =
-    useState(
-      initialData?.taxpayerId ?? "",
-    )
+  const [taxpayerId, setTaxpayerId] = useState(
+    initialData?.taxpayerId ?? "",
+  )
 
   /*
    * Direct Collection is SINGLE SERVICE based.
@@ -604,8 +604,7 @@ export function CollectionForm({
     revenueServiceId,
     setRevenueServiceId,
   ] = useState(
-    initialData?.revenueServiceId ??
-      "",
+    initialData?.revenueServiceId ?? "",
   )
 
   /*
@@ -616,30 +615,24 @@ export function CollectionForm({
   const [
     fieldValues,
     setFieldValues,
-  ] =
-    useState<DirectCollectionFields>(
-      initialData?.fields ?? {},
-    )
+  ] = useState<DirectCollectionFields>(
+    initialData?.fields ?? {},
+  )
 
-  const [notes, setNotes] =
-    useState(
-      initialData?.notes ?? "",
-    )
+  const [notes, setNotes] = useState(
+    initialData?.notes ?? "",
+  )
 
-  const [reason, setReason] =
-    useState(
-      initialData?.reason ?? "",
-    )
+  const [reason, setReason] = useState(
+    initialData?.reason ?? "",
+  )
 
   const [
     validationErrors,
     setValidationErrors,
-  ] = useState<
-    Record<string, string>
-  >({})
+  ] = useState<Record<string, string>>({})
 
-  const [errors, setErrors] =
-    useState<string[]>([])
+  const [errors, setErrors] = useState<string[]>([])
 
   const [
     isConfirmed,
@@ -655,10 +648,9 @@ export function CollectionForm({
   const [
     calculation,
     setCalculation,
-  ] =
-    useState<DirectCollectionCalculation | null>(
-      null,
-    )
+  ] = useState<DirectCollectionCalculation | null>(
+    null,
+  )
 
   /*
   |--------------------------------------------------------------------------
@@ -666,33 +658,29 @@ export function CollectionForm({
   |--------------------------------------------------------------------------
   */
 
-  const selectedTaxpayer =
-    useMemo(
-      () =>
-        taxpayers.find(
-          (taxpayer) =>
-            taxpayer.id ===
-            taxpayerId,
-        ) ?? null,
-      [
-        taxpayers,
-        taxpayerId,
-      ],
-    )
+  const selectedTaxpayer = useMemo(
+    () =>
+      taxpayers.find(
+        (taxpayer) =>
+          taxpayer.id === taxpayerId,
+      ) ?? null,
+    [
+      taxpayers,
+      taxpayerId,
+    ],
+  )
 
-  const selectedService =
-    useMemo(
-      () =>
-        revenueServices.find(
-          (service) =>
-            service.id ===
-            revenueServiceId,
-        ) ?? null,
-      [
-        revenueServices,
-        revenueServiceId,
-      ],
-    )
+  const selectedService = useMemo(
+    () =>
+      revenueServices.find(
+        (service) =>
+          service.id === revenueServiceId,
+      ) ?? null,
+    [
+      revenueServices,
+      revenueServiceId,
+    ],
+  )
 
   /*
    * Always calculate the normalized version of the field state.
@@ -700,73 +688,23 @@ export function CollectionForm({
    * This means even if stale field.key data exists in state,
    * API calls will never send it.
    */
-  const normalizedFields =
-    useMemo(
-      () =>
-        normalizeDirectCollectionFields(
-          fieldValues,
-          selectedService,
-        ),
-      [
+  const normalizedFields = useMemo(
+    () =>
+      normalizeDirectCollectionFields(
         fieldValues,
         selectedService,
-      ],
-    )
+      ),
+    [
+      fieldValues,
+      selectedService,
+    ],
+  )
 
-  const progressPercent =
-    useMemo(
-      () =>
-        ((step - 1) /
-          (STEPS.length - 1)) *
-        100,
-      [step],
-    )
-
-  /*
-  |--------------------------------------------------------------------------
-  | INITIAL DATA
-  |--------------------------------------------------------------------------
-  */
-
-  useEffect(() => {
-    setStep(1)
-    setFurthestStep(1)
-    setValidationErrors({})
-    setErrors([])
-    setIsConfirmed(false)
-    setCalculation(null)
-
-    if (!initialData) {
-      setTaxpayerId("")
-      setRevenueServiceId("")
-      setFieldValues({})
-      setNotes("")
-      setReason("")
-
-      return
-    }
-
-    setTaxpayerId(
-      initialData.taxpayerId ?? "",
-    )
-
-    setRevenueServiceId(
-      initialData.revenueServiceId ??
-        "",
-    )
-
-    setFieldValues(
-      initialData.fields ?? {},
-    )
-
-    setNotes(
-      initialData.notes ?? "",
-    )
-
-    setReason(
-      initialData.reason ?? "",
-    )
-  }, [initialData])
+  const progressPercent = useMemo(
+    () =>
+      ((step - 1) / (STEPS.length - 1)) * 100,
+    [step],
+  )
 
   /*
   |--------------------------------------------------------------------------
@@ -774,22 +712,21 @@ export function CollectionForm({
   |--------------------------------------------------------------------------
   */
 
-  const handleTaxpayerChange =
-    useCallback(
-      (value: string) => {
-        setTaxpayerId(value)
+  const handleTaxpayerChange = useCallback(
+    (value: string) => {
+      setTaxpayerId(value)
 
-        /*
-         * Changing taxpayer invalidates
-         * the previous server calculation.
-         */
-        setCalculation(null)
-        setIsConfirmed(false)
-        setValidationErrors({})
-        setErrors([])
-      },
-      [],
-    )
+      /*
+       * Changing taxpayer invalidates
+       * the previous server calculation.
+       */
+      setCalculation(null)
+      setIsConfirmed(false)
+      setValidationErrors({})
+      setErrors([])
+    },
+    [],
+  )
 
   /*
   |--------------------------------------------------------------------------
@@ -797,45 +734,40 @@ export function CollectionForm({
   |--------------------------------------------------------------------------
   */
 
-  const clearService =
-    useCallback(() => {
-      setRevenueServiceId("")
+  const clearService = useCallback(() => {
+    setRevenueServiceId("")
+    setFieldValues({})
+    setCalculation(null)
+    setValidationErrors({})
+    setIsConfirmed(false)
+    setErrors([])
+  }, [])
+
+  const handleServiceSelection = useCallback(
+    (serviceIds: string[]) => {
+      /*
+       * Direct Collection accepts
+       * exactly ONE service.
+       */
+      const serviceId = serviceIds[0] ?? ""
+
+      setRevenueServiceId(serviceId)
+
+      /*
+       * Always clear previous service fields.
+       *
+       * This prevents old field.key or old service
+       * UUID values from leaking into the new service.
+       */
       setFieldValues({})
+
       setCalculation(null)
       setValidationErrors({})
       setIsConfirmed(false)
       setErrors([])
-    }, [])
-
-  const handleServiceSelection =
-    useCallback(
-      (serviceIds: string[]) => {
-        /*
-         * Direct Collection accepts
-         * exactly ONE service.
-         */
-        const serviceId =
-          serviceIds[0] ?? ""
-
-        setRevenueServiceId(
-          serviceId,
-        )
-
-        /*
-         * Always clear previous service fields.
-         *
-         * This prevents old field.key or old service
-         * UUID values from leaking into the new service.
-         */
-        setFieldValues({})
-
-        setCalculation(null)
-        setValidationErrors({})
-        setIsConfirmed(false)
-        setErrors([])
-      },
-      [],
-    )
+    },
+    [],
+  )
 
   /*
   |--------------------------------------------------------------------------
@@ -843,58 +775,50 @@ export function CollectionForm({
   |--------------------------------------------------------------------------
   */
 
-  const handleServiceFieldChange =
-    useCallback(
-      (
-        fieldId: string,
-        value: unknown,
-      ) => {
-        /*
-         * fieldId MUST be RevenueServiceField.id.
-         */
-        const normalizedValue =
-          toDirectCollectionFieldValue(
-            value,
-          )
+  const handleServiceFieldChange = useCallback(
+    (
+      fieldId: string,
+      value: unknown,
+    ) => {
+      /*
+       * fieldId MUST be RevenueServiceField.id.
+       */
+      const normalizedValue =
+        toDirectCollectionFieldValue(value)
 
-        setFieldValues(
-          (current) => ({
-            ...current,
-
-            /*
-             * UUID is the API key.
-             */
-            [fieldId]:
-              normalizedValue,
-          }),
-        )
+      setFieldValues((current) => ({
+        ...current,
 
         /*
-         * Any field change invalidates
-         * the previous calculation.
+         * UUID is the API key.
          */
-        setCalculation(null)
-        setIsConfirmed(false)
-        setErrors([])
+        [fieldId]: normalizedValue,
+      }))
 
-        setValidationErrors(
-          (current) => {
-            if (!current[fieldId]) {
-              return current
-            }
+      /*
+       * Any field change invalidates
+       * the previous calculation.
+       */
+      setCalculation(null)
+      setIsConfirmed(false)
+      setErrors([])
 
-            const next = {
-              ...current,
-            }
+      setValidationErrors((current) => {
+        if (!current[fieldId]) {
+          return current
+        }
 
-            delete next[fieldId]
+        const next = {
+          ...current,
+        }
 
-            return next
-          },
-        )
-      },
-      [],
-    )
+        delete next[fieldId]
+
+        return next
+      })
+    },
+    [],
+  )
 
   /*
   |--------------------------------------------------------------------------
@@ -902,53 +826,45 @@ export function CollectionForm({
   |--------------------------------------------------------------------------
   */
 
-  const handleFileChange =
-    useCallback(
-      (
-        event: ChangeEvent<HTMLInputElement>,
-        field: RevenueField,
-      ) => {
-        const file =
-          event.target.files?.[0] ??
-          null
+  const handleFileChange = useCallback(
+    (
+      event: ChangeEvent<HTMLInputElement>,
+      field: RevenueField,
+    ) => {
+      const file =
+        event.target.files?.[0] ?? null
 
-        /*
-         * Store the value under field.id.
-         */
-        const fieldId =
-          getServiceFieldId(field)
+      /*
+       * Store the value under field.id.
+       */
+      const fieldId = getServiceFieldId(field)
 
-        setFieldValues(
-          (current) => ({
-            ...current,
+      setFieldValues((current) => ({
+        ...current,
 
-            [fieldId]:
-              file?.name ?? "",
-          }),
-        )
+        [fieldId]: file?.name ?? "",
+      }))
 
-        setCalculation(null)
-        setIsConfirmed(false)
-        setErrors([])
+      setCalculation(null)
+      setIsConfirmed(false)
+      setErrors([])
 
-        setValidationErrors(
-          (current) => {
-            if (!current[fieldId]) {
-              return current
-            }
+      setValidationErrors((current) => {
+        if (!current[fieldId]) {
+          return current
+        }
 
-            const next = {
-              ...current,
-            }
+        const next = {
+          ...current,
+        }
 
-            delete next[fieldId]
+        delete next[fieldId]
 
-            return next
-          },
-        )
-      },
-      [],
-    )
+        return next
+      })
+    },
+    [],
+  )
 
   /*
   |--------------------------------------------------------------------------
@@ -956,44 +872,36 @@ export function CollectionForm({
   |--------------------------------------------------------------------------
   */
 
-  const removeFile =
-    useCallback(
-      (
-        field: RevenueField,
-      ) => {
-        const fieldId =
-          getServiceFieldId(field)
+  const removeFile = useCallback(
+    (field: RevenueField) => {
+      const fieldId = getServiceFieldId(field)
 
-        setFieldValues(
-          (current) => ({
-            ...current,
+      setFieldValues((current) => ({
+        ...current,
 
-            [fieldId]: "",
-          }),
-        )
+        [fieldId]: "",
+      }))
 
-        setCalculation(null)
-        setIsConfirmed(false)
-        setErrors([])
+      setCalculation(null)
+      setIsConfirmed(false)
+      setErrors([])
 
-        setValidationErrors(
-          (current) => {
-            if (!current[fieldId]) {
-              return current
-            }
+      setValidationErrors((current) => {
+        if (!current[fieldId]) {
+          return current
+        }
 
-            const next = {
-              ...current,
-            }
+        const next = {
+          ...current,
+        }
 
-            delete next[fieldId]
+        delete next[fieldId]
 
-            return next
-          },
-        )
-      },
-      [],
-    )
+        return next
+      })
+    },
+    [],
+  )
 
   /*
   |--------------------------------------------------------------------------
@@ -1001,31 +909,28 @@ export function CollectionForm({
   |--------------------------------------------------------------------------
   */
 
-  const validateStepOne =
-    useCallback(() => {
-      const nextErrors: string[] = []
+  const validateStepOne = useCallback(() => {
+    const nextErrors: string[] = []
 
-      if (!taxpayerId) {
-        nextErrors.push(
-          "Select a taxpayer before continuing.",
-        )
-      }
-
-      if (!revenueServiceId) {
-        nextErrors.push(
-          "Select a revenue service before continuing.",
-        )
-      }
-
-      setErrors(nextErrors)
-
-      return (
-        nextErrors.length === 0
+    if (!taxpayerId) {
+      nextErrors.push(
+        "Select a taxpayer before continuing.",
       )
-    }, [
-      taxpayerId,
-      revenueServiceId,
-    ])
+    }
+
+    if (!revenueServiceId) {
+      nextErrors.push(
+        "Select a revenue service before continuing.",
+      )
+    }
+
+    setErrors(nextErrors)
+
+    return nextErrors.length === 0
+  }, [
+    taxpayerId,
+    revenueServiceId,
+  ])
 
   /*
   |--------------------------------------------------------------------------
@@ -1033,121 +938,98 @@ export function CollectionForm({
   |--------------------------------------------------------------------------
   */
 
-  const validateStepTwo =
-    useCallback(() => {
-      if (!selectedService) {
-        setErrors([
-          "Select a revenue service before continuing.",
-        ])
+  const validateStepTwo = useCallback(() => {
+    if (!selectedService) {
+      setErrors([
+        "Select a revenue service before continuing.",
+      ])
 
-        return false
-      }
+      return false
+    }
 
-      const nextValidationErrors: Record<
-        string,
-        string
-      > = {}
+    const nextValidationErrors: Record<string, string> = {}
 
-      const fields =
-        selectedService.fields ?? []
+    const fields = selectedService.fields ?? []
 
-      /*
-       * Use normalized UUID-keyed values.
-       */
-      const values =
-        normalizeDirectCollectionFields(
-          fieldValues,
-          selectedService,
-        )
-
-      /*
-       * Backend remains authoritative.
-       * This is only client-side basic validation.
-       */
-      for (const field of fields) {
-        if (!field) {
-          continue
-        }
-
-        const fieldId =
-          getServiceFieldId(field)
-
-        if (!fieldId) {
-          continue
-        }
-
-        const rawValue =
-          values[fieldId]
-
-        /*
-         * File values can be strings such as a filename.
-         */
-        const value =
-          rawValue === null ||
-          rawValue === undefined
-            ? ""
-            : String(
-                rawValue,
-              ).trim()
-
-        /*
-         * Support both possible property names.
-         */
-        const fieldRecord =
-          field as RevenueField & {
-            required?: boolean
-            is_required?: boolean
-          }
-
-        const isRequired =
-          fieldRecord.required ===
-            true ||
-          fieldRecord.is_required ===
-            true
-
-        /*
-         * Checkbox false is a legitimate value.
-         */
-        if (
-          isRequired &&
-          field.type !==
-            "CHECKBOX" &&
-          !value
-        ) {
-          nextValidationErrors[
-            fieldId
-          ] =
-            `${
-              field.label ??
-              "This field"
-            } is required.`
-        }
-      }
-
-      if (
-        Object.keys(
-          nextValidationErrors,
-        ).length > 0
-      ) {
-        setValidationErrors(
-          nextValidationErrors,
-        )
-
-        setErrors([
-          "Complete all required fields before calculating the collection amount.",
-        ])
-
-        return false
-      }
-
-      setValidationErrors({})
-      setErrors([])
-
-      return true
-    }, [
-      selectedService,
+    /*
+     * Use normalized UUID-keyed values.
+     */
+    const values = normalizeDirectCollectionFields(
       fieldValues,
-    ])
+      selectedService,
+    )
+
+    /*
+     * Backend remains authoritative.
+     * This is only client-side basic validation.
+     */
+    for (const field of fields) {
+      if (!field) {
+        continue
+      }
+
+      const fieldId = getServiceFieldId(field)
+
+      if (!fieldId) {
+        continue
+      }
+
+      const rawValue = values[fieldId]
+
+      /*
+       * File values can be strings such as a filename.
+       */
+      const value =
+        rawValue === null ||
+        rawValue === undefined
+          ? ""
+          : String(rawValue).trim()
+
+      /*
+       * Support both possible property names.
+       */
+      const fieldRecord = field as RevenueField & {
+        required?: boolean
+        is_required?: boolean
+      }
+
+      const isRequired =
+        fieldRecord.required === true ||
+        fieldRecord.is_required === true
+
+      /*
+       * Checkbox false is a legitimate value.
+       */
+      if (
+        isRequired &&
+        field.type !== "CHECKBOX" &&
+        !value
+      ) {
+        nextValidationErrors[fieldId] =
+          `${field.label ?? "This field"} is required.`
+      }
+    }
+
+    if (
+      Object.keys(nextValidationErrors).length > 0
+    ) {
+      setValidationErrors(nextValidationErrors)
+
+      setErrors([
+        "Complete all required fields before calculating the collection amount.",
+      ])
+
+      return false
+    }
+
+    setValidationErrors({})
+    setErrors([])
+
+    return true
+  }, [
+    selectedService,
+    fieldValues,
+  ])
 
   /*
   |--------------------------------------------------------------------------
@@ -1155,98 +1037,87 @@ export function CollectionForm({
   |--------------------------------------------------------------------------
   */
 
-  const handleCalculate =
-    useCallback(async () => {
-      if (isSubmitting) {
-        return false
-      }
+  const handleCalculate = useCallback(async () => {
+    if (isSubmitting) {
+      return false
+    }
 
-      if (!taxpayerId) {
-        setErrors([
-          "Select a taxpayer before calculating.",
-        ])
+    if (!taxpayerId) {
+      setErrors([
+        "Select a taxpayer before calculating.",
+      ])
 
-        setStep(1)
+      setStep(1)
 
-        return false
-      }
+      return false
+    }
 
-      if (!revenueServiceId) {
-        setErrors([
-          "Select a revenue service before calculating.",
-        ])
+    if (!revenueServiceId) {
+      setErrors([
+        "Select a revenue service before calculating.",
+      ])
 
-        setStep(1)
+      setStep(1)
 
-        return false
-      }
+      return false
+    }
 
-      if (!validateStepTwo()) {
-        return false
-      }
+    if (!validateStepTwo()) {
+      return false
+    }
 
-      try {
-        setErrors([])
+    try {
+      setErrors([])
 
-        /*
-         * Final API boundary normalization.
-         */
-        const fields =
-          normalizeDirectCollectionFields(
-            fieldValues,
-            selectedService,
-          )
+      /*
+       * Final API boundary normalization.
+       */
+      const fields = normalizeDirectCollectionFields(
+        fieldValues,
+        selectedService,
+      )
 
-        const result =
-          await calculateDirectCollection(
-            {
-              taxpayer_id:
-                taxpayerId,
+      const result = await calculateDirectCollection({
+        taxpayer_id: taxpayerId,
 
-              revenue_service_id:
-                revenueServiceId,
+        revenue_service_id: revenueServiceId,
 
-              fields,
-            },
-          )
+        fields,
+      })
 
-        setCalculation(result)
+      setCalculation(result)
 
-        setIsConfirmed(false)
-        setErrors([])
+      setIsConfirmed(false)
+      setErrors([])
 
-        setStep(3)
+      setStep(3)
 
-        setFurthestStep(
-          (current) =>
-            Math.max(
-              current,
-              3,
-            ) as Step,
-        )
+      setFurthestStep((current) =>
+        Math.max(current, 3) as Step,
+      )
 
-        return true
-      } catch (error) {
-        setCalculation(null)
+      return true
+    } catch (error) {
+      setCalculation(null)
 
-        setErrors([
-          getErrorMessage(
-            error,
-            "Unable to calculate the direct collection amount.",
-          ),
-        ])
+      setErrors([
+        getErrorMessage(
+          error,
+          "Unable to calculate the direct collection amount.",
+        ),
+      ])
 
-        return false
-      }
-    }, [
-      isSubmitting,
-      taxpayerId,
-      revenueServiceId,
-      validateStepTwo,
-      fieldValues,
-      selectedService,
-      calculateDirectCollection,
-    ])
+      return false
+    }
+  }, [
+    isSubmitting,
+    taxpayerId,
+    revenueServiceId,
+    validateStepTwo,
+    fieldValues,
+    selectedService,
+    calculateDirectCollection,
+  ])
 
   /*
   |--------------------------------------------------------------------------
@@ -1254,39 +1125,34 @@ export function CollectionForm({
   |--------------------------------------------------------------------------
   */
 
-  const handleNext =
-    useCallback(async () => {
-      if (isSubmitting) {
+  const handleNext = useCallback(async () => {
+    if (isSubmitting) {
+      return
+    }
+
+    if (step === 1) {
+      if (!validateStepOne()) {
         return
       }
 
-      if (step === 1) {
-        if (!validateStepOne()) {
-          return
-        }
+      setStep(2)
 
-        setStep(2)
+      setFurthestStep((current) =>
+        Math.max(current, 2) as Step,
+      )
 
-        setFurthestStep(
-          (current) =>
-            Math.max(
-              current,
-              2,
-            ) as Step,
-        )
+      return
+    }
 
-        return
-      }
-
-      if (step === 2) {
-        await handleCalculate()
-      }
-    }, [
-      isSubmitting,
-      step,
-      validateStepOne,
-      handleCalculate,
-    ])
+    if (step === 2) {
+      await handleCalculate()
+    }
+  }, [
+    isSubmitting,
+    step,
+    validateStepOne,
+    handleCalculate,
+  ])
 
   /*
   |--------------------------------------------------------------------------
@@ -1294,30 +1160,28 @@ export function CollectionForm({
   |--------------------------------------------------------------------------
   */
 
-  const handleBack =
-    useCallback(() => {
-      if (isSubmitting) {
-        return
-      }
+  const handleBack = useCallback(() => {
+    if (isSubmitting) {
+      return
+    }
 
-      if (step === 1) {
-        onCancel?.()
+    if (step === 1) {
+      onCancel?.()
 
-        return
-      }
+      return
+    }
 
-      setStep(
-        (current) =>
-          (current - 1) as Step,
-      )
+    setStep((current) =>
+      (current - 1) as Step,
+    )
 
-      setIsConfirmed(false)
-      setErrors([])
-    }, [
-      isSubmitting,
-      step,
-      onCancel,
-    ])
+    setIsConfirmed(false)
+    setErrors([])
+  }, [
+    isSubmitting,
+    step,
+    onCancel,
+  ])
 
   /*
   |--------------------------------------------------------------------------
@@ -1325,40 +1189,36 @@ export function CollectionForm({
   |--------------------------------------------------------------------------
   */
 
-  const canJumpToStep =
-    useCallback(
-      (target: Step) =>
-        target <= furthestStep &&
-        target !== step &&
-        !isSubmitting,
-      [
-        furthestStep,
-        step,
-        isSubmitting,
-      ],
-    )
+  const canJumpToStep = useCallback(
+    (target: Step) =>
+      target <= furthestStep &&
+      target !== step &&
+      !isSubmitting,
+    [
+      furthestStep,
+      step,
+      isSubmitting,
+    ],
+  )
 
-  const handleStepClick =
-    useCallback(
-      (target: Step) => {
-        if (
-          !canJumpToStep(target)
-        ) {
-          return
-        }
+  const handleStepClick = useCallback(
+    (target: Step) => {
+      if (!canJumpToStep(target)) {
+        return
+      }
 
-        if (target < step) {
-          setIsConfirmed(false)
-        }
+      if (target < step) {
+        setIsConfirmed(false)
+      }
 
-        setStep(target)
-        setErrors([])
-      },
-      [
-        canJumpToStep,
-        step,
-      ],
-    )
+      setStep(target)
+      setErrors([])
+    },
+    [
+      canJumpToStep,
+      step,
+    ],
+  )
 
   /*
   |--------------------------------------------------------------------------
@@ -1366,17 +1226,16 @@ export function CollectionForm({
   |--------------------------------------------------------------------------
   */
 
-  const handleConfirmationChange =
-    useCallback(
-      (checked: boolean) => {
-        setIsConfirmed(checked)
+  const handleConfirmationChange = useCallback(
+    (checked: boolean) => {
+      setIsConfirmed(checked)
 
-        if (checked) {
-          setErrors([])
-        }
-      },
-      [],
-    )
+      if (checked) {
+        setErrors([])
+      }
+    },
+    [],
+  )
 
   /*
   |--------------------------------------------------------------------------
@@ -1396,277 +1255,246 @@ export function CollectionForm({
   |--------------------------------------------------------------------------
   */
 
-  const handleSubmit =
-    useCallback(async () => {
-      if (isSubmitting) {
-        return
-      }
+  const handleSubmit = useCallback(async () => {
+    if (isSubmitting) {
+      return
+    }
 
-      if (!taxpayerId) {
-        setErrors([
-          "Taxpayer is required.",
-        ])
+    if (!taxpayerId) {
+      setErrors([
+        "Taxpayer is required.",
+      ])
 
-        setStep(1)
+      setStep(1)
 
-        return
-      }
+      return
+    }
 
-      if (!revenueServiceId) {
-        setErrors([
-          "Revenue service is required.",
-        ])
+    if (!revenueServiceId) {
+      setErrors([
+        "Revenue service is required.",
+      ])
 
-        setStep(1)
+      setStep(1)
 
-        return
-      }
+      return
+    }
 
-      if (!validateStepTwo()) {
-        setStep(2)
+    if (!validateStepTwo()) {
+      setStep(2)
 
-        return
-      }
+      return
+    }
 
-      if (!calculation) {
-        setErrors([
-          "The collection amount must be calculated before submitting.",
-        ])
+    if (!calculation) {
+      setErrors([
+        "The collection amount must be calculated before submitting.",
+      ])
 
-        setStep(2)
+      setStep(2)
 
-        return
-      }
+      return
+    }
 
-      if (!isConfirmed) {
-        setErrors([
-          isEditMode
-            ? "Confirm that the collection information is correct before updating the collection."
-            : "Confirm that the collection information is correct before creating the invoice.",
-        ])
+    if (!isConfirmed) {
+      setErrors([
+        isEditMode
+          ? "Confirm that the collection information is correct before updating the collection."
+          : "Confirm that the collection information is correct before creating the invoice.",
+      ])
 
-        return
-      }
+      return
+    }
+
+    /*
+     * The calculator currently requires a due date
+     * before an invoice can be issued.
+     */
+    if (!calculation.due_date) {
+      setErrors([
+        "The server did not provide a due date for this direct collection.",
+      ])
+
+      return
+    }
+
+    /*
+     * Edit mode requires the existing invoice ID.
+     */
+    if (isEditMode && !initialData?.id) {
+      setErrors([
+        "The direct collection invoice ID is missing. The collection cannot be updated.",
+      ])
+
+      return
+    }
+
+    try {
+      setErrors([])
 
       /*
-       * The calculator currently requires a due date
-       * before an invoice can be issued.
+       * Always normalize again at the final API boundary.
        */
-      if (!calculation.due_date) {
-        setErrors([
-          "The server did not provide a due date for this direct collection.",
-        ])
-
-        return
-      }
+      const fields = normalizeDirectCollectionFields(
+        fieldValues,
+        selectedService,
+      )
 
       /*
-       * Edit mode requires the existing invoice ID.
+       * ==========================================================
+       * EDIT
+       * ==========================================================
+       *
+       * Backend will:
+       *
+       * 1. Lock the existing invoice.
+       * 2. Verify status = ISSUED.
+       * 3. Verify no payment has been made.
+       * 4. Resolve taxpayer/service.
+       * 5. Recalculate server-side.
+       * 6. Preserve invoice number.
+       * 7. Update existing invoice.
+       * 8. Update existing invoice item.
+       *
+       * No new invoice is created.
        */
-      if (isEditMode && !initialData?.id) {
-        setErrors([
-          "The direct collection invoice ID is missing. The collection cannot be updated.",
-        ])
+      if (isEditMode) {
+        const invoice = await updateDirectCollection({
+          invoiceId: initialData?.id ?? "",
+          payload: {
+            taxpayer_id: taxpayerId,
 
-        return
-      }
+            revenue_service_id: revenueServiceId,
 
-      try {
-        setErrors([])
+            fields,
 
-        /*
-         * Always normalize again at the final API boundary.
-         */
-        const fields =
-          normalizeDirectCollectionFields(
-            fieldValues,
-            selectedService,
-          )
+            notes: notes.trim() || null,
+
+            reason: reason.trim() || null,
+          },
+        })
+
+        const result = invoice as DirectCollectionInvoice
 
         /*
-         * ==========================================================
-         * EDIT
-         * ==========================================================
+         * DirectCollectionResource returns:
          *
-         * Backend will:
-         *
-         * 1. Lock the existing invoice.
-         * 2. Verify status = ISSUED.
-         * 3. Verify no payment has been made.
-         * 4. Resolve taxpayer/service.
-         * 5. Recalculate server-side.
-         * 6. Preserve invoice number.
-         * 7. Update existing invoice.
-         * 8. Update existing invoice item.
-         *
-         * No new invoice is created.
+         * {
+         *   id,
+         *   invoice: {
+         *     invoice_number,
+         *     status,
+         *     total_amount,
+         *     currency,
+         *     ...
+         *   },
+         *   taxpayer,
+         *   taxpayer_id,
+         *   revenue_service_id,
+         *   ...
+         * }
          */
-        if (isEditMode) {
-          const invoice =
-            await updateDirectCollection(
-              {
-                invoiceId:
-                  initialData!.id!,
-
-                payload: {
-                  taxpayer_id:
-                    taxpayerId,
-
-                  revenue_service_id:
-                    revenueServiceId,
-
-                  fields,
-
-                  notes:
-                    notes.trim() ||
-                    null,
-
-                  reason:
-                    reason.trim() ||
-                    null,
-                },
-              },
-            )
-
-          const result =
-            invoice as DirectCollectionInvoice
-
-          /*
-           * DirectCollectionResource returns:
-           *
-           * {
-           *   id,
-           *   invoice: {
-           *     invoice_number,
-           *     status,
-           *     total_amount,
-           *     currency,
-           *     ...
-           *   },
-           *   taxpayer,
-           *   taxpayer_id,
-           *   revenue_service_id,
-           *   ...
-           * }
-           */
-          onSuccess({
-            invoiceId:
-              result.id,
-
-            invoiceNumber:
-              result.invoice
-                ?.invoice_number,
-
-            status:
-              result.invoice?.status,
-
-            amount:
-              result.invoice
-                ?.total_amount,
-
-            currency:
-              result.invoice?.currency,
-
-            taxpayerId:
-              result.taxpayer_id ??
-              taxpayerId,
-
-            revenueServiceId:
-              result.revenue_service_id ??
-              revenueServiceId,
-          })
-
-          return
-        }
-
-        /*
-         * ==========================================================
-         * CREATE
-         * ==========================================================
-         */
-
-        const invoice =
-          await createDirectCollection(
-            {
-              taxpayer_id:
-                taxpayerId,
-
-              revenue_service_id:
-                revenueServiceId,
-
-              fields,
-
-              /*
-               * Kept for compatibility with
-               * StoreDirectCollectionPayload.
-               *
-               * Backend calculation remains authoritative.
-               */
-              due_date:
-                calculation.due_date,
-
-              notes:
-                notes.trim() ||
-                null,
-            },
-          )
-
-        const result =
-          invoice as DirectCollectionInvoice
-
         onSuccess({
-          invoiceId:
-            result.id,
+          invoiceId: result.id,
 
           invoiceNumber:
-            result.invoice
-              ?.invoice_number,
+            result.invoice?.invoice_number,
 
           status:
             result.invoice?.status,
 
           amount:
-            result.invoice
-              ?.total_amount,
+            result.invoice?.total_amount,
 
           currency:
             result.invoice?.currency,
 
           taxpayerId:
-            result.taxpayer_id ??
-            taxpayerId,
+            result.taxpayer_id ?? taxpayerId,
 
           revenueServiceId:
             result.revenue_service_id ??
             revenueServiceId,
         })
-      } catch (error) {
-        setErrors([
-          getErrorMessage(
-            error,
-            isEditMode
-              ? "Unable to update the direct collection."
-              : "Unable to create the direct collection.",
-          ),
-        ])
+
+        return
       }
-    }, [
-      isSubmitting,
-      taxpayerId,
-      revenueServiceId,
-      validateStepTwo,
-      calculation,
-      isConfirmed,
-      isEditMode,
-      initialData,
-      fieldValues,
-      selectedService,
-      notes,
-      reason,
-      updateDirectCollection,
-      createDirectCollection,
-      onSuccess,
-    ])
+
+      /*
+       * ==========================================================
+       * CREATE
+       * ==========================================================
+       */
+
+      const invoice = await createDirectCollection({
+        taxpayer_id: taxpayerId,
+
+        revenue_service_id: revenueServiceId,
+
+        fields,
+
+        /*
+         * Kept for compatibility with
+         * StoreDirectCollectionPayload.
+         *
+         * Backend calculation remains authoritative.
+         */
+        due_date: calculation.due_date,
+
+        notes: notes.trim() || null,
+      })
+
+      const result = invoice as DirectCollectionInvoice
+
+      onSuccess({
+        invoiceId: result.id,
+
+        invoiceNumber:
+          result.invoice?.invoice_number,
+
+        status:
+          result.invoice?.status,
+
+        amount:
+          result.invoice?.total_amount,
+
+        currency:
+          result.invoice?.currency,
+
+        taxpayerId:
+          result.taxpayer_id ?? taxpayerId,
+
+        revenueServiceId:
+          result.revenue_service_id ??
+          revenueServiceId,
+      })
+    } catch (error) {
+      setErrors([
+        getErrorMessage(
+          error,
+          isEditMode
+            ? "Unable to update the direct collection."
+            : "Unable to create the direct collection.",
+        ),
+      ])
+    }
+  }, [
+    isSubmitting,
+    taxpayerId,
+    revenueServiceId,
+    validateStepTwo,
+    calculation,
+    isConfirmed,
+    isEditMode,
+    initialData,
+    fieldValues,
+    selectedService,
+    notes,
+    reason,
+    updateDirectCollection,
+    createDirectCollection,
+    onSuccess,
+  ])
 
   /*
   |--------------------------------------------------------------------------
@@ -1674,16 +1502,13 @@ export function CollectionForm({
   |--------------------------------------------------------------------------
   */
 
-  const calculatedAmount =
-    calculation?.amount
+  const calculatedAmount = calculation?.amount
 
   const calculatedCurrency =
-    calculation?.currency ??
-    "ETB"
+    calculation?.currency ?? "ETB"
 
   const calculatedDueDate =
-    calculation?.due_date ??
-    null
+    calculation?.due_date ?? null
 
   /*
   |--------------------------------------------------------------------------
@@ -1708,9 +1533,7 @@ export function CollectionForm({
             size="icon"
             className="shrink-0"
             onClick={handleBack}
-            disabled={
-              isSubmitting
-            }
+            disabled={isSubmitting}
             aria-label={
               step === 1
                 ? "Cancel"
@@ -1747,29 +1570,20 @@ export function CollectionForm({
           <div className="flex items-center justify-between text-xs">
 
             {STEPS.map((item) => {
-              const active =
-                step === item.number
+              const active = step === item.number
 
-              const completed =
-                step > item.number
+              const completed = step > item.number
 
-              const reachable =
-                canJumpToStep(
-                  item.number,
-                )
+              const reachable = canJumpToStep(item.number)
 
               return (
                 <button
                   key={item.number}
                   type="button"
                   onClick={() =>
-                    handleStepClick(
-                      item.number,
-                    )
+                    handleStepClick(item.number)
                   }
-                  disabled={
-                    !reachable
-                  }
+                  disabled={!reachable}
                   className={[
                     "flex items-center gap-1.5 rounded font-medium transition-colors",
                     active
@@ -1834,19 +1648,14 @@ export function CollectionForm({
 
           <div className="space-y-1">
 
-            {errors.map(
-              (
-                error,
-                index,
-              ) => (
-                <p
-                  key={`${error}-${index}`}
-                  className="text-sm text-destructive"
-                >
-                  {error}
-                </p>
-              ),
-            )}
+            {errors.map((error, index) => (
+              <p
+                key={`${error}-${index}`}
+                className="text-sm text-destructive"
+              >
+                {error}
+              </p>
+            ))}
 
           </div>
 
@@ -1883,12 +1692,8 @@ export function CollectionForm({
               </Label>
 
               <TaxpayerSelector
-                value={
-                  taxpayerId
-                }
-                onChange={
-                  handleTaxpayerChange
-                }
+                value={taxpayerId}
+                onChange={handleTaxpayerChange}
               />
 
             </div>
@@ -1901,25 +1706,15 @@ export function CollectionForm({
 
               <RevenueServiceSelector
                 mode="multi"
-                services={
-                  revenueServices
-                }
+                services={revenueServices}
                 selectedServiceIds={
                   revenueServiceId
-                    ? [
-                        revenueServiceId,
-                      ]
+                    ? [revenueServiceId]
                     : []
                 }
-                onChange={
-                  handleServiceSelection
-                }
-                onRemoveService={
-                  clearService
-                }
-                onClearServices={
-                  clearService
-                }
+                onChange={handleServiceSelection}
+                onRemoveService={clearService}
+                onClearServices={clearService}
               />
 
               <p className="text-xs text-muted-foreground">
@@ -1961,9 +1756,7 @@ export function CollectionForm({
               <CardHeader className="pb-3">
 
                 <CardTitle className="text-base">
-                  {
-                    selectedService.name
-                  }
+                  {selectedService.name}
                 </CardTitle>
 
                 <CardDescription>
@@ -1977,16 +1770,10 @@ export function CollectionForm({
               <CardContent className="space-y-5">
 
                 <RevenueServiceFields
-                  service={
-                    selectedService
-                  }
+                  service={selectedService}
                   index={0}
-                  values={
-                    fieldValues
-                  }
-                  errors={
-                    validationErrors
-                  }
+                  values={fieldValues}
+                  errors={validationErrors}
                   onChange={(
                     fieldId,
                     value,
@@ -2005,9 +1792,7 @@ export function CollectionForm({
                       field,
                     )
                   }
-                  onRemoveFile={(
-                    field,
-                  ) =>
+                  onRemoveFile={(field) =>
                     removeFile(field)
                   }
                   onRemove={() => {
@@ -2044,27 +1829,17 @@ export function CollectionForm({
 
                 <textarea
                   id="collection-notes"
-                  value={
-                    notes
-                  }
+                  value={notes}
                   onChange={(event) => {
-                    setNotes(
-                      event.target.value,
-                    )
+                    setNotes(event.target.value)
 
-                    setCalculation(
-                      null,
-                    )
+                    setCalculation(null)
 
-                    setIsConfirmed(
-                      false,
-                    )
+                    setIsConfirmed(false)
                   }}
                   placeholder="Add any relevant collection notes..."
                   rows={3}
-                  disabled={
-                    isSubmitting
-                  }
+                  disabled={isSubmitting}
                   maxLength={2000}
                   className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                 />
@@ -2103,19 +1878,13 @@ export function CollectionForm({
 
                   <textarea
                     id="collection-edit-reason"
-                    value={
-                      reason
-                    }
+                    value={reason}
                     onChange={(event) =>
-                      setReason(
-                        event.target.value,
-                      )
+                      setReason(event.target.value)
                     }
                     placeholder="Explain why this collection is being updated..."
                     rows={3}
-                    disabled={
-                      isSubmitting
-                    }
+                    disabled={isSubmitting}
                     maxLength={1000}
                     className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                   />
@@ -2174,8 +1943,7 @@ export function CollectionForm({
                 <dd className="mt-0.5 font-medium">
                   {selectedTaxpayer
                     ? selectedTaxpayer.full_name
-                    : taxpayerId ||
-                      "—"}
+                    : taxpayerId || "—"}
                 </dd>
 
               </div>
@@ -2187,8 +1955,7 @@ export function CollectionForm({
                 </dt>
 
                 <dd className="mt-0.5 font-medium">
-                  {selectedService?.name ??
-                    "—"}
+                  {selectedService?.name ?? "—"}
                 </dd>
 
               </div>
@@ -2214,8 +1981,7 @@ export function CollectionForm({
                 </dt>
 
                 <dd className="mt-0.5 font-medium">
-                  {calculatedDueDate ??
-                    "—"}
+                  {calculatedDueDate ?? "—"}
                 </dd>
 
               </div>
@@ -2268,18 +2034,14 @@ export function CollectionForm({
                     <div>
 
                       <p className="text-sm font-semibold">
-                        {
-                          selectedService.name
-                        }
+                        {selectedService.name}
                       </p>
 
                       {selectedService.code && (
                         <p className="mt-0.5 text-xs text-muted-foreground">
                           Revenue code:{" "}
                           <span className="font-mono">
-                            {
-                              selectedService.code
-                            }
+                            {selectedService.code}
                           </span>
                         </p>
                       )}
@@ -2294,42 +2056,27 @@ export function CollectionForm({
 
                   {/* FIELDS */}
 
-                  {(
-                    selectedService.fields ??
-                    []
-                  ).length > 0 && (
+                  {(selectedService.fields ?? []).length > 0 && (
                     <div className="mt-4 space-y-2 border-t pt-3 text-sm">
 
-                      {(
-                        selectedService.fields ??
-                        []
-                      ).map(
+                      {(selectedService.fields ?? []).map(
                         (field) => {
                           const fieldId =
-                            getServiceFieldId(
-                              field,
-                            )
+                            getServiceFieldId(field)
 
                           return (
                             <div
-                              key={
-                                fieldId
-                              }
+                              key={fieldId}
                               className="flex items-start justify-between gap-4"
                             >
 
                               <span className="text-muted-foreground">
-                                {
-                                  field.label ??
-                                  fieldId
-                                }
+                                {field.label ?? fieldId}
                               </span>
 
                               <span className="max-w-[60%] break-words text-right font-medium">
                                 {formatFieldValue(
-                                  normalizedFields[
-                                    fieldId
-                                  ],
+                                  normalizedFields[fieldId],
                                 )}
                               </span>
 
@@ -2371,24 +2118,23 @@ export function CollectionForm({
                 EDIT REASON
                 ================================================= */}
 
-            {isEditMode &&
-              reason.trim() && (
-                <>
-                  <Separator />
+            {isEditMode && reason.trim() && (
+              <>
+                <Separator />
 
-                  <div>
+                <div>
 
-                    <p className="mb-1 text-xs font-medium text-muted-foreground">
-                      Edit Reason
-                    </p>
+                  <p className="mb-1 text-xs font-medium text-muted-foreground">
+                    Edit Reason
+                  </p>
 
-                    <p className="whitespace-pre-wrap text-sm">
-                      {reason}
-                    </p>
+                  <p className="whitespace-pre-wrap text-sm">
+                    {reason}
+                  </p>
 
-                  </div>
-                </>
-              )}
+                </div>
+              </>
+            )}
 
             <Separator />
 
@@ -2463,18 +2209,13 @@ export function CollectionForm({
               <input
                 id="collection-confirmation"
                 type="checkbox"
-                checked={
-                  isConfirmed
-                }
+                checked={isConfirmed}
                 onChange={(event) =>
                   handleConfirmationChange(
-                    event.target
-                      .checked,
+                    event.target.checked,
                   )
                 }
-                disabled={
-                  isSubmitting
-                }
+                disabled={isSubmitting}
                 className="mt-0.5 size-4 shrink-0 rounded border-input accent-foreground"
               />
 
@@ -2501,9 +2242,7 @@ export function CollectionForm({
           type="button"
           variant="outline"
           onClick={handleBack}
-          disabled={
-            isSubmitting
-          }
+          disabled={isSubmitting}
         >
           <ArrowLeft className="mr-2 size-4" />
 
@@ -2516,9 +2255,7 @@ export function CollectionForm({
           <Button
             type="button"
             onClick={handleNext}
-            disabled={
-              isSubmitting
-            }
+            disabled={isSubmitting}
           >
             {isCalculating ? (
               <>
@@ -2547,8 +2284,7 @@ export function CollectionForm({
               !calculation.due_date
             }
           >
-            {isCreating ||
-            isUpdating ? (
+            {isCreating || isUpdating ? (
               <>
                 <Loader2 className="mr-2 size-4 animate-spin" />
 

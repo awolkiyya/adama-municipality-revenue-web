@@ -6,7 +6,109 @@ import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 import { getInitials } from "@/utils/getInitials";
 import { formatEthiopianDate, formatEthiopianDateWithTime } from "@/lib/utils";
 import { usePrivateImage } from "@/hooks/usePrivateImage";
-// import { usePrivateImage } from "@/hooks/usePrivateImage";
+
+type DisplayValue = string | number | null | undefined;
+
+interface RendererRow {
+  [key: string]: unknown;
+
+  amount?: DisplayValue;
+  assessment_number?: DisplayValue;
+  avatar?: string | null;
+  balance_due?: DisplayValue;
+  calculationType?: string | null;
+  citizen_name?: DisplayValue;
+  citizen_number?: DisplayValue;
+  city?: { name?: string | null } | null;
+  code?: DisplayValue;
+  codesCount?: number | null;
+  collectionMode?: string | null;
+  createdAt?: string | null;
+  created_at?: string | null;
+  created_by?: DisplayValue;
+  currency?: string | null;
+  dates?: { issued_at?: string | null } | null;
+  description?: DisplayValue;
+  due_date?: string | null;
+  email?: DisplayValue;
+  endCode?: DisplayValue;
+  end_date?: string | null;
+  fields?: unknown[] | null;
+  financial?: {
+    subtotal?: DisplayValue;
+    total_amount?: DisplayValue;
+    paid_amount?: DisplayValue;
+    balance_due?: DisplayValue;
+    currency?: string | null;
+  } | null;
+  formula?: string | null;
+  interval_days?: DisplayValue;
+  invoice_number?: DisplayValue;
+  is_active?: boolean | null;
+  is_default?: boolean | null;
+  lastLoginAt?: string | null;
+  level?: DisplayValue;
+  maxValue?: DisplayValue;
+  minValue?: DisplayValue;
+  name?: string | null;
+  paid_amount?: DisplayValue;
+  penalty_status?: string | null;
+  percentage?: DisplayValue;
+  phone?: DisplayValue;
+  progress?: number;
+  registered_at?: string | null;
+  revenueCode?: { code?: DisplayValue } | null;
+  revenueDomain?: string | null;
+  role?: DisplayValue;
+  service?: {
+    name?: string | null;
+    revenue_code?: { code?: DisplayValue } | null;
+    revenueCode?: { code?: DisplayValue } | null;
+  } | null;
+  serviceType?: string | null;
+  source_type?: string | null;
+  startCode?: DisplayValue;
+  start_date?: string | null;
+  status?: string | null;
+  subcity?: { name?: string | null } | null;
+  subtotal?: DisplayValue;
+  symbol?: DisplayValue;
+  title?: DisplayValue;
+  total_amount?: DisplayValue;
+  unit?: string | null;
+  unit_code?: string | null;
+  wereda?: { name?: string | null } | null;
+}
+
+type CalculationType = "fixed" | "percentage" | "per_unit" | "range" | "formula";
+
+interface CalculationRow {
+  calculationType?: string | null;
+  amount?: number | string | null;
+  percentage?: number | string | null;
+  minValue?: number | string | null;
+  maxValue?: number | string | null;
+  unit?: string | null;
+  formula?: string | null;
+}
+
+type CalculationRendererRow = RendererRow & CalculationRow;
+
+function AvatarRenderer({ row }: { row: RendererRow }) {
+  const image = usePrivateImage(row.avatar ?? "");
+
+  return (
+    <Avatar className="h-10 w-10 rounded-lg">
+      <AvatarImage
+        src={image.url}
+        alt={row.name ?? ""}
+      />
+      <AvatarFallback className="rounded-lg text-xs">
+        {getInitials(row.name ?? "")}
+      </AvatarFallback>
+    </Avatar>
+  );
+}
 
 
 const formatAmount = (value: number | string | null | undefined) => {
@@ -20,20 +122,6 @@ const formatAmount = (value: number | string | null | undefined) => {
   });
 };
 
-
-// ---- Types -----------------------------------------------------------
-
-type CalculationType = "fixed" | "percentage" | "per_unit" | "range" | "formula";
-
-interface CalculationRow {
-  calculationType?: string | null;
-  amount?: number | string | null;
-  percentage?: number | string | null;
-  minValue?: number | string | null;
-  maxValue?: number | string | null;
-  unit?: string | null;
-  formula?: string | null;
-}
 
 // ---- Formatting --------------------------------------------------------
 
@@ -62,7 +150,7 @@ function formatCalculationValue(row: CalculationRow): string {
 }
 
 
-export const columnRenderers: Record<string, (row: any) => React.ReactNode> =
+export const columnRenderers: Record<string, (row: RendererRow) => React.ReactNode> =
 {
 
   
@@ -70,14 +158,9 @@ export const columnRenderers: Record<string, (row: any) => React.ReactNode> =
      CORE FIELDS
   ========================================================= */
 
-  avatar: (row) => (
-    <Avatar className="h-10 w-10 rounded-lg">
-      <AvatarImage src={usePrivateImage(row.avatar).url} alt={row.name} />
-      <AvatarFallback className="rounded-lg text-xs">
-        {getInitials(row.name)}
-      </AvatarFallback>
-    </Avatar>
-  ),  name: (row) => (
+  avatar: (row) => <AvatarRenderer row={row} />,
+
+  name: (row) => (
     <span className="block max-w-[180px] truncate text-sm font-medium text-foreground">
       {row.name}
     </span>
@@ -657,7 +740,7 @@ calculationType: (row) => {
 
 // ---- Column definition ---------------------------------------------
 
-amount: (row: CalculationRow) => {
+amount: (row: CalculationRendererRow) => {
   const type = (row.calculationType ?? "").toLowerCase();
   const display = formatCalculationValue(row);
 
@@ -699,7 +782,7 @@ amount: (row: CalculationRow) => {
         font-medium
         text-foreground
       "
-      title={row.invoice_number ?? undefined}
+      // title={row.invoice_number ?? undefined}
     >
       {row.invoice_number ?? "-"}
     </span>
@@ -716,7 +799,7 @@ amount: (row: CalculationRow) => {
           font-medium
           text-foreground
         "
-        title={row.citizen_name ?? undefined}
+        // title={row.citizen_name ?? undefined}
       >
         {row.citizen_name ?? "-"}
       </span>

@@ -383,7 +383,7 @@ export function ImportCitizenModal() {
             <div className="w-full space-y-2">
               <p className="text-sm font-medium">Importing citizen records…</p>
               <Progress value={progress} className="h-2" />
-              <p className="text-xs text-muted-foreground">{progress}% complete — please don't close this window.</p>
+              <p className="text-xs text-muted-foreground">{progress}% complete — please dont close this window.</p>
             </div>
           </div>
         )}

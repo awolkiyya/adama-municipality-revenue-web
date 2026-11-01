@@ -1,3 +1,4 @@
+
 "use client";
 
 import {
@@ -10,15 +11,21 @@ import { toast } from "sonner";
 import { accessManagementService } from "@/services/accessManagement.service";
 
 // =====================================================
-// PERMISSIONS
+// QUERY PARAMETER TYPES
 // =====================================================
 
-export function usePermissions(params?: {
+type AccessManagementQueryParams = {
   search?: string;
   page?: number;
   per_page?: number;
   guard_name?: string;
-}) {
+};
+
+// =====================================================
+// PERMISSIONS
+// =====================================================
+
+export function usePermissions(params?: AccessManagementQueryParams) {
   return useQuery({
     queryKey: ["permissions", params],
     queryFn: () => accessManagementService.getPermissions(params),
@@ -45,12 +52,7 @@ export function usePermission(id?: string) {
 // ROLES
 // =====================================================
 
-export function useRoles(params?: {
-  search?: string;
-  page?: number;
-  per_page?: number;
-  guard_name?: string;
-}) {
+export function useRoles(params?: AccessManagementQueryParams) {
   return useQuery({
     queryKey: ["roles", params],
     queryFn: () => accessManagementService.getRoles(params),
@@ -98,8 +100,14 @@ export function useUpdateRole() {
   const qc = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: any }) =>
-      accessManagementService.updateRole(id, data),
+    mutationFn: ({
+      id,
+      data,
+    }: {
+      id: string;
+      data: Parameters<typeof accessManagementService.updateRole>[1];
+    }) => accessManagementService.updateRole(id, data),
+
     onSuccess: (_, vars) => {
       qc.invalidateQueries({ queryKey: ["roles"] });
       qc.invalidateQueries({ queryKey: ["role", vars.id] });
@@ -154,8 +162,11 @@ export function useAssignRolePermissions() {
       roleId: string;
       data: { permissions: string[] };
     }) => accessManagementService.assignRolePermissions(roleId, data),
+
     onSuccess: (_, vars) => {
-      qc.invalidateQueries({ queryKey: ["role-permissions", vars.roleId] });
+      qc.invalidateQueries({
+        queryKey: ["role-permissions", vars.roleId],
+      });
       qc.invalidateQueries({ queryKey: ["roles"] });
       toast.success("Permissions assigned successfully");
     },
@@ -192,8 +203,11 @@ export function useAssignUserRole() {
       userId: string;
       data: { role_id: string };
     }) => accessManagementService.assignUserRole(userId, data),
+
     onSuccess: (_, vars) => {
-      qc.invalidateQueries({ queryKey: ["user-roles", vars.userId] });
+      qc.invalidateQueries({
+        queryKey: ["user-roles", vars.userId],
+      });
       toast.success("Role assigned successfully");
     },
   });
@@ -207,10 +221,18 @@ export function useRemoveUserRole() {
   const qc = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ userId, roleId }: { userId: string; roleId: string }) =>
-      accessManagementService.removeUserRole(userId, roleId),
+    mutationFn: ({
+      userId,
+      roleId,
+    }: {
+      userId: string;
+      roleId: string;
+    }) => accessManagementService.removeUserRole(userId, roleId),
+
     onSuccess: (_, vars) => {
-      qc.invalidateQueries({ queryKey: ["user-roles", vars.userId] });
+      qc.invalidateQueries({
+        queryKey: ["user-roles", vars.userId],
+      });
       toast.success("Role removed successfully");
     },
   });

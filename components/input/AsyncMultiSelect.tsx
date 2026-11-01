@@ -52,7 +52,7 @@ interface FetchDataResponse<T> {
 }
 
 interface AsyncMultiSelectProps<
-  T extends Record<string, any>,
+  T extends object,
   V extends string | number,
 > {
   value: V[];
@@ -96,7 +96,7 @@ function truncateText(text: string, max = 40): string {
 ========================================================= */
 
 export function AsyncMultiSelect<
-  T extends Record<string, any>,
+  T extends object,
   V extends string | number,
 >({
   value,
@@ -115,42 +115,48 @@ export function AsyncMultiSelect<
   multiple = true,
   clearable = true,
 }: AsyncMultiSelectProps<T, V>) {
+  /* =====================================================
+     STATE
+  ===================================================== */
+
   const [open, setOpen] = useState(false);
   const [optionIds, setOptionIds] = useState<V[]>([]);
   const [search, setSearch] = useState("");
-  const [page, setPage] = useState(1);
   const [total, setTotal] = useState<number | null>(null);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const itemsCacheRef = useRef<Map<V, T>>(new Map());
-  const [, forceRerender] = useState(0);
+  // React state is the source of truth during rendering.
+  const [itemsCache, setItemsCache] = useState<Map<V, T>>(
+    () => new Map<V, T>(),
+  );
+
+  /* =====================================================
+     REFS
+  ===================================================== */
 
   const mountedRef = useRef(false);
   const latestRequestIdRef = useRef(0);
   const loadingMoreRef = useRef(false);
-  const requestedPagesRef = useRef<Set<number>>(new Set());
 
-  const searchRef = useRef(search);
-  const pageRef = useRef(page);
-  const totalRef = useRef<number | null>(total);
+  const requestedPagesRef = useRef<Set<number>>(
+    new Set(),
+  );
+
+  const pageRef = useRef(1);
+  const totalRef = useRef<number | null>(null);
   const optionCountRef = useRef(0);
 
-  useEffect(() => {
-    searchRef.current = search;
-  }, [search]);
+  const searchRef = useRef(search);
+  const optionIdsRef = useRef<V[]>([]);
 
-  useEffect(() => {
-    pageRef.current = page;
-  }, [page]);
+  // Used only in callbacks and effects, never during render.
+  const itemsCacheRef = useRef<Map<V, T>>(itemsCache);
 
-  useEffect(() => {
-    totalRef.current = total;
-  }, [total]);
-
-  useEffect(() => {
-    optionCountRef.current = optionIds.length;
-  }, [optionIds]);
+  /* =====================================================
+     MOUNT / UNMOUNT
+  ===================================================== */
 
   useEffect(() => {
     mountedRef.current = true;
@@ -167,12 +173,17 @@ export function AsyncMultiSelect<
 
   const cacheItems = useCallback(
     (items: T[]) => {
+      if (items.length === 0) return;
+
+      const nextCache = new Map(itemsCacheRef.current);
+
       for (const item of items) {
-        itemsCacheRef.current.set(
-          item[valueField] as V,
-          item,
-        );
+        const id = item[valueField] as V;
+        nextCache.set(id, item);
       }
+
+      itemsCacheRef.current = nextCache;
+      setItemsCache(nextCache);
     },
     [valueField],
   );
@@ -188,7 +199,7 @@ export function AsyncMultiSelect<
       }
 
       if (displayField) {
-        const fieldValue = item[displayField];
+        const fieldValue: unknown = item[displayField];
 
         if (
           typeof fieldValue === "string" ||
@@ -223,9 +234,10 @@ export function AsyncMultiSelect<
     ) => {
       if (!mountedRef.current) return;
 
+      // Reset pagination for a new search.
       if (reset) {
-        // Invalidate requests from the previous search.
         latestRequestIdRef.current += 1;
+
         requestedPagesRef.current.clear();
         loadingMoreRef.current = false;
 
@@ -233,8 +245,9 @@ export function AsyncMultiSelect<
         totalRef.current = null;
         optionCountRef.current = 0;
 
+        optionIdsRef.current = [];
+
         setOptionIds([]);
-        setPage(1);
         setTotal(null);
       } else {
         if (loadingMoreRef.current) return;
@@ -252,12 +265,12 @@ export function AsyncMultiSelect<
           return;
         }
 
-        // Only request the next sequential page.
         if (pageNumber !== pageRef.current + 1) {
           return;
         }
       }
 
+      // Start the request.
       const requestId = ++latestRequestIdRef.current;
 
       requestedPagesRef.current.add(pageNumber);
@@ -276,6 +289,7 @@ export function AsyncMultiSelect<
           pageSize,
         });
 
+        // Ignore stale or unmounted requests.
         if (
           !mountedRef.current ||
           requestId !== latestRequestIdRef.current
@@ -293,36 +307,41 @@ export function AsyncMultiSelect<
           (item) => item[valueField] as V,
         );
 
-        setOptionIds((previousIds) => {
-          const merged = reset
-            ? new Set<V>()
-            : new Set<V>(previousIds);
+        // Merge pages without duplicates.
+        const previousIds = reset
+          ? []
+          : optionIdsRef.current;
 
-          for (const id of fetchedIds) {
-            merged.add(id);
-          }
+        const merged = new Set<V>(previousIds);
 
-          const nextIds = [...merged];
-          optionCountRef.current = nextIds.length;
+        for (const id of fetchedIds) {
+          merged.add(id);
+        }
 
-          return nextIds;
-        });
+        const nextIds = [...merged];
+
+        optionIdsRef.current = nextIds;
+        optionCountRef.current = nextIds.length;
+
+        setOptionIds(nextIds);
 
         pageRef.current = pageNumber;
-        setPage(pageNumber);
 
         const responseTotal =
           typeof response?.total === "number"
             ? response.total
             : null;
 
-        totalRef.current = responseTotal;
-        setTotal(responseTotal);
-
-        // An empty page indicates there are no further results.
-        if (fetched.length === 0) {
-          totalRef.current = optionCountRef.current;
-          setTotal(optionCountRef.current);
+        if (responseTotal !== null) {
+          totalRef.current = responseTotal;
+          setTotal(responseTotal);
+        } else if (fetched.length < pageSize) {
+          // A short page indicates the end when total is omitted.
+          totalRef.current = nextIds.length;
+          setTotal(nextIds.length);
+        } else {
+          totalRef.current = null;
+          setTotal(null);
         }
       } catch (err) {
         console.error(
@@ -335,8 +354,6 @@ export function AsyncMultiSelect<
           requestId === latestRequestIdRef.current
         ) {
           setError("Failed to load data");
-
-          // Permit retrying a failed page.
           requestedPagesRef.current.delete(pageNumber);
         }
       } finally {
@@ -349,7 +366,12 @@ export function AsyncMultiSelect<
         }
       }
     },
-    [fetchData, pageSize, cacheItems, valueField],
+    [
+      fetchData,
+      pageSize,
+      cacheItems,
+      valueField,
+    ],
   );
 
   /* =====================================================
@@ -363,8 +385,20 @@ export function AsyncMultiSelect<
 
     return () => {
       window.clearTimeout(timer);
+
+      // Invalidate requests from the previous search.
+      latestRequestIdRef.current += 1;
+      loadingMoreRef.current = false;
     };
   }, [search, debounceTime, loadOptions]);
+
+  const handleSearchChange = useCallback(
+    (nextSearch: string) => {
+      searchRef.current = nextSearch;
+      setSearch(nextSearch);
+    },
+    [],
+  );
 
   /* =====================================================
      HYDRATE PRE-SELECTED IDS
@@ -394,7 +428,6 @@ export function AsyncMultiSelect<
         }
 
         cacheItems(items);
-        forceRerender((previous) => previous + 1);
       } catch (err) {
         console.error(
           "Failed to resolve selected dropdown items:",
@@ -408,7 +441,11 @@ export function AsyncMultiSelect<
     return () => {
       active = false;
     };
-  }, [value, fetchItemsByIds, cacheItems]);
+  }, [
+    value,
+    fetchItemsByIds,
+    cacheItems,
+  ]);
 
   /* =====================================================
      DERIVED STATE
@@ -417,17 +454,17 @@ export function AsyncMultiSelect<
   const options = useMemo(
     () =>
       optionIds
-        .map((id) => itemsCacheRef.current.get(id))
-        .filter((item): item is T => Boolean(item)),
-    [optionIds],
+        .map((id) => itemsCache.get(id))
+        .filter((item): item is T => item !== undefined),
+    [optionIds, itemsCache],
   );
 
   const selectedItems = useMemo(
     () =>
       value
-        .map((id) => itemsCacheRef.current.get(id))
-        .filter((item): item is T => Boolean(item)),
-    [value, optionIds],
+        .map((id) => itemsCache.get(id))
+        .filter((item): item is T => item !== undefined),
+    [value, itemsCache],
   );
 
   const hasMore =
@@ -448,26 +485,42 @@ export function AsyncMultiSelect<
 
       if (!multiple) {
         onChange([id], [item]);
+
         setOpen(false);
+        searchRef.current = "";
         setSearch("");
+
         return;
       }
 
       const newValues = value.includes(id)
-        ? value.filter((existingId) => existingId !== id)
+        ? value.filter(
+            (existingId) => existingId !== id,
+          )
         : [...value, id];
 
       const newItems = newValues
-        .map((selectedId) =>
-          itemsCacheRef.current.get(selectedId),
-        )
-        .filter((selectedItem): selectedItem is T =>
-          Boolean(selectedItem),
+        .map((selectedId) => {
+          if (selectedId === id) {
+            return item;
+          }
+
+          return itemsCacheRef.current.get(selectedId);
+        })
+        .filter(
+          (selectedItem): selectedItem is T =>
+            selectedItem !== undefined,
         );
 
       onChange(newValues, newItems);
     },
-    [value, valueField, cacheItems, onChange, multiple],
+    [
+      value,
+      valueField,
+      cacheItems,
+      onChange,
+      multiple,
+    ],
   );
 
   const removeItem = useCallback(
@@ -480,7 +533,9 @@ export function AsyncMultiSelect<
         .map((selectedId) =>
           itemsCacheRef.current.get(selectedId),
         )
-        .filter((item): item is T => Boolean(item));
+        .filter(
+          (item): item is T => item !== undefined,
+        );
 
       onChange(newValues, newItems);
     },
@@ -525,15 +580,22 @@ export function AsyncMultiSelect<
   );
 
   /* =====================================================
-     UI
+     SINGLE SELECTION
   ===================================================== */
 
   const singleSelectedItem = multiple
     ? undefined
     : selectedItems[0];
 
+  /* =====================================================
+     UI
+  ===================================================== */
+
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={setOpen}
+    >
       <PopoverTrigger asChild>
         <Button
           type="button"
@@ -572,15 +634,12 @@ export function AsyncMultiSelect<
                       </Badge>
                     ))}
 
-                  {selectedItems.length >
-                    maxSelectedDisplay && (
+                  {value.length > maxSelectedDisplay && (
                     <Badge
                       variant="outline"
                       className="font-normal text-muted-foreground"
                     >
-                      +{selectedItems.length -
-                        maxSelectedDisplay}{" "}
-                      more
+                      +{value.length - maxSelectedDisplay} more
                     </Badge>
                   )}
                 </>
@@ -599,33 +658,34 @@ export function AsyncMultiSelect<
           )}
 
           <span className="flex shrink-0 items-center gap-1">
-            {!multiple && clearable && singleSelectedItem && (
-              <span
-                role="button"
-                tabIndex={0}
-                aria-label="Clear selection"
-                className="rounded-sm p-0.5 text-muted-foreground hover:text-foreground"
-                onClick={clearSingle}
-                onKeyDown={(event) => {
-                  if (
-                    event.key === "Enter" ||
-                    event.key === " "
-                  ) {
-                    event.preventDefault();
-                    onChange([], []);
-                  }
-                }}
-              >
-                <X className="h-3.5 w-3.5" />
-              </span>
-            )}
+            {!multiple &&
+              clearable &&
+              singleSelectedItem && (
+                <span
+                  role="button"
+                  tabIndex={0}
+                  aria-label="Clear selection"
+                  className="rounded-sm p-0.5 text-muted-foreground hover:text-foreground"
+                  onClick={clearSingle}
+                  onKeyDown={(event) => {
+                    if (
+                      event.key === "Enter" ||
+                      event.key === " "
+                    ) {
+                      event.preventDefault();
+                      onChange([], []);
+                    }
+                  }}
+                >
+                  <X className="h-3.5 w-3.5" />
+                </span>
+              )}
 
             <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
           </span>
         </Button>
       </PopoverTrigger>
 
-      {/* Wider, responsive dropdown */}
       <PopoverContent
         align="start"
         side="bottom"
@@ -636,7 +696,7 @@ export function AsyncMultiSelect<
           <CommandInput
             placeholder="Search..."
             value={search}
-            onValueChange={setSearch}
+            onValueChange={handleSearchChange}
           />
 
           <CommandList
@@ -657,17 +717,19 @@ export function AsyncMultiSelect<
               </div>
             )}
 
-            {!loading && !error && options.length === 0 && (
-              <div className="flex items-center gap-2 p-4 text-sm text-muted-foreground">
-                <Info className="h-4 w-4" />
-                No results
-              </div>
-            )}
+            {!loading &&
+              !error &&
+              options.length === 0 && (
+                <div className="flex items-center gap-2 p-4 text-sm text-muted-foreground">
+                  <Info className="h-4 w-4" />
+                  No results
+                </div>
+              )}
 
             <CommandGroup>
               {options.map((item) => {
                 const id = item[valueField] as V;
-                const selected = value.includes(id);
+                const isSelected = value.includes(id);
 
                 return (
                   <CommandItem
@@ -679,7 +741,7 @@ export function AsyncMultiSelect<
                     <Check
                       className={cn(
                         "h-4 w-4",
-                        selected
+                        isSelected
                           ? "opacity-100"
                           : "opacity-0",
                       )}

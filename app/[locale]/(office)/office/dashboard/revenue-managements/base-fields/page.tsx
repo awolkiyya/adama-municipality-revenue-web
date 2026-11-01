@@ -1,11 +1,7 @@
+
 "use client";
 
-import React, {
-  useCallback,
-  useEffect,
-  useState,
-} from "react";
-
+import React, { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import {
@@ -387,8 +383,9 @@ function BaseFieldDetailsSheet({
 
   const description = field?.description?.trim();
 
+  // BaseField uses camelCase: inputSource
   const inputSource = normalizeInputSource(
-    field?.input_source,
+    field?.inputSource,
   );
 
   return (
@@ -503,7 +500,7 @@ function BaseFieldDetailsSheet({
 
                       <div className="mt-2">
                         <InputSourceBadge
-                          source={field.input_source}
+                          source={field.inputSource}
                         />
                       </div>
 
@@ -1367,7 +1364,7 @@ function BaseFieldManagerContent() {
 
                         <td className="px-4 py-3">
                           <InputSourceBadge
-                            source={field.input_source}
+                            source={field.inputSource}
                           />
                         </td>
 

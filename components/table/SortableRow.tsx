@@ -1,26 +1,44 @@
+
+"use client";
+
 import React from "react";
 import { Row } from "@tanstack/react-table";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
-type SortableRowProps<T> = {
+type SortableRowData = {
+  id?: string | number;
+};
+
+type SortableRowProps<T extends SortableRowData> = {
   row: Row<T>;
   children: React.ReactNode;
-  as?: React.ElementType; // allows TableRow, div, tr, etc.
+  as?: React.ElementType;
   getId?: (row: T) => string | number;
 };
 
-export function SortableRow<T>({
+export function SortableRow<T extends SortableRowData>({
   row,
   children,
   as: Component = "tr",
   getId,
 }: SortableRowProps<T>) {
-  const id =
-    getId?.(row.original) ??
-    (row.original as any).id;
+  const id = getId
+    ? getId(row.original)
+    : row.original.id;
 
-  const { setNodeRef, transform, transition, isDragging } = useSortable({
+  if (id === undefined || id === null || id === "") {
+    throw new Error(
+      "SortableRow requires a valid row ID. Provide getId or an id property."
+    );
+  }
+
+  const {
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
     id: String(id),
   });
 

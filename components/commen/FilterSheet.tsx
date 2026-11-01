@@ -1,11 +1,12 @@
-// components/commen/FilterSheet.tsx
+
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { SlidersHorizontal, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+
 import {
   Sheet,
   SheetContent,
@@ -16,62 +17,50 @@ import {
   SheetTrigger,
   SheetClose,
 } from "@/components/ui/sheet";
+
 import { Separator } from "@/components/ui/separator";
 import { Filters } from "@/components/commen/Filters";
 import { FilterField } from "@/types/commen";
 
-/*
-|--------------------------------------------------------------------------
-| FilterSheet
-|--------------------------------------------------------------------------
-|
-| A reusable, drop-in replacement for inline filter rows across the system.
-| Wraps any `Filters` schema in a side Sheet with draft/apply/reset semantics:
-|
-| - Selecting options inside the sheet does NOT refetch data immediately.
-| - Changes only take effect when the user clicks "Apply Filters".
-| - "Reset all" clears the in-progress draft, not the applied filters.
-| - Trigger button shows a badge with the count of active (non-default) filters.
-| - An optional "Clear filters" ghost button appears outside the sheet
-|   when filters are active, for a one-click reset without opening it.
-|
-| USAGE
-| -----
-| <FilterSheet
-|   schema={revenueServiceFilters}
-|   value={filters}
-|   defaultValues={INITIAL_FILTERS}
-|   onChange={(next) => {
-|     setFilters(next);
-|     setPage(1); // reset pagination on filter change, page-specific
-|   }}
-| />
-|
-*/
+/* =========================================================
+   TYPES
+========================================================= */
+
+type FilterValues = Record<string, unknown>;
 
 interface FilterSheetProps {
-  /* Field schema, same shape used by <Filters /> everywhere else. */
+  /**
+   * Field schema used by the Filters component.
+   */
   schema: FilterField[];
 
-  /* Currently APPLIED filter values (owned by the parent page/query). */
-  value: Record<string, any>;
+  /**
+   * Currently applied filter values.
+   */
+  value: FilterValues;
 
-  /* Values to compare against + reset to. Usually your page's INITIAL_FILTERS. */
-  defaultValues: Record<string, any>;
+  /**
+   * Default values used for comparison and reset.
+   */
+  defaultValues: FilterValues;
 
-  /* Called only when the user clicks "Apply Filters". */
-  onChange: (next: Record<string, any>) => void;
+  /**
+   * Called when the user applies filters.
+   */
+  onChange: (next: FilterValues) => void;
 
-  /* Optional copy overrides, so each page can customize without a new component. */
+  /**
+   * Optional display configuration.
+   */
   title?: string;
   description?: string;
-
-  /* Optional: hide the standalone "Clear filters" button next to the trigger. */
   hideClearButton?: boolean;
-
-  /* Optional: override sheet width class, e.g. "sm:max-w-lg" for filter-heavy pages. */
   contentClassName?: string;
 }
+
+/* =========================================================
+   COMPONENT
+========================================================= */
 
 export function FilterSheet({
   schema,
@@ -83,52 +72,92 @@ export function FilterSheet({
   hideClearButton = false,
   contentClassName = "sm:max-w-md",
 }: FilterSheetProps) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [draft, setDraft] = useState<Record<string, any>>(value);
+  /* =========================================================
+     STATE
+  ========================================================= */
 
-  /*
-  |--------------------------------------------------------------------------
-  | Keep the draft in sync whenever the applied value changes externally
-  | (e.g. a "Clear filters" click outside the sheet, or a reset elsewhere).
-  |--------------------------------------------------------------------------
-  */
-  useEffect(() => {
-    if (!isOpen) {
-      setDraft(value);
-    }
-  }, [value, isOpen]);
+  const [isOpen, setIsOpen] = useState(false);
+
+  const [draft, setDraft] = useState<FilterValues>(() => ({
+    ...value,
+  }));
+
+  /* =========================================================
+     ACTIVE FILTER COUNT
+  ========================================================= */
 
   const activeFilterCount = Object.entries(value).filter(
-    ([key, val]) => val !== undefined && val !== null && val !== defaultValues[key]
+    ([key, val]) =>
+      val !== undefined &&
+      val !== null &&
+      val !== defaultValues[key]
   ).length;
+
+  /* =========================================================
+     OPEN / CLOSE
+  ========================================================= */
 
   const handleOpenChange = (open: boolean) => {
     if (open) {
-      // Seed the draft from whatever is currently applied, so reopening
-      // never shows stale or half-finished selections from a prior session.
-      setDraft(value);
+      // Always initialize from the currently applied filters.
+      // This prevents stale draft values when reopening the sheet.
+      setDraft({
+        ...value,
+      });
     }
+
     setIsOpen(open);
   };
 
+  /* =========================================================
+     APPLY FILTERS
+  ========================================================= */
+
   const handleApply = () => {
-    onChange(draft);
+    onChange({
+      ...draft,
+    });
+
     setIsOpen(false);
   };
 
+  /* =========================================================
+     RESET DRAFT
+  ========================================================= */
+
   const handleResetDraft = () => {
-    setDraft(defaultValues);
+    setDraft({
+      ...defaultValues,
+    });
   };
 
+  /* =========================================================
+     CLEAR APPLIED FILTERS
+  ========================================================= */
+
   const handleClearApplied = () => {
-    onChange(defaultValues);
-    setDraft(defaultValues);
+    const resetValues = {
+      ...defaultValues,
+    };
+
+    onChange(resetValues);
+    setDraft(resetValues);
   };
+
+  /* =========================================================
+     RENDER
+  ========================================================= */
 
   return (
     <div className="flex items-center gap-2">
+
+      {/* =====================================================
+          CLEAR FILTERS BUTTON
+      ===================================================== */}
+
       {!hideClearButton && activeFilterCount > 0 && (
         <Button
+          type="button"
           variant="ghost"
           size="sm"
           onClick={handleClearApplied}
@@ -139,11 +168,26 @@ export function FilterSheet({
         </Button>
       )}
 
-      <Sheet open={isOpen} onOpenChange={handleOpenChange}>
+      {/* =====================================================
+          FILTER SHEET
+      ===================================================== */}
+
+      <Sheet
+        open={isOpen}
+        onOpenChange={handleOpenChange}
+      >
+        {/* TRIGGER */}
+
         <SheetTrigger asChild>
-          <Button variant="outline" className="relative gap-2 p-5">
+          <Button
+            type="button"
+            variant="outline"
+            className="relative gap-2 p-5"
+          >
             <SlidersHorizontal className="h-4 w-4" />
+
             Filters
+
             {activeFilterCount > 0 && (
               <Badge
                 variant="default"
@@ -155,16 +199,28 @@ export function FilterSheet({
           </Button>
         </SheetTrigger>
 
-        <SheetContent side="right" className={`flex w-full flex-col p-5 ${contentClassName}`}>
+        {/* CONTENT */}
+
+        <SheetContent
+          side="right"
+          className={`flex w-full flex-col p-5 ${contentClassName}`}
+        >
+          {/* HEADER */}
+
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
               <SlidersHorizontal className="h-4 w-4" />
               {title}
             </SheetTitle>
-            <SheetDescription>{description}</SheetDescription>
+
+            <SheetDescription>
+              {description}
+            </SheetDescription>
           </SheetHeader>
 
           <Separator />
+
+          {/* FILTER FIELDS */}
 
           <div className="flex-1 overflow-y-auto px-1 py-4">
             <Filters
@@ -179,15 +235,25 @@ export function FilterSheet({
 
           <Separator />
 
-          <SheetFooter className="gap-2 sm:justify-between">
-           
+          {/* FOOTER */}
 
-            <div className="flex gap-2">
+          <SheetFooter className="gap-2 sm:justify-between">
+            <div className="flex w-full justify-end gap-2">
               <SheetClose asChild>
-                <Button variant="outline">Cancel</Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                >
+                  Cancel
+                </Button>
               </SheetClose>
 
-              <Button onClick={handleApply}>Apply Filters</Button>
+              <Button
+                type="button"
+                onClick={handleApply}
+              >
+                Apply Filters
+              </Button>
             </div>
           </SheetFooter>
         </SheetContent>

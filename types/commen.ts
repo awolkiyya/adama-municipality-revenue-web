@@ -1,7 +1,7 @@
-import { LucideIcon } from "lucide-react";
-import { PermissionAction } from "./user";
 
-
+import type { LucideIcon } from "lucide-react";
+import type { ComponentType } from "react";
+import type { PermissionAction } from "./user";
 
 export interface NavPermission {
   resource: string;
@@ -18,7 +18,6 @@ export interface NavItem {
 
 export type ThemeMode = "light" | "dark";
 
-
 export type Frequency =
   | "daily"
   | "weekly"
@@ -27,16 +26,12 @@ export type Frequency =
   | "half_year"
   | "yearly";
 
-
 export interface FrequencyConfig {
   size: number;
   labels: string[];
 }
 
-export type FrequencyConfigMap = Record<
-  Frequency,
-  FrequencyConfig
->;
+export type FrequencyConfigMap = Record<Frequency, FrequencyConfig>;
 
 export type GovernanceType =
   | "city"
@@ -52,11 +47,9 @@ export type GovernanceType =
   | "main_objective"
   | "activity"
   | "kpi"
-  | "report"
-  ;
+  | "report";
 
-
-  export type CommentType =
+export type CommentType =
   | "administrativeUnit"
   | "sector"
   | "user"
@@ -71,48 +64,43 @@ export type GovernanceType =
   | "inspection"
   | "closure"
   | "resolution"
-  |"business"
-  |"revenueCategory"
-  |"revenueService"
+  | "business"
+  | "revenueCategory"
+  | "revenueService"
   | "baseField"
   | "measurementUnit"
   | "tariffRule"
   | "assessment"
-  | "invoice"
-  ;
- 
-// table props
-export type TableProps = {
+  | "invoice";
+
+// Table props
+// Pass a specific row type when the table uses a known data structure.
+export type TableProps<TRow = Record<string, unknown>> = {
   type: GovernanceType;
-  data: any[];
+  data: TRow[];
   isLoading?: boolean;
 
   page?: number;
   pageSize?: number;
 
-  onView?: (row: any) => void;
-  onEdit?: (row: any) => void;
-  onDelete?: (row: any) => void;
+  onView?: (row: TRow) => void;
+  onEdit?: (row: TRow) => void;
+  onDelete?: (row: TRow) => void;
 
   onCreate?: () => void;
 
-  onCreateActivity?: (row: any) => void;
+  onCreateActivity?: (row: TRow) => void;
+  onCreateKpi?: (row: TRow) => void;
 
-  // ✅ NEW: KPI ACTION
-  onCreateKpi?: (row: any) => void;
-
-  onUpdatePassword?: (row: any) => void;
-  onToggleStatus?: (row: any) => void;
-  onTargetPlanning?:(row:any)=>void;
-  onGenerateDocument?: (row: any) => void;
-  onStatusUpdate?: (row: any) => void;
-
-
+  onUpdatePassword?: (row: TRow) => void;
+  onToggleStatus?: (row: TRow) => void;
+  onTargetPlanning?: (row: TRow) => void;
+  onGenerateDocument?: (row: TRow) => void;
+  onStatusUpdate?: (row: TRow) => void;
 };
 
-
-
 export type TemplateMode = "create" | "edit";
+
 export type TemplateKind = "PLAN" | "REPORT";
 
 export type ReportType =
@@ -123,15 +111,14 @@ export type ReportType =
   | "YEARLY"
   | "CUSTOM";
 
-
 export type PlanTemplatePayload = {
   kind: "PLAN";
   title: string;
   sector_id?: string;
   level: string;
   description?: string;
-  is_default:boolean;
-  is_active:boolean;
+  is_default: boolean;
+  is_active: boolean;
   sections: SectionData[];
 };
 
@@ -141,32 +128,34 @@ export type ReportTemplatePayload = {
   sector_id?: string;
   level: string;
   description?: string;
-  is_default:boolean;
-  is_active:boolean;
+  is_default: boolean;
+  is_active: boolean;
   reportType: ReportType;
   sections: SectionData[];
 };
 
 export type TemplatePayload = PlanTemplatePayload | ReportTemplatePayload;
 
-
-export type SectionType = "TEXT" | "RICH_TEXT" | "KPI_TABLE" | "BUDGET_TABLE";
+export type SectionType =
+  | "TEXT"
+  | "RICH_TEXT"
+  | "KPI_TABLE"
+  | "BUDGET_TABLE";
 
 export type SectionData = {
   uuid: string;
   title: string;
-  description:string;
-  field_key:string;
+  description: string;
+  field_key: string;
   type: SectionType;
   order: number;
   required: boolean;
   repeatable: boolean;
   active: boolean;
-  help_text:string;
+  help_text: string;
 };
 
-export type Status="draft"|"active"|"inactive"|"complate";
-
+export type Status = "draft" | "active" | "inactive" | "complate";
 
 export type StatusOption = {
   label: string;
@@ -192,7 +181,7 @@ export type SummaryKey<T extends string> = T | "total";
 export type SummaryItem<T extends string> = {
   label: string;
   key: SummaryKey<T>;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: ComponentType<{ className?: string }>;
   color: string;
   bg: string;
 };
@@ -200,9 +189,6 @@ export type SummaryItem<T extends string> = {
 export type SummaryData<T extends string> = Record<T, number> & {
   total: number;
 };
-
-
-
 
 export type PlanFilters = {
   page?: number;
@@ -219,10 +205,9 @@ export type DocumentStatus =
   | "rejected"
   | "verified";
 
-
 export type UpdateStatusPayload = {
-    status: DocumentStatus;
-    reason?: string;
+  status: DocumentStatus;
+  reason?: string;
 };
 
 export type KpiDirection = "increase" | "decrease";
@@ -231,8 +216,6 @@ export type KpiValueType =
   | "CUMULATIVE"
   | "STATE"
   | "PROGRESS";
-
-
 
 export type FilterType =
   | "select"
@@ -245,9 +228,7 @@ export type FilterOption = {
   value: string;
 };
 
-// Value shape used by "dateRange" filter fields.
-// Both bounds are optional so a user can filter by
-// "from" only, "to" only, or a full range.
+// Value shape used by dateRange filter fields.
 export type DateRangeValue = {
   from?: string;
   to?: string;
@@ -259,5 +240,5 @@ export type FilterField = {
   type: "select" | "text" | "dateRange";
   options?: { label: string; value: string }[];
   defaultValue?: string | DateRangeValue | null;
-  icon?: LucideIcon; // <-- optional icon shown next to the label
+  icon?: LucideIcon;
 };

@@ -1,3 +1,4 @@
+
 "use client";
 
 import {
@@ -8,7 +9,7 @@ import {
 
 import { Badge } from "@/components/ui/badge";
 
-import {
+import type {
   RevenueField,
   RevenueService,
 } from "@/types/revenue/assessment";
@@ -27,20 +28,11 @@ type AssessmentSubmissionOverviewProps = {
   /**
    * Field values isolated by service id.
    *
-   * Example:
-   *
-   * {
-   *   rs_001: {
-   *     license_number: "BL-001",
-   *   },
-   *   rs_002: {
-   *     land_area: "250",
-   *   }
-   * }
+   * Values are indexed using RevenueField.id.
    */
   serviceFieldValues: Record<
     string,
-    Record<string, any>
+    Record<string, unknown>
   >;
 };
 
@@ -58,10 +50,7 @@ export function AssessmentSubmissionOverview({
 
   return (
     <div className="rounded-xl border bg-card shadow-sm">
-      {/* =================================================
-       * HEADER
-       * ================================================= */}
-
+      {/* HEADER */}
       <div className="flex items-center gap-3 border-b p-5 sm:p-6">
         <div className="rounded-lg bg-primary/10 p-2">
           <ShieldCheck className="h-4 w-4 text-primary" />
@@ -80,10 +69,7 @@ export function AssessmentSubmissionOverview({
         </div>
       </div>
 
-      {/* =================================================
-       * SERVICES
-       * ================================================= */}
-
+      {/* SERVICES */}
       <div className="space-y-3 p-5 sm:p-6">
         {services.map((service) => {
           const values =
@@ -91,7 +77,9 @@ export function AssessmentSubmissionOverview({
 
           const requiredFields =
             service.fields.filter(
-              (field) => field.required,
+              (field) =>
+                field.required &&
+                field.type !== "CHECKBOX",
             );
 
           const requiredCount =
@@ -100,7 +88,7 @@ export function AssessmentSubmissionOverview({
           const completedCount =
             requiredFields.filter((field) =>
               isFieldComplete(
-                values[field.key],
+                values[field.id],
                 field,
               ),
             ).length;
@@ -115,7 +103,6 @@ export function AssessmentSubmissionOverview({
               className="flex items-center justify-between gap-4 rounded-lg border p-4"
             >
               {/* SERVICE */}
-
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium">
                   {service.name}
@@ -127,7 +114,6 @@ export function AssessmentSubmissionOverview({
               </div>
 
               {/* STATUS */}
-
               <Badge
                 variant={
                   ready
@@ -146,18 +132,13 @@ export function AssessmentSubmissionOverview({
                   <AlertTriangle className="h-3 w-3" />
                 )}
 
-                {ready
-                  ? "Ready"
-                  : "Incomplete"}
+                {ready ? "Ready" : "Incomplete"}
               </Badge>
             </div>
           );
         })}
 
-        {/* =================================================
-         * SERVER-SIDE PRICING NOTICE
-         * ================================================= */}
-
+        {/* SERVER-SIDE PRICING NOTICE */}
         <div className="flex items-start gap-2 rounded-lg border border-primary/20 bg-primary/5 p-4 text-xs text-muted-foreground">
           <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
 

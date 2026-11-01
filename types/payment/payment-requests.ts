@@ -1,4 +1,5 @@
-import { PaymentProvider } from "../revenue/payment-provider";
+
+import type { PaymentProvider } from "../revenue/payment-provider";
 import type { Payment } from "./payment";
 
 import type {
@@ -7,6 +8,14 @@ import type {
   OnlinePaymentProviderCode,
 } from "./payment-enums";
 
+// ============================================================
+// EMPTY REQUEST
+// ============================================================
+
+/**
+ * Represents an API request that does not accept body parameters.
+ */
+export type EmptyRequest = Record<string, never>;
 
 // ============================================================
 // INITIALIZE ONLINE PAYMENT REQUEST
@@ -28,13 +37,11 @@ import type {
  * - checkout URL
  */
 export interface InitializeOnlinePaymentRequest {
-
   // ----------------------------------------------------------
   // Invoice
   // ----------------------------------------------------------
 
   invoice_id: string;
-
 
   // ----------------------------------------------------------
   // Payment amount
@@ -48,25 +55,22 @@ export interface InitializeOnlinePaymentRequest {
    */
   amount?: number;
 
-
   /**
- * External online payment provider.
- *
- * Supported providers:
- *
- * CHAPA
- * TELEBIRR
- * CBE_BIRR
- */
- payment_provider: OnlinePaymentProviderCode;
-
+   * External online payment provider.
+   *
+   * Supported providers:
+   *
+   * CHAPA
+   * TELEBIRR
+   * CBE_BIRR
+   */
+  payment_provider: OnlinePaymentProviderCode;
 
   // ----------------------------------------------------------
   // Description
   // ----------------------------------------------------------
 
   description?: string;
-
 
   // ----------------------------------------------------------
   // Additional metadata
@@ -75,19 +79,15 @@ export interface InitializeOnlinePaymentRequest {
   // metadata?: Record<string, unknown>;
 }
 
-
 // ============================================================
 // INITIALIZE ONLINE PAYMENT RESPONSE
 // ============================================================
 
 export interface InitializeOnlinePaymentResponse {
-
   success: boolean;
-
   message: string;
 
   data: {
-
     success: boolean;
 
     // --------------------------------------------------------
@@ -95,7 +95,6 @@ export interface InitializeOnlinePaymentResponse {
     // --------------------------------------------------------
 
     status: PaymentResultStatus;
-
 
     // --------------------------------------------------------
     // Provider
@@ -106,31 +105,25 @@ export interface InitializeOnlinePaymentResponse {
       "CHAPA" | "TELEBIRR" | "CBE_BIRR"
     >;
 
-
     // --------------------------------------------------------
     // Internal payment reference
     // --------------------------------------------------------
 
     paymentReference: string;
 
-
     // --------------------------------------------------------
     // Money
     // --------------------------------------------------------
 
     amount: number;
-
     currency: string;
-
 
     // --------------------------------------------------------
     // External provider references
     // --------------------------------------------------------
 
     providerReference?: string | null;
-
     providerTransactionId?: string | null;
-
 
     // --------------------------------------------------------
     // Checkout
@@ -138,13 +131,11 @@ export interface InitializeOnlinePaymentResponse {
 
     checkoutUrl?: string | null;
 
-
     // --------------------------------------------------------
     // Provider / operation message
     // --------------------------------------------------------
 
     message: string;
-
 
     // --------------------------------------------------------
     // Additional metadata
@@ -153,26 +144,20 @@ export interface InitializeOnlinePaymentResponse {
     metadata?: Record<string, unknown>;
   };
 
-
   // ----------------------------------------------------------
   // Validation / operation errors
   // ----------------------------------------------------------
 
   errors?: Record<string, unknown> | null;
 
-
   // ----------------------------------------------------------
   // API metadata
   // ----------------------------------------------------------
 
   meta?: {
-
     timestamp?: string;
-
     request_id?: string;
-
     version?: string;
-
   } | null;
 }
 
@@ -187,22 +172,18 @@ export interface InitializeOnlinePaymentResponse {
  *
  * Therefore no payment_id needs to be sent in the body.
  */
-export interface VerifyOnlinePaymentRequest {
-}
-
+export type VerifyOnlinePaymentRequest = EmptyRequest;
 
 // ============================================================
 // PAYMENT VERIFICATION RESULT
 // ============================================================
 
 export interface PaymentVerificationResult {
-
   // ----------------------------------------------------------
   // External provider result
   // ----------------------------------------------------------
 
   status: PaymentVerificationStatus;
-
 
   // ----------------------------------------------------------
   // Verification result
@@ -210,13 +191,11 @@ export interface PaymentVerificationResult {
 
   is_successful: boolean;
 
-
   // ----------------------------------------------------------
   // Provider message
   // ----------------------------------------------------------
 
   message?: string | null;
-
 
   // ----------------------------------------------------------
   // Provider
@@ -224,44 +203,35 @@ export interface PaymentVerificationResult {
 
   provider?: PaymentProvider | null;
 
-
   // ----------------------------------------------------------
   // References
   // ----------------------------------------------------------
 
   transaction_reference?: string | null;
-
   provider_reference?: string | null;
-
 
   // ----------------------------------------------------------
   // Money
   // ----------------------------------------------------------
 
   amount?: number | null;
-
   currency?: string | null;
 }
-
 
 // ============================================================
 // VERIFY ONLINE PAYMENT RESPONSE
 // ============================================================
 
 export interface VerifyOnlinePaymentResponse {
-
   success: boolean;
-
   message: string;
 
   data: {
-
     // --------------------------------------------------------
     // Current municipal payment
     // --------------------------------------------------------
 
     payment: Payment;
-
 
     // --------------------------------------------------------
     // External provider verification result
@@ -270,22 +240,16 @@ export interface VerifyOnlinePaymentResponse {
     verification: PaymentVerificationResult;
   };
 
-
   // ----------------------------------------------------------
   // API metadata
   // ----------------------------------------------------------
 
   meta?: {
-
     timestamp?: string;
-
     request_id?: string;
-
     version?: string;
-
   } | null;
 }
-
 
 // ============================================================
 // CASH PAYMENT REQUEST
@@ -305,13 +269,11 @@ export interface VerifyOnlinePaymentResponse {
  * - authenticated collector
  */
 export interface CreateCashPaymentRequest {
-
   // ----------------------------------------------------------
   // Invoice
   // ----------------------------------------------------------
 
   invoice_id: string;
-
 
   // ----------------------------------------------------------
   // Payment amount
@@ -319,13 +281,11 @@ export interface CreateCashPaymentRequest {
 
   amount: number;
 
-
   // ----------------------------------------------------------
   // Description
   // ----------------------------------------------------------
 
   description?: string;
-
 
   // ----------------------------------------------------------
   // Additional metadata
@@ -333,7 +293,6 @@ export interface CreateCashPaymentRequest {
 
   metadata?: Record<string, unknown>;
 }
-
 
 // ============================================================
 // CASH PAYMENT POST REQUEST
@@ -348,9 +307,7 @@ export interface CreateCashPaymentRequest {
  *
  * No request body is required.
  */
-export interface PostCashPaymentRequest {
-}
-
+export type PostCashPaymentRequest = EmptyRequest;
 
 // ============================================================
 // BANK TRANSFER PAYMENT REQUEST
@@ -373,7 +330,6 @@ export interface PostCashPaymentRequest {
  * verifies or rejects the bank transfer.
  */
 export interface CreateBankTransferPaymentRequest {
-
   // ----------------------------------------------------------
   // Invoice
   // ----------------------------------------------------------
@@ -383,7 +339,6 @@ export interface CreateBankTransferPaymentRequest {
    */
   invoice_id: string;
 
-
   // ----------------------------------------------------------
   // Payment amount
   // ----------------------------------------------------------
@@ -392,7 +347,6 @@ export interface CreateBankTransferPaymentRequest {
    * Amount transferred by the payer.
    */
   amount: number;
-
 
   // ----------------------------------------------------------
   // Municipal bank account
@@ -404,7 +358,6 @@ export interface CreateBankTransferPaymentRequest {
    * This references the backend bank_accounts.id.
    */
   bank_account_id: string;
-
 
   // ----------------------------------------------------------
   // Transfer information
@@ -422,7 +375,6 @@ export interface CreateBankTransferPaymentRequest {
    * YYYY-MM-DD or an ISO-compatible date string.
    */
   transfer_date: string;
-
 
   // ----------------------------------------------------------
   // Payer information
@@ -450,7 +402,6 @@ export interface CreateBankTransferPaymentRequest {
    */
   payer_phone?: string;
 
-
   // ----------------------------------------------------------
   // Notes
   // ----------------------------------------------------------
@@ -459,7 +410,6 @@ export interface CreateBankTransferPaymentRequest {
    * Additional information about the bank transfer.
    */
   notes?: string;
-
 
   // ----------------------------------------------------------
   // Supporting evidence
@@ -478,7 +428,6 @@ export interface CreateBankTransferPaymentRequest {
    */
   evidence?: File;
 
-
   // ----------------------------------------------------------
   // Additional metadata
   // ----------------------------------------------------------
@@ -488,8 +437,6 @@ export interface CreateBankTransferPaymentRequest {
    */
   metadata?: Record<string, unknown>;
 }
-
-
 
 // ============================================================
 // VERIFY BANK TRANSFER REQUEST
@@ -503,10 +450,8 @@ export interface CreateBankTransferPaymentRequest {
  * The payment ID belongs in the URL.
  */
 export interface VerifyBankTransferRequest {
-
   verification_notes?: string;
 }
-
 
 // ============================================================
 // REJECT BANK TRANSFER REQUEST
@@ -518,10 +463,8 @@ export interface VerifyBankTransferRequest {
  * POST /bank-transfers/{payment}/reject
  */
 export interface RejectBankTransferRequest {
-
   reason: string;
 }
-
 
 // ============================================================
 // PROVIDER-SPECIFIC RESPONSE ALIASES
@@ -532,7 +475,6 @@ export interface RejectBankTransferRequest {
  */
 export type ChapaPaymentResponse =
   InitializeOnlinePaymentResponse;
-
 
 /**
  * Chapa verification response.

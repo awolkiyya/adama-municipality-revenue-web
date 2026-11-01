@@ -1,6 +1,7 @@
+
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import {
@@ -65,7 +66,6 @@ import type {
   AgentPendingInvoiceStatus,
 } from "@/types/agent/agent-invoice";
 
-
 /* =========================================================
    CONSTANTS
    ========================================================= */
@@ -79,21 +79,13 @@ const RECEIPT_MAX_MB = 5;
 
 const MAX_VISIBLE_SERVICES = 6;
 
-
 /* =========================================================
    TYPES
    ========================================================= */
 
-type Step =
-  | "find"
-  | "payment"
-  | "review"
-  | "done";
+type Step = "find" | "payment" | "review" | "done";
 
-type SubmittedStatus =
-  | "COMPLETED"
-  | "PENDING";
-
+type SubmittedStatus = "COMPLETED" | "PENDING";
 
 /* =========================================================
    STATUS STYLE
@@ -122,7 +114,6 @@ const STATUS_STYLE: Record<
   },
 };
 
-
 /* =========================================================
    STEPS
    ========================================================= */
@@ -149,16 +140,13 @@ const STEPS: {
   },
 ];
 
-
 /* =========================================================
    HELPERS
    ========================================================= */
 
 function etb(amount: string | number): string {
   const value =
-    typeof amount === "number"
-      ? amount
-      : Number(amount);
+    typeof amount === "number" ? amount : Number(amount);
 
   if (!Number.isFinite(value)) {
     return "ETB 0.00";
@@ -170,13 +158,9 @@ function etb(amount: string | number): string {
   }).format(value)}`;
 }
 
-
 function getTodayDate(): string {
-  return new Date()
-    .toISOString()
-    .slice(0, 10);
+  return new Date().toISOString().slice(0, 10);
 }
-
 
 /* =========================================================
    PAGE
@@ -184,7 +168,6 @@ function getTodayDate(): string {
 
 export default function PaymentProcessPage() {
   const router = useRouter();
-
 
   /* =======================================================
      PAYMENT OPTIONS
@@ -197,8 +180,7 @@ export default function PaymentProcessPage() {
     refetch: refetchPaymentOptions,
   } = usePaymentOptions();
 
-  const paymentOptions =
-    paymentOptionsResponse?.data;
+  const paymentOptions = paymentOptionsResponse?.data;
 
   const bankAccounts = useMemo(
     () =>
@@ -216,7 +198,6 @@ export default function PaymentProcessPage() {
     [paymentOptions?.payment_providers],
   );
 
-
   /* =======================================================
      BANK TRANSFER MUTATION
      ======================================================= */
@@ -227,7 +208,6 @@ export default function PaymentProcessPage() {
     error: bankTransferError,
     reset: resetBankTransferMutation,
   } = useCreateBankTransfer();
-
 
   /* =======================================================
      ONLINE PAYMENT MUTATION
@@ -240,32 +220,25 @@ export default function PaymentProcessPage() {
     reset: resetOnlinePaymentMutation,
   } = useInitializeOnlinePayment();
 
-
   /* =======================================================
      AVAILABLE METHODS
      ======================================================= */
 
   const hasOnlinePayment =
-    paymentOptions?.payment_methods?.includes(
-      "MOBILE_MONEY",
-    ) ?? false;
+    paymentOptions?.payment_methods?.includes("MOBILE_MONEY") ??
+    false;
 
   const hasBankTransfer =
-    paymentOptions?.payment_methods?.includes(
-      "BANK",
-    ) ?? false;
-
+    paymentOptions?.payment_methods?.includes("BANK") ?? false;
 
   /* =======================================================
      FLOW STATE
      ======================================================= */
 
-  const [step, setStep] =
-    useState<Step>("find");
+  const [step, setStep] = useState<Step>("find");
 
   const [invoice, setInvoice] =
     useState<AgentPendingInvoice | null>(null);
-
 
   /* =======================================================
      PAYMENT AMOUNT
@@ -274,9 +247,7 @@ export default function PaymentProcessPage() {
   const [amountMode, setAmountMode] =
     useState<AmountMode>("FULL");
 
-  const [partAmount, setPartAmount] =
-    useState("");
-
+  const [partAmount, setPartAmount] = useState("");
 
   /* =======================================================
      PAYMENT METHOD
@@ -288,7 +259,6 @@ export default function PaymentProcessPage() {
   const [selectedProvider, setSelectedProvider] =
     useState<PaymentProvider | null>(null);
 
-
   /* =======================================================
      BANK TRANSFER
      ======================================================= */
@@ -296,84 +266,61 @@ export default function PaymentProcessPage() {
   const [selectedBank, setSelectedBank] =
     useState<BankAccount | null>(null);
 
-  const [bankRef, setBankRef] =
-    useState("");
+  const [bankRef, setBankRef] = useState("");
 
   const [transferDate, setTransferDate] =
     useState(getTodayDate());
 
-  const [receipt, setReceipt] =
-    useState<File | null>(null);
-
+  const [receipt, setReceipt] = useState<File | null>(null);
 
   /* =======================================================
      SUCCESS / RESULT
      ======================================================= */
 
-  const [reference, setReference] =
-    useState("");
+  const [reference, setReference] = useState("");
 
   const [submittedStatus, setSubmittedStatus] =
     useState<SubmittedStatus>("PENDING");
 
-
   /* =======================================================
-     INITIALIZE PAYMENT OPTIONS
+     DERIVED DEFAULT PAYMENT OPTIONS
      ======================================================= */
 
-  useEffect(() => {
-    if (
-      selectedProvider === null &&
-      paymentProviders.length > 0
-    ) {
-      setSelectedProvider(
-        paymentProviders[0],
-      );
-    }
+  /*
+   * Do not initialize these values with useEffect.
+   *
+   * Payment options are loaded asynchronously. Deriving the
+   * defaults here avoids calling setState inside an effect
+   * and automatically handles the options becoming available.
+   *
+   * Explicit user selections take precedence over defaults.
+   */
 
-    if (
-      selectedBank === null &&
-      bankAccounts.length > 0
-    ) {
-      setSelectedBank(
-        bankAccounts[0],
-      );
-    }
-  }, [
-    paymentProviders,
-    bankAccounts,
-    selectedProvider,
-    selectedBank,
-  ]);
+  const activeProvider =
+    selectedProvider ?? paymentProviders[0] ?? null;
 
+  const activeBank =
+    selectedBank ?? bankAccounts[0] ?? null;
 
   /* =======================================================
-     KEEP PAYMENT METHOD VALID
+     DERIVED AVAILABLE PAYMENT METHOD
      ======================================================= */
 
-  useEffect(() => {
-    if (
-      method === "ONLINE" &&
-      !hasOnlinePayment &&
-      hasBankTransfer
-    ) {
-      setMethod("BANK_TRANSFER");
-      return;
-    }
+  /*
+   * Keep the selected method valid without synchronously
+   * updating state inside useEffect.
+   */
 
-    if (
-      method === "BANK_TRANSFER" &&
-      !hasBankTransfer &&
-      hasOnlinePayment
-    ) {
-      setMethod("ONLINE");
-    }
-  }, [
-    method,
-    hasOnlinePayment,
-    hasBankTransfer,
-  ]);
-
+  const activeMethod: PaymentMethod =
+    method === "ONLINE" &&
+    !hasOnlinePayment &&
+    hasBankTransfer
+      ? "BANK_TRANSFER"
+      : method === "BANK_TRANSFER" &&
+          !hasBankTransfer &&
+          hasOnlinePayment
+        ? "ONLINE"
+        : method;
 
   /* =======================================================
      DERIVED PAYMENT STATE
@@ -395,31 +342,23 @@ export default function PaymentProcessPage() {
    * For a PENDING bank transfer, the actual invoice balance
    * remains unchanged until verification.
    */
-  const projectedRemaining = Math.max(
-    balance - amount,
-    0,
-  );
+
+  const projectedRemaining = Math.max(balance - amount, 0);
 
   const providerLabel =
-    selectedProvider?.name ??
-    "Payment provider";
+    activeProvider?.name ?? "Payment provider";
 
   const methodLabel =
-    method === "BANK_TRANSFER"
-      ? `Bank transfer · ${
-          selectedBank?.bank_name ?? "Bank"
-        }`
+    activeMethod === "BANK_TRANSFER"
+      ? `Bank transfer · ${activeBank?.bank_name ?? "Bank"}`
       : `Online · ${providerLabel}`;
-
 
   /* =======================================================
      SUBMISSION STATE
      ======================================================= */
 
   const isSubmitting =
-    isCreatingBankTransfer ||
-    isInitializingOnlinePayment;
-
+    isCreatingBankTransfer || isInitializingOnlinePayment;
 
   /* =======================================================
      VALIDATION
@@ -428,32 +367,28 @@ export default function PaymentProcessPage() {
   const amountError =
     amountMode === "PARTIAL" &&
     partAmount !== "" &&
-    (amount <= 0 ||
-      amount >= balance)
+    (amount <= 0 || amount >= balance)
       ? amount <= 0
         ? "Enter an amount greater than zero."
         : "Must be less than the balance. Choose Pay in full instead."
       : null;
 
-
   const amountReady =
     amountMode === "FULL"
       ? balance > 0
-      : amount > 0 &&
-        amount < balance;
-
+      : amount > 0 && amount < balance;
 
   /*
    * Evidence is intentionally optional because the backend
    * request defines it as nullable.
    */
+
   const methodReady =
-    method === "ONLINE"
-      ? selectedProvider !== null
-      : selectedBank !== null &&
+    activeMethod === "ONLINE"
+      ? activeProvider !== null
+      : activeBank !== null &&
         bankRef.trim().length >= 6 &&
         transferDate !== "";
-
 
   const canReview =
     invoice !== null &&
@@ -461,14 +396,11 @@ export default function PaymentProcessPage() {
     methodReady &&
     !isSubmitting;
 
-
   /* =======================================================
      SELECT INVOICE
      ======================================================= */
 
-  function selectInvoice(
-    selected: AgentPendingInvoice,
-  ) {
+  function selectInvoice(selected: AgentPendingInvoice) {
     resetBankTransferMutation();
     resetOnlinePaymentMutation();
 
@@ -484,25 +416,17 @@ export default function PaymentProcessPage() {
     }
 
     setBankRef("");
-    setTransferDate(
-      getTodayDate(),
-    );
+    setTransferDate(getTodayDate());
     setReceipt(null);
 
-    setSelectedProvider(
-      paymentProviders[0] ?? null,
-    );
-
-    setSelectedBank(
-      bankAccounts[0] ?? null,
-    );
+    setSelectedProvider(paymentProviders[0] ?? null);
+    setSelectedBank(bankAccounts[0] ?? null);
 
     setReference("");
     setSubmittedStatus("PENDING");
 
     setStep("payment");
   }
-
 
   /* =======================================================
      RESET
@@ -525,24 +449,16 @@ export default function PaymentProcessPage() {
       setMethod("BANK_TRANSFER");
     }
 
-    setSelectedProvider(
-      paymentProviders[0] ?? null,
-    );
-
-    setSelectedBank(
-      bankAccounts[0] ?? null,
-    );
+    setSelectedProvider(paymentProviders[0] ?? null);
+    setSelectedBank(bankAccounts[0] ?? null);
 
     setBankRef("");
-    setTransferDate(
-      getTodayDate(),
-    );
+    setTransferDate(getTodayDate());
     setReceipt(null);
 
     setReference("");
     setSubmittedStatus("PENDING");
   }
-
 
   /* =======================================================
      CHANGE INVOICE
@@ -560,74 +476,54 @@ export default function PaymentProcessPage() {
     setStep("find");
 
     setBankRef("");
-    setTransferDate(
-      getTodayDate(),
-    );
+    setTransferDate(getTodayDate());
     setReceipt(null);
 
     setReference("");
   }
-
 
   /* =======================================================
      CONFIRM PAYMENT
      ======================================================= */
 
   async function confirmPayment() {
-    if (
-      !invoice ||
-      !canReview ||
-      isSubmitting
-    ) {
+    if (!invoice || !canReview || isSubmitting) {
       return;
     }
-
 
     /* =====================================================
        BANK TRANSFER
        ===================================================== */
 
-    if (method === "BANK_TRANSFER") {
-      if (!selectedBank) {
+    if (activeMethod === "BANK_TRANSFER") {
+      if (!activeBank) {
         return;
       }
 
       try {
-        const response =
-          await createBankTransfer({
-            invoice_id:
-              invoice.id,
+        const response = await createBankTransfer({
+          invoice_id: invoice.id,
 
-            amount,
+          amount,
 
-            bank_account_id:
-              selectedBank.id,
+          bank_account_id: activeBank.id,
 
-            transfer_reference:
-              bankRef.trim(),
+          transfer_reference: bankRef.trim(),
 
-            transfer_date:
-              transferDate,
+          transfer_date: transferDate,
 
-            payer_name:
-              invoice.taxpayer?.name ??
-              undefined,
+          payer_name: invoice.taxpayer?.name ?? undefined,
 
-            evidence:
-              receipt ?? undefined,
+          evidence: receipt ?? undefined,
 
-            metadata: {
-              amount_mode:
-                amountMode,
+          metadata: {
+            amount_mode: amountMode,
 
-              source:
-                "REVENUE_COLLECTION_PORTAL",
+            source: "REVENUE_COLLECTION_PORTAL",
 
-              invoice_number:
-                invoice.invoice_number,
-            },
-          });
-
+            invoice_number: invoice.invoice_number,
+          },
+        });
 
         /*
          * The backend returns ApiResponse<Payment>.
@@ -636,8 +532,8 @@ export default function PaymentProcessPage() {
          * TypeScript contract, therefore we explicitly guard
          * it before accessing payment properties.
          */
-        const payment =
-          response.data;
+
+        const payment = response.data;
 
         if (!payment) {
           throw new Error(
@@ -645,19 +541,18 @@ export default function PaymentProcessPage() {
           );
         }
 
-
         /*
          * Use the backend-generated reference.
          *
          * Never generate a fake payment reference in the
          * frontend.
          */
+
         setReference(
           payment.transaction_reference ??
-          payment.payment_number ??
-          payment.id,
+            payment.payment_number ??
+            payment.id,
         );
-
 
         /*
          * Bank transfers are normally PENDING immediately
@@ -665,13 +560,12 @@ export default function PaymentProcessPage() {
          *
          * They only become COMPLETED after verification.
          */
+
         setSubmittedStatus(
-          payment.status ===
-            "COMPLETED"
+          payment.status === "COMPLETED"
             ? "COMPLETED"
             : "PENDING",
         );
-
 
         setStep("done");
       } catch {
@@ -682,107 +576,103 @@ export default function PaymentProcessPage() {
          * Keep the user on the review page so they can
          * correct the information and retry.
          */
+
         return;
       }
 
       return;
     }
 
+    /* =====================================================
+       ONLINE PAYMENT
+       ===================================================== */
 
-   /* =====================================================
-   ONLINE PAYMENT
-   ===================================================== */
+    if (activeMethod === "ONLINE") {
+      if (!activeProvider) {
+        return;
+      }
 
-if (method === "ONLINE") {
-  if (!selectedProvider) {
-    return;
-  }
+      /*
+       * Online payment initialization.
+       *
+       * The backend automatically determines:
+       *
+       * - payment_method = ONLINE
+       * - payment status = PENDING
+       * - payment reference
+       * - transaction/reference values
+       *
+       * The frontend only provides:
+       *
+       * - invoice
+       * - amount
+       * - online provider
+       */
 
-  /*
-   * Online payment initialization.
-   *
-   * The backend automatically determines:
-   *
-   * - payment_method = ONLINE
-   * - payment status = PENDING
-   * - payment reference
-   * - transaction/reference values
-   *
-   * The frontend only provides:
-   *
-   * - invoice
-   * - amount
-   * - online provider
-   */
-  try {
-    const response =
-      await initializeOnlinePayment({
-        invoice_id: invoice.id,
+      try {
+        const response = await initializeOnlinePayment({
+          invoice_id: invoice.id,
 
-        amount,
+          amount,
 
-        payment_provider:
-          selectedProvider.code,
-      });
+          payment_provider: activeProvider.code,
+        });
 
-    /*
-     * The backend should return the initialized payment
-     * together with the provider checkout URL.
-     */
-    const payment =
-      response.data;
+        /*
+         * The backend should return the initialized payment
+         * together with the provider checkout URL.
+         */
 
-    if (!payment) {
-      throw new Error(
-        "Online payment initialization did not return a payment.",
-      );
+        const payment = response.data;
+
+        if (!payment) {
+          throw new Error(
+            "Online payment initialization did not return a payment.",
+          );
+        }
+
+        /*
+         * Redirect the taxpayer/agent to the provider checkout.
+         *
+         * The frontend must NOT mark the payment as COMPLETED.
+         *
+         * Completion must happen after the backend receives
+         * and verifies the provider callback/webhook.
+         */
+
+        if (payment.checkoutUrl) {
+          window.location.assign(payment.checkoutUrl);
+          return;
+        }
+
+        /*
+         * Initialization succeeded but the provider did not
+         * return a checkout URL.
+         */
+
+        throw new Error(
+          "Online payment was initialized, but no checkout URL was returned.",
+        );
+      } catch {
+        /*
+         * Keep the user on the review page.
+         *
+         * The mutation error is displayed by the online-payment
+         * error section above.
+         */
+
+        return;
+      }
     }
-
-    /*
-     * Redirect the taxpayer/agent to the provider checkout.
-     *
-     * The frontend must NOT mark the payment as COMPLETED.
-     *
-     * Completion must happen after the backend receives and
-     * verifies the provider callback/webhook.
-     */
-    if (payment.checkoutUrl) {
-      window.location.assign(
-        payment.checkoutUrl,
-      );
-
-      return;
-    }
-
-    /*
-     * Initialization succeeded but the provider did not
-     * return a checkout URL.
-     */
-    throw new Error(
-      "Online payment was initialized, but no checkout URL was returned.",
-    );
-  } catch {
-    /*
-     * Keep the user on the review page.
-     *
-     * The mutation error is displayed by the online-payment
-     * error section above.
-     */
-    return;
   }
-}
-  }
-
 
   /* =======================================================
      STEP
      ======================================================= */
 
-  const stepIndex =
-    STEPS.findIndex(
-      (item) => item.key === step,
-    );
-
+  const stepIndex = STEPS.findIndex(
+    (item) => item.key === step,
+  );
 
   /* =======================================================
      RENDER
@@ -790,16 +680,12 @@ if (method === "ONLINE") {
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-4 sm:space-y-6">
-
       {/* ===================================================
           HEADER
           =================================================== */}
 
       <header className="overflow-hidden rounded-xl border bg-card text-card-foreground">
-
-        <div
-          className={`${PAD_X} pb-5 pt-4`}
-        >
+        <div className={`${PAD_X} pb-5 pt-4`}>
           <button
             type="button"
             onClick={() => router.back()}
@@ -811,7 +697,6 @@ if (method === "ONLINE") {
           </button>
 
           <div className="mt-3 flex items-center gap-3">
-
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border bg-background">
               <Landmark className="h-5 w-5" />
             </div>
@@ -825,7 +710,6 @@ if (method === "ONLINE") {
                 Process payment
               </h1>
             </div>
-
           </div>
         </div>
 
@@ -835,336 +719,249 @@ if (method === "ONLINE") {
             className="border-t bg-muted/30 px-4 py-3 sm:px-6"
           >
             <ol className="flex items-center gap-3">
+              {STEPS.map((item, index) => {
+                const Icon = item.icon;
 
-              {STEPS.map(
-                (item, index) => {
-                  const Icon =
-                    item.icon;
+                const done = index < stepIndex;
+                const active = index === stepIndex;
 
-                  const done =
-                    index < stepIndex;
-
-                  const active =
-                    index ===
-                    stepIndex;
-
-                  return (
-                    <li
-                      key={
-                        item.key
-                      }
-                      className="flex flex-1 items-center gap-3 last:flex-none"
+                return (
+                  <li
+                    key={item.key}
+                    className="flex flex-1 items-center gap-3 last:flex-none"
+                  >
+                    <div
+                      aria-current={active ? "step" : undefined}
+                      className={`flex items-center gap-2 ${
+                        active || done
+                          ? "text-foreground"
+                          : "text-muted-foreground"
+                      }`}
                     >
-
-                      <div
-                        aria-current={
+                      <span
+                        className={`flex h-7 w-7 items-center justify-center rounded-full ${
                           active
-                            ? "step"
-                            : undefined
-                        }
-                        className={`flex items-center gap-2 ${
-                          active ||
-                          done
-                            ? "text-foreground"
-                            : "text-muted-foreground"
+                            ? "border border-primary bg-primary text-primary-foreground"
+                            : done
+                              ? "border border-primary text-primary"
+                              : "border text-muted-foreground"
                         }`}
                       >
+                        {done ? (
+                          <Check className="h-3.5 w-3.5" />
+                        ) : (
+                          <Icon className="h-3.5 w-3.5" />
+                        )}
+                      </span>
 
-                        <span
-                          className={`flex h-7 w-7 items-center justify-center rounded-full ${
-                            active
-                              ? "border border-primary bg-primary text-primary-foreground"
-                              : done
-                                ? "border border-primary text-primary"
-                                : "border text-muted-foreground"
-                          }`}
-                        >
-                          {done ? (
-                            <Check className="h-3.5 w-3.5" />
-                          ) : (
-                            <Icon className="h-3.5 w-3.5" />
-                          )}
-                        </span>
+                      <span className="hidden text-xs font-medium sm:inline">
+                        {item.label}
+                      </span>
+                    </div>
 
-                        <span className="hidden text-xs font-medium sm:inline">
-                          {
-                            item.label
-                          }
-                        </span>
-
-                      </div>
-
-                      {index <
-                        STEPS.length -
-                          1 && (
-                        <div
-                          className={`h-px flex-1 ${
-                            index <
-                            stepIndex
-                              ? "bg-primary"
-                              : "bg-border"
-                          }`}
-                        />
-                      )}
-
-                    </li>
-                  );
-                },
-              )}
-
+                    {index < STEPS.length - 1 && (
+                      <div
+                        className={`h-px flex-1 ${
+                          index < stepIndex
+                            ? "bg-primary"
+                            : "bg-border"
+                        }`}
+                      />
+                    )}
+                  </li>
+                );
+              })}
             </ol>
           </nav>
         )}
-
       </header>
-
 
       {/* ===================================================
           PAYMENT OPTIONS LOADING
           =================================================== */}
 
-      {isPaymentOptionsLoading &&
-        step !== "done" && (
-          <div className="flex items-center gap-3 rounded-lg border bg-muted/30 p-4 text-sm">
+      {isPaymentOptionsLoading && step !== "done" && (
+        <div className="flex items-center gap-3 rounded-lg border bg-muted/30 p-4 text-sm">
+          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
 
-            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+          <div>
+            <p className="font-medium">
+              Loading payment options
+            </p>
 
-            <div>
-              <p className="font-medium">
-                Loading payment options
-              </p>
-
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                Checking available banks and online payment providers.
-              </p>
-            </div>
-
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Checking available banks and online payment providers.
+            </p>
           </div>
-        )}
-
+        </div>
+      )}
 
       {/* ===================================================
           PAYMENT OPTIONS ERROR
           =================================================== */}
 
-      {isPaymentOptionsError &&
-        step !== "done" && (
-          <div className="flex items-center justify-between gap-4 rounded-lg border border-destructive/30 bg-destructive/5 p-4">
+      {isPaymentOptionsError && step !== "done" && (
+        <div className="flex items-center justify-between gap-4 rounded-lg border border-destructive/30 bg-destructive/5 p-4">
+          <div>
+            <p className="text-sm font-medium">
+              Payment options unavailable
+            </p>
 
-            <div>
-              <p className="text-sm font-medium">
-                Payment options unavailable
-              </p>
-
-              <p className="mt-1 text-xs text-muted-foreground">
-                We could not load the available payment methods.
-              </p>
-            </div>
-
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                refetchPaymentOptions()
-              }
-              disabled={isSubmitting}
-            >
-              Try again
-            </Button>
-
+            <p className="mt-1 text-xs text-muted-foreground">
+              We could not load the available payment methods.
+            </p>
           </div>
-        )}
 
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => refetchPaymentOptions()}
+            disabled={isSubmitting}
+          >
+            Try again
+          </Button>
+        </div>
+      )}
 
       {/* ===================================================
           BANK TRANSFER ERROR
           =================================================== */}
 
-      {bankTransferError &&
-        step !== "done" && (
-          <div className="flex items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-4">
+      {bankTransferError && step !== "done" && (
+        <div className="flex items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-4">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
 
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+          <div className="min-w-0">
+            <p className="text-sm font-medium">
+              Bank transfer could not be recorded
+            </p>
 
-            <div className="min-w-0">
-              <p className="text-sm font-medium">
-                Bank transfer could not be recorded
-              </p>
-
-              <p className="mt-1 text-xs text-muted-foreground">
-                {bankTransferError instanceof Error
-                  ? bankTransferError.message
-                  : "Please review the payment information and try again."}
-              </p>
-            </div>
-
+            <p className="mt-1 text-xs text-muted-foreground">
+              {bankTransferError instanceof Error
+                ? bankTransferError.message
+                : "Please review the payment information and try again."}
+            </p>
           </div>
-        )}
-
+        </div>
+      )}
 
       {/* ===================================================
           ONLINE PAYMENT ERROR
           =================================================== */}
 
-      {onlinePaymentError &&
-        step !== "done" && (
-          <div className="flex items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-4">
+      {onlinePaymentError && step !== "done" && (
+        <div className="flex items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-4">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
 
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+          <div className="min-w-0">
+            <p className="text-sm font-medium">
+              Online payment could not be initialized
+            </p>
 
-            <div className="min-w-0">
-              <p className="text-sm font-medium">
-                Online payment could not be initialized
-              </p>
-
-              <p className="mt-1 text-xs text-muted-foreground">
-                {onlinePaymentError instanceof Error
-                  ? onlinePaymentError.message
-                  : "Please review the payment information and try again."}
-              </p>
-            </div>
-
+            <p className="mt-1 text-xs text-muted-foreground">
+              {onlinePaymentError instanceof Error
+                ? onlinePaymentError.message
+                : "Please review the payment information and try again."}
+            </p>
           </div>
-        )}
-
+        </div>
+      )}
 
       {/* ===================================================
           SUCCESS
           =================================================== */}
 
-      {step === "done" &&
-        invoice && (
-          <Card>
+      {step === "done" && invoice && (
+        <Card>
+          <CardContent className="flex flex-col items-center px-4 py-10 text-center sm:px-6">
+            <div className="flex h-14 w-14 items-center justify-center rounded-full border">
+              {submittedStatus === "PENDING" ? (
+                <Clock3 className="h-7 w-7 text-muted-foreground" />
+              ) : (
+                <CheckCircle2 className="h-7 w-7 text-primary" />
+              )}
+            </div>
 
-            <CardContent className="flex flex-col items-center px-4 py-10 text-center sm:px-6">
+            <h2 className="mt-4 text-lg font-semibold">
+              {activeMethod === "BANK_TRANSFER"
+                ? submittedStatus === "PENDING"
+                  ? "Bank transfer submitted"
+                  : "Bank transfer completed"
+                : "Payment recorded"}
+            </h2>
 
-              <div className="flex h-14 w-14 items-center justify-center rounded-full border">
-                {submittedStatus ===
-                "PENDING" ? (
-                  <Clock3 className="h-7 w-7 text-muted-foreground" />
-                ) : (
-                  <CheckCircle2 className="h-7 w-7 text-primary" />
-                )}
-              </div>
+            <p className="mt-1 max-w-md text-sm text-muted-foreground">
+              {activeMethod === "BANK_TRANSFER"
+                ? submittedStatus === "PENDING"
+                  ? `${etb(amount)} has been submitted for verification against ${invoice.invoice_number}.`
+                  : `${etb(amount)} was applied to ${invoice.invoice_number}.`
+                : `${etb(amount)} was applied to ${invoice.invoice_number}.`}
+            </p>
 
-              <h2 className="mt-4 text-lg font-semibold">
+            {/* =============================================
+                PENDING NOTICE
+                ============================================= */}
 
-                {method ===
-                  "BANK_TRANSFER"
-                  ? submittedStatus ===
-                    "PENDING"
-                    ? "Bank transfer submitted"
-                    : "Bank transfer completed"
-                  : "Payment recorded"}
+            {activeMethod === "BANK_TRANSFER" &&
+              submittedStatus === "PENDING" && (
+                <div className="mt-4 flex max-w-md items-start gap-2 rounded-lg border bg-muted/30 px-3 py-2 text-left text-xs text-muted-foreground">
+                  <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
 
-              </h2>
+                  <span>
+                    The payment is pending verification. It will
+                    affect the invoice balance only after an
+                    authorized officer verifies the bank transfer.
+                  </span>
+                </div>
+              )}
 
-              <p className="mt-1 max-w-md text-sm text-muted-foreground">
+            <dl className="mt-6 w-full max-w-sm divide-y rounded-lg border px-4 text-left">
+              <Row
+                icon={Hash}
+                label="Reference"
+                value={reference}
+                mono
+              />
 
-                {method ===
-                  "BANK_TRANSFER"
-                  ? submittedStatus ===
-                    "PENDING"
-                    ? `${etb(amount)} has been submitted for verification against ${invoice.invoice_number}.`
-                    : `${etb(amount)} was applied to ${invoice.invoice_number}.`
-                  : `${etb(amount)} was applied to ${invoice.invoice_number}.`}
+              <Row
+                icon={CreditCard}
+                label="Method"
+                value={methodLabel}
+              />
 
-              </p>
-
-
-              {/* =============================================
-                  PENDING NOTICE
-                  ============================================= */}
-
-              {method ===
-                "BANK_TRANSFER" &&
-                submittedStatus ===
-                  "PENDING" && (
-                  <div className="mt-4 flex max-w-md items-start gap-2 rounded-lg border bg-muted/30 px-3 py-2 text-left text-xs text-muted-foreground">
-
-                    <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
-
-                    <span>
-                      The payment is pending verification.
-                      It will affect the invoice balance only
-                      after an authorized officer verifies the
-                      bank transfer.
-                    </span>
-
-                  </div>
-                )}
-
-
-              <dl className="mt-6 w-full max-w-sm divide-y rounded-lg border px-4 text-left">
-
+              {submittedStatus === "PENDING" ? (
                 <Row
-                  icon={Hash}
-                  label="Reference"
-                  value={
-                    reference
-                  }
-                  mono
+                  icon={Wallet}
+                  label="Current balance"
+                  value={etb(balance)}
+                  strong
                 />
-
+              ) : (
                 <Row
-                  icon={CreditCard}
-                  label="Method"
-                  value={
-                    methodLabel
-                  }
+                  icon={Wallet}
+                  label="Remaining"
+                  value={etb(projectedRemaining)}
+                  strong
                 />
+              )}
+            </dl>
 
-                {submittedStatus ===
-                  "PENDING" ? (
-                  <Row
-                    icon={Wallet}
-                    label="Current balance"
-                    value={etb(
-                      balance,
-                    )}
-                    strong
-                  />
-                ) : (
-                  <Row
-                    icon={Wallet}
-                    label="Remaining"
-                    value={etb(
-                      projectedRemaining,
-                    )}
-                    strong
-                  />
-                )}
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+              <Button
+                variant="outline"
+                onClick={() => router.back()}
+              >
+                Done
+              </Button>
 
-              </dl>
-
-
-              <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-
-                <Button
-                  variant="outline"
-                  onClick={() =>
-                    router.back()
-                  }
-                >
-                  Done
-                </Button>
-
-                <Button
-                  onClick={
-                    resetAll
-                  }
-                >
-                  Process another payment
-                </Button>
-
-              </div>
-
-            </CardContent>
-
-          </Card>
-        )}
-
+              <Button onClick={resetAll}>
+                Process another payment
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* ===================================================
           MAIN FLOW
@@ -1172,554 +969,341 @@ if (method === "ONLINE") {
 
       {step !== "done" && (
         <div className="grid gap-4 sm:gap-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
-
           {/* =================================================
               LEFT
               ================================================= */}
 
           <div className="space-y-4 sm:space-y-6">
-
             {/* ===============================================
                 FIND INVOICE
                 =============================================== */}
 
             {step === "find" && (
               <FindInvoiceSection
-                selectedInvoice={
-                  invoice
-                }
-                onSelect={
-                  selectInvoice
-                }
+                selectedInvoice={invoice}
+                onSelect={selectInvoice}
               />
             )}
-
 
             {/* ===============================================
                 SELECTED INVOICE
                 =============================================== */}
 
-            {invoice &&
-              step !== "find" && (
-                <SelectedInvoiceCard
-                  invoice={
-                    invoice
-                  }
-                  onChangeInvoice={
-                    changeInvoice
-                  }
-                />
-              )}
-
+            {invoice && step !== "find" && (
+              <SelectedInvoiceCard
+                invoice={invoice}
+                onChangeInvoice={changeInvoice}
+              />
+            )}
 
             {/* ===============================================
                 FULLY PAID
                 =============================================== */}
 
-            {invoice &&
-              balance === 0 && (
-                <div className="flex items-start gap-3 rounded-lg border bg-muted/30 p-4">
+            {invoice && balance === 0 && (
+              <div className="flex items-start gap-3 rounded-lg border bg-muted/30 p-4">
+                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
 
-                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                <div>
+                  <p className="text-sm font-medium">
+                    This invoice is fully paid
+                  </p>
 
-                  <div>
-                    <p className="text-sm font-medium">
-                      This invoice is fully paid
-                    </p>
-
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      No balance is outstanding. Search for another invoice.
-                    </p>
-                  </div>
-
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    No balance is outstanding. Search for another invoice.
+                  </p>
                 </div>
-              )}
-
+              </div>
+            )}
 
             {/* ===============================================
                 PAYMENT
                 =============================================== */}
 
-            {invoice &&
-              balance > 0 &&
-              step === "payment" && (
-                <Card>
+            {invoice && balance > 0 && step === "payment" && (
+              <Card>
+                <CardHeader className={`border-b py-4 ${PAD_X}`}>
+                  <SectionHeader
+                    icon={CreditCard}
+                    title="Payment"
+                    hint="Choose the amount and how it is paid"
+                  />
+                </CardHeader>
 
-                  <CardHeader
-                    className={`border-b py-4 ${PAD_X}`}
-                  >
-                    <SectionHeader
-                      icon={
-                        CreditCard
-                      }
-                      title="Payment"
-                      hint="Choose the amount and how it is paid"
-                    />
-                  </CardHeader>
+                <CardContent className={`space-y-6 sm:space-y-8 ${PAD}`}>
+                  <PaymentAmountSection
+                    currency="ETB"
+                    balanceDue={balance}
+                    mode={amountMode}
+                    amount={partAmount}
+                    onModeChange={(nextMode) => {
+                      setAmountMode(nextMode);
 
-                  <CardContent
-                    className={`space-y-6 sm:space-y-8 ${PAD}`}
-                  >
+                      if (nextMode === "FULL") {
+                        setPartAmount("");
+                      }
+                    }}
+                    onAmountChange={setPartAmount}
+                  />
 
-                    <PaymentAmountSection
-                      currency="ETB"
-                      balanceDue={
-                        balance
-                      }
-                      mode={
-                        amountMode
-                      }
-                      amount={
-                        partAmount
-                      }
-                      onModeChange={(
-                        nextMode,
-                      ) => {
-                        setAmountMode(
-                          nextMode,
-                        );
+                  {amountError && (
+                    <p className="text-xs text-destructive">
+                      {amountError}
+                    </p>
+                  )}
 
-                        if (
-                          nextMode ===
-                          "FULL"
-                        ) {
-                          setPartAmount(
-                            "",
-                          );
-                        }
-                      }}
-                      onAmountChange={
-                        setPartAmount
-                      }
+                  <div className="border-t pt-6">
+                    <PaymentMethodSection
+                      method={activeMethod}
+                      onMethodChange={setMethod}
+                      hasOnlinePayment={hasOnlinePayment}
+                      hasBankTransfer={hasBankTransfer}
                     />
 
-                    {amountError && (
-                      <p className="text-xs text-destructive">
-                        {
-                          amountError
-                        }
-                      </p>
+                    {activeMethod === "ONLINE" && (
+                      <div className="mt-4">
+                        {paymentProviders.length > 0 ? (
+                          <OnlinePaymentSection
+                            amount={amount}
+                            currency="ETB"
+                            providers={paymentProviders}
+                            selectedProvider={activeProvider}
+                            onProviderChange={setSelectedProvider}
+                          />
+                        ) : (
+                          <UnavailablePaymentMethod
+                            title="No online payment provider available"
+                            description="Online payment is currently unavailable. Please choose another payment method."
+                          />
+                        )}
+                      </div>
                     )}
 
+                    {activeMethod === "BANK_TRANSFER" && (
+                      <div className="mt-4">
+                        {bankAccounts.length > 0 ? (
+                          <BankTransferSection
+                            banks={bankAccounts}
+                            selectedBank={activeBank}
+                            onBankChange={setSelectedBank}
+                            transferReference={bankRef}
+                            onTransferReferenceChange={setBankRef}
+                            transferDate={transferDate}
+                            onTransferDateChange={setTransferDate}
+                            evidence={receipt}
+                            onEvidenceChange={setReceipt}
+                            evidenceMaxMb={RECEIPT_MAX_MB}
+                          />
+                        ) : (
+                          <UnavailablePaymentMethod
+                            title="No bank account available"
+                            description="Bank transfer is currently unavailable. Please choose another payment method."
+                          />
+                        )}
+                      </div>
+                    )}
+                  </div>
 
-                    <div className="border-t pt-6">
+                  <div className="flex flex-col-reverse gap-3 border-t pt-5 sm:flex-row sm:justify-end">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={resetAll}
+                      disabled={isSubmitting}
+                    >
+                      <X className="mr-2 h-4 w-4" />
+                      Cancel
+                    </Button>
 
-                      <PaymentMethodSection
-                        method={
-                          method
-                        }
-                        onMethodChange={
-                          setMethod
-                        }
-                        hasOnlinePayment={
-                          hasOnlinePayment
-                        }
-                        hasBankTransfer={
-                          hasBankTransfer
-                        }
-                      />
-
-
-                      {method ===
-                        "ONLINE" && (
-                        <div className="mt-4">
-
-                          {paymentProviders.length >
-                          0 ? (
-                            <OnlinePaymentSection
-                              amount={
-                                amount
-                              }
-                              currency="ETB"
-                              providers={
-                                paymentProviders
-                              }
-                              selectedProvider={
-                                selectedProvider
-                              }
-                              onProviderChange={
-                                setSelectedProvider
-                              }
-                            />
-                          ) : (
-                            <UnavailablePaymentMethod
-                              title="No online payment provider available"
-                              description="Online payment is currently unavailable. Please choose another payment method."
-                            />
-                          )}
-
-                        </div>
-                      )}
-
-
-                      {method ===
-                        "BANK_TRANSFER" && (
-                        <div className="mt-4">
-
-                          {bankAccounts.length >
-                          0 ? (
-                            <BankTransferSection
-                              banks={
-                                bankAccounts
-                              }
-                              selectedBank={
-                                selectedBank
-                              }
-                              onBankChange={
-                                setSelectedBank
-                              }
-                              transferReference={
-                                bankRef
-                              }
-                              onTransferReferenceChange={
-                                setBankRef
-                              }
-                              transferDate={
-                                transferDate
-                              }
-                              onTransferDateChange={
-                                setTransferDate
-                              }
-                              evidence={
-                                receipt
-                              }
-                              onEvidenceChange={
-                                setReceipt
-                              }
-                              evidenceMaxMb={
-                                RECEIPT_MAX_MB
-                              }
-                            />
-                          ) : (
-                            <UnavailablePaymentMethod
-                              title="No bank account available"
-                              description="Bank transfer is currently unavailable. Please choose another payment method."
-                            />
-                          )}
-
-                        </div>
-                      )}
-
-                    </div>
-
-
-                    <div className="flex flex-col-reverse gap-3 border-t pt-5 sm:flex-row sm:justify-end">
-
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={
-                          resetAll
-                        }
-                        disabled={
-                          isSubmitting
-                        }
-                      >
-                        <X className="mr-2 h-4 w-4" />
-                        Cancel
-                      </Button>
-
-                      <Button
-                        type="button"
-                        disabled={
-                          !canReview ||
-                          isPaymentOptionsLoading
-                        }
-                        onClick={() =>
-                          setStep(
-                            "review",
-                          )
-                        }
-                      >
-                        Review payment
-                        <ArrowRight className="ml-2 h-4 w-4" />
-                      </Button>
-
-                    </div>
-
-                  </CardContent>
-
-                </Card>
-              )}
-
+                    <Button
+                      type="button"
+                      disabled={!canReview || isPaymentOptionsLoading}
+                      onClick={() => setStep("review")}
+                    >
+                      Review payment
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             {/* ===============================================
                 REVIEW
                 =============================================== */}
 
-            {invoice &&
-              step === "review" && (
-                <Card>
+            {invoice && step === "review" && (
+              <Card>
+                <CardHeader className={`border-b py-4 ${PAD_X}`}>
+                  <SectionHeader
+                    icon={ClipboardCheck}
+                    title="Review and confirm"
+                    hint="Check the details before recording"
+                  />
+                </CardHeader>
 
-                  <CardHeader
-                    className={`border-b py-4 ${PAD_X}`}
-                  >
-                    <SectionHeader
-                      icon={
-                        ClipboardCheck
-                      }
-                      title="Review and confirm"
-                      hint="Check the details before recording"
+                <CardContent className={PAD}>
+                  <dl className="divide-y rounded-lg border px-4">
+                    <Row
+                      icon={UserRound}
+                      label="Taxpayer"
+                      value={`${invoice.taxpayer?.name ?? "—"} (${invoice.taxpayer?.taxpayer_number ?? "—"})`}
                     />
-                  </CardHeader>
 
-                  <CardContent
-                    className={PAD}
-                  >
+                    <Row
+                      icon={FileText}
+                      label="Invoice"
+                      value={invoice.invoice_number}
+                    />
 
-                    <dl className="divide-y rounded-lg border px-4">
+                    <Row
+                      icon={Coins}
+                      label="Payment type"
+                      value={
+                        amountMode === "FULL"
+                          ? "Full payment"
+                          : "Part payment"
+                      }
+                    />
 
+                    <Row
+                      icon={CreditCard}
+                      label="Method"
+                      value={methodLabel}
+                    />
+
+                    {activeMethod === "ONLINE" && activeProvider && (
                       <Row
-                        icon={
-                          UserRound
-                        }
-                        label="Taxpayer"
-                        value={`${invoice.taxpayer?.name ?? "—"} (${invoice.taxpayer?.taxpayer_number ?? "—"})`}
+                        icon={CreditCard}
+                        label="Provider"
+                        value={activeProvider.name}
                       />
-
-                      <Row
-                        icon={
-                          FileText
-                        }
-                        label="Invoice"
-                        value={
-                          invoice.invoice_number
-                        }
-                      />
-
-                      <Row
-                        icon={
-                          Coins
-                        }
-                        label="Payment type"
-                        value={
-                          amountMode ===
-                          "FULL"
-                            ? "Full payment"
-                            : "Part payment"
-                        }
-                      />
-
-                      <Row
-                        icon={
-                          CreditCard
-                        }
-                        label="Method"
-                        value={
-                          methodLabel
-                        }
-                      />
-
-
-                      {method ===
-                        "ONLINE" &&
-                        selectedProvider && (
-                          <Row
-                            icon={
-                              CreditCard
-                            }
-                            label="Provider"
-                            value={
-                              selectedProvider.name
-                            }
-                          />
-                        )}
-
-
-                      {method ===
-                        "BANK_TRANSFER" && (
-                        <>
-
-                          <Row
-                            icon={
-                              Landmark
-                            }
-                            label="Transfer to"
-                            value={
-                              selectedBank
-                                ? `${selectedBank.bank_name} · ${selectedBank.account_number}`
-                                : "—"
-                            }
-                          />
-
-                          <Row
-                            icon={
-                              Hash
-                            }
-                            label="Reference"
-                            value={
-                              bankRef.trim()
-                            }
-                            mono
-                          />
-
-                          <Row
-                            icon={
-                              Clock3
-                            }
-                            label="Transfer date"
-                            value={
-                              transferDate
-                            }
-                          />
-
-                          <Row
-                            icon={
-                              Receipt
-                            }
-                            label="Evidence"
-                            value={
-                              receipt?.name ??
-                              "Not provided"
-                            }
-                          />
-
-                        </>
-                      )}
-
-
-                      <Row
-                        icon={
-                          Banknote
-                        }
-                        label="Amount"
-                        value={etb(
-                          amount,
-                        )}
-                        strong
-                      />
-
-                      <Row
-                        icon={
-                          Wallet
-                        }
-                        label={
-                          method ===
-                          "BANK_TRANSFER"
-                            ? "Projected remaining"
-                            : "Remaining"
-                        }
-                        value={etb(
-                          projectedRemaining,
-                        )}
-                      />
-
-                    </dl>
-
-
-                    {method ===
-                      "BANK_TRANSFER" && (
-                      <div className="mt-4 rounded-lg border bg-muted/30 p-3">
-
-                        <p className="flex items-start gap-2 text-xs text-muted-foreground">
-
-                          <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
-
-                          <span>
-                            This transfer will be recorded as
-                            <strong className="mx-1 font-medium text-foreground">
-                              pending
-                            </strong>
-                            until an authorized officer verifies it.
-                            The invoice balance will remain unchanged
-                            until verification.
-                          </span>
-
-                        </p>
-
-                      </div>
                     )}
 
+                    {activeMethod === "BANK_TRANSFER" && (
+                      <>
+                        <Row
+                          icon={Landmark}
+                          label="Transfer to"
+                          value={
+                            activeBank
+                              ? `${activeBank.bank_name} · ${activeBank.account_number}`
+                              : "—"
+                          }
+                        />
 
-                    <div className="mt-6 flex flex-col-reverse gap-3 border-t pt-5 sm:flex-row sm:justify-end">
+                        <Row
+                          icon={Hash}
+                          label="Reference"
+                          value={bankRef.trim()}
+                          mono
+                        />
 
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() =>
-                          setStep(
-                            "payment",
-                          )
-                        }
-                        disabled={
-                          isSubmitting
-                        }
-                      >
-                        <ArrowLeft className="mr-2 h-4 w-4" />
-                        Edit
-                      </Button>
+                        <Row
+                          icon={Clock3}
+                          label="Transfer date"
+                          value={transferDate}
+                        />
 
-                      <Button
-                        type="button"
-                        onClick={
-                          confirmPayment
-                        }
-                        disabled={
-                          !canReview ||
-                          isSubmitting
-                        }
-                      >
-                        {isSubmitting ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            {method ===
-                            "BANK_TRANSFER"
-                              ? "Recording transfer..."
-                              : "Initializing payment..."}
-                          </>
-                        ) : (
-                          <>
-                            <Check className="mr-2 h-4 w-4" />
-                            Confirm payment
-                          </>
-                        )}
-                      </Button>
+                        <Row
+                          icon={Receipt}
+                          label="Evidence"
+                          value={receipt?.name ?? "Not provided"}
+                        />
+                      </>
+                    )}
 
+                    <Row
+                      icon={Banknote}
+                      label="Amount"
+                      value={etb(amount)}
+                      strong
+                    />
+
+                    <Row
+                      icon={Wallet}
+                      label={
+                        activeMethod === "BANK_TRANSFER"
+                          ? "Projected remaining"
+                          : "Remaining"
+                      }
+                      value={etb(projectedRemaining)}
+                    />
+                  </dl>
+
+                  {activeMethod === "BANK_TRANSFER" && (
+                    <div className="mt-4 rounded-lg border bg-muted/30 p-3">
+                      <p className="flex items-start gap-2 text-xs text-muted-foreground">
+                        <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
+
+                        <span>
+                          This transfer will be recorded as
+                          <strong className="mx-1 font-medium text-foreground">
+                            pending
+                          </strong>
+                          until an authorized officer verifies it.
+                          The invoice balance will remain unchanged
+                          until verification.
+                        </span>
+                      </p>
                     </div>
+                  )}
 
-                  </CardContent>
+                  <div className="mt-6 flex flex-col-reverse gap-3 border-t pt-5 sm:flex-row sm:justify-end">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setStep("payment")}
+                      disabled={isSubmitting}
+                    >
+                      <ArrowLeft className="mr-2 h-4 w-4" />
+                      Edit
+                    </Button>
 
-                </Card>
-              )}
-
+                    <Button
+                      type="button"
+                      onClick={confirmPayment}
+                      disabled={!canReview || isSubmitting}
+                    >
+                      {isSubmitting ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          {activeMethod === "BANK_TRANSFER"
+                            ? "Recording transfer..."
+                            : "Initializing payment..."}
+                        </>
+                      ) : (
+                        <>
+                          <Check className="mr-2 h-4 w-4" />
+                          Confirm payment
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
-
 
           {/* =================================================
               RIGHT — INVOICE SUMMARY
               ================================================= */}
 
           <aside className="lg:sticky lg:top-6">
-
             {invoice ? (
               <InvoiceSummary
-                invoice={
-                  invoice
-                }
-                balance={
-                  balance
-                }
-                amount={
-                  amount
-                }
-                remaining={
-                  projectedRemaining
-                }
+                invoice={invoice}
+                balance={balance}
+                amount={amount}
+                remaining={projectedRemaining}
                 pending={
-                  method ===
-                    "BANK_TRANSFER" &&
-                  submittedStatus ===
-                    "PENDING"
+                  activeMethod === "BANK_TRANSFER" &&
+                  submittedStatus === "PENDING"
                 }
               />
             ) : (
               <div className="flex items-start gap-3 rounded-lg border border-dashed p-5">
-
-                <Tile
-                  icon={
-                    FileText
-                  }
-                />
+                <Tile icon={FileText} />
 
                 <div>
                   <p className="text-sm font-medium">
@@ -1727,22 +1311,18 @@ if (method === "ONLINE") {
                   </p>
 
                   <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                    Select an invoice to see the taxpayer, services, and balance here.
+                    Select an invoice to see the taxpayer, services,
+                    and balance here.
                   </p>
                 </div>
-
               </div>
             )}
-
           </aside>
-
         </div>
       )}
-
     </div>
   );
 }
-
 
 /* =========================================================
    INVOICE SUMMARY
@@ -1761,88 +1341,52 @@ function InvoiceSummary({
   remaining: number;
   pending: boolean;
 }) {
-  const services =
-    invoice.services ?? [];
+  const services = invoice.services ?? [];
 
-  const visibleServices =
-    services.slice(
-      0,
-      MAX_VISIBLE_SERVICES,
-    );
+  const visibleServices = services.slice(
+    0,
+    MAX_VISIBLE_SERVICES,
+  );
 
-  const hiddenServiceCount =
-    Math.max(
-      services.length -
-        MAX_VISIBLE_SERVICES,
-      0,
-    );
+  const hiddenServiceCount = Math.max(
+    services.length - MAX_VISIBLE_SERVICES,
+    0,
+  );
 
   return (
     <Card>
-
       <CardHeader className="border-b px-4 py-4">
-
         <div className="flex items-center justify-between gap-3">
-
           <div className="flex min-w-0 items-center gap-3">
-
-            <Tile
-              icon={
-                UserRound
-              }
-              accent
-            />
+            <Tile icon={UserRound} accent />
 
             <div className="min-w-0">
-
               <p className="truncate text-sm font-semibold">
-                {invoice.taxpayer?.name ??
-                  "Taxpayer unavailable"}
+                {invoice.taxpayer?.name ?? "Taxpayer unavailable"}
               </p>
 
               <p className="truncate text-xs text-muted-foreground">
-                {invoice.taxpayer
-                  ?.taxpayer_number ??
-                  "—"}
+                {invoice.taxpayer?.taxpayer_number ?? "—"}
               </p>
-
             </div>
-
           </div>
 
-          <StatusBadge
-            status={
-              invoice.status
-            }
-          />
-
+          <StatusBadge status={invoice.status} />
         </div>
-
       </CardHeader>
 
-
       <CardContent className="px-4 py-2">
-
         <dl className="divide-y">
-
           <Row
-            icon={
-              FileText
-            }
+            icon={FileText}
             label="Invoice"
-            value={
-              invoice.invoice_number
-            }
+            value={invoice.invoice_number}
           />
-
         </dl>
-
 
         {services.length > 0 && (
           <div className="border-t py-3">
-
             <div className="mb-2.5 flex items-center justify-between gap-3">
-
               <div>
                 <p className="text-xs font-semibold">
                   Services
@@ -1854,180 +1398,106 @@ function InvoiceSummary({
               </div>
 
               <span className="shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                {
-                  services.length
-                }
+                {services.length}
               </span>
-
             </div>
 
             <div className="space-y-1.5">
-
-              {visibleServices.map(
-                (
-                  service,
-                ) => (
-                  <div
-                    key={
-                      service.id
-                    }
-                    className="flex items-start justify-between gap-3 rounded-md px-2.5 py-2 transition-colors hover:bg-muted/40"
-                  >
-
-                    <div className="min-w-0">
-
-                      <p className="text-xs font-medium leading-4">
-                        {
-                          service.name
-                        }
-                      </p>
-
-                      {service.description &&
-                        service.description !==
-                          service.name && (
-                          <p className="mt-0.5 line-clamp-1 text-[10px] leading-4 text-muted-foreground">
-                            {
-                              service.description
-                            }
-                          </p>
-                        )}
-
-                    </div>
-
-                    <p className="shrink-0 text-xs font-medium tabular-nums">
-                      {etb(
-                        service.amount,
-                      )}
+              {visibleServices.map((service) => (
+                <div
+                  key={service.id}
+                  className="flex items-start justify-between gap-3 rounded-md px-2.5 py-2 transition-colors hover:bg-muted/40"
+                >
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium leading-4">
+                      {service.name}
                     </p>
 
+                    {service.description &&
+                      service.description !== service.name && (
+                        <p className="mt-0.5 line-clamp-1 text-[10px] leading-4 text-muted-foreground">
+                          {service.description}
+                        </p>
+                      )}
                   </div>
-                ),
-              )}
 
+                  <p className="shrink-0 text-xs font-medium tabular-nums">
+                    {etb(service.amount)}
+                  </p>
+                </div>
+              ))}
             </div>
 
             {hiddenServiceCount > 0 && (
               <div className="mt-2 rounded-md bg-muted/40 px-2.5 py-2 text-center">
-
                 <p className="text-[11px] text-muted-foreground">
-                  +{" "}
-                  {
-                    hiddenServiceCount
-                  }{" "}
-                  more{" "}
-                  {
-                    hiddenServiceCount ===
-                    1
-                      ? "service"
-                      : "services"
-                  }
+                  + {hiddenServiceCount} more{" "}
+                  {hiddenServiceCount === 1 ? "service" : "services"}
                 </p>
-
               </div>
             )}
-
           </div>
         )}
-
 
         {services.length === 0 && (
           <div className="border-t py-3">
-
             <div className="rounded-md border border-dashed px-3 py-2.5">
-
               <p className="text-[11px] text-muted-foreground">
                 Service details are not available for this invoice.
               </p>
-
             </div>
-
           </div>
         )}
 
-
         <div className="border-t">
-
           <dl className="divide-y">
-
             <Row
-              icon={
-                Receipt
-              }
+              icon={Receipt}
               label="Total"
-              value={etb(
-                invoice.total_amount,
-              )}
+              value={etb(invoice.total_amount)}
             />
 
             <Row
-              icon={
-                CheckCircle2
-              }
+              icon={CheckCircle2}
               label="Paid"
-              value={etb(
-                invoice.paid_amount,
-              )}
+              value={etb(invoice.paid_amount)}
             />
 
             <Row
-              icon={
-                Wallet
-              }
+              icon={Wallet}
               label="Balance due"
-              value={etb(
-                balance,
-              )}
+              value={etb(balance)}
               strong
             />
-
           </dl>
-
         </div>
-
 
         {balance > 0 && (
           <div className="-mx-4 mt-2 border-t bg-muted/30 px-4 py-3">
-
             <dl>
-
               <Row
-                icon={
-                  Banknote
-                }
+                icon={Banknote}
                 label="This payment"
-                value={etb(
-                  amount,
-                )}
+                value={etb(amount)}
                 strong
               />
 
               <Row
-                icon={
-                  Wallet
-                }
+                icon={Wallet}
                 label={
                   pending
                     ? "Current balance"
                     : "Projected remaining"
                 }
-                value={etb(
-                  pending
-                    ? balance
-                    : remaining,
-                )}
+                value={etb(pending ? balance : remaining)}
               />
-
             </dl>
-
           </div>
         )}
-
       </CardContent>
-
     </Card>
   );
 }
-
 
 /* =========================================================
    SELECTED INVOICE
@@ -2042,69 +1512,40 @@ function SelectedInvoiceCard({
 }) {
   return (
     <Card>
-
       <CardContent className="flex items-center justify-between gap-4 p-4">
-
         <div className="flex min-w-0 items-center gap-3">
-
-          <Tile
-            icon={
-              FileText
-            }
-            accent
-          />
+          <Tile icon={FileText} accent />
 
           <div className="min-w-0">
-
             <div className="flex items-center gap-2">
-
               <p className="truncate text-sm font-semibold">
-                {
-                  invoice.invoice_number
-                }
+                {invoice.invoice_number}
               </p>
 
-              <StatusBadge
-                status={
-                  invoice.status
-                }
-              />
-
+              <StatusBadge status={invoice.status} />
             </div>
 
             <p className="mt-1 truncate text-xs text-muted-foreground">
-
-              {invoice.taxpayer?.name ??
-                "Taxpayer unavailable"}
-
-              {invoice.taxpayer
-                ?.taxpayer_number
+              {invoice.taxpayer?.name ?? "Taxpayer unavailable"}
+              {invoice.taxpayer?.taxpayer_number
                 ? ` · ${invoice.taxpayer.taxpayer_number}`
                 : ""}
-
             </p>
-
           </div>
-
         </div>
 
         <Button
           type="button"
           variant="outline"
           size="sm"
-          onClick={
-            onChangeInvoice
-          }
+          onClick={onChangeInvoice}
         >
           Change
         </Button>
-
       </CardContent>
-
     </Card>
   );
 }
-
 
 /* =========================================================
    UNAVAILABLE PAYMENT METHOD
@@ -2119,7 +1560,6 @@ function UnavailablePaymentMethod({
 }) {
   return (
     <div className="rounded-lg border border-dashed p-4">
-
       <p className="text-sm font-medium">
         {title}
       </p>
@@ -2127,11 +1567,9 @@ function UnavailablePaymentMethod({
       <p className="mt-1 text-xs text-muted-foreground">
         {description}
       </p>
-
     </div>
   );
 }
-
 
 /* =========================================================
    TILE
@@ -2158,7 +1596,6 @@ function Tile({
   );
 }
 
-
 /* =========================================================
    SECTION HEADER
    ========================================================= */
@@ -2174,14 +1611,9 @@ function SectionHeader({
 }) {
   return (
     <div className="flex items-center gap-3">
-
-      <Tile
-        icon={icon}
-        accent
-      />
+      <Tile icon={icon} accent />
 
       <div>
-
         <h2 className="text-base font-semibold leading-tight">
           {title}
         </h2>
@@ -2189,13 +1621,10 @@ function SectionHeader({
         <p className="text-xs text-muted-foreground">
           {hint}
         </p>
-
       </div>
-
     </div>
   );
 }
-
 
 /* =========================================================
    STATUS BADGE
@@ -2206,25 +1635,19 @@ function StatusBadge({
 }: {
   status: AgentPendingInvoiceStatus;
 }) {
-  const {
-    label,
-    dot,
-  } = STATUS_STYLE[status];
+  const { label, dot } = STATUS_STYLE[status];
 
   return (
     <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium">
-
       <span
         aria-hidden="true"
         className={`h-1.5 w-1.5 rounded-full ${dot}`}
       />
 
       {label}
-
     </span>
   );
 }
-
 
 /* =========================================================
    ROW
@@ -2245,29 +1668,18 @@ function Row({
 }) {
   return (
     <div className="flex items-center justify-between gap-4 py-2.5 text-sm">
-
       <dt className="flex shrink-0 items-center gap-2 text-muted-foreground">
-
         <Icon className="h-4 w-4 shrink-0" />
-
         {label}
-
       </dt>
 
       <dd
         className={`min-w-0 max-w-[65%] truncate text-right tabular-nums ${
-          strong
-            ? "font-semibold"
-            : "font-medium"
-        } ${
-          mono
-            ? "font-mono text-xs"
-            : ""
-        }`}
+          strong ? "font-semibold" : "font-medium"
+        } ${mono ? "font-mono text-xs" : ""}`}
       >
         {value}
       </dd>
-
     </div>
   );
 }

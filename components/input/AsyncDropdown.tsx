@@ -37,7 +37,7 @@ import { Button } from "@/components/ui/button";
    TYPES
 ========================================================= */
 
-interface AsyncDropdownProps<T, V extends string | number> {
+interface AsyncDropdownProps<T extends object, V extends string | number> {
   value: V | null;
 
   onChange: (value: V, item: T) => void;
@@ -76,13 +76,15 @@ interface AsyncDropdownProps<T, V extends string | number> {
 
 const truncateText = (text: string, max = 60): string => {
   if (!text) return "";
-  return text.length > max ? `${text.slice(0, max)}...` : text;
+
+  return text.length > max
+    ? `${text.slice(0, max)}...`
+    : text;
 };
 
 /**
  * Normalize IDs for comparisons.
- * Supports API IDs returned as either 4 or "4",
- * while treating null and undefined as unselected.
+ * Supports API IDs returned as either 4 or "4".
  */
 const sameId = (first: unknown, second: unknown): boolean => {
   if (first == null || second == null) {
@@ -97,8 +99,8 @@ const sameId = (first: unknown, second: unknown): boolean => {
 ========================================================= */
 
 export const AsyncDropdown = <
-  T extends Record<string, any>,
-  V extends string | number
+  T extends object,
+  V extends string | number,
 >({
   value,
   onChange,
@@ -113,39 +115,62 @@ export const AsyncDropdown = <
   debounceTime = 300,
   disabled = false,
 }: AsyncDropdownProps<T, V>) => {
+  /* =====================================================
+     STATE
+  ===================================================== */
+
   const [open, setOpen] = useState(false);
   const [options, setOptions] = useState<T[]>([]);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState<number | null>(null);
+  const [loadedCount, setLoadedCount] = useState(0);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   /**
-   * Selected object for cases where the selected item is fetched
-   * individually or isn't in the current page.
-   * The controlled `value` remains the source of truth.
+   * Keeps the selected object available when it is not
+   * included in the current server response.
    */
   const [selectedItem, setSelectedItem] = useState<T | null>(null);
 
+  /* =====================================================
+     REFS
+  ===================================================== */
+
   const mountedRef = useRef(false);
   const requestIdRef = useRef(0);
+  const loadingMoreRef = useRef(false);
 
-  /**
-   * Refs mirror the latest value/selectedItem so that loadOptions
-   * can read them WITHOUT depending on them. Otherwise every
-   * selection changes loadOptions' identity, which re-triggers the
-   * fetch effect and causes an unwanted refetch.
-   */
   const valueRef = useRef<V | null>(value);
   const selectedItemRef = useRef<T | null>(selectedItem);
 
-  valueRef.current = value;
-  selectedItemRef.current = selectedItem;
+  /* =====================================================
+     MOUNT TRACKING
+  ===================================================== */
 
-  /* =========================================================
+  useEffect(() => {
+    mountedRef.current = true;
+
+    return () => {
+      mountedRef.current = false;
+      requestIdRef.current += 1;
+    };
+  }, []);
+
+  /* =====================================================
+     SYNCHRONIZE LATEST VALUES
+  ===================================================== */
+
+  useEffect(() => {
+    valueRef.current = value;
+    selectedItemRef.current = selectedItem;
+  }, [value, selectedItem]);
+
+  /* =====================================================
      LABEL HELPERS
-  ========================================================= */
+  ===================================================== */
 
   const getLabelText = useCallback(
     (item: T): string => {
@@ -154,16 +179,19 @@ export const AsyncDropdown = <
       }
 
       if (displayField) {
-        const raw = item[displayField];
+        const raw: unknown = item[displayField];
 
-        if (typeof raw === "string" || typeof raw === "number") {
+        if (
+          typeof raw === "string" ||
+          typeof raw === "number"
+        ) {
           return String(raw);
         }
       }
 
       return "";
     },
-    [renderLabel, displayField]
+    [renderLabel, displayField],
   );
 
   const getOptionNode = useCallback(
@@ -174,12 +202,12 @@ export const AsyncDropdown = <
 
       return getLabelText(item);
     },
-    [renderOption, getLabelText]
+    [renderOption, getLabelText],
   );
 
-  /* =========================================================
+  /* =====================================================
      RESOLVE CURRENT SELECTION
-  ========================================================= */
+  ===================================================== */
 
   const resolvedSelected = useMemo(() => {
     if (value == null) {
@@ -187,26 +215,47 @@ export const AsyncDropdown = <
     }
 
     const matchingOption = options.find((item) =>
-      sameId(item[valueField], value)
+      sameId(item[valueField], value),
     );
 
     if (matchingOption) {
       return matchingOption;
     }
 
-    if (selectedItem && sameId(selectedItem[valueField], value)) {
+    if (
+      selectedItem &&
+      sameId(selectedItem[valueField], value)
+    ) {
       return selectedItem;
     }
 
     return null;
   }, [value, options, selectedItem, valueField]);
 
-  /* =========================================================
+  /* =====================================================
      LOAD DATA
-  ========================================================= */
+  ===================================================== */
 
   const loadOptions = useCallback(
-    async (pageNum: number, searchText: string, reset = false) => {
+    async (
+      pageNum: number,
+      searchText: string,
+      reset = false,
+    ) => {
+      if (!mountedRef.current) {
+        return;
+      }
+
+      if (!reset && loadingMoreRef.current) {
+        return;
+      }
+
+      if (reset) {
+        loadingMoreRef.current = false;
+      } else {
+        loadingMoreRef.current = true;
+      }
+
       const requestId = ++requestIdRef.current;
 
       setLoading(true);
@@ -219,126 +268,133 @@ export const AsyncDropdown = <
           pageSize,
         });
 
-        if (!mountedRef.current || requestId !== requestIdRef.current) {
+        if (
+          !mountedRef.current ||
+          requestId !== requestIdRef.current
+        ) {
           return;
         }
 
-        const incomingOptions = Array.isArray(result.data)
+        const incomingOptions = Array.isArray(result?.data)
           ? result.data
           : [];
 
-        setOptions((previous) => {
-          if (reset) {
-            const currentValue = valueRef.current;
-            const currentSelectedItem = selectedItemRef.current;
+        if (reset) {
+          const currentValue = valueRef.current;
+          const currentSelectedItem = selectedItemRef.current;
 
+          setOptions((previous) => {
             /**
-             * Keep the selected item visible if it isn't included
-             * in the current search/page response.
+             * Preserve the selected item if it is missing
+             * from the current search/page response.
              */
             const currentSelected =
               previous.find((item) =>
-                sameId(item[valueField], currentValue)
+                sameId(item[valueField], currentValue),
               ) ??
               (currentSelectedItem &&
-              sameId(currentSelectedItem[valueField], currentValue)
+              sameId(
+                currentSelectedItem[valueField],
+                currentValue,
+              )
                 ? currentSelectedItem
                 : null);
 
             if (
               currentSelected &&
               !incomingOptions.some((item) =>
-                sameId(item[valueField], currentSelected[valueField])
+                sameId(
+                  item[valueField],
+                  currentSelected[valueField],
+                ),
               )
             ) {
               return [currentSelected, ...incomingOptions];
             }
 
             return incomingOptions;
-          }
+          });
 
-          const merged = [...previous];
+          setLoadedCount(incomingOptions.length);
+        } else {
+          setOptions((previous) => {
+            const merged = [...previous];
 
-          for (const item of incomingOptions) {
-            const exists = merged.some((existing) =>
-              sameId(existing[valueField], item[valueField])
-            );
+            for (const item of incomingOptions) {
+              const exists = merged.some((existing) =>
+                sameId(
+                  existing[valueField],
+                  item[valueField],
+                ),
+              );
 
-            if (!exists) {
-              merged.push(item);
+              if (!exists) {
+                merged.push(item);
+              }
             }
-          }
 
-          return merged;
-        });
+            return merged;
+          });
+
+          setLoadedCount(
+            (previous) => previous + incomingOptions.length,
+          );
+        }
 
         setPage(pageNum);
-        setTotal(result.total ?? null);
+        setTotal(
+          typeof result?.total === "number"
+            ? result.total
+            : null,
+        );
       } catch (err) {
-        if (!mountedRef.current || requestId !== requestIdRef.current) {
+        if (
+          !mountedRef.current ||
+          requestId !== requestIdRef.current
+        ) {
           return;
         }
 
-        console.error("AsyncDropdown: failed to load options", err);
+        console.error(
+          "AsyncDropdown: failed to load options",
+          err,
+        );
+
         setError("Failed to load data");
       } finally {
-        if (mountedRef.current && requestId === requestIdRef.current) {
+        if (
+          mountedRef.current &&
+          requestId === requestIdRef.current
+        ) {
           setLoading(false);
+          loadingMoreRef.current = false;
         }
       }
     },
-    [fetchData, pageSize, valueField]
+    [fetchData, pageSize, valueField],
   );
 
-  /* =========================================================
-     MOUNT TRACKING
-  ========================================================= */
-
-  useEffect(() => {
-    mountedRef.current = true;
-
-    return () => {
-      mountedRef.current = false;
-      requestIdRef.current += 1;
-    };
-  }, []);
-
-  /* =========================================================
+  /* =====================================================
      INITIAL LOAD + SEARCH
-  ========================================================= */
+  ===================================================== */
 
   useEffect(() => {
-    const timer = setTimeout(() => {
+    const timer = window.setTimeout(() => {
       void loadOptions(1, search, true);
     }, debounceTime);
 
     return () => {
-      clearTimeout(timer);
+      window.clearTimeout(timer);
+
+      // Invalidate requests belonging to the previous search.
+      requestIdRef.current += 1;
+      loadingMoreRef.current = false;
     };
   }, [search, loadOptions, debounceTime]);
 
-  /* =========================================================
-     SYNCHRONIZE CONTROLLED VALUE
-  ========================================================= */
-
-  useEffect(() => {
-    if (value == null) {
-      setSelectedItem(null);
-      return;
-    }
-
-    setSelectedItem((previous) => {
-      if (previous && !sameId(previous[valueField], value)) {
-        return null;
-      }
-
-      return previous;
-    });
-  }, [value, valueField]);
-
-  /* =========================================================
+  /* =====================================================
      LOAD SELECTED ITEM BY ID
-  ========================================================= */
+  ===================================================== */
 
   useEffect(() => {
     if (value == null || !fetchItemById) {
@@ -351,7 +407,11 @@ export const AsyncDropdown = <
       try {
         const item = await fetchItemById(value);
 
-        if (!active || !item) {
+        if (
+          !active ||
+          !mountedRef.current ||
+          !item
+        ) {
           return;
         }
 
@@ -359,7 +419,10 @@ export const AsyncDropdown = <
 
         setOptions((previous) => {
           const exists = previous.some((option) =>
-            sameId(option[valueField], item[valueField])
+            sameId(
+              option[valueField],
+              item[valueField],
+            ),
           );
 
           if (exists) {
@@ -372,7 +435,7 @@ export const AsyncDropdown = <
         if (active) {
           console.error(
             "AsyncDropdown: failed to load selected item",
-            err
+            err,
           );
         }
       }
@@ -385,62 +448,78 @@ export const AsyncDropdown = <
     };
   }, [value, fetchItemById, valueField]);
 
-  /* =========================================================
+  /* =====================================================
      INFINITE SCROLL
-  ========================================================= */
+  ===================================================== */
 
-  const handleScroll = (event: React.UIEvent<HTMLDivElement>) => {
-    const element = event.currentTarget;
+  const hasMore =
+    total !== null
+      ? loadedCount < total
+      : loadedCount > 0 &&
+        loadedCount % pageSize === 0;
 
-    const reachedBottom =
-      element.scrollTop + element.clientHeight >=
-      element.scrollHeight - 20;
+  const handleScroll = useCallback(
+    (event: React.UIEvent<HTMLDivElement>) => {
+      const element = event.currentTarget;
 
-    if (
-      reachedBottom &&
-      !loading &&
-      total !== null &&
-      options.length < total
-    ) {
+      const reachedBottom =
+        element.scrollTop + element.clientHeight >=
+        element.scrollHeight - 20;
+
+      if (
+        !reachedBottom ||
+        loading ||
+        loadingMoreRef.current ||
+        !hasMore
+      ) {
+        return;
+      }
+
       void loadOptions(page + 1, search);
-    }
-  };
+    },
+    [loading, hasMore, loadOptions, page, search],
+  );
 
-  /* =========================================================
+  /* =====================================================
      OPEN / CLOSE
-  ========================================================= */
+  ===================================================== */
 
-  const handleOpenChange = (nextOpen: boolean) => {
-    setOpen(nextOpen);
+  const handleOpenChange = useCallback(
+    (nextOpen: boolean) => {
+      setOpen(nextOpen);
 
-    // Reset the search when closing so the next open starts fresh.
-    if (!nextOpen && search) {
-      setSearch("");
-    }
-  };
+      // Reset search when closing.
+      if (!nextOpen && search) {
+        setSearch("");
+      }
+    },
+    [search],
+  );
 
-  /* =========================================================
+  /* =====================================================
      SELECT
-  ========================================================= */
+  ===================================================== */
 
-  const handleSelect = (item: T) => {
-    const selectedValue = item[valueField] as V;
+  const handleSelect = useCallback(
+    (item: T) => {
+      const selectedValue = item[valueField] as V;
 
-    setSelectedItem(item);
-    onChange(selectedValue, item);
-    handleOpenChange(false);
-  };
+      setSelectedItem(item);
+      onChange(selectedValue, item);
 
-  /* =========================================================
+      handleOpenChange(false);
+    },
+    [valueField, onChange, handleOpenChange],
+  );
+
+  /* =====================================================
      UI
-  ========================================================= */
+  ===================================================== */
 
   return (
     <Popover
       open={open}
       onOpenChange={handleOpenChange}
-      // Required when rendered inside a Sheet/Dialog: lets the
-      // popover manage its own scroll and pointer events.
       modal
     >
       <PopoverTrigger asChild>
@@ -454,7 +533,10 @@ export const AsyncDropdown = <
         >
           <span className="truncate text-sm font-medium">
             {resolvedSelected
-              ? truncateText(getLabelText(resolvedSelected), 60)
+              ? truncateText(
+                  getLabelText(resolvedSelected),
+                  60,
+                )
               : placeholder}
           </span>
 
@@ -466,12 +548,9 @@ export const AsyncDropdown = <
         align="start"
         sideOffset={6}
         className="w-[var(--radix-popover-trigger-width)] min-w-[280px] p-0"
-        // Safety net: keep wheel/touch events away from the
-        // Sheet's scroll lock (react-remove-scroll).
         onWheel={(event) => event.stopPropagation()}
         onTouchMove={(event) => event.stopPropagation()}
       >
-        {/* shouldFilter={false}: search is handled by the server */}
         <Command shouldFilter={false}>
           <CommandInput
             placeholder="Search..."
@@ -479,7 +558,6 @@ export const AsyncDropdown = <
             onValueChange={setSearch}
           />
 
-          {/* CommandList itself is the scroll container */}
           <CommandList
             className="max-h-72 overflow-y-auto overscroll-contain"
             onScroll={handleScroll}
@@ -498,12 +576,14 @@ export const AsyncDropdown = <
               </div>
             )}
 
-            {!loading && options.length === 0 && !error && (
-              <div className="flex items-center gap-2 p-4 text-sm text-muted-foreground">
-                <Info className="h-4 w-4" />
-                No results found
-              </div>
-            )}
+            {!loading &&
+              options.length === 0 &&
+              !error && (
+                <div className="flex items-center gap-2 p-4 text-sm text-muted-foreground">
+                  <Info className="h-4 w-4" />
+                  No results found
+                </div>
+              )}
 
             <CommandGroup>
               {options.map((item) => {
@@ -520,7 +600,9 @@ export const AsyncDropdown = <
                     <Check
                       className={cn(
                         "mt-0.5 h-4 w-4 shrink-0",
-                        isSelected ? "opacity-100" : "opacity-0"
+                        isSelected
+                          ? "opacity-100"
+                          : "opacity-0",
                       )}
                     />
 
@@ -538,6 +620,15 @@ export const AsyncDropdown = <
                 Loading more...
               </div>
             )}
+
+            {!loading &&
+              !error &&
+              options.length > 0 &&
+              !hasMore && (
+                <div className="py-2 text-center text-xs text-muted-foreground">
+                  No more results
+                </div>
+              )}
           </CommandList>
         </Command>
       </PopoverContent>

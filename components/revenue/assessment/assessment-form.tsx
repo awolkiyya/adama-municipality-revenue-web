@@ -1,8 +1,8 @@
-// components/revenue/assessment/assessment-form.tsx
 
 "use client";
 
-import { ChangeEvent, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import type { ChangeEvent } from "react";
 
 import {
   Check,
@@ -21,7 +21,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 
-import {
+import type {
   RevenueField,
   RevenueService,
   SubmissionResult,
@@ -31,7 +31,7 @@ import { TaxpayerSelector } from "./taxpayer-selector";
 import { RevenueServiceSelector } from "./revenue-service-selector";
 import { RevenueServiceFields } from "./revenue-service-fields";
 
-import { Citizen } from "@/types/citizen";
+import type { Citizen } from "@/types/citizen";
 
 // =====================================================
 // TYPES
@@ -39,7 +39,10 @@ import { Citizen } from "@/types/citizen";
 
 type FieldValue = unknown;
 
-type ServiceFieldValues = Record<string, Record<string, FieldValue>>;
+type ServiceFieldValues = Record<
+  string,
+  Record<string, FieldValue>
+>;
 
 type AssessmentMode = "create" | "edit";
 
@@ -241,12 +244,9 @@ const getInitialServiceId = (
 /**
  * Reads an existing service's values from the API.
  *
- * IMPORTANT:
- *
  * The final form state uses RevenueField.id as the key.
  *
  * API examples can use:
- *
  * - fieldId
  * - field_id
  * - fieldCode
@@ -358,14 +358,6 @@ const getInitialServiceFields = (
 
       /*
        * Legacy/API field key.
-       *
-       * Convert:
-       *
-       * LAND_AREA
-       *
-       * into:
-       *
-       * 01a0a71b-d3e1-...
        */
       const byKey = fields.find(
         (field) => field.key === rawKey,
@@ -408,10 +400,7 @@ const buildInitialServiceFieldValues = (
   if (isRecord(directValues)) {
     const normalized: ServiceFieldValues = {};
 
-    for (const [
-      serviceId,
-      values,
-    ] of Object.entries(directValues)) {
+    for (const [serviceId, values] of Object.entries(directValues)) {
       if (!isRecord(values)) {
         continue;
       }
@@ -422,14 +411,9 @@ const buildInitialServiceFieldValues = (
 
       const fields = service?.fields ?? [];
 
-      const normalizedFields: Record<
-        string,
-        FieldValue
-      > = {};
+      const normalizedFields: Record<string, FieldValue> = {};
 
-      for (const [rawKey, value] of Object.entries(
-        values,
-      )) {
+      for (const [rawKey, value] of Object.entries(values)) {
         /*
          * Preferred: field.id.
          */
@@ -504,9 +488,7 @@ const buildInitialServiceIds = (
 
   return assessment.services
     .map(getInitialServiceId)
-    .filter(
-      (id): id is string => id.length > 0,
-    );
+    .filter((id): id is string => id.length > 0);
 };
 
 // =====================================================
@@ -580,16 +562,77 @@ const isValidSelectValue = (
     (option) => String(option.value),
   );
 
-  return validValues.includes(
-    String(value),
+  return validValues.includes(String(value));
+};
+
+// =====================================================
+// INITIALIZATION KEY
+// =====================================================
+
+/**
+ * Re-mounts the form when its initial assessment data or
+ * the field ID/key mapping changes.
+ *
+ * This replaces state synchronization effects and ensures
+ * edit-mode values are initialized against the latest
+ * RevenueService definitions.
+ */
+const getAssessmentFormKey = (
+  mode: AssessmentMode,
+  assessment: InitialAssessment | null,
+  revenueServices: RevenueService[],
+): string => {
+  const serviceFieldDefinitions = revenueServices.map(
+    (service) => ({
+      id: service.id,
+      fields: service.fields.map((field) => ({
+        id: field.id,
+        key: field.key,
+      })),
+    }),
+  );
+
+  return (
+    JSON.stringify([
+      mode,
+      assessment,
+      serviceFieldDefinitions,
+    ]) ?? "assessment-form"
   );
 };
 
 // =====================================================
-// COMPONENT
+// PUBLIC COMPONENT
 // =====================================================
 
-export function AssessmentForm({
+export function AssessmentForm(props: AssessmentFormProps) {
+  const {
+    mode = "create",
+    initialAssessment = null,
+    revenueServices,
+  } = props;
+
+  const formKey = getAssessmentFormKey(
+    mode,
+    initialAssessment,
+    revenueServices,
+  );
+
+  return (
+    <AssessmentFormContent
+      key={formKey}
+      {...props}
+      mode={mode}
+      initialAssessment={initialAssessment}
+    />
+  );
+}
+
+// =====================================================
+// FORM CONTENT
+// =====================================================
+
+function AssessmentFormContent({
   mode = "create",
   initialAssessment = null,
 
@@ -610,143 +653,52 @@ export function AssessmentForm({
   onBack,
 }: AssessmentFormProps) {
   // ===================================================
-  // INITIAL DATA
+  // STATE
   // ===================================================
 
-  const initialTaxpayerId = useMemo(
-    () =>
-      getInitialTaxpayerId(
-        initialAssessment,
-      ),
-    [initialAssessment],
+  const [taxpayerId, setTaxpayerId] = useState(
+    () => getInitialTaxpayerId(initialAssessment),
   );
 
-  const initialServiceIds = useMemo(
-    () =>
-      buildInitialServiceIds(
-        initialAssessment,
-      ),
-    [initialAssessment],
-  );
+  const [selectedServiceIds, setSelectedServiceIds] =
+    useState<string[]>(() =>
+      buildInitialServiceIds(initialAssessment),
+    );
 
-  const initialFieldValues = useMemo(
-    () =>
+  const [serviceFieldValues, setServiceFieldValues] =
+    useState<ServiceFieldValues>(() =>
       buildInitialServiceFieldValues(
         initialAssessment,
         revenueServices,
       ),
-    [
-      initialAssessment,
-      revenueServices,
-    ],
+    );
+
+  const [notes, setNotes] = useState(
+    () => initialAssessment?.notes ?? "",
   );
 
-  const initialNotes = useMemo(
-    () =>
-      initialAssessment?.notes ?? "",
-    [initialAssessment],
-  );
+  const [isSaving, setIsSaving] = useState<
+    "draft" | "submit" | null
+  >(null);
 
-  // ===================================================
-  // STATE
-  // ===================================================
+  const [submissionResult, setSubmissionResult] =
+    useState<SubmissionResult | null>(null);
 
-  const [taxpayerId, setTaxpayerId] =
-    useState(initialTaxpayerId);
-
-  const [
-    selectedServiceIds,
-    setSelectedServiceIds,
-  ] = useState<string[]>(
-    initialServiceIds,
-  );
-
-  const [
-    serviceFieldValues,
-    setServiceFieldValues,
-  ] = useState<ServiceFieldValues>(
-    initialFieldValues,
-  );
-
-  const [notes, setNotes] =
-    useState(initialNotes);
-
-  const [isSaving, setIsSaving] =
-    useState<
-      "draft" | "submit" | null
-    >(null);
-
-  const [
-    submissionResult,
-    setSubmissionResult,
-  ] = useState<SubmissionResult | null>(
-    null,
-  );
-
-  const [
-    submissionError,
-    setSubmissionError,
-  ] = useState<string | null>(null);
+  const [submissionError, setSubmissionError] =
+    useState<string | null>(null);
 
   // ===================================================
   // STEP STATE
   // ===================================================
 
-  const [currentStep, setCurrentStep] =
-    useState(0);
+  const [currentStep, setCurrentStep] = useState(0);
 
-  const [furthestStep, setFurthestStep] =
-    useState(0);
-
-  useEffect(() => {
-    if (
-      mode === "edit" &&
-      initialAssessment
-    ) {
-      setFurthestStep(
-        STEPS.length - 1,
-      );
-    }
-  }, [
-    mode,
-    initialAssessment,
-  ]);
-
-  // ===================================================
-  // SYNCHRONIZE EDIT DATA
-  // ===================================================
-
-  useEffect(() => {
-    if (!initialAssessment) {
-      return;
-    }
-
-    setTaxpayerId(
-      getInitialTaxpayerId(
-        initialAssessment,
-      ),
-    );
-
-    setSelectedServiceIds(
-      buildInitialServiceIds(
-        initialAssessment,
-      ),
-    );
-
-    setServiceFieldValues(
-      buildInitialServiceFieldValues(
-        initialAssessment,
-        revenueServices,
-      ),
-    );
-
-    setNotes(
-      initialAssessment.notes ?? "",
-    );
-  }, [
-    initialAssessment,
-    revenueServices,
-  ]);
+  const [furthestStep, setFurthestStep] = useState(
+    () =>
+      mode === "edit" && initialAssessment
+        ? STEPS.length - 1
+        : 0,
+  );
 
   // ===================================================
   // SELECTED TAXPAYER
@@ -756,8 +708,7 @@ export function AssessmentForm({
     () =>
       taxpayers.find(
         (taxpayer) =>
-          String(taxpayer.id) ===
-          String(taxpayerId),
+          String(taxpayer.id) === String(taxpayerId),
       ) ?? null,
     [taxpayers, taxpayerId],
   );
@@ -768,16 +719,10 @@ export function AssessmentForm({
 
   const selectedServices = useMemo(
     () =>
-      revenueServices.filter(
-        (service) =>
-          selectedServiceIds.includes(
-            service.id,
-          ),
+      revenueServices.filter((service) =>
+        selectedServiceIds.includes(service.id),
       ),
-    [
-      revenueServices,
-      selectedServiceIds,
-    ],
+    [revenueServices, selectedServiceIds],
   );
 
   // ===================================================
@@ -801,13 +746,8 @@ export function AssessmentForm({
   // ===================================================
   // FIELD CHANGE
   //
-  // IMPORTANT:
-  //
   // fieldId = RevenueField.id
-  //
-  // NOT:
-  //
-  // field.key
+  // NOT field.key
   // ===================================================
 
   const setServiceFieldValue = (
@@ -815,16 +755,13 @@ export function AssessmentForm({
     fieldId: string,
     value: FieldValue,
   ) => {
-    setServiceFieldValues(
-      (previous) => ({
-        ...previous,
-
-        [serviceId]: {
-          ...(previous[serviceId] ?? {}),
-          [fieldId]: value,
-        },
-      }),
-    );
+    setServiceFieldValues((previous) => ({
+      ...previous,
+      [serviceId]: {
+        ...(previous[serviceId] ?? {}),
+        [fieldId]: value,
+      },
+    }));
 
     clearFeedback();
   };
@@ -833,9 +770,7 @@ export function AssessmentForm({
   // TAXPAYER CHANGE
   // ===================================================
 
-  const handleTaxpayerChange = (
-    id: string,
-  ) => {
+  const handleTaxpayerChange = (id: string) => {
     setTaxpayerId(id);
     clearFeedback();
   };
@@ -847,25 +782,19 @@ export function AssessmentForm({
   const handleServiceSelectionChange = (
     serviceIds: string[],
   ) => {
-    setSelectedServiceIds(
-      serviceIds,
-    );
+    setSelectedServiceIds(serviceIds);
 
-    setServiceFieldValues(
-      (previous) => {
-        const next: ServiceFieldValues =
-          {};
+    setServiceFieldValues((previous) => {
+      const next: ServiceFieldValues = {};
 
-        for (const serviceId of serviceIds) {
-          if (previous[serviceId]) {
-            next[serviceId] =
-              previous[serviceId];
-          }
+      for (const serviceId of serviceIds) {
+        if (previous[serviceId]) {
+          next[serviceId] = previous[serviceId];
         }
+      }
 
-        return next;
-      },
-    );
+      return next;
+    });
 
     clearFeedback();
   };
@@ -874,27 +803,18 @@ export function AssessmentForm({
   // REMOVE SERVICE
   // ===================================================
 
-  const removeService = (
-    serviceId: string,
-  ) => {
-    setSelectedServiceIds(
-      (previous) =>
-        previous.filter(
-          (id) => id !== serviceId,
-        ),
+  const removeService = (serviceId: string) => {
+    setSelectedServiceIds((previous) =>
+      previous.filter((id) => id !== serviceId),
     );
 
-    setServiceFieldValues(
-      (previous) => {
-        const next = {
-          ...previous,
-        };
+    setServiceFieldValues((previous) => {
+      const next = { ...previous };
 
-        delete next[serviceId];
+      delete next[serviceId];
 
-        return next;
-      },
-    );
+      return next;
+    });
 
     clearFeedback();
   };
@@ -916,71 +836,41 @@ export function AssessmentForm({
   // ===================================================
 
   const validationErrors = useMemo(() => {
-    const errors: Record<
-      string,
-      Record<string, string>
-    > = {};
+    const errors: Record<string, Record<string, string>> = {};
 
     for (const service of selectedServices) {
-      const values =
-        serviceFieldValues[
-          service.id
-        ] ?? {};
+      const values = serviceFieldValues[service.id] ?? {};
 
-      const serviceErrors: Record<
-        string,
-        string
-      > = {};
+      const serviceErrors: Record<string, string> = {};
 
       for (const field of service.fields) {
         if (!field.required) {
           continue;
         }
 
-        /*
-         * IMPORTANT:
-         *
-         * Read by field.id.
-         */
-        const value =
-          values[field.id];
+        const value = values[field.id];
 
-        // =================================================
         // FILE
-        // =================================================
 
-        if (
-          field.type === "FILE"
-        ) {
+        if (field.type === "FILE") {
           if (
             mode === "edit" &&
-            isExistingFileValue(
-              value,
-            )
+            isExistingFileValue(value)
           ) {
             continue;
           }
 
-          if (
-            !(value instanceof File)
-          ) {
-            serviceErrors[
-              field.id
-            ] =
+          if (!(value instanceof File)) {
+            serviceErrors[field.id] =
               `${field.label} is required.`;
           }
 
           continue;
         }
 
-        // =================================================
         // MULTI FILE
-        // =================================================
 
-        if (
-          field.type ===
-          "MULTI_FILE"
-        ) {
+        if (field.type === "MULTI_FILE") {
           if (
             mode === "edit" &&
             hasExistingFiles(value)
@@ -988,159 +878,96 @@ export function AssessmentForm({
             continue;
           }
 
-          if (
-            !Array.isArray(value) ||
-            value.length === 0
-          ) {
-            serviceErrors[
-              field.id
-            ] =
+          if (!Array.isArray(value) || value.length === 0) {
+            serviceErrors[field.id] =
               `${field.label} is required.`;
           }
 
           continue;
         }
 
-        // =================================================
         // CHECKBOX
-        // =================================================
 
-        if (
-          field.type ===
-          "CHECKBOX"
-        ) {
+        if (field.type === "CHECKBOX") {
           if (value !== true) {
-            serviceErrors[
-              field.id
-            ] =
+            serviceErrors[field.id] =
               `Please confirm ${field.label.toLowerCase()}.`;
           }
 
           continue;
         }
 
-        // =================================================
         // SELECT
-        // =================================================
 
-        if (
-          field.type ===
-          "SELECT"
-        ) {
-          if (
-            isEmptyValue(value)
-          ) {
-            serviceErrors[
-              field.id
-            ] =
+        if (field.type === "SELECT") {
+          if (isEmptyValue(value)) {
+            serviceErrors[field.id] =
               `${field.label} is required.`;
 
             continue;
           }
 
-          const options =
-            getFieldOptions(
-              field,
-            );
+          const options = getFieldOptions(field);
 
-          if (
-            options.length === 0
-          ) {
-            serviceErrors[
-              field.id
-            ] =
+          if (options.length === 0) {
+            serviceErrors[field.id] =
               `${field.label} has no active options configured.`;
 
             continue;
           }
 
-          if (
-            !isValidSelectValue(
-              field,
-              value,
-            )
-          ) {
-            serviceErrors[
-              field.id
-            ] =
+          if (!isValidSelectValue(field, value)) {
+            serviceErrors[field.id] =
               `${field.label} has an invalid selection.`;
           }
 
           continue;
         }
 
-        // =================================================
         // NORMAL REQUIRED FIELD
-        // =================================================
 
-        if (
-          isEmptyValue(value)
-        ) {
-          serviceErrors[
-            field.id
-          ] =
+        if (isEmptyValue(value)) {
+          serviceErrors[field.id] =
             `${field.label} is required.`;
 
           continue;
         }
 
-        // =================================================
         // NUMBER / DECIMAL
-        // =================================================
 
         if (
-          field.type ===
-            "NUMBER" ||
-          field.type ===
-            "DECIMAL"
+          field.type === "NUMBER" ||
+          field.type === "DECIMAL"
         ) {
-          const numeric =
-            Number(value);
+          const numeric = Number(value);
 
-          if (
-            Number.isNaN(numeric)
-          ) {
-            serviceErrors[
-              field.id
-            ] =
+          if (Number.isNaN(numeric)) {
+            serviceErrors[field.id] =
               `${field.label} must be a valid number.`;
 
             continue;
           }
 
           if (
-            field.min !==
-              undefined &&
-            numeric <
-              Number(field.min)
+            field.min !== undefined &&
+            numeric < Number(field.min)
           ) {
-            serviceErrors[
-              field.id
-            ] =
+            serviceErrors[field.id] =
               `${field.label} cannot be less than ${field.min}.`;
           }
 
           if (
-            field.max !==
-              undefined &&
-            numeric >
-              Number(field.max)
+            field.max !== undefined &&
+            numeric > Number(field.max)
           ) {
-            serviceErrors[
-              field.id
-            ] =
+            serviceErrors[field.id] =
               `${field.label} cannot exceed ${field.max}.`;
           }
         }
       }
 
-      if (
-        Object.keys(
-          serviceErrors,
-        ).length > 0
-      ) {
-        errors[service.id] =
-          serviceErrors;
+      if (Object.keys(serviceErrors).length > 0) {
+        errors[service.id] = serviceErrors;
       }
     }
 
@@ -1155,23 +982,16 @@ export function AssessmentForm({
   // REQUIRED FIELD PROGRESS
   // ===================================================
 
-  const totalRequiredFields =
-    useMemo(
-      () =>
-        selectedServices.reduce(
-          (
-            total,
-            service,
-          ) =>
-            total +
-            service.fields.filter(
-              (field) =>
-                field.required,
-            ).length,
-          0,
-        ),
-      [selectedServices],
-    );
+  const totalRequiredFields = useMemo(
+    () =>
+      selectedServices.reduce(
+        (total, service) =>
+          total +
+          service.fields.filter((field) => field.required).length,
+        0,
+      ),
+    [selectedServices],
+  );
 
   // ===================================================
   // FIELD COMPLETE
@@ -1181,65 +1001,36 @@ export function AssessmentForm({
     service: RevenueService,
     field: RevenueField,
   ): boolean => {
-    /*
-     * IMPORTANT:
-     *
-     * Always use field.id.
-     */
-    const value =
-      getServiceValues(
-        service.id,
-      )[field.id];
+    const value = getServiceValues(service.id)[field.id];
 
     // FILE
 
-    if (
-      field.type === "FILE"
-    ) {
+    if (field.type === "FILE") {
       return (
         value instanceof File ||
-        (mode === "edit" &&
-          isExistingFileValue(
-            value,
-          ))
+        (mode === "edit" && isExistingFileValue(value))
       );
     }
 
     // MULTI FILE
 
-    if (
-      field.type ===
-      "MULTI_FILE"
-    ) {
+    if (field.type === "MULTI_FILE") {
       return (
-        (Array.isArray(value) &&
-          value.length > 0) ||
-        (mode === "edit" &&
-          hasExistingFiles(
-            value,
-          ))
+        (Array.isArray(value) && value.length > 0) ||
+        (mode === "edit" && hasExistingFiles(value))
       );
     }
 
     // CHECKBOX
 
-    if (
-      field.type ===
-      "CHECKBOX"
-    ) {
+    if (field.type === "CHECKBOX") {
       return value === true;
     }
 
     // SELECT
 
-    if (
-      field.type ===
-      "SELECT"
-    ) {
-      return isValidSelectValue(
-        field,
-        value,
-      );
+    if (field.type === "SELECT") {
+      return isValidSelectValue(field, value);
     }
 
     // NORMAL
@@ -1251,30 +1042,26 @@ export function AssessmentForm({
   // COMPLETED REQUIRED FIELDS
   // ===================================================
 
-  const completedRequiredFields =
-    useMemo(() => {
-      let completed = 0;
+  const completedRequiredFields = useMemo(() => {
+    let completed = 0;
 
-      for (const service of selectedServices) {
-        for (const field of service.fields) {
-          if (
-            field.required &&
-            isFieldComplete(
-              service,
-              field,
-            )
-          ) {
-            completed++;
-          }
+    for (const service of selectedServices) {
+      for (const field of service.fields) {
+        if (
+          field.required &&
+          isFieldComplete(service, field)
+        ) {
+          completed++;
         }
       }
+    }
 
-      return completed;
-    }, [
-      selectedServices,
-      serviceFieldValues,
-      mode,
-    ]);
+    return completed;
+  }, [
+    selectedServices,
+    serviceFieldValues,
+    mode,
+  ]);
 
   // ===================================================
   // SUBMIT STATE
@@ -1282,44 +1069,32 @@ export function AssessmentForm({
 
   const canSubmit = Boolean(
     selectedTaxpayer &&
-      selectedServices.length >
-        0 &&
+      selectedServices.length > 0 &&
       !taxpayerError &&
       !revenueServicesError &&
-      Object.keys(
-        validationErrors,
-      ).length === 0,
+      Object.keys(validationErrors).length === 0,
   );
 
   // ===================================================
   // STEP VALIDITY
   // ===================================================
 
-  const isStepComplete = (
-    stepIndex: number,
-  ): boolean => {
-    const key =
-      STEPS[stepIndex]?.key;
+  const isStepComplete = (stepIndex: number): boolean => {
+    const key = STEPS[stepIndex]?.key;
 
     switch (key as StepKey) {
       case "taxpayer-services":
         return (
-          Boolean(
-            selectedTaxpayer,
-          ) &&
+          Boolean(selectedTaxpayer) &&
           !taxpayerError &&
-          selectedServices.length >
-            0 &&
+          selectedServices.length > 0 &&
           !revenueServicesError
         );
 
       case "details":
         return (
-          selectedServices.length >
-            0 &&
-          Object.keys(
-            validationErrors,
-          ).length === 0
+          selectedServices.length > 0 &&
+          Object.keys(validationErrors).length === 0
         );
 
       case "notes":
@@ -1337,9 +1112,7 @@ export function AssessmentForm({
   // STEP NAVIGATION
   // ===================================================
 
-  const goToStep = (
-    stepIndex: number,
-  ) => {
+  const goToStep = (stepIndex: number) => {
     if (
       stepIndex < 0 ||
       stepIndex >= STEPS.length
@@ -1347,21 +1120,13 @@ export function AssessmentForm({
       return;
     }
 
-    if (
-      stepIndex <= furthestStep
-    ) {
-      setCurrentStep(
-        stepIndex,
-      );
+    if (stepIndex <= furthestStep) {
+      setCurrentStep(stepIndex);
     }
   };
 
   const goNext = () => {
-    if (
-      !isStepComplete(
-        currentStep,
-      )
-    ) {
+    if (!isStepComplete(currentStep)) {
       return;
     }
 
@@ -1372,33 +1137,22 @@ export function AssessmentForm({
 
     setCurrentStep(next);
 
-    setFurthestStep(
-      (previous) =>
-        Math.max(
-          previous,
-          next,
-        ),
+    setFurthestStep((previous) =>
+      Math.max(previous, next),
     );
   };
 
   const goBack = () => {
-    setCurrentStep(
-      (previous) =>
-        Math.max(
-          0,
-          previous - 1,
-        ),
+    setCurrentStep((previous) =>
+      Math.max(0, previous - 1),
     );
   };
 
-  const isLastStep =
-    currentStep ===
-    STEPS.length - 1;
+  const isLastStep = currentStep === STEPS.length - 1;
 
   // ===================================================
   // FILE CHANGE
   //
-  // IMPORTANT:
   // field.id is used as the state key.
   // ===================================================
 
@@ -1407,17 +1161,13 @@ export function AssessmentForm({
     serviceId: string,
     field: RevenueField,
   ) => {
-    const files =
-      event.target.files;
+    const files = event.target.files;
 
     if (!files) {
       return;
     }
 
-    if (
-      field.type ===
-      "MULTI_FILE"
-    ) {
+    if (field.type === "MULTI_FILE") {
       setServiceFieldValue(
         serviceId,
         field.id,
@@ -1427,8 +1177,7 @@ export function AssessmentForm({
       setServiceFieldValue(
         serviceId,
         field.id,
-        files[0] ??
-          undefined,
+        files[0] ?? undefined,
       );
     }
   };
@@ -1452,18 +1201,12 @@ export function AssessmentForm({
   // BUILD FORM DATA
   //
   // FIELD METADATA USES field.id.
-  //
-  // Backend can still receive field.key inside the
-  // metadata if it needs the business code.
   // ===================================================
 
   const buildFormData = (
-    status:
-      | "DRAFT"
-      | "PENDING_APPROVAL",
+    status: "DRAFT" | "PENDING_APPROVAL",
   ): FormData => {
-    const formData =
-      new FormData();
+    const formData = new FormData();
 
     if (
       mode === "edit" &&
@@ -1475,195 +1218,99 @@ export function AssessmentForm({
       );
     }
 
-    formData.append(
-      "mode",
-      mode,
-    );
+    formData.append("mode", mode);
+    formData.append("taxpayerId", taxpayerId);
+    formData.append("notes", notes.trim());
+    formData.append("status", status);
 
-    formData.append(
-      "taxpayerId",
-      taxpayerId,
-    );
+    const servicesMeta = selectedServices.map(
+      (service) => {
+        const values = getServiceValues(service.id);
 
-    formData.append(
-      "notes",
-      notes.trim(),
-    );
+        const fieldsMeta: Record<string, unknown> = {};
 
-    formData.append(
-      "status",
-      status,
-    );
+        for (const field of service.fields) {
+          const value = values[field.id];
 
-    const servicesMeta =
-      selectedServices.map(
-        (service) => {
-          const values =
-            getServiceValues(
-              service.id,
-            );
+          // SINGLE FILE
 
-          const fieldsMeta: Record<
-            string,
-            unknown
-          > = {};
+          if (field.type === "FILE") {
+            if (value instanceof File) {
+              const partKey =
+                `file__${service.id}__${field.id}`;
 
-          for (const field of service.fields) {
-            /*
-             * IMPORTANT:
-             *
-             * Form state lookup uses field.id.
-             */
-            const value =
-              values[field.id];
+              formData.append(partKey, value);
 
-            // =========================================
-            // SINGLE FILE
-            // =========================================
-
-            if (
-              field.type ===
-              "FILE"
+              fieldsMeta[field.id] = {
+                __file: partKey,
+              };
+            } else if (
+              mode === "edit" &&
+              isExistingFileValue(value)
             ) {
-              if (
-                value instanceof File
-              ) {
-                const partKey =
-                  `file__${service.id}__${field.id}`;
-
-                formData.append(
-                  partKey,
-                  value,
-                );
-
-                fieldsMeta[
-                  field.id
-                ] = {
-                  __file: partKey,
-                };
-              } else if (
-                mode ===
-                  "edit" &&
-                isExistingFileValue(
-                  value,
-                )
-              ) {
-                fieldsMeta[
-                  field.id
-                ] = {
-                  __existingFile:
-                    value,
-                };
-              } else {
-                fieldsMeta[
-                  field.id
-                ] = null;
-              }
-
-              continue;
+              fieldsMeta[field.id] = {
+                __existingFile: value,
+              };
+            } else {
+              fieldsMeta[field.id] = null;
             }
 
-            // =========================================
-            // MULTIPLE FILES
-            // =========================================
-
-            if (
-              field.type ===
-              "MULTI_FILE"
-            ) {
-              if (
-                Array.isArray(
-                  value,
-                )
-              ) {
-                const newFileKeys: string[] =
-                  [];
-
-                const existingFiles: unknown[] =
-                  [];
-
-                value.forEach(
-                  (
-                    file,
-                    index,
-                  ) => {
-                    if (
-                      file instanceof
-                      File
-                    ) {
-                      const partKey =
-                        `file__${service.id}__${field.id}__${index}`;
-
-                      formData.append(
-                        partKey,
-                        file,
-                      );
-
-                      newFileKeys.push(
-                        partKey,
-                      );
-
-                      return;
-                    }
-
-                    if (
-                      mode ===
-                        "edit" &&
-                      isExistingFileValue(
-                        file,
-                      )
-                    ) {
-                      existingFiles.push(
-                        file,
-                      );
-                    }
-                  },
-                );
-
-                fieldsMeta[
-                  field.id
-                ] = {
-                  __files:
-                    newFileKeys,
-                  __existingFiles:
-                    existingFiles,
-                };
-              } else {
-                fieldsMeta[
-                  field.id
-                ] = null;
-              }
-
-              continue;
-            }
-
-            // =========================================
-            // NORMAL FIELD
-            // =========================================
-
-            fieldsMeta[
-              field.id
-            ] = value ?? null;
+            continue;
           }
 
-          return {
-            serviceId:
-              service.id,
+          // MULTIPLE FILES
 
-            serviceCode:
-              service.code,
+          if (field.type === "MULTI_FILE") {
+            if (Array.isArray(value)) {
+              const newFileKeys: string[] = [];
+              const existingFiles: unknown[] = [];
 
-            fields:
-              fieldsMeta,
-          };
-        },
-      );
+              value.forEach((file, index) => {
+                if (file instanceof File) {
+                  const partKey =
+                    `file__${service.id}__${field.id}__${index}`;
+
+                  formData.append(partKey, file);
+                  newFileKeys.push(partKey);
+
+                  return;
+                }
+
+                if (
+                  mode === "edit" &&
+                  isExistingFileValue(file)
+                ) {
+                  existingFiles.push(file);
+                }
+              });
+
+              fieldsMeta[field.id] = {
+                __files: newFileKeys,
+                __existingFiles: existingFiles,
+              };
+            } else {
+              fieldsMeta[field.id] = null;
+            }
+
+            continue;
+          }
+
+          // NORMAL FIELD
+
+          fieldsMeta[field.id] = value ?? null;
+        }
+
+        return {
+          serviceId: service.id,
+          serviceCode: service.code,
+          fields: fieldsMeta,
+        };
+      },
+    );
 
     formData.append(
       "services",
-      JSON.stringify(
-        servicesMeta,
-      ),
+      JSON.stringify(servicesMeta),
     );
 
     return formData;
@@ -1673,138 +1320,105 @@ export function AssessmentForm({
   // SAVE DRAFT
   // ===================================================
 
-  const handleSaveDraft =
-    async () => {
-      if (
-        !selectedTaxpayer ||
-        selectedServices.length ===
-          0
-      ) {
-        return;
+  const handleSaveDraft = async () => {
+    if (
+      !selectedTaxpayer ||
+      selectedServices.length === 0
+    ) {
+      return;
+    }
+
+    setIsSaving("draft");
+    clearFeedback();
+
+    try {
+      const formData = buildFormData("DRAFT");
+
+      if (!onSaveDraft) {
+        throw new Error(
+          "Draft submission handler is not configured.",
+        );
       }
 
-      setIsSaving("draft");
-      clearFeedback();
+      const result = await onSaveDraft(formData);
 
-      try {
-        const formData =
-          buildFormData(
-            "DRAFT",
-          );
-
-        if (!onSaveDraft) {
-          throw new Error(
-            "Draft submission handler is not configured.",
-          );
-        }
-
-        const result =
-          await onSaveDraft(
-            formData,
-          );
-
-        setSubmissionResult(
-          result,
-        );
-      } catch (error) {
-        setSubmissionError(
-          error instanceof
-            Error
-            ? error.message
-            : "Could not save the draft.",
-        );
-      } finally {
-        setIsSaving(null);
-      }
-    };
+      setSubmissionResult(result);
+    } catch (error) {
+      setSubmissionError(
+        error instanceof Error
+          ? error.message
+          : "Could not save the draft.",
+      );
+    } finally {
+      setIsSaving(null);
+    }
+  };
 
   // ===================================================
   // SUBMIT
   // ===================================================
 
-  const handleSubmit =
-    async () => {
-      if (!canSubmit) {
-        return;
+  const handleSubmit = async () => {
+    if (!canSubmit) {
+      return;
+    }
+
+    setIsSaving("submit");
+    clearFeedback();
+
+    try {
+      const formData = buildFormData("PENDING_APPROVAL");
+
+      if (!onSubmit) {
+        throw new Error(
+          "Assessment submission handler is not configured.",
+        );
       }
 
-      setIsSaving("submit");
-      clearFeedback();
+      const result = await onSubmit(formData);
 
-      try {
-        const formData =
-          buildFormData(
-            "PENDING_APPROVAL",
-          );
-
-        if (!onSubmit) {
-          throw new Error(
-            "Assessment submission handler is not configured.",
-          );
-        }
-
-        const result =
-          await onSubmit(
-            formData,
-          );
-
-        setSubmissionResult(
-          result,
-        );
-      } catch (error) {
-        setSubmissionError(
-          error instanceof
-            Error
-            ? error.message
-            : "Could not submit the assessment.",
-        );
-      } finally {
-        setIsSaving(null);
-      }
-    };
+      setSubmissionResult(result);
+    } catch (error) {
+      setSubmissionError(
+        error instanceof Error
+          ? error.message
+          : "Could not submit the assessment.",
+      );
+    } finally {
+      setIsSaving(null);
+    }
+  };
 
   // ===================================================
   // UI LABELS
   // ===================================================
 
-  const isEdit =
-    mode === "edit";
+  const isEdit = mode === "edit";
 
-  const submitLabel =
-    isEdit
-      ? "Update & Submit"
-      : "Submit for Approval";
+  const submitLabel = isEdit
+    ? "Update & Submit"
+    : "Submit for Approval";
 
-  const draftLabel =
-    isEdit
-      ? "Save Changes"
-      : "Save as Draft";
+  const draftLabel = isEdit
+    ? "Save Changes"
+    : "Save as Draft";
 
-  const activeStepConfig =
-    STEPS[currentStep];
+  const activeStepConfig = STEPS[currentStep];
 
-  const activeHelp =
-    STEP_HELP[
-      activeStepConfig.key as StepKey
-    ];
+  const activeHelp = STEP_HELP[activeStepConfig.key];
 
   // ===================================================
   // PROGRESS
   // ===================================================
 
-  const progressPercent =
-    Math.round(
-      ((currentStep + 1) /
-        STEPS.length) *
-        100,
-    );
+  const progressPercent = Math.round(
+    ((currentStep + 1) / STEPS.length) * 100,
+  );
 
   const detailsProgressPercent =
     totalRequiredFields > 0
       ? Math.round(
-          (completedRequiredFields /
-            totalRequiredFields) *
-            100,
+          (completedRequiredFields / totalRequiredFields) * 100,
         )
       : 100;
 
@@ -1821,26 +1435,17 @@ export function AssessmentForm({
   const getStepStatus = (
     stepIndex: number,
   ): StepStatus => {
-    if (
-      stepIndex ===
-      currentStep
-    ) {
+    if (stepIndex === currentStep) {
       return "current";
     }
 
-    if (
-      stepIndex >
-      furthestStep
-    ) {
+    if (stepIndex > furthestStep) {
       return "locked";
     }
 
     if (
-      stepIndex <
-        currentStep &&
-      isStepComplete(
-        stepIndex,
-      )
+      stepIndex < currentStep &&
+      isStepComplete(stepIndex)
     ) {
       return "complete";
     }
@@ -1855,168 +1460,108 @@ export function AssessmentForm({
   return (
     <div className="mx-auto w-full max-w-7xl p-5">
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[280px_1fr]">
-        {/* =================================================
-            SIDEBAR
-        ================================================= */}
+        {/* SIDEBAR */}
 
         <aside className="lg:sticky lg:top-5 lg:h-fit">
           <div className="space-y-6 rounded-xl border bg-card p-5">
             {/* STEPPER */}
 
             <ol className="space-y-1">
-              {STEPS.map(
-                (
-                  step,
-                  index,
-                ) => {
-                  const status =
-                    getStepStatus(
-                      index,
-                    );
+              {STEPS.map((step, index) => {
+                const status = getStepStatus(index);
+                const StepIcon = step.icon;
+                const isClickable = status !== "locked";
+                const isLastItem = index === STEPS.length - 1;
 
-                  const StepIcon =
-                    step.icon;
-
-                  const isClickable =
-                    status !==
-                    "locked";
-
-                  const isLastItem =
-                    index ===
-                    STEPS.length - 1;
-
-                  return (
-                    <li
-                      key={
-                        step.key
-                      }
-                      className="relative"
+                return (
+                  <li key={step.key} className="relative">
+                    <button
+                      type="button"
+                      disabled={!isClickable}
+                      onClick={() => goToStep(index)}
+                      className={`flex w-full items-start gap-3 rounded-lg px-2 py-2 text-left transition-colors ${
+                        status === "current"
+                          ? "bg-primary/10"
+                          : isClickable
+                            ? "hover:bg-muted/60"
+                            : "cursor-not-allowed opacity-50"
+                      }`}
                     >
-                      <button
-                        type="button"
-                        disabled={
-                          !isClickable
-                        }
-                        onClick={() =>
-                          goToStep(
-                            index,
-                          )
-                        }
-                        className={`flex w-full items-start gap-3 rounded-lg px-2 py-2 text-left transition-colors ${
-                          status ===
-                          "current"
-                            ? "bg-primary/10"
-                            : isClickable
-                              ? "hover:bg-muted/60"
-                              : "cursor-not-allowed opacity-50"
+                      <span
+                        className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-xs font-semibold ${
+                          status === "complete"
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : status === "current"
+                              ? "border-primary text-primary"
+                              : "border-muted-foreground/30 text-muted-foreground"
                         }`}
                       >
+                        {status === "complete" ? (
+                          <Check className="h-3.5 w-3.5" />
+                        ) : status === "locked" ? (
+                          <Lock className="h-3 w-3" />
+                        ) : (
+                          <StepIcon className="h-3.5 w-3.5" />
+                        )}
+                      </span>
+
+                      <span className="flex-1 pt-0.5">
                         <span
-                          className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-xs font-semibold ${
-                            status ===
-                            "complete"
-                              ? "border-primary bg-primary text-primary-foreground"
-                              : status ===
-                                  "current"
-                                ? "border-primary text-primary"
-                                : "border-muted-foreground/30 text-muted-foreground"
+                          className={`block text-sm font-medium ${
+                            status === "locked"
+                              ? "text-muted-foreground"
+                              : "text-foreground"
                           }`}
                         >
-                          {status ===
-                          "complete" ? (
-                            <Check className="h-3.5 w-3.5" />
-                          ) : status ===
-                            "locked" ? (
-                            <Lock className="h-3 w-3" />
-                          ) : (
-                            <StepIcon className="h-3.5 w-3.5" />
-                          )}
+                          {step.shortTitle}
                         </span>
 
-                        <span className="flex-1 pt-0.5">
-                          <span
-                            className={`block text-sm font-medium ${
-                              status ===
-                              "current"
-                                ? "text-foreground"
-                                : status ===
-                                    "locked"
-                                  ? "text-muted-foreground"
-                                  : "text-foreground"
-                            }`}
-                          >
-                            {
-                              step.shortTitle
-                            }
+                        {step.key === "taxpayer-services" && (
+                          <span className="mt-0.5 block text-xs text-muted-foreground">
+                            {selectedTaxpayer
+                              ? selectedTaxpayer.full_name
+                              : "No taxpayer yet"}
+
+                            {selectedServices.length > 0
+                              ? ` · ${selectedServices.length} service${
+                                  selectedServices.length === 1
+                                    ? ""
+                                    : "s"
+                                }`
+                              : ""}
                           </span>
+                        )}
 
-                          {step.key ===
-                            "taxpayer-services" && (
+                        {step.key === "details" &&
+                          totalRequiredFields > 0 && (
                             <span className="mt-0.5 block text-xs text-muted-foreground">
-                              {selectedTaxpayer
-                                ? selectedTaxpayer.full_name
-                                : "No taxpayer yet"}
-
-                              {selectedServices.length >
-                                0
-                                ? ` · ${selectedServices.length} service${
-                                    selectedServices.length ===
-                                    1
-                                      ? ""
-                                      : "s"
-                                  }`
-                                : ""}
+                              {completedRequiredFields}/
+                              {totalRequiredFields} required fields
                             </span>
                           )}
+                      </span>
+                    </button>
 
-                          {step.key ===
-                            "details" &&
-                            totalRequiredFields >
-                              0 && (
-                              <span className="mt-0.5 block text-xs text-muted-foreground">
-                                {
-                                  completedRequiredFields
-                                }
-                                /
-                                {
-                                  totalRequiredFields
-                                }{" "}
-                                required fields
-                              </span>
-                            )}
-                        </span>
-                      </button>
-
-                      {!isLastItem && (
-                        <span
-                          className={`ml-[1.6rem] block h-3 w-px ${
-                            status ===
-                            "complete"
-                              ? "bg-primary"
-                              : "bg-muted-foreground/20"
-                          }`}
-                        />
-                      )}
-                    </li>
-                  );
-                },
-              )}
+                    {!isLastItem && (
+                      <span
+                        className={`ml-[1.6rem] block h-3 w-px ${
+                          status === "complete"
+                            ? "bg-primary"
+                            : "bg-muted-foreground/20"
+                        }`}
+                      />
+                    )}
+                  </li>
+                );
+              })}
             </ol>
 
             {/* OVERALL PROGRESS */}
 
             <div>
               <div className="mb-1.5 flex items-center justify-between text-xs text-muted-foreground">
-                <span>
-                  Overall progress
-                </span>
-
-                <span>
-                  {
-                    progressPercent
-                  }
-                  %
-                </span>
+                <span>Overall progress</span>
+                <span>{progressPercent}%</span>
               </div>
 
               <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
@@ -2037,39 +1582,23 @@ export function AssessmentForm({
 
                 <div className="space-y-2">
                   <p className="text-sm font-semibold text-foreground">
-                    {
-                      activeHelp.heading
-                    }
+                    {activeHelp.heading}
                   </p>
 
                   <p className="text-xs leading-relaxed text-muted-foreground">
-                    {
-                      activeHelp.body
-                    }
+                    {activeHelp.body}
                   </p>
 
                   <ul className="space-y-1.5 pt-1">
-                    {activeHelp.tips.map(
-                      (
-                        tip,
-                        index,
-                      ) => (
-                        <li
-                          key={
-                            index
-                          }
-                          className="flex gap-1.5 text-xs leading-relaxed text-muted-foreground"
-                        >
-                          <span className="text-primary">
-                            •
-                          </span>
-
-                          <span>
-                            {tip}
-                          </span>
-                        </li>
-                      ),
-                    )}
+                    {activeHelp.tips.map((tip, index) => (
+                      <li
+                        key={index}
+                        className="flex gap-1.5 text-xs leading-relaxed text-muted-foreground"
+                      >
+                        <span className="text-primary">•</span>
+                        <span>{tip}</span>
+                      </li>
+                    ))}
                   </ul>
                 </div>
               </div>
@@ -2077,35 +1606,25 @@ export function AssessmentForm({
           </div>
         </aside>
 
-        {/* =================================================
-            MAIN CONTENT
-        ================================================= */}
+        {/* MAIN CONTENT */}
 
         <div className="rounded-xl border bg-card shadow-none">
           <div className="flex items-center justify-between border-b px-5 py-4 sm:px-6">
             <div>
               <p className="text-sm font-semibold">
-                {
-                  activeStepConfig.title
-                }
+                {activeStepConfig.title}
               </p>
 
               <p className="text-xs text-muted-foreground">
-                Step{" "}
-                {currentStep + 1}{" "}
-                of{" "}
-                {STEPS.length}
+                Step {currentStep + 1} of {STEPS.length}
               </p>
             </div>
           </div>
 
           <div className="space-y-8 p-5 sm:p-6">
-            {/* =================================================
-                STEP 1
-            ================================================= */}
+            {/* STEP 1 */}
 
-            {activeStepConfig.key ===
-              "taxpayer-services" && (
+            {activeStepConfig.key === "taxpayer-services" && (
               <div className="flex flex-col gap-8">
                 {/* TAXPAYER */}
 
@@ -2121,29 +1640,20 @@ export function AssessmentForm({
                   </div>
 
                   <TaxpayerSelector
-                    value={
-                      taxpayerId
-                    }
-                    onChange={
-                      handleTaxpayerChange
-                    }
-                    taxpayers={
-                      taxpayers
-                    }
+                    value={taxpayerId}
+                    onChange={handleTaxpayerChange}
+                    // taxpayers={taxpayers}
                   />
 
                   {taxpayerLoading && (
                     <p className="text-xs text-muted-foreground">
-                      Loading
-                      taxpayers...
+                      Loading taxpayers...
                     </p>
                   )}
 
                   {taxpayerError && (
                     <p className="text-xs text-destructive">
-                      Failed to
-                      load
-                      taxpayers.
+                      Failed to load taxpayers.
                     </p>
                   )}
                 </div>
@@ -2157,8 +1667,7 @@ export function AssessmentForm({
                     </span>
 
                     <p className="text-sm font-medium">
-                      Choose revenue
-                      services
+                      Choose revenue services
                     </p>
                   </div>
 
@@ -2166,10 +1675,7 @@ export function AssessmentForm({
                     <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3">
                       <div className="flex items-center justify-between gap-3">
                         <p className="text-xs text-destructive">
-                          Failed to
-                          load
-                          revenue
-                          services.
+                          Failed to load revenue services.
                         </p>
 
                         {onRetryRevenueServices && (
@@ -2177,9 +1683,7 @@ export function AssessmentForm({
                             type="button"
                             variant="outline"
                             size="sm"
-                            onClick={
-                              onRetryRevenueServices
-                            }
+                            onClick={onRetryRevenueServices}
                           >
                             Retry
                           </Button>
@@ -2189,63 +1693,37 @@ export function AssessmentForm({
                   )}
 
                   <RevenueServiceSelector
-                    services={
-                      revenueServices
-                    }
-                    selectedServiceIds={
-                      selectedServiceIds
-                    }
-                    onChange={
-                      handleServiceSelectionChange
-                    }
-                    onRemoveService={
-                      removeService
-                    }
-                    onClearServices={
-                      handleClearServices
-                    }
+                    services={revenueServices}
+                    selectedServiceIds={selectedServiceIds}
+                    onChange={handleServiceSelectionChange}
+                    onRemoveService={removeService}
+                    onClearServices={handleClearServices}
                   />
 
                   {revenueServicesLoading && (
                     <p className="text-xs text-muted-foreground">
-                      Loading
-                      revenue
-                      services...
+                      Loading revenue services...
                     </p>
                   )}
                 </div>
               </div>
             )}
 
-            {/* =================================================
-                STEP 2
-            ================================================= */}
+            {/* STEP 2 */}
 
-            {activeStepConfig.key ===
-              "details" && (
+            {activeStepConfig.key === "details" && (
               <div className="space-y-6">
                 {/* PROGRESS */}
 
-                {selectedServices.length >
-                  0 &&
-                  totalRequiredFields >
-                    0 && (
+                {selectedServices.length > 0 &&
+                  totalRequiredFields > 0 && (
                     <div>
                       <div className="mb-1.5 flex items-center justify-between text-xs text-muted-foreground">
-                        <span>
-                          Required
-                          fields
-                          completed
-                        </span>
+                        <span>Required fields completed</span>
 
                         <span>
-                          {
-                            completedRequiredFields
-                          }
-                          /
-                          {
-                            totalRequiredFields
-                          }
+                          {completedRequiredFields}/
+                          {totalRequiredFields}
                         </span>
                       </div>
 
@@ -2262,14 +1740,10 @@ export function AssessmentForm({
 
                 {/* NO SERVICES */}
 
-                {selectedServices.length ===
-                0 ? (
+                {selectedServices.length === 0 ? (
                   <div className="rounded-lg border border-dashed p-6 text-center">
                     <p className="text-sm text-muted-foreground">
-                      No revenue
-                      services
-                      selected
-                      yet.
+                      No revenue services selected yet.
                     </p>
 
                     <Button
@@ -2277,105 +1751,58 @@ export function AssessmentForm({
                       variant="outline"
                       size="sm"
                       className="mt-3"
-                      onClick={() =>
-                        goToStep(
-                          0,
-                        )
-                      }
+                      onClick={() => goToStep(0)}
                     >
-                      Go select
-                      services
+                      Go select services
                     </Button>
                   </div>
                 ) : (
                   /* SERVICES */
 
-                  selectedServices.map(
-                    (
-                      service,
-                      index,
-                    ) => {
-                      const serviceValues =
-                        serviceFieldValues[
-                          service.id
-                        ] ?? {};
+                  selectedServices.map((service, index) => {
+                    const serviceValues =
+                      serviceFieldValues[service.id] ?? {};
 
-                      const serviceErrors =
-                        validationErrors[
-                          service.id
-                        ] ?? {};
+                    const serviceErrors =
+                      validationErrors[service.id] ?? {};
 
-                      return (
-                        <RevenueServiceFields
-                          key={
-                            service.id
-                          }
-                          service={
-                            service
-                          }
-                          index={
-                            index
-                          }
-                          values={
-                            serviceValues
-                          }
-                          errors={
-                            serviceErrors
-                          }
-
-                          /*
-                           * fieldId is RevenueField.id.
-                           */
-                          onChange={(
+                    return (
+                      <RevenueServiceFields
+                        key={service.id}
+                        service={service}
+                        index={index}
+                        values={serviceValues}
+                        errors={serviceErrors}
+                        onChange={(fieldId, value) => {
+                          setServiceFieldValue(
+                            service.id,
                             fieldId,
                             value,
-                          ) => {
-                            setServiceFieldValue(
-                              service.id,
-                              fieldId,
-                              value,
-                            );
-                          }}
-
-                          onFileChange={(
+                          );
+                        }}
+                        onFileChange={(event, field) => {
+                          handleFileChange(
                             event,
+                            service.id,
                             field,
-                          ) => {
-                            handleFileChange(
-                              event,
-                              service.id,
-                              field,
-                            );
-                          }}
-
-                          onRemoveFile={(
-                            field,
-                          ) => {
-                            removeFile(
-                              service.id,
-                              field,
-                            );
-                          }}
-
-                          onRemove={() => {
-                            removeService(
-                              service.id,
-                            );
-                          }}
-                        />
-                      );
-                    },
-                  )
+                          );
+                        }}
+                        onRemoveFile={(field) => {
+                          removeFile(service.id, field);
+                        }}
+                        onRemove={() => {
+                          removeService(service.id);
+                        }}
+                      />
+                    );
+                  })
                 )}
               </div>
             )}
 
-            {/* =================================================
-                STEP 3 — NOTES
-            ================================================= */}
+            {/* STEP 3 — NOTES */}
 
-            {activeStepConfig.key ===
-              "notes" && (
+            {activeStepConfig.key === "notes" && (
               <div className="flex items-start gap-3">
                 <div className="rounded-lg bg-primary/10 p-2">
                   <FileText className="h-4 w-4 text-primary" />
@@ -2385,13 +1812,8 @@ export function AssessmentForm({
                   <Textarea
                     placeholder="Add site visit notes, measurements, references, or other supporting information..."
                     value={notes}
-                    onChange={(
-                      event,
-                    ) =>
-                      setNotes(
-                        event.target
-                          .value,
-                      )
+                    onChange={(event) =>
+                      setNotes(event.target.value)
                     }
                     className="min-h-[160px] resize-none"
                   />
@@ -2399,12 +1821,9 @@ export function AssessmentForm({
               </div>
             )}
 
-            {/* =================================================
-                STEP 4 — REVIEW
-            ================================================= */}
+            {/* STEP 4 — REVIEW */}
 
-            {activeStepConfig.key ===
-              "review" && (
+            {activeStepConfig.key === "review" && (
               <div className="space-y-5">
                 {/* TAXPAYER */}
 
@@ -2416,11 +1835,7 @@ export function AssessmentForm({
 
                     <button
                       type="button"
-                      onClick={() =>
-                        goToStep(
-                          0,
-                        )
-                      }
+                      onClick={() => goToStep(0)}
                       className="text-xs font-medium text-primary hover:underline"
                     >
                       Edit
@@ -2429,9 +1844,7 @@ export function AssessmentForm({
 
                   {taxpayerError ? (
                     <p className="mt-1 text-sm text-destructive">
-                      Failed to
-                      load
-                      taxpayers.
+                      Failed to load taxpayers.
                     </p>
                   ) : (
                     <>
@@ -2443,9 +1856,7 @@ export function AssessmentForm({
                       {selectedTaxpayer && (
                         <p className="mt-0.5 text-xs text-muted-foreground">
                           National ID{" "}
-                          {
-                            selectedTaxpayer.national_id
-                          }
+                          {selectedTaxpayer.national_id}
                         </p>
                       )}
                     </>
@@ -2457,64 +1868,38 @@ export function AssessmentForm({
                 <div className="rounded-lg border p-4">
                   <div className="flex items-center justify-between">
                     <p className="text-xs font-medium text-muted-foreground">
-                      Revenue
-                      services
-                      (
-                      {
-                        selectedServices.length
-                      }
-                      )
+                      Revenue services ({selectedServices.length})
                     </p>
 
                     <button
                       type="button"
-                      onClick={() =>
-                        goToStep(
-                          0,
-                        )
-                      }
+                      onClick={() => goToStep(0)}
                       className="text-xs font-medium text-primary hover:underline"
                     >
                       Edit
                     </button>
                   </div>
 
-                  {selectedServices.length ===
-                  0 ? (
+                  {selectedServices.length === 0 ? (
                     <p className="mt-1 text-sm text-muted-foreground">
-                      None
-                      selected
+                      None selected
                     </p>
                   ) : (
                     <div className="mt-2 space-y-2">
-                      {selectedServices.map(
-                        (
-                          service,
-                        ) => (
-                          <div
-                            key={
-                              service.id
-                            }
-                            className="rounded-md bg-muted/50 p-2.5"
-                          >
-                            <p className="truncate text-sm font-medium">
-                              {
-                                service.name
-                              }
-                            </p>
+                      {selectedServices.map((service) => (
+                        <div
+                          key={service.id}
+                          className="rounded-md bg-muted/50 p-2.5"
+                        >
+                          <p className="truncate text-sm font-medium">
+                            {service.name}
+                          </p>
 
-                            <p className="mt-0.5 text-xs text-muted-foreground">
-                              {
-                                service.code
-                              }{" "}
-                              ·{" "}
-                              {
-                                service.category
-                              }
-                            </p>
-                          </div>
-                        ),
-                      )}
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            {service.code} · {service.category}
+                          </p>
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
@@ -2524,17 +1909,12 @@ export function AssessmentForm({
                 <div className="rounded-lg border p-4">
                   <div className="flex items-center justify-between">
                     <p className="text-xs font-medium text-muted-foreground">
-                      Service
-                      details
+                      Service details
                     </p>
 
                     <button
                       type="button"
-                      onClick={() =>
-                        goToStep(
-                          1,
-                        )
-                      }
+                      onClick={() => goToStep(1)}
                       className="text-xs font-medium text-primary hover:underline"
                     >
                       Edit
@@ -2543,55 +1923,35 @@ export function AssessmentForm({
 
                   <div className="mt-2 flex items-center justify-between">
                     <p className="text-sm text-muted-foreground">
-                      Required
-                      fields
+                      Required fields
                     </p>
 
                     <p className="text-sm font-medium">
-                      {
-                        completedRequiredFields
-                      }{" "}
-                      /{" "}
-                      {
-                        totalRequiredFields
-                      }
+                      {completedRequiredFields} / {totalRequiredFields}
                     </p>
                   </div>
 
-                  {totalRequiredFields >
-                    0 &&
+                  {totalRequiredFields > 0 &&
                     completedRequiredFields <
                       totalRequiredFields && (
                       <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
-                        Some
-                        required
-                        information
-                        is still
-                        missing.
+                        Some required information is still missing.
                       </p>
                     )}
                 </div>
 
                 {/* VALIDATION */}
 
-                {Object.keys(
-                  validationErrors,
-                ).length > 0 && (
+                {Object.keys(validationErrors).length > 0 && (
                   <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-4">
                     <div className="flex items-center justify-between">
                       <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
-                        Missing or
-                        invalid
-                        information
+                        Missing or invalid information
                       </p>
 
                       <button
                         type="button"
-                        onClick={() =>
-                          goToStep(
-                            1,
-                          )
-                        }
+                        onClick={() => goToStep(1)}
                         className="text-xs font-medium text-primary hover:underline"
                       >
                         Fix
@@ -2599,39 +1959,19 @@ export function AssessmentForm({
                     </div>
 
                     <div className="mt-1.5 space-y-1">
-                      {Object.values(
-                        validationErrors,
-                      )
-                        .flatMap(
-                          (
-                            errors,
-                          ) =>
-                            Object.values(
-                              errors,
-                            ),
+                      {Object.values(validationErrors)
+                        .flatMap((errors) =>
+                          Object.values(errors),
                         )
-                        .slice(
-                          0,
-                          5,
-                        )
-                        .map(
-                          (
-                            error,
-                            index,
-                          ) => (
-                            <p
-                              key={
-                                index
-                              }
-                              className="text-xs text-muted-foreground"
-                            >
-                              •{" "}
-                              {
-                                error
-                              }
-                            </p>
-                          ),
-                        )}
+                        .slice(0, 5)
+                        .map((error, index) => (
+                          <p
+                            key={index}
+                            className="text-xs text-muted-foreground"
+                          >
+                            • {error}
+                          </p>
+                        ))}
                     </div>
                   </div>
                 )}
@@ -2646,11 +1986,7 @@ export function AssessmentForm({
 
                     <button
                       type="button"
-                      onClick={() =>
-                        goToStep(
-                          2,
-                        )
-                      }
+                      onClick={() => goToStep(2)}
                       className="text-xs font-medium text-primary hover:underline"
                     >
                       Edit
@@ -2658,22 +1994,16 @@ export function AssessmentForm({
                   </div>
 
                   <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">
-                    {notes.trim() ||
-                      "No notes added."}
+                    {notes.trim() || "No notes added."}
                   </p>
                 </div>
 
                 {/* PRICING NOTICE */}
 
                 <div className="rounded-lg border border-dashed p-3 text-xs text-muted-foreground">
-                  No amount is
-                  calculated on this
-                  page. The Decision
-                  Provider is
-                  responsible for
-                  tariff resolution
-                  and assessment
-                  calculation.
+                  No amount is calculated on this page. The Decision
+                  Provider is responsible for tariff resolution and
+                  assessment calculation.
                 </div>
 
                 {/* SUBMISSION ERROR */}
@@ -2681,9 +2011,7 @@ export function AssessmentForm({
                 {submissionError && (
                   <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3">
                     <p className="text-xs font-medium text-destructive">
-                      {
-                        submissionError
-                      }
+                      {submissionError}
                     </p>
                   </div>
                 )}
@@ -2693,16 +2021,12 @@ export function AssessmentForm({
                 {submissionResult && (
                   <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3">
                     <p className="text-xs font-medium text-emerald-700 dark:text-emerald-400">
-                      {
-                        submissionResult.message
-                      }
+                      {submissionResult.message}
                     </p>
 
                     <p className="mt-1 text-xs text-muted-foreground">
                       Reference:{" "}
-                      {
-                        submissionResult.assessmentNumber
-                      }
+                      {submissionResult.assessmentNumber}
                     </p>
                   </div>
                 )}
@@ -2715,19 +2039,15 @@ export function AssessmentForm({
                     className="w-full"
                     disabled={
                       !canSubmit ||
-                      isSaving !==
-                        null ||
+                      isSaving !== null ||
                       revenueServicesLoading ||
                       taxpayerLoading
                     }
-                    onClick={
-                      handleSubmit
-                    }
+                    onClick={handleSubmit}
                   >
                     <Send className="mr-2 h-4 w-4" />
 
-                    {isSaving ===
-                    "submit"
+                    {isSaving === "submit"
                       ? isEdit
                         ? "Updating..."
                         : "Submitting..."
@@ -2740,21 +2060,16 @@ export function AssessmentForm({
                     className="w-full"
                     disabled={
                       !selectedTaxpayer ||
-                      selectedServices.length ===
-                        0 ||
-                      isSaving !==
-                        null ||
+                      selectedServices.length === 0 ||
+                      isSaving !== null ||
                       taxpayerError ||
                       revenueServicesError
                     }
-                    onClick={
-                      handleSaveDraft
-                    }
+                    onClick={handleSaveDraft}
                   >
                     <Save className="mr-2 h-4 w-4" />
 
-                    {isSaving ===
-                    "draft"
+                    {isSaving === "draft"
                       ? "Saving..."
                       : draftLabel}
                   </Button>
@@ -2763,46 +2078,31 @@ export function AssessmentForm({
             )}
           </div>
 
-          {/* =================================================
-              STEP NAVIGATION
-          ================================================= */}
+          {/* STEP NAVIGATION */}
 
           <div className="flex items-center justify-between border-t p-5 sm:p-6">
             <Button
               type="button"
               variant="ghost"
               disabled={
-                currentStep ===
-                  0 ||
+                currentStep === 0 ||
                 isSaving !== null
               }
-              onClick={
-                currentStep ===
-                0
-                  ? onBack
-                  : goBack
-              }
+              onClick={currentStep === 0 ? onBack : goBack}
             >
               <ChevronLeft className="mr-1 h-4 w-4" />
 
-              {currentStep ===
-              0
-                ? "Cancel"
-                : "Back"}
+              {currentStep === 0 ? "Cancel" : "Back"}
             </Button>
 
             {!isLastStep && (
               <Button
                 type="button"
                 disabled={
-                  !isStepComplete(
-                    currentStep,
-                  ) ||
+                  !isStepComplete(currentStep) ||
                   isSaving !== null
                 }
-                onClick={
-                  goNext
-                }
+                onClick={goNext}
               >
                 Next
 

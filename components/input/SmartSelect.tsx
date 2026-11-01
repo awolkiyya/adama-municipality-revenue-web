@@ -1,7 +1,12 @@
+
 "use client";
 
 import * as React from "react";
-import { Check, ChevronsUpDown, X } from "lucide-react";
+import {
+  Check,
+  ChevronsUpDown,
+  X,
+} from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
@@ -22,10 +27,14 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 
+/* =========================================================
+   TYPES
+   ========================================================= */
+
 export type Option = {
   id: string;
   label: string;
-  meta?: any;
+  meta?: unknown;
 };
 
 type Props = {
@@ -41,6 +50,10 @@ type Props = {
   onChange: (option: Option | null) => void;
 };
 
+/* =========================================================
+   COMPONENT
+   ========================================================= */
+
 export function SmartSelect({
   value,
   options,
@@ -52,46 +65,74 @@ export function SmartSelect({
 }: Props) {
   const [open, setOpen] = React.useState(false);
 
-  /**
-   * Normalize selection safely (prevents type mismatch bugs)
-   */
+  /* =======================================================
+     SELECTED OPTION
+     ======================================================= */
+
   const selected = React.useMemo(() => {
-    if (!value) return undefined;
-    return options.find((o) => String(o.id) === String(value));
+    if (!value) {
+      return undefined;
+    }
+
+    return options.find(
+      (option) => String(option.id) === String(value),
+    );
   }, [options, value]);
+
+  /* =======================================================
+     ACTIONS
+     ======================================================= */
 
   const handleSelect = (option: Option) => {
     onChange(option);
     setOpen(false);
   };
 
-  const handleClear = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (disabled) return;
+  const handleClear = (
+    event: React.MouseEvent<HTMLButtonElement>,
+  ) => {
+    event.stopPropagation();
+
+    if (disabled) {
+      return;
+    }
+
     onChange(null);
   };
 
+  /* =======================================================
+     RENDER
+     ======================================================= */
+
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={setOpen}
+    >
       <PopoverTrigger asChild>
         <Button
           variant="outline"
           role="combobox"
           disabled={disabled}
           className="w-full justify-between py-4"
+          aria-expanded={open}
         >
           <span className="truncate">
-            {selected ? selected.label : placeholder}
+            {selected
+              ? selected.label
+              : placeholder}
           </span>
 
           <div className="flex items-center gap-1">
             {selected && !disabled && (
-              <span
+              <button
+                type="button"
                 onClick={handleClear}
-                className="flex items-center justify-center rounded-md hover:bg-muted p-1"
+                aria-label="Clear selection"
+                className="flex items-center justify-center rounded-md p-1 hover:bg-muted"
               >
                 <X className="h-4 w-4 text-muted-foreground hover:text-red-500" />
-              </span>
+              </button>
             )}
 
             <ChevronsUpDown className="ml-1 h-4 w-4 shrink-0 opacity-50" />
@@ -104,10 +145,14 @@ export function SmartSelect({
         align="start"
       >
         <Command>
-          <CommandInput placeholder={searchPlaceholder} />
+          <CommandInput
+            placeholder={searchPlaceholder}
+          />
 
           <CommandList>
-            <CommandEmpty>{emptyMessage}</CommandEmpty>
+            <CommandEmpty>
+              {emptyMessage}
+            </CommandEmpty>
 
             <CommandGroup>
               {options.map((option) => {
@@ -123,15 +168,19 @@ export function SmartSelect({
                     <Check
                       className={cn(
                         "mr-2 h-4 w-4",
-                        isActive ? "opacity-100" : "opacity-0"
+                        isActive
+                          ? "opacity-100"
+                          : "opacity-0",
                       )}
                     />
+
                     {option.label}
                   </CommandItem>
                 );
               })}
 
-              {/* Optional explicit clear row */}
+              {/* Clear selection */}
+
               {selected && (
                 <CommandItem
                   onSelect={() => {

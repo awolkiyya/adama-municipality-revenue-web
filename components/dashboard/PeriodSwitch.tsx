@@ -1,6 +1,7 @@
+
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { CalendarDays } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -12,6 +13,10 @@ import {
 
 import { Period, PERIODS } from "@/types/dashboard";
 import { EthiopianDatePicker } from "../input/EthiopianDatePicker";
+
+/* =========================================================
+   TYPES
+========================================================= */
 
 export type PeriodSelection =
   | {
@@ -29,6 +34,15 @@ type PeriodSwitchProps = {
   onChange: (selection: PeriodSelection) => void;
 };
 
+type DateRange = {
+  from: string;
+  to: string;
+};
+
+/* =========================================================
+   DATE HELPERS
+========================================================= */
+
 function toDateKey(date: Date): string {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -43,6 +57,7 @@ function fromDateKey(value: string): Date | undefined {
   }
 
   const [year, month, day] = value.split("-").map(Number);
+
   const date = new Date(year, month - 1, day);
 
   if (
@@ -56,7 +71,7 @@ function fromDateKey(value: string): Date | undefined {
   return date;
 }
 
-function getDefaultDateRange() {
+function getDefaultDateRange(): DateRange {
   const to = new Date();
   const from = new Date(to);
 
@@ -68,26 +83,29 @@ function getDefaultDateRange() {
   };
 }
 
+/* =========================================================
+   COMPONENT
+========================================================= */
+
 export function PeriodSwitch({
   value,
   onChange,
 }: PeriodSwitchProps) {
   const [customOpen, setCustomOpen] = useState(false);
 
-  const [draftRange, setDraftRange] = useState(() =>
-    value.type === "custom"
-      ? { from: value.from, to: value.to }
-      : getDefaultDateRange(),
+  const [draftRange, setDraftRange] = useState<DateRange>(
+    () =>
+      value.type === "custom"
+        ? {
+            from: value.from,
+            to: value.to,
+          }
+        : getDefaultDateRange()
   );
 
-  useEffect(() => {
-    if (value.type === "custom") {
-      setDraftRange({
-        from: value.from,
-        to: value.to,
-      });
-    }
-  }, [value]);
+  /* =========================================================
+     DATE VALIDATION
+  ========================================================= */
 
   const todayKey = toDateKey(new Date());
 
@@ -100,6 +118,10 @@ export function PeriodSwitch({
     draftRange.from > draftRange.to ||
     draftRange.to > todayKey;
 
+  /* =========================================================
+     SELECT PRESET
+  ========================================================= */
+
   function selectPreset(period: Period) {
     setCustomOpen(false);
 
@@ -109,15 +131,58 @@ export function PeriodSwitch({
     });
   }
 
+  /* =========================================================
+     OPEN CUSTOM RANGE
+  ========================================================= */
+
   function openCustomRange() {
+    // Synchronize the draft with the currently selected value.
+    // This replaces the previous useEffect.
     setDraftRange(
       value.type === "custom"
-        ? { from: value.from, to: value.to }
-        : getDefaultDateRange(),
+        ? {
+            from: value.from,
+            to: value.to,
+          }
+        : getDefaultDateRange()
     );
 
     setCustomOpen(true);
   }
+
+  /* =========================================================
+     CLOSE CUSTOM RANGE
+  ========================================================= */
+
+  function closeCustomRange() {
+    setCustomOpen(false);
+  }
+
+  /* =========================================================
+     UPDATE START DATE
+  ========================================================= */
+
+  function handleFromDateChange(date: Date) {
+    setDraftRange((current) => ({
+      ...current,
+      from: toDateKey(date),
+    }));
+  }
+
+  /* =========================================================
+     UPDATE END DATE
+  ========================================================= */
+
+  function handleToDateChange(date: Date) {
+    setDraftRange((current) => ({
+      ...current,
+      to: toDateKey(date),
+    }));
+  }
+
+  /* =========================================================
+     APPLY CUSTOM RANGE
+  ========================================================= */
 
   function applyCustomRange() {
     if (invalidRange) {
@@ -133,8 +198,17 @@ export function PeriodSwitch({
     setCustomOpen(false);
   }
 
+  /* =========================================================
+     RENDER
+  ========================================================= */
+
   return (
     <div className="flex flex-wrap items-center gap-1 rounded-lg border bg-background p-1">
+
+      {/* =====================================================
+          PRESET PERIODS
+      ===================================================== */}
+
       {PERIODS.map((period) => {
         const selected =
           value.type === "preset" &&
@@ -155,13 +229,17 @@ export function PeriodSwitch({
         );
       })}
 
+      {/* =====================================================
+          CUSTOM DATE RANGE
+      ===================================================== */}
+
       <Popover
         open={customOpen}
         onOpenChange={(open) => {
           if (open) {
             openCustomRange();
           } else {
-            setCustomOpen(false);
+            closeCustomRange();
           }
         }}
       >
@@ -170,12 +248,15 @@ export function PeriodSwitch({
             type="button"
             size="sm"
             variant={
-              value.type === "custom" ? "secondary" : "ghost"
+              value.type === "custom"
+                ? "secondary"
+                : "ghost"
             }
             className="h-8 gap-2 px-3"
             aria-label="Choose a custom reporting date range"
           >
             <CalendarDays className="size-4" />
+
             {value.type === "custom"
               ? "Custom range"
               : "Custom"}
@@ -189,6 +270,8 @@ export function PeriodSwitch({
           collisionPadding={8}
           className="w-[calc(100vw-2rem)] max-w-sm p-4"
         >
+          {/* HEADER */}
+
           <div className="space-y-1">
             <h3 className="text-sm font-semibold">
               Custom date range
@@ -199,7 +282,12 @@ export function PeriodSwitch({
             </p>
           </div>
 
+          {/* DATE PICKERS */}
+
           <div className="mt-4 grid gap-4">
+
+            {/* FROM DATE */}
+
             <div className="space-y-1.5">
               <label className="text-sm font-medium">
                 From date
@@ -207,16 +295,13 @@ export function PeriodSwitch({
 
               <EthiopianDatePicker
                 value={fromDate}
-                onChange={(date) =>
-                  setDraftRange((current) => ({
-                    ...current,
-                    from: toDateKey(date),
-                  }))
-                }
+                onChange={handleFromDateChange}
                 placeholder="Select start date"
                 maxYear={new Date().getFullYear()}
               />
             </div>
+
+            {/* TO DATE */}
 
             <div className="space-y-1.5">
               <label className="text-sm font-medium">
@@ -225,34 +310,34 @@ export function PeriodSwitch({
 
               <EthiopianDatePicker
                 value={toDate}
-                onChange={(date) =>
-                  setDraftRange((current) => ({
-                    ...current,
-                    to: toDateKey(date),
-                  }))
-                }
+                onChange={handleToDateChange}
                 placeholder="Select end date"
                 maxYear={new Date().getFullYear()}
               />
             </div>
           </div>
 
+          {/* VALIDATION */}
+
           {invalidRange && (
             <p
               className="mt-3 text-xs text-destructive"
               role="alert"
             >
-              Select a valid date range. The end date must be on or
-              after the start date, and dates cannot be in the future.
+              Select a valid date range. The end date must be
+              on or after the start date, and dates cannot be
+              in the future.
             </p>
           )}
+
+          {/* ACTIONS */}
 
           <div className="mt-4 flex justify-end gap-2">
             <Button
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => setCustomOpen(false)}
+              onClick={closeCustomRange}
             >
               Cancel
             </Button>

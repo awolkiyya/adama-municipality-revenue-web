@@ -1,26 +1,41 @@
-import { FieldErrors, FieldError } from "react-hook-form";
+import type {
+  FieldError,
+  FieldErrors,
+  FieldValues,
+} from "react-hook-form";
 
-export function flattenFormErrors(
-  errors: FieldErrors<any>
+type FieldErrorWithMessage = FieldError & {
+  message: string;
+};
+
+function isFieldErrorWithMessage(
+  value: unknown,
+): value is FieldErrorWithMessage {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "message" in value &&
+    typeof value.message === "string"
+  );
+}
+
+export function flattenFormErrors<TFieldValues extends FieldValues>(
+  errors: FieldErrors<TFieldValues>,
 ): string[] {
   const result: string[] = [];
 
-  const walk = (obj: FieldErrors<any>) => {
-    if (!obj) return;
+  const walk = (value: unknown): void => {
+    if (!value || typeof value !== "object") {
+      return;
+    }
 
-    Object.values(obj).forEach((value) => {
-      if (!value) return;
+    if (isFieldErrorWithMessage(value)) {
+      result.push(value.message);
+      return;
+    }
 
-      // direct error
-      if ((value as FieldError).message) {
-        result.push((value as FieldError).message as string);
-        return;
-      }
-
-      // nested errors
-      if (typeof value === "object") {
-        walk(value as FieldErrors<any>);
-      }
+    Object.values(value).forEach((nestedValue) => {
+      walk(nestedValue);
     });
   };
 

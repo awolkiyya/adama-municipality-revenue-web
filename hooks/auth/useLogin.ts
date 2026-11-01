@@ -1,17 +1,66 @@
+
 import { useMutation } from "@tanstack/react-query";
+import { useDispatch } from "react-redux";
+import { useRouter } from "next/navigation";
+
+import Cookies from "js-cookie";
+import { toast } from "sonner";
 
 import { authService } from "@/services/auth.service";
-
-import { useDispatch } from "react-redux";
 import { setAuth } from "@/lib/store/slices/user.slice";
 
 import type { LoginResponse } from "@/types/user";
 
-import { useRouter } from "next/navigation";
+/*
+|--------------------------------------------------------------------------
+| Types
+|--------------------------------------------------------------------------
+*/
 
-import { toast } from "sonner";
+type LoginPayload = {
+  email: string;
+  password: string;
+};
 
-import Cookies from "js-cookie";
+type OtpPayload = {
+  phone: string;
+  type: string;
+};
+
+type VerifyOtpPayload = OtpPayload & {
+  otp: string;
+};
+
+type OtpResponse = {
+  message: string;
+  expiresIn?: number;
+};
+
+/*
+|--------------------------------------------------------------------------
+| Error Helper
+|--------------------------------------------------------------------------
+*/
+
+const getErrorMessage = (
+  error: unknown,
+  fallback: string,
+): string => {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "message" in error &&
+    typeof error.message === "string"
+  ) {
+    return error.message;
+  }
+
+  return fallback;
+};
 
 /*
 |--------------------------------------------------------------------------
@@ -20,7 +69,7 @@ import Cookies from "js-cookie";
 |
 | Successful authentication establishes:
 |
-|   app  = office
+|   app = office
 |   role = employee role
 |
 |--------------------------------------------------------------------------
@@ -32,50 +81,12 @@ export const useLogin = () => {
 
   return useMutation<
     LoginResponse,
-    any,
-    {
-      email: string;
-      password: string;
-    }
+    unknown,
+    LoginPayload
   >({
-
-    mutationFn:
-      authService.login,
+    mutationFn: authService.login,
 
     onSuccess: (res) => {
-
-      /*
-      |--------------------------------------------------------------------------
-      | IMPORTANT
-      |--------------------------------------------------------------------------
-      |
-      | This login belongs to the OFFICE application.
-      |
-      |--------------------------------------------------------------------------
-      */
-
-      // Cookies.set(
-      //   "app",
-      //   "office",
-      //   {
-      //     path: "/",
-      //     sameSite: "lax",
-      //   }
-      // );
-
-
-      /*
-      |--------------------------------------------------------------------------
-      | Clear any stale citizen application state
-      |--------------------------------------------------------------------------
-      */
-
-      /*
-       * There is no separate citizen-role cookie,
-       * so the important thing is that app is now
-       * explicitly "office".
-       */
-
       /*
       |--------------------------------------------------------------------------
       | Redux authentication state
@@ -86,7 +97,7 @@ export const useLogin = () => {
         setAuth({
           user: res.user,
           token: res.access_token,
-        })
+        }),
       );
 
       /*
@@ -98,9 +109,8 @@ export const useLogin = () => {
       toast.success(
         `Welcome back, ${res.user.name}!`,
         {
-          description:
-            "Login successful.",
-        }
+          description: "Login successful.",
+        },
       );
 
       /*
@@ -109,13 +119,10 @@ export const useLogin = () => {
       |--------------------------------------------------------------------------
       */
 
-      router.push(
-        "/office/dashboard"
-      );
+      router.push("/office/dashboard");
     },
   });
 };
-
 
 /*
 |--------------------------------------------------------------------------
@@ -135,60 +142,45 @@ export const useLogin = () => {
 */
 
 export const useSendOtp = () => {
-
-  const router =
-    useRouter();
+  const router = useRouter();
 
   return useMutation<
-    {
-      message: string;
-      expiresIn?: number;
-    },
-    any,
-    {
-      phone: string;
-      type: string;
-    }
+    OtpResponse,
+    unknown,
+    OtpPayload
   >({
+    mutationFn: authService.sendOtp,
 
-    mutationFn:
-      authService.sendOtp,
-
-    onSuccess: (
-      res,
-      variables
-    ) => {
-
+    onSuccess: (res, variables) => {
       toast.success(
         "OTP sent successfully",
         {
           description:
-            res.message ??
+            res.message ||
             "Check your phone for the verification code.",
-        }
+        },
       );
 
       router.push(
         `/citizen/auth/verify-otp?phone=${encodeURIComponent(
-          variables.phone
-        )}`
+          variables.phone,
+        )}`,
       );
     },
 
     onError: (error) => {
-
       toast.error(
         "Failed to send OTP",
         {
-          description:
-            error?.message ??
+          description: getErrorMessage(
+            error,
             "Something went wrong. Please try again.",
-        }
+          ),
+        },
       );
     },
   });
 };
-
 
 /*
 |--------------------------------------------------------------------------
@@ -203,48 +195,37 @@ export const useSendOtp = () => {
 */
 
 export const useResendOtp = () => {
-
   return useMutation<
-    {
-      message: string;
-      expiresIn?: number;
-    },
-    any,
-    {
-      phone: string;
-      type: string;
-    }
+    OtpResponse,
+    unknown,
+    OtpPayload
   >({
-
-    mutationFn:
-      authService.resendOtp,
+    mutationFn: authService.resendOtp,
 
     onSuccess: (res) => {
-
       toast.success(
         "OTP resent",
         {
           description:
-            res.message ??
+            res.message ||
             "A new verification code has been sent to your phone.",
-        }
+        },
       );
     },
 
     onError: (error) => {
-
       toast.error(
         "Failed to resend OTP",
         {
-          description:
-            error?.message ??
+          description: getErrorMessage(
+            error,
             "Something went wrong. Please try again.",
-        }
+          ),
+        },
       );
     },
   });
 };
-
 
 /*
 |--------------------------------------------------------------------------
@@ -261,37 +242,23 @@ export const useResendOtp = () => {
 */
 
 export const useVerifyOtp = () => {
-
-  const dispatch =
-    useDispatch();
-
-  const router =
-    useRouter();
+  const dispatch = useDispatch();
+  const router = useRouter();
 
   return useMutation<
     LoginResponse,
-    any,
-    {
-      phone: string;
-      otp: string;
-      type: string;
-    }
+    unknown,
+    VerifyOtpPayload
   >({
-
-    mutationFn:
-      authService.verifyOtp,
+    mutationFn: authService.verifyOtp,
 
     onSuccess: (res) => {
-
       /*
       |--------------------------------------------------------------------------
       | IMPORTANT: SWITCH APPLICATION
       |--------------------------------------------------------------------------
       |
-      | The user may previously have been an office
-      | employee in this browser.
-      |
-      | Therefore explicitly change:
+      | Explicitly change:
       |
       |     app = citizen
       |
@@ -304,17 +271,12 @@ export const useVerifyOtp = () => {
         {
           path: "/",
           sameSite: "lax",
-        }
+        },
       );
 
       /*
       |--------------------------------------------------------------------------
-      | IMPORTANT: REMOVE EMPLOYEE ROLE
-      |--------------------------------------------------------------------------
-      |
-      | A citizen must never inherit the previous
-      | employee role from the browser.
-      |
+      | REMOVE EMPLOYEE ROLE
       |--------------------------------------------------------------------------
       */
 
@@ -322,7 +284,7 @@ export const useVerifyOtp = () => {
         "role",
         {
           path: "/",
-        }
+        },
       );
 
       /*
@@ -335,7 +297,7 @@ export const useVerifyOtp = () => {
         setAuth({
           user: res.user,
           token: res.access_token,
-        })
+        }),
       );
 
       /*
@@ -347,9 +309,8 @@ export const useVerifyOtp = () => {
       toast.success(
         "Login successful",
         {
-          description:
-            `Welcome, ${res.user.name}!`,
-        }
+          description: `Welcome, ${res.user.name}!`,
+        },
       );
 
       /*
@@ -358,20 +319,18 @@ export const useVerifyOtp = () => {
       |--------------------------------------------------------------------------
       */
 
-      router.push(
-        "/citizen/dashboard"
-      );
+      router.push("/citizen/dashboard");
     },
 
     onError: (error) => {
-
       toast.error(
         "OTP verification failed",
         {
-          description:
-            error?.message ??
+          description: getErrorMessage(
+            error,
             "Invalid or expired OTP.",
-        }
+          ),
+        },
       );
     },
   });

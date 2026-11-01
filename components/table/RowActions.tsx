@@ -220,7 +220,7 @@ type Props = {
      ROW
   --------------------------------------------------- */
 
-  row?: any;
+  row?: object;
 };
 
 
@@ -295,7 +295,9 @@ export function RowActions({
   const canManageFormulaVariables =
     actions.manageFormulaVariables &&
     String(
-      row?.calculationType ?? ""
+      row && "calculationType" in row
+        ? row.calculationType
+        : ""
     ).toLowerCase() === "formula";
 
 

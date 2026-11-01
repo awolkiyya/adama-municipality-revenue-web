@@ -261,8 +261,9 @@ function getFieldIdentifiers(
 
   return candidates
     .map(normalizeIdentifier)
-    .filter((value, index, values) =>
-      Boolean(value) && values.indexOf(value) === index,
+    .filter(
+      (value, index, values) =>
+        Boolean(value) && values.indexOf(value) === index,
     );
 }
 
@@ -367,7 +368,10 @@ function extractServiceFieldValues(
     );
   });
 
-  if (!assessmentService || !Array.isArray(assessmentService.values)) {
+  if (
+    !assessmentService ||
+    !Array.isArray(assessmentService.values)
+  ) {
     return result;
   }
 
@@ -454,18 +458,6 @@ function resolveFinancialValue(
 |--------------------------------------------------------------------------
 | Build Backend Service Fields
 |--------------------------------------------------------------------------
-|
-| Ordinary value:
-|   FIELD_UUID: 2000
-|
-| New upload:
-|   FIELD_UUID: {
-|     __file: "file__SERVICE_UUID__FIELD_UUID"
-|   }
-|
-| Existing file values remain in the persisted value map unless
-| the user explicitly removes them.
-|--------------------------------------------------------------------------
 */
 
 function buildBackendServiceFields(
@@ -539,11 +531,6 @@ export function useExistingAgreement({
   const [serviceFiles, setServiceFiles] =
     useState<ServiceFileValues>({});
 
-  /*
-   * Explicitly removed existing attachments are tracked separately
-   * from newly selected files. The backend must implement removal
-   * semantics for this list before these removals can be persisted.
-   */
   const [removedFiles, setRemovedFiles] = useState<
     Record<string, string[]>
   >({});
@@ -553,12 +540,20 @@ export function useExistingAgreement({
 
   /*
    * Edit Hydration
+   *
+   * Defer state updates to a microtask to avoid synchronous
+   * state updates inside the effect body.
+   *
+   * Cleanup prevents stale hydration when initialData changes
+   * or the component unmounts.
    */
 
   useEffect(() => {
     if (!isEditMode || !isRecord(initialData)) {
       return;
     }
+
+    let cancelled = false;
 
     const data = initialData;
     const services = getAssessmentServices(data);
@@ -583,14 +578,14 @@ export function useExistingAgreement({
       firstValue(data, ["notes"]),
     );
 
-    setAgreement({
+    const nextAgreement: ExistingAgreementForm = {
       taxpayerId,
       revenueServiceId,
       source,
       notes,
-    });
+    };
 
-    setFinancial({
+    const nextFinancial: ExistingFinancialPosition = {
       originalObligation: resolveFinancialValue(
         data,
         services,
@@ -616,19 +611,31 @@ export function useExistingAgreement({
         services,
         ["balanceAsOfDate", "balance_as_of_date"],
       ),
-    });
+    };
 
-    setServiceFieldValues(
+    const nextServiceFieldValues =
       extractServiceFieldValues(
         services,
         revenueServiceId,
         revenueServices,
-      ),
-    );
+      );
 
-    setServiceFiles({});
-    setRemovedFiles({});
-    setValidationErrors({});
+    queueMicrotask(() => {
+      if (cancelled) {
+        return;
+      }
+
+      setAgreement(nextAgreement);
+      setFinancial(nextFinancial);
+      setServiceFieldValues(nextServiceFieldValues);
+      setServiceFiles({});
+      setRemovedFiles({});
+      setValidationErrors({});
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [isEditMode, initialData, revenueServices]);
 
   /*
@@ -948,10 +955,6 @@ export function useExistingAgreement({
       file: File | null,
     ) => {
       if (!file) {
-        /*
-         * Clearing the browser's file input is not treated as
-         * removing an existing server attachment.
-         */
         setServiceFiles((previous) => {
           const current = { ...(previous[serviceId] ?? {}) };
           delete current[field];
@@ -985,10 +988,6 @@ export function useExistingAgreement({
 
   /*
    * Explicitly Remove Existing File
-   *
-   * Pass the persisted file UUID/ID from the attachment UI.
-   * The backend must implement `removed_file_ids` semantics
-   * before this operation can delete a server-side attachment.
    */
 
   const removeFile = useCallback(
@@ -1026,11 +1025,6 @@ export function useExistingAgreement({
           };
         });
       }
-
-      /*
-       * Do not clear the existing persisted value here. Removing
-       * a server attachment is a separate, explicit operation.
-       */
     },
     [],
   );
@@ -1433,16 +1427,6 @@ export function useExistingAgreement({
 
   /*
    * Build Multipart FormData
-   *
-   * File field:
-   *   file__SERVICE_UUID__FIELD_UUID
-   *
-   * JSON reference:
-   *   {
-   *     "FIELD_UUID": {
-   *       "__file": "file__SERVICE_UUID__FIELD_UUID"
-   *     }
-   *   }
    */
 
   const buildFormData = useCallback((): FormData => {

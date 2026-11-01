@@ -5,12 +5,17 @@ import { toast } from "sonner";
 import { useRouter, useParams } from "next/navigation";
 import { useCitizen, useUpdateCitizen } from "@/hooks/useCitizen.hook";
 import { mapCitizenToForm } from "@/utils/citizen.mapper";
+import type { AxiosError } from "axios";
+
+type ApiErrorResponse = {
+  message?: string;
+};
 
 function TaxPayerEditPage() {
   const router = useRouter();
-  const params = useParams();
+  const params = useParams<{ id: string }>();
 
-  const id = params.id as string;
+  const id = params.id;
 
   const {
     data: citizen,
@@ -23,7 +28,6 @@ function TaxPayerEditPage() {
     isPending,
   } = useUpdateCitizen();
 
-
   if (isLoading) {
     return (
       <div className="p-6">
@@ -31,7 +35,6 @@ function TaxPayerEditPage() {
       </div>
     );
   }
-
 
   if (isError || !citizen) {
     return (
@@ -41,11 +44,8 @@ function TaxPayerEditPage() {
     );
   }
 
-
   return (
     <div className="mx-auto max-w-4xl space-y-6 p-6">
-
-      {/* Header */}
       <div>
         <h1 className="text-2xl font-semibold">
           Edit Citizen
@@ -56,12 +56,10 @@ function TaxPayerEditPage() {
         </p>
       </div>
 
-
       <TaxpayerForm
         defaultValues={mapCitizenToForm(citizen)}
         isSubmitting={isPending}
         onSubmit={(values) => {
-
           updateCitizen(
             {
               id,
@@ -69,25 +67,13 @@ function TaxPayerEditPage() {
             },
             {
               onSuccess: () => {
-                toast.success(
-                  "Citizen updated successfully."
-                );
-
+                toast.success("Citizen updated successfully.");
                 router.push("/office/dashboard/taxpayers");
-              },
-
-              onError: (error: any) => {
-                toast.error(
-                  error?.response?.data?.message ??
-                  "Failed to update citizen."
-                );
-              },
+              }
             }
           );
-
         }}
       />
-
     </div>
   );
 }

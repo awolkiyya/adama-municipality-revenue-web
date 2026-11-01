@@ -740,7 +740,7 @@ function PaymentsContent() {
     }
 
     return options;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [unitsResponse, initialFilters.unitId]);
 
   /* -------------------------------- Search -------------------------------- */

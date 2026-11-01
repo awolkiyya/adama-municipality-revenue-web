@@ -4,7 +4,6 @@ import type { LucideIcon } from "lucide-react";
 import {
   ArrowRight,
   CheckCircle2,
-  Clock3,
   FileText,
   ShieldCheck,
   User,

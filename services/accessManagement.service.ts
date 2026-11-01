@@ -1,13 +1,27 @@
+
 import { api } from "@/lib/api";
 import { normalizeApiError } from "@/lib/api-error";
-import {
+
+import type {
   Permission,
   Role,
   RolePermissionPayload,
   UserRolePayload,
 } from "@/types/access-management";
-import { ApiResponse, ListResponse } from "@/types/api";
-import { PermissionGroup } from "@/types/permission.types";
+
+import type {
+  ApiResponse,
+  ListResponse,
+} from "@/types/api";
+
+import type { PermissionGroup } from "@/types/permission.types";
+
+type AccessManagementQueryParams = {
+  search?: string;
+  page?: number;
+  per_page?: number;
+  guard_name?: string;
+};
 
 /**
  * Access Management API Service
@@ -28,27 +42,23 @@ export const accessManagementService = {
    *
    * GET /system/access-management/permissions/grouped
    */
-  getPermissions: async (params?: {
-    search?: string;
-    page?: number;
-    per_page?: number;
-    guard_name?: string;
-  }): Promise<ListResponse<PermissionGroup>> => {
+  getPermissions: async (
+    params?: AccessManagementQueryParams
+  ): Promise<ListResponse<PermissionGroup>> => {
     try {
-      const cleanParams = Object.entries(params || {}).reduce(
-        (acc, [key, value]) => {
-          if (
-            value !== undefined &&
-            value !== null &&
-            value !== ""
-          ) {
-            acc[key] = value;
-          }
+      const cleanParams = Object.entries(params ?? {}).reduce<
+        Record<string, unknown>
+      >((acc, [key, value]) => {
+        if (
+          value !== undefined &&
+          value !== null &&
+          value !== ""
+        ) {
+          acc[key] = value;
+        }
 
-          return acc;
-        },
-        {} as Record<string, any>
-      );
+        return acc;
+      }, {});
 
       const res = await api.get<ListResponse<PermissionGroup>>(
         "/system/access-management/permissions/grouped",
@@ -65,9 +75,6 @@ export const accessManagementService = {
 
   /**
    * GET SINGLE PERMISSION
-   *
-   * NOTE:
-   * This endpoint must exist in Laravel before using it.
    */
   getPermissionById: async (
     id: string
@@ -92,27 +99,23 @@ export const accessManagementService = {
    *
    * GET /system/access-management/roles
    */
-  getRoles: async (params?: {
-    search?: string;
-    page?: number;
-    per_page?: number;
-    guard_name?: string;
-  }): Promise<ListResponse<Role>> => {
+  getRoles: async (
+    params?: AccessManagementQueryParams
+  ): Promise<ListResponse<Role>> => {
     try {
-      const cleanParams = Object.entries(params || {}).reduce(
-        (acc, [key, value]) => {
-          if (
-            value !== undefined &&
-            value !== null &&
-            value !== ""
-          ) {
-            acc[key] = value;
-          }
+      const cleanParams = Object.entries(params ?? {}).reduce<
+        Record<string, unknown>
+      >((acc, [key, value]) => {
+        if (
+          value !== undefined &&
+          value !== null &&
+          value !== ""
+        ) {
+          acc[key] = value;
+        }
 
-          return acc;
-        },
-        {} as Record<string, any>
-      );
+        return acc;
+      }, {});
 
       const res = await api.get<ListResponse<Role>>(
         "/system/access-management/roles",
@@ -172,12 +175,6 @@ export const accessManagementService = {
    * UPDATE ROLE
    *
    * PATCH /system/access-management/roles/{id}
-   *
-   * Only role metadata:
-   * - name
-   * - description
-   *
-   * Permission assignment/revocation is handled separately.
    */
   updateRole: async (
     id: string,
@@ -224,14 +221,7 @@ export const accessManagementService = {
   /**
    * GET ROLE PERMISSIONS
    *
-   * IMPORTANT:
-   * Your current Laravel routes do NOT define this endpoint.
-   *
-   * Add:
-   *
-   * GET /system/access-management/roles/{role}/permissions
-   *
-   * if you need this method.
+   * GET /system/access-management/roles/{role}/grouped
    */
   getRolePermissions: async (
     roleId: string
@@ -299,12 +289,15 @@ export const accessManagementService = {
    * GET ROLE HISTORY
    *
    * GET /system/access-management/roles/{role}/history
+   *
+   * Uses unknown until the backend history response
+   * structure is explicitly defined.
    */
   getRoleHistory: async (
     roleId: string
-  ): Promise<ApiResponse<any>> => {
+  ): Promise<ApiResponse<unknown>> => {
     try {
-      const res = await api.get<ApiResponse<any>>(
+      const res = await api.get<ApiResponse<unknown>>(
         `/system/access-management/roles/${roleId}/history`
       );
 
@@ -317,16 +310,6 @@ export const accessManagementService = {
   /* =====================================================
      USER ROLE MANAGEMENT
   ====================================================== */
-
-  /**
-   * IMPORTANT:
-   *
-   * These endpoints are NOT defined in the Role routes you
-   * showed earlier.
-   *
-   * Keep these URLs only if your UserController routes
-   * actually define them.
-   */
 
   /**
    * GET USER ROLES
@@ -347,13 +330,16 @@ export const accessManagementService = {
 
   /**
    * ASSIGN ROLE TO USER
+   *
+   * Uses unknown until the backend assignment response
+   * structure is explicitly defined.
    */
   assignUserRole: async (
     userId: string,
     data: UserRolePayload
-  ): Promise<ApiResponse<any>> => {
+  ): Promise<ApiResponse<unknown>> => {
     try {
-      const res = await api.post<ApiResponse<any>>(
+      const res = await api.post<ApiResponse<unknown>>(
         `/system/access-management/users/${userId}/roles`,
         data
       );

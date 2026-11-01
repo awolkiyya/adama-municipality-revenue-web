@@ -508,9 +508,9 @@ export function AgreementInformationStep({
               onSelectTaxpayer
             }
 
-            taxpayers={
-              taxpayers
-            }
+            // taxpayers={
+            //   taxpayers
+            // }
 
           />
 

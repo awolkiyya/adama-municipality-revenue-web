@@ -1,3 +1,4 @@
+
 "use client";
 
 import {
@@ -9,7 +10,7 @@ import {
 import { toast } from "sonner";
 
 import { UserService } from "@/services/user.service";
-import { UserQueryParams } from "@/types/user";
+import type { UserQueryParams } from "@/types/user";
 import { useRouter } from "next/navigation";
 
 // =====================================================
@@ -19,7 +20,7 @@ export function useUsers(params: UserQueryParams) {
   return useQuery({
     queryKey: ["users", params],
     queryFn: () => UserService.getUsers(params),
-    staleTime: 1000 * 60 * 2, // 2 minutes cache
+    staleTime: 1000 * 60 * 2,
   });
 }
 
@@ -52,8 +53,7 @@ export function useCreateUser() {
       qc.invalidateQueries({ queryKey: ["users"] });
       toast.success("User created successfully");
       router.push("/office/dashboard/users");
-
-    }
+    },
   });
 }
 
@@ -70,7 +70,7 @@ export function useUpdateUser() {
       data,
     }: {
       id: string | number;
-      data: any;
+      data: Parameters<typeof UserService.updateUser>[1];
     }) => UserService.updateUser(id, data),
 
     onSuccess: (_, vars) => {
@@ -79,7 +79,6 @@ export function useUpdateUser() {
 
       toast.success("User updated successfully");
       router.push("/office/dashboard/users");
-
     },
   });
 }

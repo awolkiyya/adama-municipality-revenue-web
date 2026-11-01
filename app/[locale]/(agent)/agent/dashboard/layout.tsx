@@ -288,7 +288,7 @@ export function NotificationBell() {
           </h4>
 
           <p className="mt-2 max-w-[300px] text-sm text-muted-foreground">
-            You're all caught up. New activity from your
+            Youre all caught up. New activity from your
             planning, KPI, reporting, and document workflows
             will appear here automatically.
           </p>

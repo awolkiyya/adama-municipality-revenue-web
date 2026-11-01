@@ -301,7 +301,7 @@ export function AssessmentToolbar({
   // ===================================================
 
   const isPendingQueue =
-    config.role ===
+    config.title ===
     "REVENUE_DECISION_OFFICER";
 
 
@@ -577,7 +577,7 @@ export function AssessmentToolbar({
                 EXPORT
                 ================================================= */}
 
-            {config.canExport && (
+            {/* {config.canExport && (
 
               <div
                 className="
@@ -598,7 +598,7 @@ export function AssessmentToolbar({
 
               </div>
 
-            )}
+            )} */}
 
           </div>
 

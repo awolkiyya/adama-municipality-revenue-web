@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
@@ -56,18 +57,14 @@ import { CommenTable } from "@/components/table/CommenTable";
 import { DataTablePagination } from "@/components/table/data-pagination";
 import { Skeleton } from "@/components/ui/skeleton";
 
-
 import { cn } from "@/lib/utils";
 import ProtectedRoute from "@/components/access/ProtectedRoute";
 import Can from "@/components/access/Can";
 
-/**
- * Extract the exact filter type used by useCitizens.
- *
- * NonNullable is required because the hook accepts:
- *
- * CitizenFilters | undefined
- */
+/* ============================================================
+   TYPES
+============================================================ */
+
 type CitizenQueryParams = NonNullable<
   Parameters<typeof useCitizens>[0]
 >;
@@ -84,6 +81,14 @@ type CitizenStatus = NonNullable<
   CitizenQueryParams["status"]
 >;
 
+/**
+ * CommenTable expects records with a string index signature.
+ * Citizen is the API model and does not declare that signature.
+ */
+type TableCitizen = Record<string, unknown> & {
+  id: string | number;
+  is_active?: boolean;
+};
 
 /* ============================================================
    FILTER SCHEMA
@@ -97,21 +102,11 @@ export const citizenFilters: FilterField[] = [
     icon: CircleDot,
     defaultValue: "ALL",
     options: [
-      {
-        label: "All",
-        value: "ALL",
-      },
-      {
-        label: "Active",
-        value: "ACTIVE",
-      },
-      {
-        label: "Inactive",
-        value: "INACTIVE",
-      },
+      { label: "All", value: "ALL" },
+      { label: "Active", value: "ACTIVE" },
+      { label: "Inactive", value: "INACTIVE" },
     ],
   },
-
   {
     key: "source",
     label: "Registration Source",
@@ -119,25 +114,12 @@ export const citizenFilters: FilterField[] = [
     icon: Database,
     defaultValue: "ALL",
     options: [
-      {
-        label: "All Sources",
-        value: "ALL",
-      },
-      {
-        label: "Manual Registration",
-        value: "MANUAL",
-      },
-      {
-        label: "Imported Records",
-        value: "IMPORT",
-      },
-      {
-        label: "External System",
-        value: "EXTERNAL_SYSTEM",
-      },
+      { label: "All Sources", value: "ALL" },
+      { label: "Manual Registration", value: "MANUAL" },
+      { label: "Imported Records", value: "IMPORT" },
+      { label: "External System", value: "EXTERNAL_SYSTEM" },
     ],
   },
-
   {
     key: "gender",
     label: "Gender",
@@ -145,22 +127,12 @@ export const citizenFilters: FilterField[] = [
     icon: UserRoundCheck,
     defaultValue: "ALL",
     options: [
-      {
-        label: "All",
-        value: "ALL",
-      },
-      {
-        label: "Male",
-        value: "MALE",
-      },
-      {
-        label: "Female",
-        value: "FEMALE",
-      },
+      { label: "All", value: "ALL" },
+      { label: "Male", value: "MALE" },
+      { label: "Female", value: "FEMALE" },
     ],
   },
 ];
-
 
 /* ============================================================
    INITIAL FILTERS
@@ -174,13 +146,12 @@ const INITIAL_FILTERS: Record<string, string> = {
 
 const DEFAULT_PAGE_SIZE = 10;
 
-
 /* ============================================================
    SEARCH INPUT
 ============================================================ */
 
 function SearchInput(
-  props: React.ComponentProps<typeof Input>
+  props: React.ComponentProps<typeof Input>,
 ) {
   return (
     <div className="relative w-full max-w-xl">
@@ -194,74 +165,57 @@ function SearchInput(
   );
 }
 
-
 /* ============================================================
    FILTER HELPERS
 ============================================================ */
 
 function isActiveValue(
-  value: string | undefined
+  value: string | undefined,
 ): boolean {
   return Boolean(value) && value !== "ALL";
 }
 
 function activeEntries(
-  value: Record<string, string>
+  value: Record<string, string>,
 ) {
   return Object.entries(value).filter(
-    ([, currentValue]) =>
-      isActiveValue(currentValue)
+    ([, currentValue]) => isActiveValue(currentValue),
   );
 }
 
-function fieldLabelFor(
-  key: string
-): string {
+function fieldLabelFor(key: string): string {
   return (
-    citizenFilters.find(
-      (field) => field.key === key
-    )?.label ?? key
+    citizenFilters.find((field) => field.key === key)?.label ??
+    key
   );
 }
 
 function optionLabelFor(
   key: string,
-  value: string
+  value: string,
 ): string {
-  const field =
-    citizenFilters.find(
-      (item) => item.key === key
-    );
+  const field = citizenFilters.find(
+    (item) => item.key === key,
+  );
 
   return (
     field?.options?.find(
-      (option) =>
-        option.value === value
+      (option) => option.value === value,
     )?.label ?? value
   );
 }
-
 
 /* ============================================================
    FILTER DEFAULT VALUE
 ============================================================ */
 
-/**
- * FilterField.defaultValue supports multiple
- * field types:
- *
- * string | DateRangeValue | null | undefined
- *
- * Citizens only use string-based select filters.
- */
 function getStringDefaultValue(
-  field: FilterField
+  field: FilterField,
 ): string {
   return typeof field.defaultValue === "string"
     ? field.defaultValue
     : "ALL";
 }
-
 
 /* ============================================================
    PILL GROUP
@@ -276,32 +230,24 @@ function PillGroup({
   value: string;
   onChange: (value: string) => void;
 }) {
-  const Icon =
-    field.icon ?? SlidersHorizontal;
+  const Icon = field.icon ?? SlidersHorizontal;
 
-  const isActive =
-    isActiveValue(value);
+  const isActive = isActiveValue(value);
 
-  const defaultValue =
-    getStringDefaultValue(field);
+  const defaultValue = getStringDefaultValue(field);
 
   return (
     <div className="space-y-2.5">
-      {/* Field header */}
-
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 text-sm font-medium">
           <Icon className="h-4 w-4 text-muted-foreground" />
-
           {field.label}
         </div>
 
         {isActive && (
           <button
             type="button"
-            onClick={() =>
-              onChange(defaultValue)
-            }
+            onClick={() => onChange(defaultValue)}
             className="text-xs font-medium text-muted-foreground transition hover:text-foreground"
           >
             Clear
@@ -309,41 +255,31 @@ function PillGroup({
         )}
       </div>
 
-      {/* Options */}
-
       <div className="flex flex-wrap gap-2">
-        {field.options?.map(
-          (option) => {
-            const selected =
-              value === option.value;
+        {field.options?.map((option) => {
+          const selected = value === option.value;
 
-            return (
-              <button
-                key={option.value}
-                type="button"
-                onClick={() =>
-                  onChange(
-                    option.value
-                  )
-                }
-                aria-pressed={selected}
-                className={cn(
-                  "rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors",
-                  selected
-                    ? "border-primary bg-primary text-primary-foreground shadow-sm"
-                    : "border-input bg-background text-foreground hover:bg-muted"
-                )}
-              >
-                {option.label}
-              </button>
-            );
-          }
-        )}
+          return (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => onChange(option.value)}
+              aria-pressed={selected}
+              className={cn(
+                "rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors",
+                selected
+                  ? "border-primary bg-primary text-primary-foreground shadow-sm"
+                  : "border-input bg-background text-foreground hover:bg-muted",
+              )}
+            >
+              {option.label}
+            </button>
+          );
+        })}
       </div>
     </div>
   );
 }
-
 
 /* ============================================================
    FILTERS SHEET
@@ -351,11 +287,7 @@ function PillGroup({
 
 interface FiltersSheetProps {
   value: Record<string, string>;
-
-  onApply: (
-    value: Record<string, string>
-  ) => void;
-
+  onApply: (value: Record<string, string>) => void;
   onReset: () => void;
 }
 
@@ -364,135 +296,71 @@ function FiltersSheet({
   onApply,
   onReset,
 }: FiltersSheetProps) {
-  const [open, setOpen] =
-    useState(false);
+  const [open, setOpen] = useState(false);
 
-  const [draft, setDraft] =
-    useState<Record<string, string>>(
-      value
-    );
-
-  /* ----------------------------------------------------------
-     Applied filter count
-  ---------------------------------------------------------- */
-
-  const appliedCount = useMemo(
-    () =>
-      activeEntries(value).length,
-    [value]
+  const [draft, setDraft] = useState<Record<string, string>>(
+    value,
   );
 
-  /* ----------------------------------------------------------
-     Draft active filters
-  ---------------------------------------------------------- */
+  const appliedCount = useMemo(
+    () => activeEntries(value).length,
+    [value],
+  );
 
   const draftActive = useMemo(
     () => activeEntries(draft),
-    [draft]
+    [draft],
   );
-
-  /* ----------------------------------------------------------
-     Detect changes
-  ---------------------------------------------------------- */
 
   const isDirty = useMemo(
-    () =>
-      JSON.stringify(draft) !==
-      JSON.stringify(value),
-    [draft, value]
+    () => JSON.stringify(draft) !== JSON.stringify(value),
+    [draft, value],
   );
 
-  /* ----------------------------------------------------------
-     Sheet open state
-  ---------------------------------------------------------- */
-
-  const handleOpenChange = (
-    next: boolean
-  ) => {
+  const handleOpenChange = (next: boolean) => {
     if (next) {
-      setDraft({
-        ...value,
-      });
+      setDraft({ ...value });
     }
 
     setOpen(next);
   };
 
-  /* ----------------------------------------------------------
-     Field change
-  ---------------------------------------------------------- */
-
   const handleFieldChange = (
     key: string,
-    value: string
+    nextValue: string,
   ) => {
-    setDraft(
-      (previous) => ({
-        ...previous,
-        [key]: value,
-      })
-    );
+    setDraft((previous) => ({
+      ...previous,
+      [key]: nextValue,
+    }));
   };
 
-  /* ----------------------------------------------------------
-     Remove chip
-  ---------------------------------------------------------- */
-
-  const handleRemoveChip = (
-    key: string
-  ) => {
-    setDraft(
-      (previous) => ({
-        ...previous,
-        [key]:
-          INITIAL_FILTERS[key] ??
-          "ALL",
-      })
-    );
+  const handleRemoveChip = (key: string) => {
+    setDraft((previous) => ({
+      ...previous,
+      [key]: INITIAL_FILTERS[key] ?? "ALL",
+    }));
   };
-
-  /* ----------------------------------------------------------
-     Clear all
-  ---------------------------------------------------------- */
 
   const handleClearAll = () => {
-    setDraft({
-      ...INITIAL_FILTERS,
-    });
+    setDraft({ ...INITIAL_FILTERS });
   };
 
-  /* ----------------------------------------------------------
-     Apply
-  ---------------------------------------------------------- */
-
   const handleApply = () => {
-    onApply({
-      ...draft,
-    });
-
+    onApply({ ...draft });
     setOpen(false);
   };
 
-  /* ----------------------------------------------------------
-     Reset
-  ---------------------------------------------------------- */
-
   const handleReset = () => {
     onReset();
-
-    setDraft({
-      ...INITIAL_FILTERS,
-    });
-
+    setDraft({ ...INITIAL_FILTERS });
     setOpen(false);
   };
 
   return (
     <Sheet
       open={open}
-      onOpenChange={
-        handleOpenChange
-      }
+      onOpenChange={handleOpenChange}
     >
       <SheetTrigger asChild>
         <Button
@@ -500,7 +368,6 @@ function FiltersSheet({
           className="h-11 gap-2"
         >
           <SlidersHorizontal className="h-4 w-4" />
-
           Filters
 
           {appliedCount > 0 && (
@@ -518,129 +385,86 @@ function FiltersSheet({
         side="right"
         className="flex w-full flex-col gap-0 p-0 sm:max-w-md"
       >
-        {/* Header */}
-
         <SheetHeader className="border-b px-6 py-5">
-          <SheetTitle>
-            Filter Citizens
-          </SheetTitle>
+          <SheetTitle>Filter Citizens</SheetTitle>
 
           <SheetDescription>
-            Narrow the list by status,
-            registration source, and
+            Narrow the list by status, registration source, and
             gender.
           </SheetDescription>
         </SheetHeader>
 
-        {/* Active filter chips */}
-
         {draftActive.length > 0 && (
           <div className="flex flex-wrap items-center gap-2 border-b bg-muted/40 px-6 py-3">
-            {draftActive.map(
-              ([key, currentValue]) => (
-                <span
-                  key={key}
-                  className="flex items-center gap-1.5 rounded-full bg-background py-1 pl-3 pr-1.5 text-xs font-medium shadow-sm ring-1 ring-border"
-                >
-                  <span className="text-muted-foreground">
-                    {fieldLabelFor(
-                      key
-                    )}
-                    :
-                  </span>
-
-                  {optionLabelFor(
-                    key,
-                    currentValue
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={() =>
-                      handleRemoveChip(
-                        key
-                      )
-                    }
-                    className="rounded-full p-0.5 text-muted-foreground transition hover:bg-muted hover:text-foreground"
-                    aria-label={`Remove ${fieldLabelFor(
-                      key
-                    )} filter`}
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
+            {draftActive.map(([key, currentValue]) => (
+              <span
+                key={key}
+                className="flex items-center gap-1.5 rounded-full bg-background py-1 pl-3 pr-1.5 text-xs font-medium shadow-sm ring-1 ring-border"
+              >
+                <span className="text-muted-foreground">
+                  {fieldLabelFor(key)}:
                 </span>
-              )
-            )}
+
+                {optionLabelFor(key, currentValue)}
+
+                <button
+                  type="button"
+                  onClick={() => handleRemoveChip(key)}
+                  className="rounded-full p-0.5 text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                  aria-label={`Remove ${fieldLabelFor(key)} filter`}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            ))}
 
             <button
               type="button"
-              onClick={
-                handleClearAll
-              }
+              onClick={handleClearAll}
               className="ml-auto flex items-center gap-1 text-xs font-medium text-muted-foreground transition hover:text-foreground"
             >
               <RotateCcw className="h-3 w-3" />
-
               Clear all
             </button>
           </div>
         )}
 
-        {/* Filter fields */}
-
         <ScrollArea className="flex-1 px-6 py-5">
           <div className="space-y-6">
-            {citizenFilters.map(
-              (field, index) => {
-                const fieldValue =
-                  draft[field.key] ??
-                  getStringDefaultValue(
-                    field
-                  );
+            {citizenFilters.map((field, index) => {
+              const fieldValue =
+                draft[field.key] ??
+                getStringDefaultValue(field);
 
-                return (
-                  <div
-                    key={field.key}
-                  >
-                    <PillGroup
-                      field={field}
-                      value={
-                        fieldValue
-                      }
-                      onChange={(
-                        selectedValue
-                      ) =>
-                        handleFieldChange(
-                          field.key,
-                          selectedValue
-                        )
-                      }
-                    />
+              return (
+                <div key={field.key}>
+                  <PillGroup
+                    field={field}
+                    value={fieldValue}
+                    onChange={(selectedValue) =>
+                      handleFieldChange(
+                        field.key,
+                        selectedValue,
+                      )
+                    }
+                  />
 
-                    {index <
-                      citizenFilters.length -
-                        1 && (
-                      <Separator className="mt-6" />
-                    )}
-                  </div>
-                );
-              }
-            )}
+                  {index < citizenFilters.length - 1 && (
+                    <Separator className="mt-6" />
+                  )}
+                </div>
+              );
+            })}
           </div>
         </ScrollArea>
-
-        {/* Footer */}
 
         <SheetFooter className="gap-2 border-t px-6 py-4 sm:justify-between">
           <Button
             variant="ghost"
-            onClick={
-              handleReset
-            }
+            onClick={handleReset}
             disabled={
               appliedCount === 0 &&
-              draftActive.length ===
-                0
+              draftActive.length === 0
             }
           >
             Reset all
@@ -654,15 +478,11 @@ function FiltersSheet({
             </SheetClose>
 
             <Button
-              onClick={
-                handleApply
-              }
+              onClick={handleApply}
               disabled={!isDirty}
             >
               Apply
-
-              {draftActive.length >
-                0 &&
+              {draftActive.length > 0 &&
                 ` · ${draftActive.length}`}
             </Button>
           </div>
@@ -672,21 +492,10 @@ function FiltersSheet({
   );
 }
 
-
 /* ============================================================
    PROTECTED PAGE
 ============================================================ */
 
-/**
- * Page-level authorization.
- *
- * The permission check happens before
- * CitizensPageContent is rendered.
- *
- * Use "citizens" instead of "taxpayers"
- * if that is the resource name defined
- * in your permission system.
- */
 export default function Page() {
   return (
     <ProtectedRoute
@@ -698,7 +507,6 @@ export default function Page() {
   );
 }
 
-
 /* ============================================================
    CITIZENS PAGE CONTENT
 ============================================================ */
@@ -706,191 +514,180 @@ export default function Page() {
 function CitizensPageContent() {
   const router = useRouter();
 
-  /* ----------------------------------------------------------
-     Search
-  ---------------------------------------------------------- */
+  /* Search */
 
-  const [search, setSearch] =
-    useState("");
+  const [search, setSearch] = useState("");
 
-  /* ----------------------------------------------------------
-     Pagination
-  ---------------------------------------------------------- */
+  /* Pagination */
 
-  const [page, setPage] =
-    useState(1);
+  const [page, setPage] = useState(1);
 
-  const [pageSize, setPageSize] =
-    useState(
-      DEFAULT_PAGE_SIZE
-    );
+  const [pageSize, setPageSize] = useState(
+    DEFAULT_PAGE_SIZE,
+  );
 
-  /* ----------------------------------------------------------
-     Filters
-  ---------------------------------------------------------- */
+  /* Filters */
 
-  const [filters, setFilters] =
-    useState<
-      Record<string, string>
-    >({
-      ...INITIAL_FILTERS,
-    });
+  const [filters, setFilters] = useState<
+    Record<string, string>
+  >({
+    ...INITIAL_FILTERS,
+  });
 
-  /* ==========================================================
-     TYPED CITIZEN FILTER VALUES
-  ========================================================== */
-
-  /**
-   * These variables convert the generic
-   * Record<string, string> values into the exact
-   * types expected by useCitizens().
-   *
-   * The cast is safe because the values come from
-   * citizenFilters, which only contains valid API
-   * values.
-   */
+  /* Typed filter values */
 
   const statusFilter =
-  filters.status === "ALL"
-    ? undefined
-    : (filters.status as CitizenStatus);
+    filters.status === "ALL"
+      ? undefined
+      : (filters.status as CitizenStatus);
 
-const sourceFilter =
-  filters.source === "ALL"
-    ? undefined
-    : (filters.source as CitizenSource);
+  const sourceFilter =
+    filters.source === "ALL"
+      ? undefined
+      : (filters.source as CitizenSource);
 
-const genderFilter =
-  filters.gender === "ALL"
-    ? undefined
-    : (filters.gender as CitizenGender);
+  const genderFilter =
+    filters.gender === "ALL"
+      ? undefined
+      : (filters.gender as CitizenGender);
 
- /* ----------------------------------------------------------
-   Citizens query
----------------------------------------------------------- */
+  /* Citizens query */
 
-const {
-  data,
-  isLoading,
-  isFetching,
-} = useCitizens({
-  search,
-  page,
-  per_page: pageSize,
-  source: sourceFilter,
-  gender: genderFilter,
-  status: statusFilter,
-});
+  const {
+    data,
+    isLoading,
+    isFetching,
+  } = useCitizens({
+    search,
+    page,
+    per_page: pageSize,
+    source: sourceFilter,
+    gender: genderFilter,
+    status: statusFilter,
+  });
 
-const toggleStatusMutation = useToggleCitizenStatus();
+  const toggleStatusMutation = useToggleCitizenStatus();
 
-/* ----------------------------------------------------------
-   Response data
----------------------------------------------------------- */
+  /* Response data */
 
-const citizens = data?.data ?? [];
-const meta = data?.meta;
+  const citizens = data?.data ?? [];
+  const meta = data?.meta;
 
-/* ----------------------------------------------------------
-   Statistics
----------------------------------------------------------- */
+  /**
+   * Adapt Citizen[] to the record type required by CommenTable.
+   *
+   * Spreading preserves all existing citizen properties.
+   * The assertion supplies the index signature required by
+   * the generic table without changing the API model.
+   */
+  const tableCitizens = useMemo<TableCitizen[]>(
+    () =>
+      citizens.map(
+        (citizen) =>
+          ({ ...citizen }) as unknown as TableCitizen,
+      ),
+    [citizens],
+  );
 
-const stats = useMemo(
-  () => ({
-    total: meta?.summary?.total_citizens ?? 0,
+  /* Statistics */
 
-    manual: meta?.summary?.manual_registration ?? 0,
+  const stats = useMemo(
+    () => ({
+      total: meta?.summary?.total_citizens ?? 0,
+      manual: meta?.summary?.manual_registration ?? 0,
+      imported: meta?.summary?.imported_records ?? 0,
+      external: meta?.summary?.external_system ?? 0,
+    }),
+    [meta?.summary],
+  );
 
-    imported: meta?.summary?.imported_records ?? 0,
+  /* Search handler */
 
-    external: meta?.summary?.external_system ?? 0,
-  }),
-  [meta?.summary],
-);
-
-  /* ----------------------------------------------------------
-     Search handler
-  ---------------------------------------------------------- */
-
-  const handleSearchChange =
-    useCallback(
-      (
-        event: React.ChangeEvent<HTMLInputElement>
-      ) => {
-        setSearch(
-          event.target.value
-        );
-
-        setPage(1);
-      },
-      []
-    );
-
-  /* ----------------------------------------------------------
-     Filter apply
-  ---------------------------------------------------------- */
-
-  const handleFiltersApply =
-    useCallback(
-      (
-        value: Record<
-          string,
-          string
-        >
-      ) => {
-        setFilters({
-          ...value,
-        });
-
-        setPage(1);
-      },
-      []
-    );
-
-  /* ----------------------------------------------------------
-     Filter reset
-  ---------------------------------------------------------- */
-
-  const handleFiltersReset =
-    useCallback(() => {
-      setFilters({
-        ...INITIAL_FILTERS,
-      });
-
+  const handleSearchChange = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      setSearch(event.target.value);
       setPage(1);
-    }, []);
+    },
+    [],
+  );
 
-  /* ----------------------------------------------------------
-     Page size
-  ---------------------------------------------------------- */
+  /* Filter apply */
 
-  const handlePageSizeChange =
-    useCallback(
-      (size: number) => {
-        setPageSize(size);
-        setPage(1);
-      },
-      []
-    );
+  const handleFiltersApply = useCallback(
+    (value: Record<string, string>) => {
+      setFilters({ ...value });
+      setPage(1);
+    },
+    [],
+  );
 
-  /* ==========================================================
-     RENDER
-  ========================================================== */
+  /* Filter reset */
+
+  const handleFiltersReset = useCallback(() => {
+    setFilters({ ...INITIAL_FILTERS });
+    setPage(1);
+  }, []);
+
+  /* Page size */
+
+  const handlePageSizeChange = useCallback(
+    (size: number) => {
+      setPageSize(size);
+      setPage(1);
+    },
+    [],
+  );
+
+  /* View citizen */
+
+  const handleViewCitizen = useCallback(
+    (row: TableCitizen) => {
+      router.push(
+        `/office/dashboard/taxpayers/${row.id}/detail`,
+      );
+    },
+    [router],
+  );
+
+  /* Edit citizen */
+
+  const handleEditCitizen = useCallback(
+    (row: TableCitizen) => {
+      router.push(
+        `/office/dashboard/taxpayers/${row.id}/edit`,
+      );
+    },
+    [router],
+  );
+
+  /* Toggle citizen status */
+
+  const handleToggleCitizenStatus = useCallback(
+    (row: TableCitizen) => {
+      if (typeof row.is_active !== "boolean") {
+        return;
+      }
+
+      toggleStatusMutation.mutate({
+        id: String(row.id),
+        isActive: !row.is_active,
+      });
+    },
+    [toggleStatusMutation],
+  );
+
+  /* Render */
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
-      {/* ======================================================
-          HEADER
-      ====================================================== */}
+      {/* Header */}
 
       <Banner
         description="Manage citizen registration, identity records, imports, and external system synchronization across the revenue platform."
         badge={
           <IconBadge
-            className="rounded-fullpy-2"
-            icon={
-              <Landmark className="h-3 w-3" />
-            }
+            className="rounded-full py-2"
+            icon={<Landmark className="h-3 w-3" />}
           >
             Citizen Management
           </IconBadge>
@@ -904,46 +701,46 @@ const stats = useMemo(
             position="bottom-right"
           />
         }
-
         overlayClassName="bg-transparent"
-
         actions={
           <div className="flex gap-3">
-          <Can
-            resource="citizens"
-            action="create"
-          >
-            <Button
-              variant="secondary"
-              onClick={() =>
-                router.push("/office/dashboard/taxpayers/create")
-              }
+            <Can
+              resource="citizens"
+              action="create"
             >
-              <Plus className="mr-2 h-4 w-4" />
-              New Citizen
-            </Button>
-          </Can>
-        
-          <Can
-            resource="citizens"
-            action="import"
-          >
-            <Button
-              onClick={() =>
-                router.push("/office/dashboard/taxpayers/import")
-              }
+              <Button
+                variant="secondary"
+                onClick={() =>
+                  router.push(
+                    "/office/dashboard/taxpayers/create",
+                  )
+                }
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                New Citizen
+              </Button>
+            </Can>
+
+            <Can
+              resource="citizens"
+              action="import"
             >
-              <Upload className="mr-2 h-4 w-4" />
-              Import Citizens
-            </Button>
-          </Can>
-        </div>
+              <Button
+                onClick={() =>
+                  router.push(
+                    "/office/dashboard/taxpayers/import",
+                  )
+                }
+              >
+                <Upload className="mr-2 h-4 w-4" />
+                Import Citizens
+              </Button>
+            </Can>
+          </div>
         }
       />
 
-      {/* ======================================================
-          KPI CARDS
-      ====================================================== */}
+      {/* KPI Cards */}
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard
@@ -975,30 +772,22 @@ const stats = useMemo(
         />
       </div>
 
-      {/* ======================================================
-          TOOLBAR
-      ====================================================== */}
+      {/* Toolbar */}
 
       <Toolbar
         search={
           <SearchInput
             placeholder="Search by citizen ID, full name, national ID or phone number..."
             value={search}
-            onChange={
-              handleSearchChange
-            }
+            onChange={handleSearchChange}
           />
         }
         right={
           <div className="flex items-center gap-3">
             <FiltersSheet
               value={filters}
-              onApply={
-                handleFiltersApply
-              }
-              onReset={
-                handleFiltersReset
-              }
+              onApply={handleFiltersApply}
+              onReset={handleFiltersReset}
             />
 
             <ExportDropdown />
@@ -1006,64 +795,40 @@ const stats = useMemo(
         }
       />
 
-      {/* ======================================================
-          CITIZEN TABLE
-      ====================================================== */}
+      {/* Citizen Table */}
 
-    <CommenTable
-      type={"taxpayer" as CommentType}
-      data={citizens}
-      page={page}
-      pageSize={pageSize}
-      isLoading={
-        isLoading ||
-        isFetching ||
-        toggleStatusMutation.isPending
-      }
-      actions={{
-        view: true,
-        edit: true,
-        toggleStatus: true,
-      }}
-      onView={(row) =>
-        router.push(
-          `/office/dashboard/taxpayers/${row.id}/detail`
-        )
-      }
-      onEdit={(row) =>
-        router.push(
-          `/office/dashboard/taxpayers/${row.id}/edit`
-        )
-      }
-      onToggleStatus={(row) => {
-        toggleStatusMutation.mutate({
-          id: row.id,
-          isActive: !row.is_active,
-        });
-      }}
-    />
+      <CommenTable
+        type={"taxpayer" as CommentType}
+        data={tableCitizens}
+        page={page}
+        pageSize={pageSize}
+        isLoading={
+          isLoading ||
+          isFetching ||
+          toggleStatusMutation.isPending
+        }
+        actions={{
+          view: true,
+          edit: true,
+          toggleStatus: true,
+        }}
+        onView={handleViewCitizen}
+        onEdit={handleEditCitizen}
+        onToggleStatus={handleToggleCitizenStatus}
+      />
 
-      {/* ======================================================
-          PAGINATION
-      ====================================================== */}
+      {/* Pagination */}
 
       <DataTablePagination
         page={page}
         pageSize={pageSize}
-        total={
-          meta?.total ?? 0
-        }
-        onPageChange={
-          setPage
-        }
-        onPageSizeChange={
-          handlePageSizeChange
-        }
+        total={meta?.total ?? 0}
+        onPageChange={setPage}
+        onPageSizeChange={handlePageSizeChange}
       />
     </div>
   );
 }
-
 
 /* ============================================================
    STAT CARD TYPES
@@ -1076,19 +841,7 @@ type StatVariant =
   | "destructive";
 
 type StatTrend = {
-  /**
-   * Signed percentage change.
-   *
-   * Example:
-   * 12.4
-   * -3.2
-   */
   value: number;
-
-  /**
-   * Example:
-   * "vs last month"
-   */
   label?: string;
 };
 
@@ -1097,32 +850,11 @@ interface StatCardProps {
   title: string;
   subtitle: string;
   value: number;
-
-  /**
-   * Tints the icon chip and
-   * left accent bar.
-   */
   variant?: StatVariant;
-
-  /**
-   * Optional period-over-period
-   * change.
-   */
   trend?: StatTrend;
-
-  /**
-   * Shows skeleton while loading.
-   */
   isLoading?: boolean;
-
-  /**
-   * Override number formatting.
-   */
-  formatValue?: (
-    value: number
-  ) => string;
+  formatValue?: (value: number) => string;
 }
-
 
 /* ============================================================
    STAT CARD STYLES
@@ -1136,34 +868,22 @@ const VARIANT_STYLES: Record<
   }
 > = {
   default: {
-    icon:
-      "bg-primary/10 text-primary",
-    accent:
-      "bg-primary",
+    icon: "bg-primary/10 text-primary",
+    accent: "bg-primary",
   },
-
   success: {
-    icon:
-      "bg-emerald-500/10 text-emerald-600",
-    accent:
-      "bg-emerald-500",
+    icon: "bg-emerald-500/10 text-emerald-600",
+    accent: "bg-emerald-500",
   },
-
   warning: {
-    icon:
-      "bg-amber-500/10 text-amber-600",
-    accent:
-      "bg-amber-500",
+    icon: "bg-amber-500/10 text-amber-600",
+    accent: "bg-amber-500",
   },
-
   destructive: {
-    icon:
-      "bg-destructive/10 text-destructive",
-    accent:
-      "bg-destructive",
+    icon: "bg-destructive/10 text-destructive",
+    accent: "bg-destructive",
   },
 };
-
 
 /* ============================================================
    TREND INDICATOR
@@ -1174,29 +894,26 @@ function TrendIndicator({
 }: {
   trend: StatTrend;
 }) {
-  const isFlat =
-    trend.value === 0;
-
-  const isUp =
-    trend.value > 0;
+  const isFlat = trend.value === 0;
+  const isUp = trend.value > 0;
 
   const Icon = isFlat
     ? Minus
     : isUp
-    ? TrendingUp
-    : TrendingDown;
+      ? TrendingUp
+      : TrendingDown;
 
   const color = isFlat
     ? "text-muted-foreground"
     : isUp
-    ? "text-emerald-600"
-    : "text-destructive";
+      ? "text-emerald-600"
+      : "text-destructive";
 
   return (
     <p
       className={cn(
         "mt-2 flex items-center gap-1 text-xs font-medium",
-        color
+        color,
       )}
     >
       <Icon
@@ -1217,7 +934,6 @@ function TrendIndicator({
   );
 }
 
-
 /* ============================================================
    STAT CARD
 ============================================================ */
@@ -1232,46 +948,30 @@ export function StatCard({
   isLoading = false,
   formatValue,
 }: StatCardProps) {
-  const styles =
-    VARIANT_STYLES[variant];
-
-  /* ----------------------------------------------------------
-     Loading
-  ---------------------------------------------------------- */
+  const styles = VARIANT_STYLES[variant];
 
   if (isLoading) {
     return (
       <Card className="border shadow-sm">
         <CardContent className="space-y-3 py-5 pl-6">
           <Skeleton className="h-4 w-24" />
-
           <Skeleton className="h-3 w-32" />
-
           <Skeleton className="h-8 w-20" />
         </CardContent>
       </Card>
     );
   }
 
-  /* ----------------------------------------------------------
-     Value formatting
-  ---------------------------------------------------------- */
-
-  const displayValue =
-    formatValue
-      ? formatValue(value)
-      : value.toLocaleString();
-
-  /* ----------------------------------------------------------
-     Render
-  ---------------------------------------------------------- */
+  const displayValue = formatValue
+    ? formatValue(value)
+    : value.toLocaleString();
 
   return (
     <Card className="group relative overflow-hidden border shadow-sm transition hover:shadow-md">
       <span
         className={cn(
           "absolute inset-y-0 left-0 w-1",
-          styles.accent
+          styles.accent,
         )}
         aria-hidden="true"
       />
@@ -1290,17 +990,13 @@ export function StatCard({
             {displayValue}
           </h3>
 
-          {trend && (
-            <TrendIndicator
-              trend={trend}
-            />
-          )}
+          {trend && <TrendIndicator trend={trend} />}
         </div>
 
         <div
           className={cn(
             "flex h-12 w-12 shrink-0 items-center justify-center rounded-xl transition-transform duration-200 group-hover:scale-105",
-            styles.icon
+            styles.icon,
           )}
         >
           <Icon

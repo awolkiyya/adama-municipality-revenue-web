@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
+
 import {
   AlertCircle,
   Loader2,
@@ -11,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+
 import {
   Select,
   SelectContent,
@@ -18,6 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+
 import { Switch } from "@/components/ui/switch";
 
 import { EthiopianDatePicker } from "../input/EthiopianDatePicker";
@@ -37,55 +40,17 @@ export type CalculationBasis =
 export type PenaltyFormValues = {
   name: string;
 
-  /**
-   * Form fields intentionally use strings.
-   *
-   * HTML inputs return strings and this also allows
-   * temporary input states such as:
-   *
-   *     ""
-   *     "5."
-   *     "5.25"
-   *
-   * The backend remains responsible for final numeric
-   * validation and financial precision.
-   */
   initial_rate: string;
   increment_rate: string;
   maximum_rate: string;
 
-  /**
-   * Determines how penalty commencement is resolved.
-   *
-   * FIXED_FISCAL_MONTH:
-   *     Uses the global payment-period configuration from
-   *     revenue settings.
-   *
-   * AGREEMENT_DATE:
-   *     Uses the applicable agreement date.
-   */
   start_type: StartType;
 
-  /**
-   * Current backend supports monthly progression only.
-   */
   increment_period: "MONTH";
 
-  /**
-   * Amount against which the penalty percentage is calculated.
-   */
   calculation_basis: CalculationBasis;
 
-  /**
-   * Stored/submitted as Gregorian YYYY-MM-DD.
-   * Displayed through EthiopianDatePicker.
-   */
   effective_from: string;
-
-  /**
-   * Stored/submitted as Gregorian YYYY-MM-DD.
-   * Empty string means no expiration.
-   */
   effective_to: string;
 
   legal_reference: string;
@@ -114,9 +79,7 @@ export type PenaltyFormProps = {
 ================================================================ */
 
 const DEFAULT_INITIAL_RATE = "5";
-
 const DEFAULT_INCREMENT_RATE = "2";
-
 const DEFAULT_MAXIMUM_RATE = "25";
 
 const DEFAULT_START_TYPE: StartType =
@@ -126,24 +89,6 @@ const DEFAULT_START_TYPE: StartType =
    FORM NORMALIZATION
 ================================================================ */
 
-/**
- * Normalize values received from the API into the exact
- * representation expected by the form.
- *
- * Laravel/PostgreSQL decimal values may arrive through JSON
- * as numbers, for example:
- *
- *     initial_rate: 5
- *
- * while the form requires:
- *
- *     initial_rate: "5"
- *
- * Keeping this normalization at the form boundary prevents
- * runtime errors such as:
- *
- *     value.trim is not a function
- */
 function normalizePenaltyFormValues(
   values: PenaltyFormValues
 ): PenaltyFormValues {
@@ -174,20 +119,12 @@ function normalizePenaltyFormValues(
         : String(values.maximum_rate),
 
     start_type:
-      values.start_type ||
-      DEFAULT_START_TYPE,
-
-    /*
-    |--------------------------------------------------------------------------
-    | increment_period is fixed by the backend.
-    |--------------------------------------------------------------------------
-    */
+      values.start_type || DEFAULT_START_TYPE,
 
     increment_period: "MONTH",
 
     calculation_basis:
-      values.calculation_basis ||
-      "PRINCIPAL",
+      values.calculation_basis || "PRINCIPAL",
 
     effective_from:
       values.effective_from == null
@@ -209,9 +146,26 @@ function normalizePenaltyFormValues(
         ? ""
         : String(values.description),
 
-    is_active:
-      Boolean(values.is_active),
+    is_active: Boolean(values.is_active),
   };
+}
+
+/* ================================================================
+   VALIDATION HELPERS
+================================================================ */
+
+function isValidNonNegativeNumber(
+  value: string
+): boolean {
+  const normalizedValue = String(value ?? "").trim();
+
+  if (!normalizedValue) {
+    return false;
+  }
+
+  const number = Number(normalizedValue);
+
+  return Number.isFinite(number) && number >= 0;
 }
 
 /* ================================================================
@@ -219,14 +173,10 @@ function normalizePenaltyFormValues(
 ================================================================ */
 
 /**
- * Convert an API date (YYYY-MM-DD) into a local JavaScript Date.
+ * Convert YYYY-MM-DD into a local JavaScript Date.
  *
- * Avoids:
- *
- *     new Date("YYYY-MM-DD")
- *
- * because JavaScript interprets that format as UTC,
- * which can shift the displayed date depending on timezone.
+ * Avoids UTC timezone shifts caused by:
+ * new Date("YYYY-MM-DD")
  */
 function stringToLocalDate(
   value?: string | null
@@ -235,8 +185,7 @@ function stringToLocalDate(
     return undefined;
   }
 
-  const match =
-    /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
 
   if (!match) {
     return undefined;
@@ -246,22 +195,7 @@ function stringToLocalDate(
   const month = Number(match[2]);
   const day = Number(match[3]);
 
-  const date = new Date(
-    year,
-    month - 1,
-    day
-  );
-
-  /*
-  |--------------------------------------------------------------------------
-  | Reject invalid dates
-  |--------------------------------------------------------------------------
-  |
-  | Example:
-  |
-  | 2026-02-31
-  |
-  */
+  const date = new Date(year, month - 1, day);
 
   if (
     date.getFullYear() !== year ||
@@ -275,30 +209,23 @@ function stringToLocalDate(
 }
 
 /**
- * Convert a local JavaScript Date into the canonical
- * API date format:
- *
- *     YYYY-MM-DD
+ * Convert a local JavaScript Date into YYYY-MM-DD.
  */
 function localDateToString(
   date?: Date | null
 ): string {
-  if (
-    !date ||
-    Number.isNaN(date.getTime())
-  ) {
+  if (!date || Number.isNaN(date.getTime())) {
     return "";
   }
 
   const year = date.getFullYear();
 
-  const month = String(
-    date.getMonth() + 1
-  ).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(
+    2,
+    "0"
+  );
 
-  const day = String(
-    date.getDate()
-  ).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
 
   return `${year}-${month}-${day}`;
 }
@@ -324,10 +251,7 @@ function Field({
         {label}
 
         {required && (
-          <span className="text-destructive">
-            {" "}
-            *
-          </span>
+          <span className="text-destructive"> *</span>
         )}
       </Label>
 
@@ -374,12 +298,10 @@ function RateInput({
           min="0"
           step="0.01"
           value={value}
-          onChange={(event) =>
-            onChange(event.target.value)
-          }
-          className={`h-11 text-base font-medium ${
+          onChange={(event) => onChange(event.target.value)}
+          className={`h-11 pr-8 text-base font-medium ${
             prefix ? "pl-7" : ""
-          } pr-8`}
+          }`}
           disabled={disabled}
         />
 
@@ -392,56 +314,32 @@ function RateInput({
 }
 
 /* ================================================================
-   COMPONENT
+   FORM CONTENT
 ================================================================ */
 
-export function PenaltyForm({
+function PenaltyFormContent({
   mode,
   initialValues,
   isSubmitting = false,
   onSubmit,
   onCancel,
 }: PenaltyFormProps) {
-  const [form, setForm] =
-    useState<PenaltyFormValues>(() =>
-      normalizePenaltyFormValues(
-        initialValues
-      )
-    );
-
-  const [error, setError] =
-    useState<string | null>(null);
-
   /*
-  |--------------------------------------------------------------------------
-  | Synchronize Initial Values
-  |--------------------------------------------------------------------------
-  |
-  | This is important for edit mode because API values can arrive
-  | asynchronously and decimal fields may be numbers instead of
-  | strings.
-  |
-  */
+   * The component is keyed by initialValues in the wrapper.
+   * Therefore, this initializer runs again when a new record
+   * is supplied, without needing a state-resetting effect.
+   */
+  const [form, setForm] = useState<PenaltyFormValues>(() =>
+    normalizePenaltyFormValues(initialValues)
+  );
 
-  useEffect(() => {
-    setForm(
-      normalizePenaltyFormValues(
-        initialValues
-      )
-    );
+  const [error, setError] = useState<string | null>(null);
 
-    setError(null);
-  }, [initialValues]);
+  /* ==============================================================
+     FIELD UPDATER
+  ============================================================== */
 
-  /*
-  |--------------------------------------------------------------------------
-  | Field Updater
-  |--------------------------------------------------------------------------
-  */
-
-  const updateField = <
-    K extends keyof PenaltyFormValues
-  >(
+  const updateField = <K extends keyof PenaltyFormValues>(
     field: K,
     value: PenaltyFormValues[K]
   ) => {
@@ -454,75 +352,31 @@ export function PenaltyForm({
   };
 
   /* ==============================================================
-     VALIDATION HELPERS
-  ============================================================== */
-
-  /**
-   * Validate a non-negative numeric form value.
-   *
-   * String() is intentionally used defensively here.
-   * The form itself stores strings, but this guarantees that
-   * accidental numeric values from external data cannot cause:
-   *
-   *     value.trim is not a function
-   */
-  const isValidNonNegativeNumber = (
-    value: string
-  ): boolean => {
-    const normalizedValue =
-      String(value ?? "").trim();
-
-    if (!normalizedValue) {
-      return false;
-    }
-
-    const number =
-      Number(normalizedValue);
-
-    return (
-      Number.isFinite(number) &&
-      number >= 0
-    );
-  };
-
-  /* ==============================================================
      RATE PREVIEW VALIDATION
   ============================================================== */
 
   const ratesLookValid = useMemo(() => {
-    const initialRate =
-      String(
-        form.initial_rate ?? ""
-      ).trim();
+    const initialRate = String(
+      form.initial_rate ?? ""
+    ).trim();
 
-    const incrementRate =
-      String(
-        form.increment_rate ?? ""
-      ).trim();
+    const incrementRate = String(
+      form.increment_rate ?? ""
+    ).trim();
 
-    const maximumRate =
-      String(
-        form.maximum_rate ?? ""
-      ).trim();
+    const maximumRate = String(
+      form.maximum_rate ?? ""
+    ).trim();
 
     if (
-      !isValidNonNegativeNumber(
-        initialRate
-      ) ||
-      !isValidNonNegativeNumber(
-        incrementRate
-      ) ||
-      !isValidNonNegativeNumber(
-        maximumRate
-      )
+      !isValidNonNegativeNumber(initialRate) ||
+      !isValidNonNegativeNumber(incrementRate) ||
+      !isValidNonNegativeNumber(maximumRate)
     ) {
       return false;
     }
 
-    return (
-      Number(maximumRate) >=
-      Number(initialRate)
-    );
+    return Number(maximumRate) >= Number(initialRate);
   }, [
     form.initial_rate,
     form.increment_rate,
@@ -534,18 +388,12 @@ export function PenaltyForm({
   ================================================================ */
 
   const effectiveFromDate = useMemo(
-    () =>
-      stringToLocalDate(
-        form.effective_from
-      ),
+    () => stringToLocalDate(form.effective_from),
     [form.effective_from]
   );
 
   const effectiveToDate = useMemo(
-    () =>
-      stringToLocalDate(
-        form.effective_to
-      ),
+    () => stringToLocalDate(form.effective_to),
     [form.effective_to]
   );
 
@@ -560,175 +408,120 @@ export function PenaltyForm({
 
     setError(null);
 
-    /*
-    |--------------------------------------------------------------------------
-    | Normalize form values one final time before validation.
-    |--------------------------------------------------------------------------
-    */
+    const name = String(form.name ?? "").trim();
 
-    const name =
-      String(form.name ?? "").trim();
+    const initialRate = String(
+      form.initial_rate ?? ""
+    ).trim();
 
-    const initialRate =
-      String(
-        form.initial_rate ?? ""
-      ).trim();
+    const incrementRate = String(
+      form.increment_rate ?? ""
+    ).trim();
 
-    const incrementRate =
-      String(
-        form.increment_rate ?? ""
-      ).trim();
+    const maximumRate = String(
+      form.maximum_rate ?? ""
+    ).trim();
 
-    const maximumRate =
-      String(
-        form.maximum_rate ?? ""
-      ).trim();
+    const effectiveFrom = String(
+      form.effective_from ?? ""
+    ).trim();
 
-    const effectiveFrom =
-      String(
-        form.effective_from ?? ""
-      ).trim();
+    const effectiveTo = String(
+      form.effective_to ?? ""
+    ).trim();
 
-    const effectiveTo =
-      String(
-        form.effective_to ?? ""
-      ).trim();
+    const legalReference = String(
+      form.legal_reference ?? ""
+    ).trim();
 
-    const legalReference =
-      String(
-        form.legal_reference ?? ""
-      ).trim();
+    const description = String(
+      form.description ?? ""
+    ).trim();
 
-    const description =
-      String(
-        form.description ?? ""
-      ).trim();
-
-    /*
-    |--------------------------------------------------------------------------
-    | Name
-    |--------------------------------------------------------------------------
-    */
+    /* --------------------------------------------------------------
+       NAME
+    -------------------------------------------------------------- */
 
     if (!name) {
-      setError(
-        "Give this penalty rule a name."
-      );
-
+      setError("Give this penalty rule a name.");
       return;
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Effective From
-    |--------------------------------------------------------------------------
-    */
+    /* --------------------------------------------------------------
+       EFFECTIVE FROM
+    -------------------------------------------------------------- */
 
     if (!effectiveFrom) {
       setError(
         "Choose a date this rule becomes effective from."
       );
-
       return;
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Effective To
-    |--------------------------------------------------------------------------
-    */
-
-    if (
-      effectiveTo &&
-      effectiveTo < effectiveFrom
-    ) {
-      setError(
-        "The end date can't be before the start date."
-      );
-
+    if (!stringToLocalDate(effectiveFrom)) {
+      setError("Enter a valid effective start date.");
       return;
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Initial Rate
-    |--------------------------------------------------------------------------
-    */
+    /* --------------------------------------------------------------
+       EFFECTIVE TO
+    -------------------------------------------------------------- */
 
-    if (
-      !isValidNonNegativeNumber(
-        initialRate
-      )
-    ) {
-      setError(
-        "Enter a valid initial rate."
-      );
+    if (effectiveTo) {
+      if (!stringToLocalDate(effectiveTo)) {
+        setError("Enter a valid effective end date.");
+        return;
+      }
 
+      if (effectiveTo < effectiveFrom) {
+        setError(
+          "The end date can't be before the start date."
+        );
+        return;
+      }
+    }
+
+    /* --------------------------------------------------------------
+       INITIAL RATE
+    -------------------------------------------------------------- */
+
+    if (!isValidNonNegativeNumber(initialRate)) {
+      setError("Enter a valid initial rate.");
       return;
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Increment Rate
-    |--------------------------------------------------------------------------
-    */
+    /* --------------------------------------------------------------
+       INCREMENT RATE
+    -------------------------------------------------------------- */
 
-    if (
-      !isValidNonNegativeNumber(
-        incrementRate
-      )
-    ) {
-      setError(
-        "Enter a valid monthly increment."
-      );
-
+    if (!isValidNonNegativeNumber(incrementRate)) {
+      setError("Enter a valid monthly increment.");
       return;
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Maximum Rate
-    |--------------------------------------------------------------------------
-    */
+    /* --------------------------------------------------------------
+       MAXIMUM RATE
+    -------------------------------------------------------------- */
 
-    if (
-      !isValidNonNegativeNumber(
-        maximumRate
-      )
-    ) {
-      setError(
-        "Enter a valid maximum rate."
-      );
-
+    if (!isValidNonNegativeNumber(maximumRate)) {
+      setError("Enter a valid maximum rate.");
       return;
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Rate Relationship
-    |--------------------------------------------------------------------------
-    */
+    /* --------------------------------------------------------------
+       RATE RELATIONSHIP
+    -------------------------------------------------------------- */
 
-    if (
-      Number(maximumRate) <
-      Number(initialRate)
-    ) {
+    if (Number(maximumRate) < Number(initialRate)) {
       setError(
         "The maximum rate can't be lower than the initial rate."
       );
-
       return;
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Backend-compatible rate limits
-    |--------------------------------------------------------------------------
-    |
-    | The Laravel request also enforces 0–100.
-    | Checking it here gives the user immediate feedback.
-    |
-    */
+    /* --------------------------------------------------------------
+       RATE LIMITS
+    -------------------------------------------------------------- */
 
     if (
       Number(initialRate) > 100 ||
@@ -738,75 +531,38 @@ export function PenaltyForm({
       setError(
         "Penalty rates must be between 0% and 100%."
       );
-
       return;
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Start Type
-    |--------------------------------------------------------------------------
-    |
-    | IMPORTANT:
-    |
-    | There is intentionally NO start_fiscal_month
-    | validation here.
-    |
-    | When start_type is FIXED_PAYMENT_DATE,
-    | the actual Ethiopian fiscal payment-period
-    | start is resolved by the backend from:
-    |
-    |     revenue_settings.payment_start_month
-    |     revenue_settings.payment_start_day
-    |
-    */
+    /* --------------------------------------------------------------
+       START TYPE
+    -------------------------------------------------------------- */
 
     if (
-      form.start_type !==
-        "FIXED_PAYMENT_DATE" &&
-      form.start_type !==
-        "AGREEMENT_DATE"
+      form.start_type !== "FIXED_PAYMENT_DATE" &&
+      form.start_type !== "AGREEMENT_DATE"
     ) {
       setError(
         "Choose a valid penalty commencement type."
       );
-
       return;
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Calculation Basis
-    |--------------------------------------------------------------------------
-    */
+    /* --------------------------------------------------------------
+       CALCULATION BASIS
+    -------------------------------------------------------------- */
 
     if (
-      form.calculation_basis !==
-        "PRINCIPAL" &&
-      form.calculation_basis !==
-        "OUTSTANDING"
+      form.calculation_basis !== "PRINCIPAL" &&
+      form.calculation_basis !== "OUTSTANDING"
     ) {
-      setError(
-        "Choose a valid calculation basis."
-      );
-
+      setError("Choose a valid calculation basis.");
       return;
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Payload
-    |--------------------------------------------------------------------------
-    |
-    | Keep rate values as strings.
-    |
-    | This avoids introducing JavaScript floating-point
-    | conversion into financial data.
-    |
-    | Laravel validation + BCMath remains responsible for
-    | final financial precision.
-    |
-    */
+    /* --------------------------------------------------------------
+       PAYLOAD
+    -------------------------------------------------------------- */
 
     const payload: PenaltyFormValues = {
       ...form,
@@ -814,23 +570,30 @@ export function PenaltyForm({
       name,
 
       initial_rate: initialRate,
-
       increment_rate: incrementRate,
-
       maximum_rate: maximumRate,
 
       effective_from: effectiveFrom,
-
       effective_to: effectiveTo,
 
       legal_reference: legalReference,
-
       description,
 
       increment_period: "MONTH",
     };
 
-    await onSubmit(payload);
+    try {
+      await onSubmit(payload);
+    } catch (err) {
+      console.error(
+        "Failed to save penalty rule:",
+        err
+      );
+
+      setError(
+        "Unable to save the penalty rule. Please try again."
+      );
+    }
   };
 
   /* ================================================================
@@ -855,25 +618,19 @@ export function PenaltyForm({
           </h1>
 
           <p className="mt-1 text-sm text-muted-foreground">
-            Sets how the late-payment penalty
-            grows over time.
+            Sets how the late-payment penalty grows over time.
           </p>
         </div>
 
         <label className="flex shrink-0 items-center gap-2 pt-1 text-sm">
           <span className="text-muted-foreground">
-            {form.is_active
-              ? "Active"
-              : "Inactive"}
+            {form.is_active ? "Active" : "Inactive"}
           </span>
 
           <Switch
             checked={form.is_active}
             onCheckedChange={(checked) =>
-              updateField(
-                "is_active",
-                checked
-              )
+              updateField("is_active", checked)
             }
             disabled={isSubmitting}
           />
@@ -902,17 +659,11 @@ export function PenaltyForm({
       ============================================================ */}
 
       <div className="space-y-5">
-        <Field
-          label="Name"
-          required
-        >
+        <Field label="Name" required>
           <Input
             value={form.name}
             onChange={(event) =>
-              updateField(
-                "name",
-                event.target.value
-              )
+              updateField("name", event.target.value)
             }
             placeholder="e.g. Late Payment Penalty"
             className="h-11"
@@ -927,10 +678,7 @@ export function PenaltyForm({
           <Textarea
             value={form.description}
             onChange={(event) =>
-              updateField(
-                "description",
-                event.target.value
-              )
+              updateField("description", event.target.value)
             }
             placeholder="What this rule is for and when it applies..."
             rows={3}
@@ -950,8 +698,7 @@ export function PenaltyForm({
           </h2>
 
           <p className="text-xs text-muted-foreground">
-            How the penalty starts, grows each
-            month, and where it caps.
+            How the penalty starts, grows each month, and where it caps.
           </p>
         </div>
 
@@ -960,10 +707,7 @@ export function PenaltyForm({
             label="Starts at"
             value={form.initial_rate}
             onChange={(value) =>
-              updateField(
-                "initial_rate",
-                value
-              )
+              updateField("initial_rate", value)
             }
             disabled={isSubmitting}
           />
@@ -972,10 +716,7 @@ export function PenaltyForm({
             label="+ Each month"
             value={form.increment_rate}
             onChange={(value) =>
-              updateField(
-                "increment_rate",
-                value
-              )
+              updateField("increment_rate", value)
             }
             disabled={isSubmitting}
           />
@@ -984,10 +725,7 @@ export function PenaltyForm({
             label="Caps at"
             value={form.maximum_rate}
             onChange={(value) =>
-              updateField(
-                "maximum_rate",
-                value
-              )
+              updateField("maximum_rate", value)
             }
             disabled={isSubmitting}
           />
@@ -1003,8 +741,7 @@ export function PenaltyForm({
             <span className="font-medium text-foreground">
               {form.increment_rate} pts
             </span>{" "}
-            for every late month, up to a
-            cap of{" "}
+            for every late month, up to a cap of{" "}
             <span className="font-medium text-foreground">
               {form.maximum_rate}%
             </span>
@@ -1054,14 +791,9 @@ export function PenaltyForm({
           </h2>
 
           <p className="mt-1 text-xs leading-5 text-muted-foreground">
-            Choose how the penalty engine
-            determines its commencement date.
+            Choose how the penalty engine determines its commencement date.
           </p>
         </div>
-
-        {/* ==========================================================
-            START TYPE
-        ========================================================== */}
 
         <div className="inline-flex rounded-lg border p-1">
           <button
@@ -1074,8 +806,7 @@ export function PenaltyForm({
             }
             disabled={isSubmitting}
             className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-              form.start_type ===
-              "FIXED_PAYMENT_DATE"
+              form.start_type === "FIXED_PAYMENT_DATE"
                 ? "bg-foreground text-background"
                 : "text-muted-foreground hover:text-foreground"
             }`}
@@ -1093,8 +824,7 @@ export function PenaltyForm({
             }
             disabled={isSubmitting}
             className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-              form.start_type ===
-              "AGREEMENT_DATE"
+              form.start_type === "AGREEMENT_DATE"
                 ? "bg-foreground text-background"
                 : "text-muted-foreground hover:text-foreground"
             }`}
@@ -1103,24 +833,17 @@ export function PenaltyForm({
           </button>
         </div>
 
-        {/* ==========================================================
-            FIXED FISCAL MONTH
-        ========================================================== */}
-
-        {form.start_type ===
-          "FIXED_PAYMENT_DATE" && (
+        {form.start_type === "FIXED_PAYMENT_DATE" && (
           <div className="rounded-lg border bg-muted/30 p-4">
             <p className="text-sm font-medium">
               Global fiscal payment period
             </p>
 
             <p className="mt-1 text-xs leading-5 text-muted-foreground">
-              The penalty engine will use the
-              global payment-period start
-              configured in Revenue General
-              Settings. The fiscal month and day
-              are not configured separately for
-              each penalty rule.
+              The penalty engine will use the global payment-period
+              start configured in Revenue General Settings. The
+              fiscal month and day are not configured separately
+              for each penalty rule.
             </p>
 
             <div className="mt-3 rounded-md border bg-background px-3 py-2.5">
@@ -1133,29 +856,22 @@ export function PenaltyForm({
               </p>
 
               <p className="mt-1 text-xs text-muted-foreground">
-                Payment Start Month + Payment
-                Start Day
+                Payment Start Month + Payment Start Day
               </p>
             </div>
           </div>
         )}
 
-        {/* ==========================================================
-            AGREEMENT DATE
-        ========================================================== */}
-
-        {form.start_type ===
-          "AGREEMENT_DATE" && (
+        {form.start_type === "AGREEMENT_DATE" && (
           <div className="rounded-lg border bg-muted/30 p-4">
             <p className="text-sm font-medium">
               Agreement date
             </p>
 
             <p className="mt-1 text-xs leading-5 text-muted-foreground">
-              The penalty engine will use the
-              agreement date associated with the
-              relevant revenue transaction or
-              assessment.
+              The penalty engine will use the agreement date
+              associated with the relevant revenue transaction
+              or assessment.
             </p>
           </div>
         )}
@@ -1172,20 +888,12 @@ export function PenaltyForm({
           </h2>
 
           <p className="text-xs text-muted-foreground">
-            Ethiopian calendar dates, converted
-            to Gregorian automatically.
+            Ethiopian calendar dates, converted to Gregorian automatically.
           </p>
         </div>
 
         <div className="grid gap-5 sm:grid-cols-2">
-          {/* ========================================================
-              EFFECTIVE FROM
-          ======================================================== */}
-
-          <Field
-            label="From"
-            required
-          >
+          <Field label="From" required>
             <EthiopianDatePicker
               value={effectiveFromDate}
               onChange={(date) =>
@@ -1200,10 +908,6 @@ export function PenaltyForm({
               yearMode="FULL"
             />
           </Field>
-
-          {/* ========================================================
-              EFFECTIVE TO
-          ======================================================== */}
 
           <Field
             label="To"
@@ -1289,5 +993,27 @@ export function PenaltyForm({
         </div>
       </div>
     </form>
+  );
+}
+
+/* ================================================================
+   PUBLIC COMPONENT
+================================================================ */
+
+/**
+ * Remount the inner form when initialValues change.
+ *
+ * This replaces the previous useEffect + setForm reset.
+ * It supports asynchronously loaded edit records and prevents
+ * stale form state when switching between penalty rules.
+ */
+export function PenaltyForm(props: PenaltyFormProps) {
+  const initialValuesKey = JSON.stringify(props.initialValues);
+
+  return (
+    <PenaltyFormContent
+      key={initialValuesKey}
+      {...props}
+    />
   );
 }

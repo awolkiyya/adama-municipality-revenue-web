@@ -1,38 +1,71 @@
+
 import { api } from "@/lib/api";
 import { normalizeApiError } from "@/lib/api-error";
-import { ApiResponse, ListResponse } from "@/types/api";
-import { AdminUnit, Cluster, Sector } from "@/types/admin-unit";
+
+import type { ApiResponse, ListResponse } from "@/types/api";
+import type { AdminUnit, Cluster, Sector } from "@/types/admin-unit";
+
+type AdminUnitQueryParams = {
+  level?: string;
+  search?: string;
+  page?: number;
+  per_page?: number;
+};
+
+type ClusterQueryParams = {
+  city_id?: string;
+  search?: string;
+  is_active?: boolean;
+  page?: number;
+  per_page?: number;
+  sort_by?: string;
+  sort_order?: "asc" | "desc";
+};
+
+type SectorQueryParams = {
+  cluster_id?: string;
+  search?: string;
+  is_active?: boolean;
+  page?: number;
+  per_page?: number;
+  sort_by?: string;
+  sort_order?: "asc" | "desc";
+};
 
 /**
  * adminUnitService
- * * Stateless API layer for Administrative Units and Sectors.
+ *
+ * Stateless API layer for Administrative Units and Sectors.
  */
 export const adminUnitService = {
-
   /* -----------------------------
      GET ALL UNITS (Paginated)
   ------------------------------ */
-  getAll: async (params?: { 
-    level?: string | 'ALL'; 
-    search?: string; 
-    page?: number;
-    per_page?: number;
-  }): Promise<ApiResponse<AdminUnit[]>> => {
+  getAll: async (
+    params?: AdminUnitQueryParams
+  ): Promise<ApiResponse<AdminUnit[]>> => {
     try {
-      // 1. Clean the params object
-      const cleanParams = Object.entries(params || {}).reduce((acc, [key, value]) => {
-        // Exclude if undefined, null, or the string "all"
-        if (value !== undefined && value !== null && value !== 'ALL') {
+      const cleanParams = Object.entries(params ?? {}).reduce<
+        Record<string, unknown>
+      >((acc, [key, value]) => {
+        if (
+          value !== undefined &&
+          value !== null &&
+          value !== "ALL"
+        ) {
           acc[key] = value;
         }
-        return acc;
-      }, {} as Record<string, any>);
 
-      // 2. Pass the clean params to the API
-      const res = await api.get<ApiResponse<AdminUnit[]>>("/administrative", {
-        params: cleanParams
-      });
-      
+        return acc;
+      }, {});
+
+      const res = await api.get<ApiResponse<AdminUnit[]>>(
+        "/administrative",
+        {
+          params: cleanParams,
+        }
+      );
+
       return res.data;
     } catch (error) {
       throw normalizeApiError(error);
@@ -42,9 +75,14 @@ export const adminUnitService = {
   /* -----------------------------
      GET SINGLE UNIT
   ------------------------------ */
-  getById: async (id: string): Promise<ApiResponse<AdminUnit>> => {
+  getById: async (
+    id: string
+  ): Promise<ApiResponse<AdminUnit>> => {
     try {
-      const res = await api.get<ApiResponse<AdminUnit>>(`/administrative/${id}`);
+      const res = await api.get<ApiResponse<AdminUnit>>(
+        `/administrative/${id}`
+      );
+
       return res.data;
     } catch (error) {
       throw normalizeApiError(error);
@@ -57,11 +95,15 @@ export const adminUnitService = {
   create: async (data: {
     name: string;
     code: string;
-    level: 'CITY' | 'SUBCITY' | 'WEREDA';
+    level: "CITY" | "SUBCITY" | "WEREDA";
     parent_id?: string | null;
   }): Promise<ApiResponse<AdminUnit>> => {
     try {
-      const res = await api.post<ApiResponse<AdminUnit>>("/administrative", data);
+      const res = await api.post<ApiResponse<AdminUnit>>(
+        "/administrative",
+        data
+      );
+
       return res.data;
     } catch (error) {
       throw normalizeApiError(error);
@@ -71,12 +113,19 @@ export const adminUnitService = {
   /* -----------------------------
      UPDATE UNIT
   ------------------------------ */
-  update: async (id: string, data: Partial<{
-    name: string;
-    is_active: boolean;
-  }>): Promise<ApiResponse<AdminUnit>> => {
+  update: async (
+    id: string,
+    data: Partial<{
+      name: string;
+      is_active: boolean;
+    }>
+  ): Promise<ApiResponse<AdminUnit>> => {
     try {
-      const res = await api.patch<ApiResponse<AdminUnit>>(`/administrative/${id}`, data);
+      const res = await api.patch<ApiResponse<AdminUnit>>(
+        `/administrative/${id}`,
+        data
+      );
+
       return res.data;
     } catch (error) {
       throw normalizeApiError(error);
@@ -86,9 +135,14 @@ export const adminUnitService = {
   /* -----------------------------
      DELETE UNIT
   ------------------------------ */
-  delete: async (id: string): Promise<ApiResponse<null>> => {
+  delete: async (
+    id: string
+  ): Promise<ApiResponse<null>> => {
     try {
-      const res = await api.delete<ApiResponse<null>>(`/administrative/${id}`);
+      const res = await api.delete<ApiResponse<null>>(
+        `/administrative/${id}`
+      );
+
       return res.data;
     } catch (error) {
       throw normalizeApiError(error);
@@ -98,36 +152,40 @@ export const adminUnitService = {
   /* -----------------------------
      GET CHILDREN
   ------------------------------ */
-  getChildren: async (id: string): Promise<ApiResponse<AdminUnit[]>> => {
+  getChildren: async (
+    id: string
+  ): Promise<ApiResponse<AdminUnit[]>> => {
     try {
-      const res = await api.get<ApiResponse<AdminUnit[]>>(`/administrative/${id}/children`);
+      const res = await api.get<ApiResponse<AdminUnit[]>>(
+        `/administrative/${id}/children`
+      );
+
       return res.data;
     } catch (error) {
       throw normalizeApiError(error);
     }
   },
 
-
-  // cluster related
   /* -----------------------------
-   GET CLUSTERS (Paginated)
+     GET CLUSTERS (Paginated)
   ------------------------------ */
-  getClusters: async (params?: {
-    city_id?: string;
-    search?: string;
-    is_active?: boolean;
-    page?: number;
-    per_page?: number;
-    sort_by?: string;
-    sort_order?: "asc" | "desc";
-  }): Promise<ListResponse<Cluster>> => {
+  getClusters: async (
+    params?: ClusterQueryParams
+  ): Promise<ListResponse<Cluster>> => {
     try {
-      const cleanParams = Object.entries(params || {}).reduce((acc, [key, value]) => {
-        if (value !== undefined && value !== null && value !== "") {
+      const cleanParams = Object.entries(params ?? {}).reduce<
+        Record<string, unknown>
+      >((acc, [key, value]) => {
+        if (
+          value !== undefined &&
+          value !== null &&
+          value !== ""
+        ) {
           acc[key] = value;
         }
+
         return acc;
-      }, {} as Record<string, any>);
+      }, {});
 
       const res = await api.get<ListResponse<Cluster>>(
         "/administrative/clusters",
@@ -142,28 +200,26 @@ export const adminUnitService = {
     }
   },
 
-    // sector related
   /* -----------------------------
      GET SECTORS (Paginated)
   ------------------------------ */
-  getSectors: async (params?: {
-    cluster_id?: string;
-    search?: string;
-    is_active?: boolean;
-    page?: number;
-    per_page?: number;
-    sort_by?: string;
-    sort_order?: "asc" | "desc";
-  }): Promise<ListResponse<Sector>> => {
+  getSectors: async (
+    params?: SectorQueryParams
+  ): Promise<ListResponse<Sector>> => {
     try {
-      const cleanParams = Object.entries(params || {}).reduce((acc, [key, value]) => {
-        if (value !== undefined && value !== null && value !== "") {
+      const cleanParams = Object.entries(params ?? {}).reduce<
+        Record<string, unknown>
+      >((acc, [key, value]) => {
+        if (
+          value !== undefined &&
+          value !== null &&
+          value !== ""
+        ) {
           acc[key] = value;
         }
 
         return acc;
-      }, {} as Record<string, any>);
-
+      }, {});
 
       const res = await api.get<ListResponse<Sector>>(
         "/administrative/sectors",
@@ -173,12 +229,10 @@ export const adminUnitService = {
       );
 
       return res.data;
-
     } catch (error) {
       throw normalizeApiError(error);
     }
   },
-
 
   /* -----------------------------
      CREATE SECTOR
@@ -191,20 +245,16 @@ export const adminUnitService = {
     is_active: boolean;
   }): Promise<ApiResponse<Sector>> => {
     try {
-
       const res = await api.post<ApiResponse<Sector>>(
         "/administrative/sectors",
         data
       );
 
       return res.data;
-
     } catch (error) {
       throw normalizeApiError(error);
     }
   },
-
-
 
   /* -----------------------------
      UPDATE SECTOR
@@ -219,20 +269,16 @@ export const adminUnitService = {
       is_active: boolean;
     }>
   ): Promise<ApiResponse<Sector>> => {
-
     try {
-
       const res = await api.patch<ApiResponse<Sector>>(
         `/administrative/sectors/${id}`,
         data
       );
 
       return res.data;
-
     } catch (error) {
       throw normalizeApiError(error);
     }
-
   },
 
   /* -----------------------------
@@ -242,16 +288,13 @@ export const adminUnitService = {
     id: string
   ): Promise<ApiResponse<null>> => {
     try {
-
       const res = await api.delete<ApiResponse<null>>(
         `/administrative/sectors/${id}`
       );
 
       return res.data;
-
     } catch (error) {
       throw normalizeApiError(error);
     }
   },
-
 };

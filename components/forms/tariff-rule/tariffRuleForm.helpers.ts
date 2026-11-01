@@ -187,7 +187,7 @@ import {
     }
   
     try {
-      // eslint-disable-next-line no-new-func
+       
       const result = Function(
         `"use strict"; return (${expression});`
       )();

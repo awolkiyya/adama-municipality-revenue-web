@@ -1,8 +1,8 @@
+
 "use client";
 
 import {
   useCallback,
-  useEffect,
   useMemo,
   useState,
 } from "react";
@@ -12,8 +12,19 @@ import type {
   RevenueService,
   SubmissionResult,
 } from "@/types/revenue/assessment";
-import { AssessmentMode, FieldValue, InitialAssessment, ServiceFieldValues } from "@/types/assessment/assessment-form.types";
-import { buildInitialServiceFieldValues, buildInitialServiceIds, getInitialTaxpayerId } from "@/types/assessment/assessment-form.helpers";
+
+import {
+  AssessmentMode,
+  FieldValue,
+  InitialAssessment,
+  ServiceFieldValues,
+} from "@/types/assessment/assessment-form.types";
+
+import {
+  buildInitialServiceFieldValues,
+  buildInitialServiceIds,
+  getInitialTaxpayerId,
+} from "@/types/assessment/assessment-form.helpers";
 
 type UseAssessmentFormParams = {
   mode: AssessmentMode;
@@ -22,119 +33,101 @@ type UseAssessmentFormParams = {
   revenueServices: RevenueService[];
 };
 
+type AssessmentFormState = {
+  assessment: InitialAssessment | null;
+  taxpayerId: string;
+  selectedServiceIds: string[];
+  serviceFieldValues: ServiceFieldValues;
+  notes: string;
+  isSaving: boolean;
+  submissionResult: SubmissionResult | null;
+  submissionError: string | null;
+};
+
+const createInitialState = (
+  initialAssessment?: InitialAssessment | null,
+): AssessmentFormState => ({
+  assessment: initialAssessment ?? null,
+
+  taxpayerId: getInitialTaxpayerId(
+    initialAssessment,
+  ),
+
+  selectedServiceIds: buildInitialServiceIds(
+    initialAssessment,
+  ),
+
+  serviceFieldValues: buildInitialServiceFieldValues(
+    initialAssessment,
+  ),
+
+  notes: initialAssessment?.notes ?? "",
+
+  isSaving: false,
+
+  submissionResult: null,
+  submissionError: null,
+});
+
 export const useAssessmentForm = ({
   mode,
   initialAssessment,
   taxpayers,
   revenueServices,
 }: UseAssessmentFormParams) => {
-  const initialTaxpayerId = useMemo(
-    () =>
-      getInitialTaxpayerId(
-        initialAssessment,
-      ),
-    [initialAssessment],
-  );
-
-  const initialServiceIds = useMemo(
-    () =>
-      buildInitialServiceIds(
-        initialAssessment,
-      ),
-    [initialAssessment],
-  );
-
-  const initialFieldValues = useMemo(
-    () =>
-      buildInitialServiceFieldValues(
-        initialAssessment,
-      ),
-    [initialAssessment],
-  );
-
-  const initialNotes = useMemo(
-    () =>
-      initialAssessment?.notes ?? "",
-    [initialAssessment],
-  );
-
   const [
-    taxpayerId,
-    setTaxpayerId,
-  ] = useState(initialTaxpayerId);
-
-  const [
-    selectedServiceIds,
-    setSelectedServiceIds,
-  ] = useState<string[]>(
-    initialServiceIds,
-  );
-
-  const [
-    serviceFieldValues,
-    setServiceFieldValues,
-  ] = useState<ServiceFieldValues>(
-    initialFieldValues,
-  );
-
-  const [
-    notes,
-    setNotes,
-  ] = useState(initialNotes);
-
-  const [
-    isSaving,
-    setIsSaving,
-  ] = useState(false);
-
-  const [
-    submissionResult,
-    setSubmissionResult,
-  ] = useState<SubmissionResult | null>(
-    null,
-  );
-
-  const [
-    submissionError,
-    setSubmissionError,
-  ] = useState<string | null>(
-    null,
+    formState,
+    setFormState,
+  ] = useState<AssessmentFormState>(
+    () => createInitialState(initialAssessment),
   );
 
   /*
-   * Keep edit-mode state synchronized
-   * when the loaded assessment changes.
+   * Reset the form when a different assessment
+   * is loaded.
+   *
+   * This avoids synchronizing state through useEffect.
    */
-  useEffect(() => {
-    if (!initialAssessment) {
-      return;
-    }
+  const [
+    previousAssessment,
+    setPreviousAssessment,
+  ] = useState(
+    initialAssessment ?? null,
+  );
 
-    setTaxpayerId(
-      getInitialTaxpayerId(
-        initialAssessment,
-      ),
+  if (
+    previousAssessment !==
+    (initialAssessment ?? null)
+  ) {
+    setPreviousAssessment(
+      initialAssessment ?? null,
     );
 
-    setSelectedServiceIds(
-      buildInitialServiceIds(
-        initialAssessment,
-      ),
+    setFormState(
+      createInitialState(initialAssessment),
     );
+  }
 
-    setServiceFieldValues(
-      buildInitialServiceFieldValues(
-        initialAssessment,
-      ),
-    );
+  const {
+    taxpayerId,
+    selectedServiceIds,
+    serviceFieldValues,
+    notes,
+    isSaving,
+    submissionResult,
+    submissionError,
+  } = formState;
 
-    setNotes(
-      initialAssessment.notes ?? "",
-    );
-
-    setSubmissionResult(null);
-    setSubmissionError(null);
-  }, [initialAssessment]);
+  const updateFormState = useCallback(
+    (
+      updater: (
+        previous: AssessmentFormState,
+      ) => AssessmentFormState,
+    ) => {
+      setFormState(updater);
+    },
+    [],
+  );
 
   const selectedTaxpayer = useMemo(() => {
     if (!taxpayerId) {
@@ -148,12 +141,13 @@ export const useAssessmentForm = ({
           String(taxpayerId),
       ) ?? null
     );
-  }, [taxpayerId, taxpayers]);
+  }, [
+    taxpayerId,
+    taxpayers,
+  ]);
 
   const selectedServices = useMemo(() => {
-    if (
-      selectedServiceIds.length === 0
-    ) {
+    if (selectedServiceIds.length === 0) {
       return [];
     }
 
@@ -163,165 +157,202 @@ export const useAssessmentForm = ({
 
     return revenueServices.filter(
       (service) =>
-        selectedIds.has(
-          service.id,
-        ),
+        selectedIds.has(service.id),
     );
   }, [
     revenueServices,
     selectedServiceIds,
   ]);
 
-  const getServiceValues =
-    useCallback(
-      (
-        serviceId: string,
-      ): Record<string, FieldValue> => {
-        return (
-          serviceFieldValues[
-            serviceId
-          ] ?? {}
-        );
-      },
-      [serviceFieldValues],
-    );
+  const getServiceValues = useCallback(
+    (
+      serviceId: string,
+    ): Record<string, FieldValue> => {
+      return (
+        serviceFieldValues[serviceId] ?? {}
+      );
+    },
+    [serviceFieldValues],
+  );
 
-  const clearFeedback =
-    useCallback(() => {
-      setSubmissionResult(null);
-      setSubmissionError(null);
-    }, []);
+  const clearFeedback = useCallback(() => {
+    updateFormState((previous) => ({
+      ...previous,
+      submissionResult: null,
+      submissionError: null,
+    }));
+  }, [
+    updateFormState,
+  ]);
 
-  const setServiceFieldValue =
-    useCallback(
-      (
-        serviceId: string,
-        fieldKey: string,
-        value: FieldValue,
-      ) => {
-        setServiceFieldValues(
-          (previous) => ({
-            ...previous,
-            [serviceId]: {
-              ...(previous[
-                serviceId
-              ] ?? {}),
-              [fieldKey]: value,
-            },
-          }),
-        );
+  const setServiceFieldValue = useCallback(
+    (
+      serviceId: string,
+      fieldKey: string,
+      value: FieldValue,
+    ) => {
+      updateFormState((previous) => ({
+        ...previous,
 
-        clearFeedback();
-      },
-      [clearFeedback],
-    );
+        serviceFieldValues: {
+          ...previous.serviceFieldValues,
 
-  const handleTaxpayerChange =
-    useCallback(
-      (value: string) => {
-        setTaxpayerId(value);
-        clearFeedback();
-      },
-      [clearFeedback],
-    );
+          [serviceId]: {
+            ...(previous.serviceFieldValues[
+              serviceId
+            ] ?? {}),
+
+            [fieldKey]: value,
+          },
+        },
+
+        submissionResult: null,
+        submissionError: null,
+      }));
+    },
+    [
+      updateFormState,
+    ],
+  );
+
+  const handleTaxpayerChange = useCallback(
+    (value: string) => {
+      updateFormState((previous) => ({
+        ...previous,
+        taxpayerId: value,
+        submissionResult: null,
+        submissionError: null,
+      }));
+    },
+    [
+      updateFormState,
+    ],
+  );
 
   const handleServiceSelectionChange =
     useCallback(
       (serviceIds: string[]) => {
-        setSelectedServiceIds(
-          serviceIds,
-        );
-
-        clearFeedback();
+        updateFormState((previous) => ({
+          ...previous,
+          selectedServiceIds: serviceIds,
+          submissionResult: null,
+          submissionError: null,
+        }));
       },
-      [clearFeedback],
+      [
+        updateFormState,
+      ],
     );
 
-  const removeService =
-    useCallback(
-      (serviceId: string) => {
-        setSelectedServiceIds(
-          (previous) =>
-            previous.filter(
-              (id) =>
-                id !== serviceId,
+  const removeService = useCallback(
+    (serviceId: string) => {
+      updateFormState((previous) => {
+        const nextFieldValues = {
+          ...previous.serviceFieldValues,
+        };
+
+        delete nextFieldValues[serviceId];
+
+        return {
+          ...previous,
+
+          selectedServiceIds:
+            previous.selectedServiceIds.filter(
+              (id) => id !== serviceId,
             ),
-        );
 
-        setServiceFieldValues(
-          (previous) => {
-            const next = {
-              ...previous,
-            };
+          serviceFieldValues: nextFieldValues,
 
-            delete next[serviceId];
+          submissionResult: null,
+          submissionError: null,
+        };
+      });
+    },
+    [
+      updateFormState,
+    ],
+  );
 
-            return next;
-          },
-        );
+  const handleClearServices = useCallback(() => {
+    updateFormState((previous) => ({
+      ...previous,
+      selectedServiceIds: [],
+      serviceFieldValues: {},
+      submissionResult: null,
+      submissionError: null,
+    }));
+  }, [
+    updateFormState,
+  ]);
 
-        clearFeedback();
-      },
-      [clearFeedback],
-    );
+  const handleNotesChange = useCallback(
+    (value: string) => {
+      updateFormState((previous) => ({
+        ...previous,
+        notes: value,
+        submissionResult: null,
+        submissionError: null,
+      }));
+    },
+    [
+      updateFormState,
+    ],
+  );
 
-  const handleClearServices =
-    useCallback(() => {
-      setSelectedServiceIds([]);
-      setServiceFieldValues({});
-      clearFeedback();
-    }, [clearFeedback]);
+  const setIsSaving = useCallback(
+    (value: boolean) => {
+      updateFormState((previous) => ({
+        ...previous,
+        isSaving: value,
+      }));
+    },
+    [
+      updateFormState,
+    ],
+  );
 
-  const handleNotesChange =
-    useCallback(
-      (
-        value: string,
-      ) => {
-        setNotes(value);
-        clearFeedback();
-      },
-      [clearFeedback],
-    );
+  const setSubmissionResult = useCallback(
+    (value: SubmissionResult | null) => {
+      updateFormState((previous) => ({
+        ...previous,
+        submissionResult: value,
+      }));
+    },
+    [
+      updateFormState,
+    ],
+  );
 
-  const resetForm =
-    useCallback(() => {
-      setTaxpayerId(
-        mode === "edit"
-          ? getInitialTaxpayerId(
-              initialAssessment,
-            )
-          : "",
+  const setSubmissionError = useCallback(
+    (value: string | null) => {
+      updateFormState((previous) => ({
+        ...previous,
+        submissionError: value,
+      }));
+    },
+    [
+      updateFormState,
+    ],
+  );
+
+  const resetForm = useCallback(() => {
+    if (mode === "edit") {
+      updateFormState(() =>
+        createInitialState(initialAssessment),
       );
 
-      setSelectedServiceIds(
-        mode === "edit"
-          ? buildInitialServiceIds(
-              initialAssessment,
-            )
-          : [],
-      );
+      return;
+    }
 
-      setServiceFieldValues(
-        mode === "edit"
-          ? buildInitialServiceFieldValues(
-              initialAssessment,
-            )
-          : {},
-      );
-
-      setNotes(
-        mode === "edit"
-          ? initialAssessment?.notes ??
-              ""
-          : "",
-      );
-
-      setSubmissionResult(null);
-      setSubmissionError(null);
-    }, [
-      initialAssessment,
-      mode,
-    ]);
+    updateFormState((previous) => ({
+      ...createInitialState(null),
+      isSaving: previous.isSaving,
+    }));
+  }, [
+    initialAssessment,
+    mode,
+    updateFormState,
+  ]);
 
   return {
     taxpayerId,

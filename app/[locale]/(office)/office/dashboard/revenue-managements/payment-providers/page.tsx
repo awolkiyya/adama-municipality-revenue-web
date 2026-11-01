@@ -218,7 +218,7 @@ function PaymentProvidersPage() {
           <p className="mt-1 max-w-xl text-sm text-muted-foreground">
             External payment services taxpayers can use for electronic
             payments. Only active providers are offered for new payments, and
-            each provider's fee percentage is used to calculate its charges.
+            each providers fee percentage is used to calculate its charges.
           </p>
         </div>
 

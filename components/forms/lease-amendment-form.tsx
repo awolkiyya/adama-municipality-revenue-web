@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Save } from "lucide-react";
 import { toast } from "sonner";
 
@@ -67,9 +67,6 @@ function parseNumericValue(value: unknown): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-/**
- * Reads a land-area value from the assessment's service values.
- */
 function getAssessmentLandArea(
   assessment: Assessment,
 ): number | null {
@@ -106,9 +103,6 @@ function getCurrentTaxpayerName(
   return assessment.taxpayer?.fullName?.trim() || "Not available";
 }
 
-/**
- * Supports camelCase and snake_case API properties.
- */
 function getCurrentTaxpayerId(
   assessment: Assessment,
 ): string | null {
@@ -140,10 +134,6 @@ function isAmendmentType(value: string): value is AmendmentType {
   );
 }
 
-/**
- * Land area is required only for amendment types that use it.
- * Generic amendments and ownership transfers do not inherently require it.
- */
 function amendmentRequiresLandArea(
   type: AmendmentType | null,
 ): boolean {
@@ -152,6 +142,37 @@ function amendmentRequiresLandArea(
     type === "PARTIAL_TRANSFER" ||
     type === "LAND_MERGE"
   );
+}
+
+/**
+ * Creates a stable component key from the initial form values.
+ * Supporting documents are included by their identifying file properties.
+ */
+function getFormInstanceKey(
+  props: LeaseAmendmentFormProps,
+): string {
+  const initial = props.initialValues;
+
+  const documents =
+    initial?.supportingDocuments?.map((file) => ({
+      name: file.name,
+      size: file.size,
+      lastModified: file.lastModified,
+    })) ?? [];
+
+  return JSON.stringify({
+    mode: props.mode,
+    amendmentId: props.amendmentId ?? null,
+    amendmentType: initial?.amendmentType ?? null,
+    newTaxpayerId: initial?.newTaxpayerId ?? null,
+    newLandArea: initial?.newLandArea ?? "",
+    transferArea: initial?.transferArea ?? "",
+    mergedLandArea: initial?.mergedLandArea ?? "",
+    otherAmendmentDescription:
+      initial?.otherAmendmentDescription ?? "",
+    reason: initial?.reason ?? "",
+    documents,
+  });
 }
 
 /* -------------------------------------------------------------------------- */
@@ -659,10 +680,27 @@ function ReasonAndDocumentsSection({
 }
 
 /* -------------------------------------------------------------------------- */
-/* Main form                                                                  */
+/* Main form wrapper                                                          */
 /* -------------------------------------------------------------------------- */
 
-export function LeaseAmendmentForm({
+/**
+ * Remount the inner form when its initial data changes.
+ * This replaces effect-based state synchronization.
+ */
+export function LeaseAmendmentForm(props: LeaseAmendmentFormProps) {
+  return (
+    <LeaseAmendmentFormContent
+      key={getFormInstanceKey(props)}
+      {...props}
+    />
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Main form content                                                          */
+/* -------------------------------------------------------------------------- */
+
+function LeaseAmendmentFormContent({
   mode,
   assessment,
   initialValues,
@@ -680,7 +718,7 @@ export function LeaseAmendmentForm({
     [assessment],
   );
 
-  const [values, setValues] = useState<LeaseAmendmentFormValues>({
+  const [values, setValues] = useState<LeaseAmendmentFormValues>(() => ({
     amendmentType: initialValues?.amendmentType ?? null,
     newTaxpayerId: initialValues?.newTaxpayerId ?? null,
     newLandArea: initialValues?.newLandArea ?? "",
@@ -690,23 +728,9 @@ export function LeaseAmendmentForm({
       initialValues?.otherAmendmentDescription ?? "",
     reason: initialValues?.reason ?? "",
     supportingDocuments: initialValues?.supportingDocuments ?? [],
-  });
+  }));
 
   const [isSaving, setIsSaving] = useState(false);
-
-  useEffect(() => {
-    if (!initialValues) {
-      return;
-    }
-
-    setValues((current) => ({
-      ...current,
-      ...initialValues,
-      supportingDocuments:
-        initialValues.supportingDocuments ??
-        current.supportingDocuments,
-    }));
-  }, [initialValues]);
 
   /* ---------------------------------------------------------------------- */
   /* Validation                                                              */
@@ -900,7 +924,6 @@ export function LeaseAmendmentForm({
       await onSubmit(values);
     } catch (error) {
       console.error("Lease amendment submission failed:", error);
-      // The page-level handler is responsible for displaying the API error.
     } finally {
       setIsSaving(false);
     }

@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useSelector } from "react-redux";
 
 import { Banner } from "@/components/banner/topBanner";
 import { FloatingParticles } from "@/components/design/FloatingParticles";
@@ -8,6 +10,7 @@ import { IconBadge } from "@/components/commen/icon-badge";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 import {
   Plus,
@@ -32,11 +35,12 @@ import { Toolbar } from "@/components/commen/Toolbar";
 import { ExportDropdown } from "@/components/commen/ExportDropdown";
 
 import { CommenTable } from "@/components/table/CommenTable";
-import { CommentType } from "@/types/commen";
-import { FilterField } from "@/types/commen";
 import { DataTablePagination } from "@/components/table/data-pagination";
 
-import { useRouter } from "next/navigation";
+import {
+  CommentType,
+  FilterField,
+} from "@/types/commen";
 
 import {
   useToggleUserStatus,
@@ -55,9 +59,31 @@ import ProtectedRoute from "@/components/access/ProtectedRoute";
 
 import { RoleDropdown } from "@/components/input/RoleDropDown";
 import { Role } from "@/types/access-management";
-import { Label } from "@/components/ui/label";
-import { useSelector } from "react-redux";
+
 import { RootState } from "@/lib/store/store";
+
+/* =====================================================
+   FILTER TYPES
+===================================================== */
+
+type UserFilters = {
+  role: string;
+  level: string;
+  status: string;
+};
+
+/* =====================================================
+   TABLE ROW TYPE
+===================================================== */
+
+type UserTableRow = Omit<AuthUser, "role"> & {
+  role: string | undefined;
+  level: AuthUser["administrative_unit"] extends infer T
+    ? T extends { level?: infer L }
+      ? L
+      : undefined
+    : undefined;
+};
 
 /* =====================================================
    FILTERS
@@ -70,47 +96,23 @@ export const userFilters: FilterField[] = [
     type: "select",
     icon: CircleDot,
     defaultValue: "ALL",
-
     options: [
-      {
-        label: "All",
-        value: "ALL",
-      },
-      {
-        label: "City",
-        value: "CITY",
-      },
-      {
-        label: "Subcity",
-        value: "SUBCITY",
-      },
-      {
-        label: "Wereda",
-        value: "WEREDA",
-      },
+      { label: "All", value: "ALL" },
+      { label: "City", value: "CITY" },
+      { label: "Subcity", value: "SUBCITY" },
+      { label: "Wereda", value: "WEREDA" },
     ],
   },
-
   {
     key: "status",
     label: "Status",
     type: "select",
     icon: CircleDot,
     defaultValue: "ALL",
-
     options: [
-      {
-        label: "All",
-        value: "ALL",
-      },
-      {
-        label: "Active",
-        value: "ACTIVE",
-      },
-      {
-        label: "Inactive",
-        value: "INACTIVE",
-      },
+      { label: "All", value: "ALL" },
+      { label: "Active", value: "ACTIVE" },
+      { label: "Inactive", value: "INACTIVE" },
     ],
   },
 ];
@@ -119,7 +121,7 @@ export const userFilters: FilterField[] = [
    INITIAL FILTERS
 ===================================================== */
 
-const INITIAL_FILTERS = {
+const INITIAL_FILTERS: UserFilters = {
   role: "ALL",
   level: "ALL",
   status: "ALL",
@@ -160,12 +162,8 @@ function SearchInput({
    DEBOUNCE
 ===================================================== */
 
-function useDebounce(
-  value: string,
-  delay = 500,
-) {
-  const [debounced, setDebounced] =
-    useState(value);
+function useDebounce(value: string, delay = 500) {
+  const [debounced, setDebounced] = useState(value);
 
   useEffect(() => {
     const handler = setTimeout(
@@ -173,8 +171,7 @@ function useDebounce(
       delay,
     );
 
-    return () =>
-      clearTimeout(handler);
+    return () => clearTimeout(handler);
   }, [value, delay]);
 
   return debounced;
@@ -186,7 +183,8 @@ function useDebounce(
 
 function UsersPageContent() {
   const router = useRouter();
-  const user = useSelector(
+
+  const currentUser = useSelector(
     (state: RootState) => state.auth.user,
   );
 
@@ -194,62 +192,54 @@ function UsersPageContent() {
      APPLIED FILTERS
   =================================================== */
 
-  const [filters, setFilters] =
-    useState<Record<string, any>>(
-      INITIAL_FILTERS,
-    );
+  const [filters, setFilters] = useState<UserFilters>(
+    INITIAL_FILTERS,
+  );
 
   /* ===================================================
      DRAFT FILTERS
-     
-     These are changed inside the Sheet.
-     They are only applied to the API after
-     clicking "Apply Filters".
   =================================================== */
 
   const [draftFilters, setDraftFilters] =
-    useState<Record<string, any>>(
-      INITIAL_FILTERS,
-    );
+    useState<UserFilters>(INITIAL_FILTERS);
+
+  /* ===================================================
+     ROLE ID
+  =================================================== */
+
+  const [selectedRoleId, setSelectedRoleId] =
+    useState<number | null>(null);
 
   /* ===================================================
      FILTER SHEET
   =================================================== */
 
-  const [filterOpen, setFilterOpen] =
-    useState(false);
+  const [filterOpen, setFilterOpen] = useState(false);
 
   /* ===================================================
      PAGINATION
   =================================================== */
 
   const [page, setPage] = useState(1);
-
-  const [pageSize, setPageSize] =
-    useState(10);
+  const [pageSize, setPageSize] = useState(10);
 
   /* ===================================================
      SEARCH
   =================================================== */
 
-  const [search, setSearch] =
-    useState("");
-
-  const debouncedSearch =
-    useDebounce(search);
+  const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search);
 
   /* ===================================================
      MODALS
   =================================================== */
 
-  const [open, setOpen] =
-    useState(false);
+  const [open, setOpen] = useState(false);
 
   const [selectedUser, setSelectedUser] =
     useState<AuthUser | null>(null);
 
-  const [openReset, setOpenReset] =
-    useState(false);
+  const [openReset, setOpenReset] = useState(false);
 
   /* ===================================================
      USERS
@@ -262,15 +252,14 @@ function UsersPageContent() {
   } = useUsers({
     page,
     per_page: pageSize,
-
     search: debouncedSearch,
 
     is_active:
       filters.status === "ACTIVE"
         ? true
         : filters.status === "INACTIVE"
-        ? false
-        : undefined,
+          ? false
+          : undefined,
 
     role:
       filters.role !== "ALL"
@@ -287,46 +276,31 @@ function UsersPageContent() {
      MUTATIONS
   =================================================== */
 
-  const updatePassword =
-    useUpdateUserPassword();
-
-  const toggleStatus =
-    useToggleUserStatus();
+  const updatePassword = useUpdateUserPassword();
+  const toggleStatus = useToggleUserStatus();
 
   /* ===================================================
      DATA
   =================================================== */
 
-  const users: AuthUser[] =
-    data?.data ?? [];
-
+  const users: AuthUser[] = data?.data ?? [];
   const meta = data?.meta;
 
   /* ===================================================
      TABLE DATA
   =================================================== */
 
-  const tableData = useMemo(() => {
+  const tableData: UserTableRow[] = useMemo(() => {
     return users.map((user) => ({
       ...user,
-
       id: user.id,
-
       avatar: user.avatar,
-
-      level:
-        user.administrative_unit?.level,
-
+      level: user.administrative_unit?.level,
       name: user.name,
-
       email: user.email,
-
       phone: user.phone,
-
       role: user.role?.name,
-
       created_at: user.created_at,
-
       is_active: user.is_active,
     }));
   }, [users]);
@@ -337,40 +311,59 @@ function UsersPageContent() {
 
   const actions = resolveActions(
     CommentTableRegistry.user,
-    user?.permissions
+    currentUser?.permissions,
   );
 
   /* ===================================================
-     OPEN FILTER SHEET
-     
-     Always start with the currently applied filters.
+     FIND ORIGINAL USER
   =================================================== */
 
-  const handleFilterOpenChange = (
-    open: boolean,
-  ) => {
-    if (open) {
-      setDraftFilters(filters);
+  const getOriginalUser = (
+    row: UserTableRow,
+  ): AuthUser | undefined => {
+    return users.find((user) => user.id === row.id);
+  };
+
+  /* ===================================================
+     OPEN FILTER SHEET
+  =================================================== */
+
+  const handleFilterOpenChange = (isOpen: boolean) => {
+    if (isOpen) {
+      setDraftFilters({ ...filters });
     }
 
-    setFilterOpen(open);
+    setFilterOpen(isOpen);
   };
 
   /* ===================================================
      ROLE CHANGE
-     
-     Role options are loaded from the server
-     by RoleDropdown.
   =================================================== */
 
   const handleRoleChange = (
     value: string | number,
-    _item: Role,
+    item: Role,
   ) => {
+    setSelectedRoleId(Number(value));
+
     setDraftFilters((previous) => ({
       ...previous,
-      role: String(_item.name),
+      role: String(item.name),
     }));
+  };
+
+  /* ===================================================
+     FILTER CHANGE
+  =================================================== */
+
+  const handleFilterChange = (
+    value: UserFilters,
+  ) => {
+    setDraftFilters({
+      role: String(value.role ?? "ALL"),
+      level: String(value.level ?? "ALL"),
+      status: String(value.status ?? "ALL"),
+    });
   };
 
   /* ===================================================
@@ -378,12 +371,8 @@ function UsersPageContent() {
   =================================================== */
 
   const handleApplyFilters = () => {
-    setFilters({
-      ...draftFilters,
-    });
-
+    setFilters({ ...draftFilters });
     setPage(1);
-
     setFilterOpen(false);
   };
 
@@ -392,56 +381,33 @@ function UsersPageContent() {
   =================================================== */
 
   const handleResetFilters = () => {
-    setDraftFilters({
-      ...INITIAL_FILTERS,
-    });
-
-    setFilters({
-      ...INITIAL_FILTERS,
-    });
-
+    setDraftFilters({ ...INITIAL_FILTERS });
+    setFilters({ ...INITIAL_FILTERS });
+    setSelectedRoleId(null);
     setPage(1);
-
     setFilterOpen(false);
   };
 
   /* ===================================================
      FILTER COUNT
-     
-     Used to show how many filters are currently active.
   =================================================== */
 
-  const activeFilterCount =
-    Object.entries(filters).filter(
-      ([key, value]) => {
-        if (key === "role") {
-          return value !== "ALL";
-        }
-
-        if (key === "level") {
-          return value !== "ALL";
-        }
-
-        if (key === "status") {
-          return value !== "ALL";
-        }
-
-        return (
-          value !== undefined &&
-          value !== null &&
-          value !== ""
-        );
-      },
-    ).length;
+  const activeFilterCount = [
+    filters.role !== "ALL",
+    filters.level !== "ALL",
+    filters.status !== "ALL",
+  ].filter(Boolean).length;
 
   /* ===================================================
      RESET PASSWORD
   =================================================== */
 
-  const handleOpenReset = (
-    user: AuthUser,
-  ) => {
-    setSelectedUser(user);
+  const handleOpenReset = (row: UserTableRow) => {
+    const originalUser = getOriginalUser(row);
+
+    if (!originalUser) return;
+
+    setSelectedUser(originalUser);
     setOpenReset(true);
   };
 
@@ -449,9 +415,7 @@ function UsersPageContent() {
      EDIT
   =================================================== */
 
-  const handleEdit = (
-    row: AuthUser,
-  ) => {
+  const handleEdit = (row: UserTableRow) => {
     router.push(
       `/office/dashboard/users/${row.id}/edit`,
     );
@@ -462,9 +426,7 @@ function UsersPageContent() {
   =================================================== */
 
   const handleCreate = () => {
-    router.push(
-      "/office/dashboard/users/create",
-    );
+    router.push("/office/dashboard/users/create");
   };
 
   /* ===================================================
@@ -474,9 +436,7 @@ function UsersPageContent() {
   return (
     <div className="mx-auto max-w-6xl space-y-6">
 
-      {/* =================================================
-          HEADER
-      ================================================= */}
+      {/* HEADER */}
 
       <Banner
         description="
@@ -485,15 +445,8 @@ function UsersPageContent() {
         "
         badge={
           <IconBadge
-            className="
-              gap-2
-              rounded-full
-              p-3
-              text-[10px]
-            "
-            icon={
-              <Users className="h-3 w-3" />
-            }
+            className="gap-2 rounded-full p-3 text-[10px]"
+            icon={<Users className="h-3 w-3" />}
           >
             Manage User & Access
           </IconBadge>
@@ -510,28 +463,20 @@ function UsersPageContent() {
         overlayClassName="bg-transparent"
         actions={
           <>
-          <Button
-            variant="outline"
-            onClick={handleCreate}
-          >
-            <Plus className="h-4 w-4" />
-            Add New User
-          </Button>
-          
-             {/* =========================================
-                EXPORT
-            ========================================= */}
+            <Button
+              variant="outline"
+              onClick={handleCreate}
+            >
+              <Plus className="h-4 w-4" />
+              Add New User
+            </Button>
 
-          <ExportDropdown />
+            <ExportDropdown />
           </>
-       
         }
-        // className="text-white"
       />
 
-      {/* =================================================
-          TOOLBAR
-      ================================================= */}
+      {/* TOOLBAR */}
 
       <Toolbar
         search={
@@ -544,27 +489,12 @@ function UsersPageContent() {
             }}
           />
         }
-
         right={
-          <div
-            className="
-              flex
-              w-full
-              flex-wrap
-              items-center
-              justify-end
-              gap-2
-            "
-          >
-
-            {/* =========================================
-                FILTER BUTTON
-            ========================================= */}
-
+          <div className="flex w-full flex-wrap items-center justify-end gap-2">
             <Button
               variant="outline"
               onClick={() => {
-                setDraftFilters(filters);
+                setDraftFilters({ ...filters });
                 setFilterOpen(true);
               }}
               className="relative"
@@ -576,17 +506,9 @@ function UsersPageContent() {
               {activeFilterCount > 0 && (
                 <span
                   className="
-                    ml-2
-                    flex
-                    h-5
-                    min-w-5
-                    items-center
-                    justify-center
-                    rounded-full
-                    bg-primary
-                    px-1.5
-                    text-[10px]
-                    font-semibold
+                    ml-2 flex h-5 min-w-5 items-center
+                    justify-center rounded-full bg-primary
+                    px-1.5 text-[10px] font-semibold
                     text-primary-foreground
                   "
                 >
@@ -594,266 +516,157 @@ function UsersPageContent() {
                 </span>
               )}
             </Button>
-
           </div>
         }
       />
 
-<Sheet
-  open={filterOpen}
-  onOpenChange={handleFilterOpenChange}
->
-  <SheetContent
-    side="right"
-    className="
-      flex
-      h-full
-      w-full
-      flex-col
-      p-0
-      sm:max-w-md
-    "
-  >
+      {/* FILTER SHEET */}
 
-    {/* HEADER */}
-    <SheetHeader
-      className="
-        shrink-0
-        border-b
-        px-5
-        py-5
-        sm:px-6
-      "
-    >
-      <SheetTitle>
-        Filter Users
-      </SheetTitle>
+      <Sheet
+        open={filterOpen}
+        onOpenChange={handleFilterOpenChange}
+      >
+        <SheetContent
+          side="right"
+          className="flex h-full w-full flex-col p-0 sm:max-w-md"
+        >
+          <SheetHeader className="shrink-0 border-b px-5 py-5 sm:px-6">
+            <SheetTitle>
+              Filter Users
+            </SheetTitle>
 
-      <SheetDescription>
-        Filter users by role, organizational
-        level, and account status.
-      </SheetDescription>
-    </SheetHeader>
+            <SheetDescription>
+              Filter users by role, organizational
+              level, and account status.
+            </SheetDescription>
+          </SheetHeader>
 
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-6 sm:px-6">
+            <div className="space-y-6">
 
-    {/* CONTENT */}
-    <div
-      className="
-        min-h-0
-        flex-1
-        overflow-y-auto
-        px-5
-        py-6
-        sm:px-6
-      "
-    >
+              {/* ROLE */}
 
-      <div className="space-y-6">
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">
+                  Role
+                </Label>
 
-        {/* ROLE */}
-        <div className="space-y-2">
+                <RoleDropdown
+                  value={selectedRoleId}
+                  onChange={handleRoleChange}
+                />
+              </div>
 
-          <Label className="text-sm font-medium">
-            Role
-          </Label>
+              <div className="border-t" />
 
-          <RoleDropdown
-            value={
-              draftFilters.role === "ALL"
-                ? null
-                : draftFilters.role
-            }
-            onChange={(value,item)=>
-              handleRoleChange(value,item)
-            }
-          />
+              {/* OTHER FILTERS */}
 
-        </div>
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-sm font-semibold">
+                    Account & Organization
+                  </h3>
 
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Narrow users by organizational
+                    level and account status.
+                  </p>
+                </div>
 
-        {/* DIVIDER */}
-        <div className="border-t" />
-
-
-        {/* OTHER FILTERS */}
-        <div className="space-y-4">
-
-          <div>
-            <h3 className="text-sm font-semibold">
-              Account & Organization
-            </h3>
-
-            <p className="mt-1 text-xs text-muted-foreground">
-              Narrow users by organizational
-              level and account status.
-            </p>
+                <Filters
+                  schema={userFilters}
+                  value={draftFilters}
+                  onChange={handleFilterChange}
+                />
+              </div>
+            </div>
           </div>
 
-          <Filters
-            schema={userFilters}
-            value={draftFilters}
-            onChange={(
-              value,
-            ) => {
-              setDraftFilters(
-                value,
-              );
-            }}
-          />
+          {/* FOOTER */}
 
-        </div>
+          <SheetFooter className="shrink-0 border-t px-5 py-4 sm:px-6">
+            <div className="flex w-full items-center gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setDraftFilters({
+                    ...INITIAL_FILTERS,
+                  });
+                  setSelectedRoleId(null);
+                }}
+                className="flex-1"
+              >
+                <RotateCcw className="mr-2 h-4 w-4" />
+                Reset
+              </Button>
 
-      </div>
+              <Button
+                type="button"
+                onClick={handleApplyFilters}
+                className="flex-1"
+              >
+                Apply Filters
+              </Button>
+            </div>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
 
-    </div>
-
-
-    {/* FOOTER */}
-    <SheetFooter
-      className="
-        shrink-0
-        border-t
-        px-5
-        py-4
-        sm:px-6
-      "
-    >
-
-      <div
-        className="
-          flex
-          w-full
-          items-center
-          gap-3
-        "
-      >
-
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => {
-            setDraftFilters({
-              ...INITIAL_FILTERS,
-            });
-          }}
-          className="
-            flex-1
-          "
-        >
-          <RotateCcw className="mr-2 h-4 w-4" />
-          Reset
-        </Button>
-
-
-        <Button
-          type="button"
-          onClick={
-            handleApplyFilters
-          }
-          className="
-            flex-1
-          "
-        >
-          Apply Filters
-        </Button>
-
-      </div>
-
-    </SheetFooter>
-
-  </SheetContent>
-</Sheet>
-
-      {/* =================================================
-          TABLE
-      ================================================= */}
+      {/* TABLE */}
 
       <CommenTable
         type={"user" as CommentType}
         data={tableData}
-
-        page={
-          meta?.current_page ??
-          page
-        }
-
-        pageSize={
-          meta?.per_page ??
-          pageSize
-        }
-
+        page={meta?.current_page ?? page}
+        pageSize={meta?.per_page ?? pageSize}
         isLoading={isLoading}
-
         actions={actions}
 
         onView={(row) => {
-          setSelectedUser(row);
+          const originalUser = getOriginalUser(row);
+
+          if (!originalUser) return;
+
+          setSelectedUser(originalUser);
           setOpen(true);
         }}
 
         onEdit={handleEdit}
 
         onDelete={(id) => {
-          console.log(
-            "delete",
-            id,
-          );
+          console.log("delete", id);
         }}
 
-        onUpdatePassword={
-          handleOpenReset
-        }
+        onUpdatePassword={handleOpenReset}
 
-        onToggleStatus={async (
-          user: AuthUser,
-        ) => {
-          await toggleStatus.mutateAsync(
-            user.id,
-          );
-
+        onToggleStatus={async (row) => {
+          await toggleStatus.mutateAsync(row.id);
           await refetch();
         }}
       />
 
-      {/* =================================================
-          PAGINATION
-      ================================================= */}
+      {/* PAGINATION */}
 
       <DataTablePagination
-        page={
-          meta?.current_page ??
-          page
-        }
-
-        pageSize={
-          meta?.per_page ??
-          pageSize
-        }
-
-        total={
-          meta?.total ?? 0
-        }
-
-        onPageChange={(newPage) => {
-          setPage(newPage);
-        }}
-
+        page={meta?.current_page ?? page}
+        pageSize={meta?.per_page ?? pageSize}
+        total={meta?.total ?? 0}
+        onPageChange={setPage}
         onPageSizeChange={(size) => {
           setPageSize(size);
           setPage(1);
         }}
       />
 
-      {/* =================================================
-          RESET PASSWORD
-      ================================================= */}
+      {/* RESET PASSWORD */}
 
       <ResetPasswordModal
         open={openReset}
         user={selectedUser}
-        onClose={() =>
-          setOpenReset(false)
-        }
+        onClose={() => {
+          setOpenReset(false);
+        }}
         onSubmit={async (
           userId: string,
           password: string,
@@ -869,9 +682,7 @@ function UsersPageContent() {
         }}
       />
 
-      {/* =================================================
-          USER DETAILS
-      ================================================= */}
+      {/* USER DETAILS */}
 
       <UserDetailModal
         open={open}

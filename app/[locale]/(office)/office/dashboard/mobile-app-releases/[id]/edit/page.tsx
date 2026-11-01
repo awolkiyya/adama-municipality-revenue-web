@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from "next/link";
@@ -10,47 +11,86 @@ import { Button } from "@/components/ui/button";
 import { Banner } from "@/components/banner/topBanner";
 import { FloatingParticles } from "@/components/design/FloatingParticles";
 
-
 import {
   useMobileAppRelease,
   useUpdateMobileAppRelease,
 } from "@/hooks/use-mobile-app-releases";
-import { ReleaseForm, ReleaseFormSubmit, toUpdatePayload } from "@/components/forms/ReleaseForm";
 
-/** apk_size is assumed to be in bytes; small values are treated as MB. */
-function formatApkSize(size: number | null): string | undefined {
-  if (!size || size <= 0) return undefined;
-  return size >= 1024 * 1024
-    ? `${(size / (1024 * 1024)).toFixed(1)} MB`
-    : `${size.toFixed(1)} MB`;
+import {
+  ReleaseForm,
+  type ReleaseFormSubmit,
+  toUpdatePayload,
+} from "@/components/forms/ReleaseForm";
+
+/* -------------------------------------------------------------------------- */
+/* Helpers                                                                    */
+/* -------------------------------------------------------------------------- */
+
+/** Convert APK size from bytes to MB. */
+function formatApkSize(
+  size: number | null | undefined,
+): string | undefined {
+  if (size == null || size <= 0) return undefined;
+
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
+
+/* -------------------------------------------------------------------------- */
+/* Page                                                                       */
+/* -------------------------------------------------------------------------- */
 
 export default function EditMobileAppReleasePage() {
   const router = useRouter();
   const locale = useLocale();
   const params = useParams<{ id: string }>();
-  const id = Number(params.id);
+
+  // Release ID is a UUID string.
+  const id = params.id;
 
   const basePath = `/${locale}/office/dashboard/mobile-app-releases`;
 
-  const { data, isLoading, isError, error, refetch } = useMobileAppRelease(id);
+  const {
+    data: release,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useMobileAppRelease(id);
+
   const updateMutation = useUpdateMobileAppRelease();
 
-  const release = data;
+  /* ------------------------------------------------------------------------ */
+  /* Submit                                                                    */
+  /* ------------------------------------------------------------------------ */
 
   function handleSubmit(values: ReleaseFormSubmit) {
     updateMutation.mutate(
-      { id, payload: toUpdatePayload(values) },
+      {
+        id,
+        payload: toUpdatePayload(values),
+      },
       {
         onSuccess: () => {
-          toast.success(`Saved changes to v${values.versionName.trim()}.`);
+          toast.success(
+            `Saved changes to v${values.versionName.trim()}.`,
+          );
+
           router.push(basePath);
         },
-        onError: (e) =>
-          toast.error(e instanceof Error ? e.message : "Couldn't save changes. Try again."),
+        onError: (e) => {
+          toast.error(
+            e instanceof Error
+              ? e.message
+              : "Couldn't save changes. Try again.",
+          );
+        },
       },
     );
   }
+
+  /* ------------------------------------------------------------------------ */
+  /* Banner                                                                    */
+  /* ------------------------------------------------------------------------ */
 
   const banner = (
     <Banner
@@ -75,10 +115,15 @@ export default function EditMobileAppReleasePage() {
     />
   );
 
+  /* ------------------------------------------------------------------------ */
+  /* Render                                                                    */
+  /* ------------------------------------------------------------------------ */
+
   return (
     <div className="mx-auto w-full max-w-3xl space-y-6 pb-10">
       {banner}
 
+      {/* Loading */}
       {isLoading && (
         <div
           className="flex min-h-[240px] items-center justify-center gap-2 text-sm text-muted-foreground"
@@ -89,18 +134,28 @@ export default function EditMobileAppReleasePage() {
         </div>
       )}
 
+      {/* Error */}
       {isError && (
         <div className="flex min-h-[240px] flex-col items-center justify-center gap-3 text-center">
           <AlertCircle className="h-6 w-6 text-destructive" />
+
           <p className="text-sm text-muted-foreground">
-            {error instanceof Error ? error.message : "Couldn't load this release."}
+            {error instanceof Error
+              ? error.message
+              : "Couldn't load this release."}
           </p>
-          <Button variant="outline" size="sm" onClick={() => void refetch()}>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void refetch()}
+          >
             Try again
           </Button>
         </div>
       )}
 
+      {/* Release form */}
       {release && (
         <ReleaseForm
           mode="edit"
@@ -114,10 +169,10 @@ export default function EditMobileAppReleasePage() {
             isMandatory: release.is_mandatory,
           }}
           existingApk={
-            release.apk_path
+            release.apk
               ? {
-                  name: release.apk_path.split("/").pop() ?? "APK file",
-                  sizeLabel: formatApkSize(release.apk_size),
+                  name: release.apk.original_name || "APK file",
+                  sizeLabel: formatApkSize(release.apk.size_bytes),
                 }
               : undefined
           }

@@ -17,7 +17,7 @@ export function mapCitizenToForm(
 
     phone: citizen.phone,
 
-    email: citizen.email ?? null,
+    email: citizen.email,
 
     administrative_unit_id:
       citizen.administrative_unit?.id ?? "",

@@ -214,7 +214,7 @@ export default function EditTariffRulePage() {
         <AlertTriangle className="h-6 w-6 text-destructive" />
 
         <p className="font-semibold">
-          Couldn't load this rule
+          Couldn&apos;t load this rule
         </p>
 
         <p className="text-sm text-muted-foreground">

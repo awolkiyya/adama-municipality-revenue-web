@@ -1344,4 +1344,26 @@ PAYMENT_SCHEDULE_RULES_VIEW_HISTORY: {
     action: "deactivate",
   },
 
+    /*
+  |--------------------------------------------------------------------------
+  | Agent Dashboard
+  |--------------------------------------------------------------------------
+  */
+
+  AGENT_DASHBOARD_VIEW: {
+    resource: "agent_dashboard",
+    action: "view",
+  },
+
+  /*
+  |--------------------------------------------------------------------------
+  | Agent Payments
+  |--------------------------------------------------------------------------
+  */
+
+  AGENT_PAYMENTS_VIEW: {
+    resource: "agent_payments",
+    action: "view",
+  },
+
 } satisfies Record<string, AppPermission>;

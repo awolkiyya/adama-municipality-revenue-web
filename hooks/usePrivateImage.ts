@@ -1,22 +1,45 @@
+
 import { fetchPrivateImage } from "@/services/user.service";
 import { useEffect, useState } from "react";
 
+type PrivateImageState = {
+  path: string | null;
+  url: string | undefined;
+  loading: boolean;
+};
+
 export function usePrivateImage(path?: string | null) {
-  const [url, setUrl] = useState<string | undefined>(undefined);
-  const [loading, setLoading] = useState(false);
+  const [state, setState] = useState<PrivateImageState>({
+    path: null,
+    url: undefined,
+    loading: false,
+  });
 
   useEffect(() => {
-    if (!path) return;
+    if (!path) {
+      return;
+    }
 
     let alive = true;
-    setLoading(true);
 
     fetchPrivateImage(path)
       .then((res) => {
-        if (alive) setUrl(res);
+        if (alive) {
+          setState({
+            path,
+            url: res,
+            loading: false,
+          });
+        }
       })
-      .finally(() => {
-        if (alive) setLoading(false);
+      .catch(() => {
+        if (alive) {
+          setState({
+            path,
+            url: undefined,
+            loading: false,
+          });
+        }
       });
 
     return () => {
@@ -24,5 +47,10 @@ export function usePrivateImage(path?: string | null) {
     };
   }, [path]);
 
-  return { url, loading };
+  const isCurrentPath = state.path === (path ?? null);
+
+  return {
+    url: isCurrentPath ? state.url : undefined,
+    loading: Boolean(path) && (!isCurrentPath || state.loading),
+  };
 }

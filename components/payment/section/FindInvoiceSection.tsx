@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState } from "react";
@@ -106,20 +107,13 @@ export function FindInvoiceSection({
   const [debouncedSearch, setDebouncedSearch] = useState("");
 
   const [page, setPage] = useState(1);
-  const [perPage, setPerPage] = useState(
-    DEFAULT_PER_PAGE,
-  );
+  const [perPage, setPerPage] = useState(DEFAULT_PER_PAGE);
 
   /* =======================================================
      SEARCH DEBOUNCE
      ======================================================= */
 
   useEffect(() => {
-    /*
-     * Any new search starts from the first page.
-     */
-    setPage(1);
-
     const timer = window.setTimeout(() => {
       setDebouncedSearch(search.trim());
     }, SEARCH_DEBOUNCE_MS);
@@ -152,23 +146,25 @@ export function FindInvoiceSection({
      PAGINATION VALUES
      ======================================================= */
 
-  const currentPage =
-    pagination?.current_page ?? page;
-
-  const pageSize =
-    pagination?.per_page ?? perPage;
-
-  const total =
-    pagination?.total ?? 0;
+  const currentPage = pagination?.current_page ?? page;
+  const pageSize = pagination?.per_page ?? perPage;
+  const total = pagination?.total ?? 0;
 
   /* =======================================================
      ACTIONS
      ======================================================= */
 
-  function handleSelect(
-    invoice: AgentPendingInvoice,
-  ) {
+  function handleSelect(invoice: AgentPendingInvoice) {
     onSelect(invoice);
+  }
+
+  function handleSearchChange(value: string) {
+    /*
+     * Reset pagination when the user changes the search.
+     * This belongs in the event handler, not the effect.
+     */
+    setPage(1);
+    setSearch(value);
   }
 
   function handleClearSearch() {
@@ -183,8 +179,8 @@ export function FindInvoiceSection({
     }
 
     if (
-      pagination &&
-      nextPage > pagination!.last_page!
+      pagination?.last_page !== undefined &&
+      nextPage > pagination.last_page
     ) {
       return;
     }
@@ -192,9 +188,7 @@ export function FindInvoiceSection({
     setPage(nextPage);
   }
 
-  function handlePageSizeChange(
-    nextPageSize: number,
-  ) {
+  function handlePageSizeChange(nextPageSize: number) {
     if (nextPageSize < 1) {
       return;
     }
@@ -217,14 +211,9 @@ export function FindInvoiceSection({
           HEADER
           =================================================== */}
 
-      <CardHeader
-        className={`border-b py-4 ${PAD_X}`}
-      >
+      <CardHeader className={`border-b py-4 ${PAD_X}`}>
         <div className="flex items-start gap-3">
-          <Tile
-            icon={Search}
-            accent
-          />
+          <Tile icon={Search} accent />
 
           <div className="min-w-0">
             <h2 className="text-base font-semibold leading-tight">
@@ -252,7 +241,7 @@ export function FindInvoiceSection({
           <Input
             value={search}
             onChange={(event) =>
-              setSearch(event.target.value)
+              handleSearchChange(event.target.value)
             }
             placeholder="Invoice number, taxpayer name, TIN, or phone"
             aria-label="Search pending invoices"
@@ -278,21 +267,19 @@ export function FindInvoiceSection({
             SEARCH HINT
             ================================================= */}
 
-        {!debouncedSearch &&
-          !isLoading &&
-          !isError && (
-            <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
-              <Search
-                aria-hidden="true"
-                className="h-3.5 w-3.5 shrink-0"
-              />
+        {!debouncedSearch && !isLoading && !isError && (
+          <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+            <Search
+              aria-hidden="true"
+              className="h-3.5 w-3.5 shrink-0"
+            />
 
-              <span>
-                Search by invoice number, taxpayer name,
-                taxpayer number, or phone.
-              </span>
-            </div>
-          )}
+            <span>
+              Search by invoice number, taxpayer name,
+              taxpayer number, or phone.
+            </span>
+          </div>
+        )}
 
         {/* =================================================
             INITIAL LOADING
@@ -388,9 +375,7 @@ export function FindInvoiceSection({
 
                 <p className="text-xs text-muted-foreground">
                   {total}{" "}
-                  {total === 1
-                    ? "invoice"
-                    : "invoices"}
+                  {total === 1 ? "invoice" : "invoices"}
                 </p>
               </div>
 
@@ -408,9 +393,7 @@ export function FindInvoiceSection({
                     >
                       <button
                         type="button"
-                        onClick={() =>
-                          handleSelect(invoice)
-                        }
+                        onClick={() => handleSelect(invoice)}
                         aria-pressed={selected}
                         className={`group flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${
                           selected
@@ -449,18 +432,12 @@ export function FindInvoiceSection({
                                 "Taxpayer unavailable"}
                             </span>
 
-                            {invoice.taxpayer
-                              ?.taxpayer_number && (
+                            {invoice.taxpayer?.taxpayer_number && (
                               <>
-                                <span aria-hidden="true">
-                                  ·
-                                </span>
+                                <span aria-hidden="true">·</span>
 
                                 <span className="shrink-0">
-                                  {
-                                    invoice.taxpayer
-                                      .taxpayer_number
-                                  }
+                                  {invoice.taxpayer.taxpayer_number}
                                 </span>
                               </>
                             )}
@@ -471,9 +448,7 @@ export function FindInvoiceSection({
 
                         <div className="shrink-0 text-right">
                           <p className="text-sm font-semibold tabular-nums">
-                            {formatAmount(
-                              invoice.balance_amount,
-                            )}
+                            {formatAmount(invoice.balance_amount)}
                           </p>
 
                           <p className="mt-0.5 text-[11px] text-muted-foreground">

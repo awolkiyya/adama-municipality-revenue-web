@@ -1,9 +1,9 @@
 
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 
 import {
   AlertCircle,
@@ -68,8 +68,6 @@ type PaymentResult = {
  * ========================================================================== */
 
 export default function InvoicePayPage() {
-  const router = useRouter();
-
   const params = useParams<{ id: string }>();
   const invoiceId = params?.id;
 
@@ -102,15 +100,17 @@ export default function InvoicePayPage() {
 
   const bankAccounts = useMemo(
     () =>
-      ((paymentOptions?.bank_accounts ?? []) as BankAccount[])
-        .filter((bank) => bank.is_active),
+      ((paymentOptions?.bank_accounts ?? []) as BankAccount[]).filter(
+        (bank) => bank.is_active,
+      ),
     [paymentOptions?.bank_accounts],
   );
 
   const paymentProviders = useMemo(
     () =>
-      ((paymentOptions?.payment_providers ?? []) as PaymentProvider[])
-        .filter((provider) => provider.is_active),
+      ((paymentOptions?.payment_providers ?? []) as PaymentProvider[]).filter(
+        (provider) => provider.is_active,
+      ),
     [paymentOptions?.payment_providers],
   );
 
@@ -197,88 +197,49 @@ export default function InvoicePayPage() {
   const [showResult, setShowResult] = useState(false);
 
   /* ------------------------------------------------------------------------
-   * Keep the selected payment method valid
+   * Derived payment method
+   *
+   * No effect is needed to correct an unavailable method.
+   * The selected method is derived from the currently enabled options.
    * ---------------------------------------------------------------------- */
 
-  useEffect(() => {
-    if (!paymentOptionsReady) {
-      return;
-    }
-
-    setMethod((current) => {
-      if (current === "ONLINE" && hasOnlinePayment) {
-        return current;
-      }
-
-      if (current === "BANK_TRANSFER" && hasBankTransfer) {
-        return current;
-      }
-
-      if (hasOnlinePayment) {
-        return "ONLINE";
-      }
-
-      if (hasBankTransfer) {
-        return "BANK_TRANSFER";
-      }
-
-      return current;
-    });
-  }, [
-    paymentOptionsReady,
-    hasOnlinePayment,
-    hasBankTransfer,
-  ]);
+  const effectiveMethod: PaymentMethod =
+    method === "ONLINE" && hasOnlinePayment
+      ? "ONLINE"
+      : method === "BANK_TRANSFER" && hasBankTransfer
+        ? "BANK_TRANSFER"
+        : hasOnlinePayment
+          ? "ONLINE"
+          : hasBankTransfer
+            ? "BANK_TRANSFER"
+            : method;
 
   /* ------------------------------------------------------------------------
-   * Keep the selected provider valid
+   * Derived payment provider
+   *
+   * Use the selected provider when it is still active.
+   * Otherwise, fall back to the first active provider.
    * ---------------------------------------------------------------------- */
 
-  useEffect(() => {
-    if (!hasOnlinePayment || paymentProviders.length === 0) {
-      setOnlineProvider("");
-      return;
-    }
-
-    const providerExists = paymentProviders.some(
+  const selectedProvider =
+    paymentProviders.find(
       (provider) => provider.code === onlineProvider,
-    );
-
-    if (!providerExists) {
-      setOnlineProvider(paymentProviders[0].code);
-    }
-  }, [
-    hasOnlinePayment,
-    paymentProviders,
-    onlineProvider,
-  ]);
+    ) ??
+    paymentProviders[0] ??
+    null;
 
   /* ------------------------------------------------------------------------
-   * Keep the selected bank valid
+   * Derived bank account
+   *
+   * Keep the selected bank when it remains active.
+   * If there is exactly one active bank account, select it by default.
    * ---------------------------------------------------------------------- */
 
-  useEffect(() => {
-    if (!hasBankTransfer || bankAccounts.length === 0) {
-      setBankId(null);
-      return;
-    }
-
-    const bankExists = bankAccounts.some(
-      (bank) => bank.id === bankId,
-    );
-
-    if (!bankExists) {
-      setBankId(
-        bankAccounts.length === 1
-          ? bankAccounts[0].id
-          : null,
-      );
-    }
-  }, [
-    hasBankTransfer,
-    bankAccounts,
-    bankId,
-  ]);
+  const selectedBank =
+    bankAccounts.find((bank) => bank.id === bankId) ??
+    (bankId === null && bankAccounts.length === 1
+      ? bankAccounts[0]
+      : null);
 
   /* ------------------------------------------------------------------------
    * Derived values
@@ -303,17 +264,9 @@ export default function InvoicePayPage() {
     ? Math.max(0, balanceDue - amount)
     : balanceDue;
 
-  const selectedBank =
-    bankAccounts.find((bank) => bank.id === bankId) ?? null;
+  const isOnline = effectiveMethod === "ONLINE";
 
-  const selectedProvider =
-    paymentProviders.find(
-      (provider) => provider.code === onlineProvider,
-    ) ?? null;
-
-  const isOnline = method === "ONLINE";
-
-  const isBank = method === "BANK_TRANSFER";
+  const isBank = effectiveMethod === "BANK_TRANSFER";
 
   const isSubmitting =
     isCreatingBankTransfer || isInitializingOnlinePayment;
@@ -662,7 +615,7 @@ export default function InvoicePayPage() {
   }
 
   /* ------------------------------------------------------------------------
-   * Successful bank-transfer submission
+   * Successful payment submission
    * ---------------------------------------------------------------------- */
 
   if (showResult) {
@@ -900,7 +853,7 @@ export default function InvoicePayPage() {
       <PaymentMethodSection
         hasOnlinePayment={hasOnlinePayment}
         hasBankTransfer={hasBankTransfer}
-        method={method}
+        method={effectiveMethod}
         onMethodChange={(nextMethod) => {
           clearErrors();
           setMethod(nextMethod);

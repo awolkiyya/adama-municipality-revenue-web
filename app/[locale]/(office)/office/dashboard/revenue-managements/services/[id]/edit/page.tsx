@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useParams } from "next/navigation";
@@ -34,18 +35,80 @@ import {
 } from "@/hooks/revenue/revenueBaseField.hook";
 
 /* =========================================================
+   FORM DOMAIN TYPES
+========================================================= */
+
+type ServiceTypeValue =
+    RevenueServiceFormValues["serviceType"];
+
+type CollectionModeValue =
+    RevenueServiceFormValues["collectionMode"];
+
+/* =========================================================
+   API RESPONSE TYPES
+========================================================= */
+
+type RevenueServiceFieldResponse = {
+    base_field_id?: string | null;
+    baseFieldId?: string | null;
+    label?: string | null;
+    isRequired?: boolean | null;
+    required?: boolean | null;
+    help_text?: string | null;
+    helpText?: string | null;
+    validation_rules?: Record<string, unknown> | null;
+    validationRules?: Record<string, unknown> | null;
+    sort_order?: number | null;
+    sortOrder?: number | null;
+    base_field?: {
+        name?: string | null;
+    } | null;
+};
+
+type RevenueServiceResponse = {
+    id: string;
+    revenueCodeId?: string | null;
+    revenue_code_id?: string | null;
+    revenueCode?: {
+        id?: string | null;
+    } | null;
+    name?: string | null;
+    description?: string | null;
+
+    // Use the same domain types as the form.
+    serviceType?: ServiceTypeValue | null;
+    service_type?: ServiceTypeValue | null;
+
+    collectionMode?: CollectionModeValue | null;
+    collection_mode?: CollectionModeValue | null;
+
+    is_active?: boolean | null;
+    isActive?: boolean | null;
+
+    fields?: RevenueServiceFieldResponse[] | null;
+    revenue_service_fields?: RevenueServiceFieldResponse[] | null;
+};
+
+type MappedRevenueServiceField = {
+    baseFieldId: string;
+    label: string;
+    required: boolean;
+    helpText: string;
+    validationRules: Record<string, unknown>;
+    sortOrder: number;
+};
+
+/* =========================================================
    API → FORM VALUES
 ========================================================= */
 
 function toFormValues(
-    service: any
+    service: RevenueServiceResponse,
 ): RevenueServiceFormValues {
     const serviceFields =
         service.fields ??
         service.revenue_service_fields ??
         [];
-
-    console.log("some test",service);
 
     return {
         id: service.id,
@@ -57,8 +120,9 @@ function toFormValues(
         */
 
         revenueCodeId:
-            service.revenueCodeId             ??
-            service.revenueCode.id ??
+            service.revenueCodeId ??
+            service.revenue_code_id ??
+            service.revenueCode?.id ??
             "",
 
         /*
@@ -77,133 +141,77 @@ function toFormValues(
 
         serviceType:
             service.serviceType ??
+            service.service_type ??
             "",
 
         collectionMode:
             service.collectionMode ??
+            service.collection_mode ??
             "ASSESSMENT_ONLY",
 
         isActive:
             service.is_active ??
+            service.isActive ??
             true,
 
         /*
         |--------------------------------------------------------------------------
         | Revenue Service Fields
         |--------------------------------------------------------------------------
-        |
-        | Each service field references a canonical BaseField.
-        |
         */
 
-        fields:
-            serviceFields
-                .map(
-                    (
-                        field: any,
-                        index: number
-                    ) => ({
-                        /*
-                        |--------------------------------------------------------------------------
-                        | Canonical BaseField ID
-                        |--------------------------------------------------------------------------
-                        */
+        fields: serviceFields
+            .map(
+                (
+                    field: RevenueServiceFieldResponse,
+                    index: number,
+                ): MappedRevenueServiceField => ({
+                    baseFieldId:
+                        field.base_field_id ??
+                        field.baseFieldId ??
+                        "",
 
-                        baseFieldId:
-                            field.base_field_id ??
-                            field.baseFieldId ??
-                            "",
+                    label:
+                        field.label ??
+                        field.base_field?.name ??
+                        "",
 
-                        /*
-                        |--------------------------------------------------------------------------
-                        | Service-specific label
-                        |--------------------------------------------------------------------------
-                        */
+                    required:
+                        field.isRequired ??
+                        field.required ??
+                        false,
 
-                        label:
-                            field.label ??
-                            field.base_field?.name ??
-                            "",
+                    helpText:
+                        field.help_text ??
+                        field.helpText ??
+                        "",
 
-                        /*
-                        |--------------------------------------------------------------------------
-                        | Required
-                        |--------------------------------------------------------------------------
-                        */
+                    validationRules:
+                        field.validation_rules ??
+                        field.validationRules ??
+                        {},
 
-                        required:
-                            field.isRequired ??
-                            field.required ??
-                            false,
-
-                        /*
-                        |--------------------------------------------------------------------------
-                        | Help text
-                        |--------------------------------------------------------------------------
-                        */
-
-                        helpText:
-                            field.help_text ??
-                            field.helpText ??
-                            "",
-
-                        /*
-                        |--------------------------------------------------------------------------
-                        | Validation rules
-                        |--------------------------------------------------------------------------
-                        */
-
-                        validationRules:
-                            field.validation_rules ??
-                            field.validationRules ??
-                            {},
-
-                        /*
-                        |--------------------------------------------------------------------------
-                        | Sort order
-                        |--------------------------------------------------------------------------
-                        */
-
-                        sortOrder:
-                            field.sort_order ??
-                            field.sortOrder ??
-                            index,
-                    })
-                )
-
-                /*
-                |--------------------------------------------------------------------------
-                | Preserve API order
-                |--------------------------------------------------------------------------
-                */
-
-                .sort(
-                    (
-                        a: { sortOrder: number },
-                        b: { sortOrder: number }
-                    ) =>
-                        a.sortOrder -
-                        b.sortOrder
-                )
-
-                /*
-                |--------------------------------------------------------------------------
-                | Normalize sort order
-                |--------------------------------------------------------------------------
-                |
-                | Form always works with 0,1,2,3...
-                |
-                */
-
-                .map(
-                    (
-                        field: any,
-                        index: number
-                    ) => ({
-                        ...field,
-                        sortOrder: index,
-                    })
-                ),
+                    sortOrder:
+                        field.sort_order ??
+                        field.sortOrder ??
+                        index,
+                }),
+            )
+            .sort(
+                (
+                    a: MappedRevenueServiceField,
+                    b: MappedRevenueServiceField,
+                ) => a.sortOrder - b.sortOrder,
+            )
+            .map(
+                (
+                    field: MappedRevenueServiceField,
+                    index: number,
+                ) => ({
+                    ...field,
+                    sortOrder: index,
+                }),
+            ),
     };
 }
 
@@ -212,11 +220,9 @@ function toFormValues(
 ========================================================= */
 
 export default function EditRevenueServicePage() {
-    const params =
-        useParams<{ id: string }>();
+    const params = useParams<{ id: string }>();
 
-    const serviceId =
-        params.id;
+    const serviceId = params.id;
 
     /*
     |--------------------------------------------------------------------------
@@ -251,11 +257,10 @@ export default function EditRevenueServicePage() {
     */
 
     const service =
-        response?.data;
+        response?.data as RevenueServiceResponse | undefined;
 
     const baseFields =
-        baseFieldsResponse?.data ??
-        [];
+        baseFieldsResponse?.data ?? [];
 
     /*
     |--------------------------------------------------------------------------
@@ -285,41 +290,29 @@ export default function EditRevenueServicePage() {
     */
 
     const handleSubmit = async (
-        values: UpdateRevenueServiceInput
+        values: UpdateRevenueServiceInput,
     ) => {
-        console.log(
-            "EDIT FORM VALUES:",
-            values
-        );
-
         /*
         |--------------------------------------------------------------------------
-        | Validate required update values
-        |--------------------------------------------------------------------------
-        |
-        | The update Zod schema uses .partial(), so TypeScript correctly
-        | considers these properties optional.
-        |
-        | The edit form, however, must provide these values before sending
-        | the request.
+        | Validate Required Values
         |--------------------------------------------------------------------------
         */
 
         if (!values.revenueCodeId) {
             throw new Error(
-                "Revenue code is required."
+                "Revenue code is required.",
             );
         }
 
         if (!values.name?.trim()) {
             throw new Error(
-                "Service name is required."
+                "Service name is required.",
             );
         }
 
         if (!values.collectionMode) {
             throw new Error(
-                "Collection mode is required."
+                "Collection mode is required.",
             );
         }
 
@@ -329,60 +322,23 @@ export default function EditRevenueServicePage() {
         |--------------------------------------------------------------------------
         */
 
-        const payload:
-            UpdateRevenueServicePayload = {
-            /*
-            |--------------------------------------------------------------------------
-            | Revenue Code
-            |--------------------------------------------------------------------------
-            */
-
+        const payload: UpdateRevenueServicePayload = {
             revenue_code_id:
                 values.revenueCodeId,
 
-            /*
-            |--------------------------------------------------------------------------
-            | Name
-            |--------------------------------------------------------------------------
-            */
-
             name:
                 values.name.trim(),
-
-            /*
-            |--------------------------------------------------------------------------
-            | Description
-            |--------------------------------------------------------------------------
-            */
 
             description:
                 values.description?.trim() ||
                 null,
 
-            /*
-            |--------------------------------------------------------------------------
-            | Service Type
-            |--------------------------------------------------------------------------
-            */
-
             service_type:
                 values.serviceType ??
                 null,
 
-            /*
-            |--------------------------------------------------------------------------
-            | Collection Mode
-            |--------------------------------------------------------------------------
-            */
-
             collection_mode:
                 values.collectionMode,
-
-            /*
-            |--------------------------------------------------------------------------
-            | Active Status
-            |--------------------------------------------------------------------------
-            */
 
             is_active:
                 values.isActive ?? true,
@@ -391,85 +347,41 @@ export default function EditRevenueServicePage() {
             |--------------------------------------------------------------------------
             | Revenue Service Fields
             |--------------------------------------------------------------------------
-            |
-            | These reference canonical BaseFields.
-            |
             */
 
             fields:
                 (values.fields ?? []).map(
                     (
                         field,
-                        index
+                        index,
                     ) => ({
-                        /*
-                        |--------------------------------------------------------------------------
-                        | Canonical BaseField
-                        |--------------------------------------------------------------------------
-                        */
-
                         base_field_id:
                             field.baseFieldId,
-
-                        /*
-                        |--------------------------------------------------------------------------
-                        | Order
-                        |--------------------------------------------------------------------------
-                        */
 
                         sort_order:
                             index,
 
-                        /*
-                        |--------------------------------------------------------------------------
-                        | Required
-                        |--------------------------------------------------------------------------
-                        */
-
                         is_required:
                             field.required,
-
-                        /*
-                        |--------------------------------------------------------------------------
-                        | Service Label
-                        |--------------------------------------------------------------------------
-                        */
 
                         label:
                             field.label?.trim() ||
                             null,
 
-                        /*
-                        |--------------------------------------------------------------------------
-                        | Help Text
-                        |--------------------------------------------------------------------------
-                        */
-
                         help_text:
                             field.helpText?.trim() ||
                             null,
 
-                        /*
-                        |--------------------------------------------------------------------------
-                        | Validation Rules
-                        |--------------------------------------------------------------------------
-                        */
-
                         validation_rules:
                             field.validationRules &&
                             Object.keys(
-                                field.validationRules
+                                field.validationRules,
                             ).length > 0
                                 ? field.validationRules
                                 : null,
-                    })
+                    }),
                 ),
         };
-
-        console.log(
-            "UPDATE REVENUE SERVICE PAYLOAD:",
-            payload
-        );
 
         /*
         |--------------------------------------------------------------------------
@@ -495,12 +407,11 @@ export default function EditRevenueServicePage() {
     ) {
         return (
             <div className="space-y-6">
-
                 <Banner
                     description="Update this service's details, collection mode, and required fields."
                     badge={
                         <IconBadge
-                            className="gap-2 rounded-full  p-3 text-xs"
+                            className="gap-2 rounded-full p-3 text-xs"
                             icon={
                                 <Briefcase className="h-4 w-4" />
                             }
@@ -518,20 +429,15 @@ export default function EditRevenueServicePage() {
                         />
                     }
                     overlayClassName="bg-transparent"
-
-
                 />
 
                 <div className="flex min-h-[300px] items-center justify-center gap-2 text-muted-foreground">
-
                     <Loader2 className="h-5 w-5 animate-spin" />
 
                     <span className="text-sm">
                         Loading revenue service...
                     </span>
-
                 </div>
-
             </div>
         );
     }
@@ -549,73 +455,11 @@ export default function EditRevenueServicePage() {
     ) {
         return (
             <div className="space-y-6">
-
-                   <Banner
-                        description="Update this service's details, collection mode, and required fields."
-                        badge={
-                            <IconBadge
-                                className="gap-2 rounded-full  p-3 text-xs"
-                                icon={
-                                    <Briefcase className="h-4 w-4" />
-                                }
-                            >
-                                Edit Revenue Service
-                            </IconBadge>
-                        }
-                        background={
-                            <FloatingParticles
-                                color="#040404"
-                                count={35}
-                                speed={0.2}
-                                connectDistance={100}
-                                position="bottom-right"
-                            />
-                        }
-                        overlayClassName="bg-transparent"
-
-
-                    />
-
-                <div className="flex min-h-[300px] flex-col items-center justify-center gap-3 rounded-xl border text-center">
-
-                    <AlertCircle className="h-6 w-6 text-red-500" />
-
-                    <p className="text-sm font-medium">
-                        Failed to load this revenue service.
-                    </p>
-
-                    <p className="max-w-md text-xs text-muted-foreground">
-
-                        {!initialValues
-                            ? "The requested revenue service could not be found."
-                            : isBaseFieldsError
-                                ? "Canonical base fields could not be loaded."
-                                : "Try refreshing the page, or go back and select the service again."
-                        }
-
-                    </p>
-
-                </div>
-
-            </div>
-        );
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Render
-    |--------------------------------------------------------------------------
-    */
-
-    return (
-        <div className="mx-auto max-w-5xl space-y-6">
-
-            
-               <Banner
+                <Banner
                     description="Update this service's details, collection mode, and required fields."
                     badge={
                         <IconBadge
-                            className="gap-2 rounded-full  p-3 text-xs"
+                            className="gap-2 rounded-full p-3 text-xs"
                             icon={
                                 <Briefcase className="h-4 w-4" />
                             }
@@ -633,9 +477,59 @@ export default function EditRevenueServicePage() {
                         />
                     }
                     overlayClassName="bg-transparent"
-
-
                 />
+
+                <div className="flex min-h-[300px] flex-col items-center justify-center gap-3 rounded-xl border text-center">
+                    <AlertCircle className="h-6 w-6 text-red-500" />
+
+                    <p className="text-sm font-medium">
+                        Failed to load this revenue service.
+                    </p>
+
+                    <p className="max-w-md text-xs text-muted-foreground">
+                        {!initialValues
+                            ? "The requested revenue service could not be found."
+                            : isBaseFieldsError
+                                ? "Canonical base fields could not be loaded."
+                                : "Try refreshing the page, or go back and select the service again."
+                        }
+                    </p>
+                </div>
+            </div>
+        );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Render
+    |--------------------------------------------------------------------------
+    */
+
+    return (
+        <div className="mx-auto max-w-5xl space-y-6">
+            <Banner
+                description="Update this service's details, collection mode, and required fields."
+                badge={
+                    <IconBadge
+                        className="gap-2 rounded-full p-3 text-xs"
+                        icon={
+                            <Briefcase className="h-4 w-4" />
+                        }
+                    >
+                        Edit Revenue Service
+                    </IconBadge>
+                }
+                background={
+                    <FloatingParticles
+                        color="#040404"
+                        count={35}
+                        speed={0.2}
+                        connectDistance={100}
+                        position="bottom-right"
+                    />
+                }
+                overlayClassName="bg-transparent"
+            />
 
             <RevenueServiceForm
                 mode="edit"
@@ -643,7 +537,6 @@ export default function EditRevenueServicePage() {
                 onSubmit={handleSubmit}
                 baseFields={baseFields}
             />
-
         </div>
     );
 }

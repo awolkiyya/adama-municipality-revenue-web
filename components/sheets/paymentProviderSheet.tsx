@@ -1,6 +1,7 @@
+
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { Loader2, Pencil } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -20,10 +21,12 @@ import type {
   PaymentProvider,
   PaymentProviderFormData,
 } from "@/types/revenue/payment-provider";
+
 import {
   useCreatePaymentProvider,
   useUpdatePaymentProvider,
 } from "@/hooks/revenue/payment-provider.hook";
+
 import { CopyCode } from "@/components/copy-code";
 
 // =====================================================
@@ -32,7 +35,7 @@ import { CopyCode } from "@/components/copy-code";
 
 export type SheetMode = "create" | "edit" | "view";
 
-/** The fee is kept as text while typing, then converted to a number on save. */
+/** The fee remains text while typing and is converted to a number on save. */
 type FormValues = {
   name: string;
   code: string;
@@ -50,7 +53,10 @@ const EMPTY_FORM: FormValues = {
 };
 
 function toForm(provider: PaymentProvider | null): FormValues {
-  if (!provider) return EMPTY_FORM;
+  if (!provider) {
+    return { ...EMPTY_FORM };
+  }
+
   return {
     name: provider.name,
     code: provider.code,
@@ -59,10 +65,16 @@ function toForm(provider: PaymentProvider | null): FormValues {
   };
 }
 
+// =====================================================
+// VALIDATION
+// =====================================================
+
 function validate(values: FormValues): FormErrors {
   const errors: FormErrors = {};
 
-  if (!values.name.trim()) errors.name = "Enter the provider name.";
+  if (!values.name.trim()) {
+    errors.name = "Enter the provider name.";
+  }
 
   if (!values.code.trim()) {
     errors.code = "Enter the provider code.";
@@ -71,6 +83,7 @@ function validate(values: FormValues): FormErrors {
   }
 
   const fee = Number(values.fee_percentage);
+
   if (values.fee_percentage.trim() === "" || Number.isNaN(fee)) {
     errors.fee_percentage = "Enter the fee as a number.";
   } else if (fee < 0 || fee > 100) {
@@ -80,23 +93,38 @@ function validate(values: FormValues): FormErrors {
   return errors;
 }
 
-/** Reads a Laravel-style 422 response: { message, errors: { field: [msg] } } */
+// =====================================================
+// SERVER ERROR HANDLING
+// =====================================================
+
+type LaravelValidationResponse = {
+  message?: string;
+  errors?: Record<string, string[]>;
+};
+
+type ApiError = {
+  message?: string;
+  response?: {
+    data?: LaravelValidationResponse;
+  };
+};
+
+/** Reads a Laravel-style 422 response. */
 function parseServerError(error: unknown): {
   message: string;
   fields: FormErrors;
 } {
-  const data = (
-    error as {
-      response?: {
-        data?: { message?: string; errors?: Record<string, string[]> };
-      };
-    }
-  )?.response?.data;
+  const apiError = error as ApiError;
+  const data = apiError.response?.data;
 
   const fields: FormErrors = {};
+
   if (data?.errors) {
     for (const [key, messages] of Object.entries(data.errors)) {
-      if (key in EMPTY_FORM && messages?.[0]) {
+      if (
+        Object.prototype.hasOwnProperty.call(EMPTY_FORM, key) &&
+        messages?.[0]
+      ) {
         fields[key as keyof FormValues] = messages[0];
       }
     }
@@ -105,17 +133,21 @@ function parseServerError(error: unknown): {
   return {
     message:
       data?.message ??
-      (error as Error)?.message ??
+      apiError.message ??
       "Could not save the payment provider. Try again.",
     fields,
   };
 }
 
-function formatFee(fee: number | string) {
+// =====================================================
+// FORMATTERS
+// =====================================================
+
+function formatFee(fee: number | string): string {
   return `${Number(fee).toFixed(2)}%`;
 }
 
-function formatDate(date: string) {
+function formatDate(date: string): string {
   return new Intl.DateTimeFormat("en-US", {
     year: "numeric",
     month: "short",
@@ -124,7 +156,7 @@ function formatDate(date: string) {
 }
 
 // =====================================================
-// SMALL PIECES
+// SMALL COMPONENTS
 // =====================================================
 
 function Field({
@@ -143,13 +175,19 @@ function Field({
   return (
     <div className="space-y-1.5">
       <Label htmlFor={htmlFor}>{label}</Label>
+
       {children}
+
       {error ? (
         <p className="text-xs text-destructive" role="alert">
           {error}
         </p>
       ) : (
-        hint && <p className="text-xs text-muted-foreground">{hint}</p>
+        hint && (
+          <p className="text-xs text-muted-foreground">
+            {hint}
+          </p>
+        )
       )}
     </div>
   );
@@ -164,8 +202,13 @@ function DetailRow({
 }) {
   return (
     <div className="flex items-center justify-between gap-4 border-b py-3.5 last:border-0">
-      <dt className="text-sm text-muted-foreground">{label}</dt>
-      <dd className="text-sm font-medium">{children}</dd>
+      <dt className="text-sm text-muted-foreground">
+        {label}
+      </dt>
+
+      <dd className="text-sm font-medium">
+        {children}
+      </dd>
     </div>
   );
 }
@@ -185,13 +228,14 @@ function StatusBadge({ isActive }: { isActive: boolean }) {
           isActive ? "bg-emerald-500" : "bg-slate-400"
         }`}
       />
+
       {isActive ? "Active" : "Inactive"}
     </Badge>
   );
 }
 
 // =====================================================
-// SHEET: CREATE / EDIT / VIEW
+// PUBLIC SHEET COMPONENT
 // =====================================================
 
 export function PaymentProviderSheet({
@@ -207,41 +251,112 @@ export function PaymentProviderSheet({
   onOpenChange: (open: boolean) => void;
   onModeChange: (mode: SheetMode) => void;
 }) {
-  const [values, setValues] = useState<FormValues>(EMPTY_FORM);
+  /*
+   * A new key resets the inner component's form state when:
+   * - The sheet opens or closes.
+   * - The sheet changes between create, edit, and view.
+   * - The selected provider or its editable values change.
+   *
+   * This avoids synchronously setting state inside an effect.
+   */
+  const sheetKey = JSON.stringify([
+    open,
+    mode,
+    provider?.id ?? null,
+    provider?.name ?? null,
+    provider?.code ?? null,
+    provider?.fee_percentage ?? null,
+    provider?.is_active ?? null,
+    provider?.created_at ?? null,
+  ]);
+
+  return (
+    <PaymentProviderSheetContent
+      key={sheetKey}
+      open={open}
+      mode={mode}
+      provider={provider}
+      onOpenChange={onOpenChange}
+      onModeChange={onModeChange}
+    />
+  );
+}
+
+// =====================================================
+// SHEET CONTENT
+// =====================================================
+
+function PaymentProviderSheetContent({
+  open,
+  mode,
+  provider,
+  onOpenChange,
+  onModeChange,
+}: {
+  open: boolean;
+  mode: SheetMode;
+  provider: PaymentProvider | null;
+  onOpenChange: (open: boolean) => void;
+  onModeChange: (mode: SheetMode) => void;
+}) {
+  // Form state is initialized from the current sheet context.
+  // The keyed parent remounts this component when that context changes.
+  const [values, setValues] = useState<FormValues>(() =>
+    toForm(mode === "create" ? null : provider)
+  );
+
   const [errors, setErrors] = useState<FormErrors>({});
   const [serverError, setServerError] = useState<string | null>(null);
 
-  // Success toasts and cache invalidation live in the hooks.
+  // Success toasts and cache invalidation remain in the hooks.
   const createMutation = useCreatePaymentProvider();
   const updateMutation = useUpdatePaymentProvider();
-  const isSaving = createMutation.isPending || updateMutation.isPending;
 
-  // Reset the form whenever the sheet opens or switches record / mode
-  useEffect(() => {
-    if (open) {
-      setValues(toForm(mode === "create" ? null : provider));
-      setErrors({});
-      setServerError(null);
-    }
-  }, [open, mode, provider]);
+  const isSaving =
+    createMutation.isPending || updateMutation.isPending;
 
-  const set = <K extends keyof FormValues>(key: K, value: FormValues[K]) => {
-    setValues((prev) => ({ ...prev, [key]: value }));
-    setErrors((prev) => ({ ...prev, [key]: undefined }));
+  // =====================================================
+  // FORM HELPERS
+  // =====================================================
+
+  const set = <K extends keyof FormValues>(
+    key: K,
+    value: FormValues[K]
+  ) => {
+    setValues((previous) => ({
+      ...previous,
+      [key]: value,
+    }));
+
+    setErrors((previous) => ({
+      ...previous,
+      [key]: undefined,
+    }));
+
+    setServerError(null);
   };
 
   const handleError = (error: unknown) => {
     const { message, fields } = parseServerError(error);
+
     setErrors(fields);
     setServerError(message);
   };
 
-  const handleSubmit = (event: React.FormEvent) => {
+  // =====================================================
+  // SUBMIT
+  // =====================================================
+
+  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    const found = validate(values);
-    setErrors(found);
-    if (Object.keys(found).length > 0) return;
+    const foundErrors = validate(values);
+
+    setErrors(foundErrors);
+
+    if (Object.keys(foundErrors).length > 0) {
+      return;
+    }
 
     setServerError(null);
 
@@ -253,22 +368,48 @@ export function PaymentProviderSheet({
     };
 
     const callbacks = {
-      onSuccess: () => onOpenChange(false),
+      onSuccess: () => {
+        onOpenChange(false);
+      },
       onError: handleError,
     };
 
     if (mode === "edit" && provider) {
-      updateMutation.mutate({ id: provider.id, data: payload }, callbacks);
+      updateMutation.mutate(
+        {
+          id: provider.id,
+          data: payload,
+        },
+        callbacks
+      );
+
       return;
     }
 
-    createMutation.mutate(payload, callbacks);
+    if (mode === "create") {
+      createMutation.mutate(payload, callbacks);
+    }
   };
 
+  // =====================================================
+  // ACTIONS
+  // =====================================================
+
   const handleCancel = () => {
-    if (mode === "edit" && provider) onModeChange("view");
-    else onOpenChange(false);
+    if (isSaving) {
+      return;
+    }
+
+    if (mode === "edit" && provider) {
+      onModeChange("view");
+    } else {
+      onOpenChange(false);
+    }
   };
+
+  // =====================================================
+  // DISPLAY VALUES
+  // =====================================================
 
   const title =
     mode === "create"
@@ -284,15 +425,30 @@ export function PaymentProviderSheet({
         ? "Update the provider details. Changes apply to new payments."
         : "External payment service";
 
-  // Live example so the fee is easy to understand
+  // Live example to make the fee easier to understand.
   const feeNumber = Number(values.fee_percentage);
+
   const feeExample =
-    !Number.isNaN(feeNumber) && feeNumber >= 0 && feeNumber <= 100
+    values.fee_percentage.trim() !== "" &&
+    !Number.isNaN(feeNumber) &&
+    feeNumber >= 0 &&
+    feeNumber <= 100
       ? ((1000 * feeNumber) / 100).toFixed(2)
       : null;
 
+  // =====================================================
+  // RENDER
+  // =====================================================
+
   return (
-    <Sheet open={open} onOpenChange={(next) => !isSaving && onOpenChange(next)}>
+    <Sheet
+      open={open}
+      onOpenChange={(next) => {
+        if (!isSaving) {
+          onOpenChange(next);
+        }
+      }}
+    >
       <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-md">
         <SheetHeader className="border-b px-6 py-5 text-left">
           <SheetTitle>{title}</SheetTitle>
@@ -300,20 +456,27 @@ export function PaymentProviderSheet({
         </SheetHeader>
 
         {/* ================= VIEW ================= */}
+
         {mode === "view" && provider && (
           <>
             <div className="flex-1 overflow-y-auto px-6 py-2">
               <dl>
-                <DetailRow label="Provider">{provider.name}</DetailRow>
+                <DetailRow label="Provider">
+                  {provider.name}
+                </DetailRow>
+
                 <DetailRow label="Code">
                   <CopyCode value={provider.code} />
                 </DetailRow>
+
                 <DetailRow label="Fee">
                   {formatFee(provider.fee_percentage)}
                 </DetailRow>
+
                 <DetailRow label="Status">
                   <StatusBadge isActive={provider.is_active} />
                 </DetailRow>
+
                 <DetailRow label="Added">
                   {formatDate(provider.created_at)}
                 </DetailRow>
@@ -321,9 +484,13 @@ export function PaymentProviderSheet({
             </div>
 
             <SheetFooter className="flex-row justify-end gap-2 border-t px-6 py-4">
-              <Button variant="outline" onClick={() => onOpenChange(false)}>
+              <Button
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+              >
                 Close
               </Button>
+
               <Button onClick={() => onModeChange("edit")}>
                 <Pencil className="mr-2 h-4 w-4" />
                 Edit provider
@@ -333,18 +500,33 @@ export function PaymentProviderSheet({
         )}
 
         {/* ============ CREATE / EDIT ============ */}
+
         {mode !== "view" && (
-          <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+          <form
+            onSubmit={handleSubmit}
+            className="flex min-h-0 flex-1 flex-col"
+          >
             <div className="flex-1 space-y-5 overflow-y-auto px-6 py-6">
-              <Field label="Provider name" htmlFor="name" error={errors.name}>
+              {/* Provider name */}
+
+              <Field
+                label="Provider name"
+                htmlFor="name"
+                error={errors.name}
+              >
                 <Input
                   id="name"
                   value={values.name}
-                  onChange={(e) => set("name", e.target.value)}
+                  onChange={(event) =>
+                    set("name", event.target.value)
+                  }
                   placeholder="Telebirr"
                   autoFocus
+                  disabled={isSaving}
                 />
               </Field>
+
+              {/* Provider code */}
 
               <Field
                 label="Code"
@@ -355,17 +537,22 @@ export function PaymentProviderSheet({
                 <Input
                   id="code"
                   value={values.code}
-                  onChange={(e) =>
+                  onChange={(event) =>
                     set(
                       "code",
-                      e.target.value.toUpperCase().replace(/\s+/g, "_"),
+                      event.target.value
+                        .toUpperCase()
+                        .replace(/\s+/g, "_")
                     )
                   }
                   placeholder="TELEBIRR"
                   className="font-mono tracking-wide"
                   autoComplete="off"
+                  disabled={isSaving}
                 />
               </Field>
+
+              {/* Fee percentage */}
 
               <Field
                 label="Fee percentage"
@@ -386,18 +573,27 @@ export function PaymentProviderSheet({
                     max={100}
                     step="0.01"
                     value={values.fee_percentage}
-                    onChange={(e) => set("fee_percentage", e.target.value)}
+                    onChange={(event) =>
+                      set("fee_percentage", event.target.value)
+                    }
                     className="pr-9"
+                    disabled={isSaving}
                   />
+
                   <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
                     %
                   </span>
                 </div>
               </Field>
 
+              {/* Availability */}
+
               <div className="flex items-center justify-between rounded-lg border p-4">
                 <div className="pr-4">
-                  <p className="text-sm font-medium">Available for payments</p>
+                  <p className="text-sm font-medium">
+                    Available for payments
+                  </p>
+
                   <p className="mt-0.5 text-xs text-muted-foreground">
                     {values.is_active
                       ? "Taxpayers can choose this provider for electronic payments."
@@ -410,8 +606,11 @@ export function PaymentProviderSheet({
                   role="switch"
                   aria-checked={values.is_active}
                   aria-label="Available for payments"
-                  onClick={() => set("is_active", !values.is_active)}
-                  className={`relative h-6 w-11 shrink-0 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                  disabled={isSaving}
+                  onClick={() =>
+                    set("is_active", !values.is_active)
+                  }
+                  className={`relative h-6 w-11 shrink-0 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 ${
                     values.is_active
                       ? "bg-emerald-500"
                       : "bg-muted-foreground/30"
@@ -419,11 +618,15 @@ export function PaymentProviderSheet({
                 >
                   <span
                     className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
-                      values.is_active ? "translate-x-5" : "translate-x-0"
+                      values.is_active
+                        ? "translate-x-5"
+                        : "translate-x-0"
                     }`}
                   />
                 </button>
               </div>
+
+              {/* Server error */}
 
               {serverError && (
                 <p
@@ -435,6 +638,8 @@ export function PaymentProviderSheet({
               )}
             </div>
 
+            {/* Footer */}
+
             <SheetFooter className="flex-row justify-end gap-2 border-t px-6 py-4">
               <Button
                 type="button"
@@ -444,9 +649,15 @@ export function PaymentProviderSheet({
               >
                 Cancel
               </Button>
+
               <Button type="submit" disabled={isSaving}>
-                {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {mode === "create" ? "Add provider" : "Save changes"}
+                {isSaving && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                )}
+
+                {mode === "create"
+                  ? "Add provider"
+                  : "Save changes"}
               </Button>
             </SheetFooter>
           </form>

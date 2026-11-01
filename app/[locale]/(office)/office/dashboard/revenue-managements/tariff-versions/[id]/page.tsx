@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
@@ -268,7 +269,6 @@ function formatConditionOperator(value: unknown): string {
     return CONDITION_OPERATOR_LABELS[normalized];
   }
 
-  // Fallback for operators not explicitly listed above.
   return normalized
     .replace(/[_-]+/g, " ")
     .replace(/\b\w/g, (character) => character.toUpperCase());
@@ -1101,6 +1101,7 @@ export default function TariffVersionDetailPage() {
    * The API receives applied server-side filters.
    * Search and calculation type are filtered client-side.
    */
+
   const { data, isLoading } = useTariffRules({
     tariff_version_id: id,
     page,
@@ -1119,7 +1120,14 @@ export default function TariffVersionDetailPage() {
           : undefined,
   });
 
-  const rules: TariffRuleApiRecord[] = data?.data ?? [];
+  /*
+   * API response adaptation:
+   * TariffRuleRecord does not declare an index signature,
+   * while the local API record type supports dynamic API fields.
+   */
+
+  const rules = (data?.data ?? []) as unknown as TariffRuleApiRecord[];
+
   const meta = data?.meta;
 
   /* Normalize API records */
@@ -1294,9 +1302,9 @@ export default function TariffVersionDetailPage() {
   /* View details in the Sheet */
 
   const handleViewRule = useCallback(
-    (rule: TariffRuleRow) => {
+    (rule: TariffRuleApiRecord) => {
       const originalRule = rules.find(
-        (item) => String(item.id) === rule.id,
+        (item) => String(item.id) === String(rule.id),
       );
 
       if (!originalRule) {
@@ -1312,7 +1320,7 @@ export default function TariffVersionDetailPage() {
   /* Edit rule */
 
   const handleEditRule = useCallback(
-    (rule: TariffRuleRow) => {
+    (rule: TariffRuleApiRecord) => {
       router.push(
         `/${locale}/office/dashboard/revenue-managements/tariff-versions/${id}/tariff-rule/${rule.id}`,
       );
@@ -1323,7 +1331,7 @@ export default function TariffVersionDetailPage() {
   /* Manage formula variables */
 
   const handleManageFormulaVariables = useCallback(
-    (rule: TariffRuleRow) => {
+    (rule: TariffRuleApiRecord) => {
       router.push(
         `/${locale}/office/dashboard/revenue-managements/tariff-versions/${id}/tariff-rule/${rule.id}/formula-variables`,
       );

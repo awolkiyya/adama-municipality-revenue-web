@@ -1,14 +1,18 @@
+
 "use client";
 
 import { useState } from "react";
 import { useSelector } from "react-redux";
-import { Building2, MapPin } from "lucide-react";
+import { MapPin } from "lucide-react";
 
 import { Banner } from "@/components/banner/topBanner";
 import { FloatingParticles } from "@/components/design/FloatingParticles";
 import { IconBadge } from "@/components/commen/icon-badge";
 import { ExportDropdown } from "@/components/commen/ExportDropdown";
-import { CommenTable } from "@/components/table/CommenTable";
+import {
+  CommenTable,
+  type TableRecord,
+} from "@/components/table/CommenTable";
 import { DataTablePagination } from "@/components/table/data-pagination";
 
 import {
@@ -126,6 +130,11 @@ function AdministrativeUnitContent() {
 
   const units: AdminUnit[] = data?.data ?? [];
   const meta = data?.meta;
+
+  // Convert AdminUnit[] to the generic table record type.
+  const tableData: TableRecord[] = units.map((unit) => ({
+    ...unit,
+  }));
 
   /* ------------------------------------------------------------------------ */
   /* Filter state                                                             */
@@ -271,12 +280,12 @@ function AdministrativeUnitContent() {
       {/* Table */}
       <CommenTable
         type={"administrativeUnit" as CommentType}
-        data={units}
+        data={tableData}
         page={meta?.current_page ?? page}
         pageSize={meta?.per_page ?? pageSize}
         isLoading={isLoading}
         actions={actions}
-        onView={(row) => handleView(row as AdminUnit)}
+        onView={(row) => handleView(row as unknown as AdminUnit)}
         onEdit={(row) => {
           console.log("edit", row);
         }}

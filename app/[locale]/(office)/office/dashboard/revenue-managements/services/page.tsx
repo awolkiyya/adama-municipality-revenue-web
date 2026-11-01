@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useMemo, useState } from "react";
@@ -210,6 +211,23 @@ function RevenueServicesPageContent() {
   } = useRevenueServices(queryFilters);
 
   const services = data?.data ?? [];
+
+  /*
+  |--------------------------------------------------------------------------
+  | Table-Compatible Data
+  |--------------------------------------------------------------------------
+  | CommenTable expects records with a string index signature.
+  | Spread each service into a new object and adapt its type.
+  */
+
+  const tableData = useMemo(
+    () =>
+      services.map(
+        (service) =>
+          ({ ...service }) as typeof service & Record<string, unknown>,
+      ),
+    [services],
+  );
 
   const summary: RevenueServiceSummary = {
     total: Number(data?.meta?.summary?.total ?? 0),
@@ -566,27 +584,39 @@ function RevenueServicesPageContent() {
 
         <CommenTable
           type={"revenueService" as CommentType}
-          data={services}
+          data={tableData}
           page={page}
           pageSize={perPage}
           isLoading={isLoading || isFetching}
           actions={actions}
           onView={(row) => {
+            const serviceId = String(row.id ?? "");
+
+            if (!serviceId) return;
+
             router.push(
-              `/office/dashboard/revenue-managements/services/${row.id}`,
+              `/office/dashboard/revenue-managements/services/${encodeURIComponent(serviceId)}`,
             );
           }}
           onEdit={(row) => {
+            const serviceId = String(row.id ?? "");
+
+            if (!serviceId) return;
+
             router.push(
-              `/office/dashboard/revenue-managements/services/${row.id}/edit`,
+              `/office/dashboard/revenue-managements/services/${encodeURIComponent(serviceId)}/edit`,
             );
           }}
           onDelete={(id) => {
             console.log("delete", id);
           }}
           onManageAccess={(row) => {
+            const serviceId = String(row.id ?? "");
+
+            if (!serviceId) return;
+
             router.push(
-              `/office/dashboard/revenue-managements/services/${row.id}/access`,
+              `/office/dashboard/revenue-managements/services/${encodeURIComponent(serviceId)}/access`,
             );
           }}
         />

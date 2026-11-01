@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -78,6 +79,8 @@ interface ApiRole {
 */
 
 interface RoleRow {
+  [key: string]: unknown;
+
   id: string;
   name: string;
   description: string;
@@ -188,16 +191,6 @@ function AccessManagementPageContent() {
   */
 
   const deleteRole = useDeleteRole();
-
-  /*
-  |--------------------------------------------------------------------------
-  | Reset Pagination When Search Changes
-  |--------------------------------------------------------------------------
-  */
-
-  useEffect(() => {
-    setPage(1);
-  }, [search]);
 
   /*
   |--------------------------------------------------------------------------
@@ -381,7 +374,7 @@ function AccessManagementPageContent() {
 
       {/* Roles Table */}
 
-      <CommenTable
+      <CommenTable<RoleRow>
         type={"role" as CommentType}
         data={roles}
         page={page}
@@ -389,7 +382,7 @@ function AccessManagementPageContent() {
         isLoading={isLoading}
         onView={handleView}
         onEdit={handleEdit}
-        onDelete={(id) => handleDeleteRequest(String(id))}
+        onDelete={handleDeleteRequest}
         actions={actions}
       />
 

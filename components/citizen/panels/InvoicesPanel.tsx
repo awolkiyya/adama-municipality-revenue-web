@@ -57,7 +57,7 @@ import type {
 } from "../types";
 
 import { getInvoiceDisplayTitle } from "@/lib/utils";
-import { useInitializePayment } from "@/hooks/payment/payment.hook";
+import { useInitializeOnlinePayment } from "@/hooks/payment/payment.hook";
 
 
 
@@ -926,7 +926,7 @@ export function InvoicesPanel() {
   // ===================================================
 
   const initializeChapaPayment =
-    useInitializePayment();
+  useInitializeOnlinePayment();
 
 
   // ===================================================
@@ -1168,35 +1168,36 @@ export function InvoicesPanel() {
   await initializeChapaPayment.mutateAsync({
     invoice_id:
       "01a013e2-eb7a-736a-9d76-b5ba41b11213",
+    
 
-    payment_method:"CHAPA",
+    // payment_method:"CHAPA",
 
     payment_provider:"CHAPA",
 
-    customer_first_name:
-      "Abdulbaasit",
+    // customer_first_name:
+    //   "Abdulbaasit",
 
-    customer_last_name:
-      "Awol",
+    // customer_last_name:
+    //   "Awol",
 
-    customer_email:
-      "awolabdulbaasit143@gmail.com",
+    // customer_email:
+    //   "awolabdulbaasit143@gmail.com",
 
-    customer_phone:
-      "+251911996750",
+    // customer_phone:
+    //   "+251911996750",
 
-    return_url:
-      `${window.location.origin}/payments/success`,
+    // return_url:
+    //   `${window.location.origin}/payments/success`,
 
-    callback_url:
-      "https://napoleon-polytonal-nonaffectingly.ngrok-free.dev/api/v1/payments/webhooks/chapa",
+    // callback_url:
+    //   "https://napoleon-polytonal-nonaffectingly.ngrok-free.dev/api/v1/payments/webhooks/chapa",
 
     description:
       "Invoice payment",
 
-    metadata: {
-      source: "postman-test",
-    },
+    // metadata: {
+    //   source: "postman-test",
+    // },
   });
 
 

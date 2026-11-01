@@ -89,7 +89,7 @@ import { TaxpayerSelector } from "@/components/revenue/assessment/taxpayer-selec
   
           <CardContent>
             <TaxpayerSelector
-              taxpayers={taxpayers}
+              // taxpayers={taxpayers}
               value={taxpayerId}
               onChange={onTaxpayerChange}
             />

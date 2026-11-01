@@ -1,3 +1,4 @@
+
 "use client";
 
 import React from "react";
@@ -7,6 +8,7 @@ import {
   getCoreRowModel,
   getSortedRowModel,
   flexRender,
+  type Column,
   type ColumnDef,
   type SortingState,
 } from "@tanstack/react-table";
@@ -59,10 +61,22 @@ import { usePermission } from "@/hooks/usePermission";
    TYPES
 ===================================================== */
 
-export interface TableProps {
+/**
+ * Every table record must have a stable ID.
+ *
+ * The index signature supports dynamic fields configured
+ * through CommentTableRegistry.
+ */
+export type TableRecord = Record<string, unknown> & {
+  id: string | number;
+};
+
+export interface TableProps<
+  TData extends TableRecord = TableRecord,
+> {
   type: CommentType;
 
-  data: any[];
+  data: TData[];
 
   page?: number;
 
@@ -71,19 +85,18 @@ export interface TableProps {
   isLoading?: boolean;
 
   /**
-   * Actions requested by the current page.
-   *
-   * An action is visible only when the page enables it,
-   * the registry enables it, and the user has the required
-   * permission when one is configured.
+   * An action is visible only when:
+   * 1. The current page enables it.
+   * 2. The registry enables it.
+   * 3. The user has the required permission, if configured.
    */
   actions: Partial<Record<TableActionKey, boolean>>;
 
   /* CORE ACTIONS */
 
-  onView?: (row: any) => void;
+  onView?: (row: TData) => void;
 
-  onEdit?: (row: any) => void;
+  onEdit?: (row: TData) => void;
 
   onDelete?: (id: string) => void;
 
@@ -91,52 +104,54 @@ export interface TableProps {
 
   /* USER / GOVERNANCE ACTIONS */
 
-  onUpdatePassword?: (row: any) => void;
+  onUpdatePassword?: (row: TData) => void;
 
-  onUpdateRole?: (row: any) => void;
+  onUpdateRole?: (row: TData) => void;
 
-  onUpdateHierarchy?: (row: any) => void;
+  onUpdateHierarchy?: (row: TData) => void;
 
-  onManageAccess?: (row: any) => void;
+  onManageAccess?: (row: TData) => void;
 
-  onToggleStatus?: (row: any) => void;
+  onToggleStatus?: (row: TData) => void;
 
   /* TARIFF RULE */
 
-  onManageFormulaVariables?: (row: any) => void;
+  onManageFormulaVariables?: (row: TData) => void;
 
   /* WORKFLOW ACTIONS */
 
-  onSubmit?: (row: any) => void;
+  onSubmit?: (row: TData) => void;
 
-  onReturn?: (row: any) => void;
+  onReturn?: (row: TData) => void;
 
-  onApprove?: (row: any) => void;
+  onApprove?: (row: TData) => void;
 
   /* INVOICE ACTIONS */
 
-  onIssue?: (row: any) => void;
+  onIssue?: (row: TData) => void;
 
-  onApplyDiscount?: (row: any) => void;
+  onApplyDiscount?: (row: TData) => void;
 
-  onApplyPenalty?: (row: any) => void;
+  onApplyPenalty?: (row: TData) => void;
 
-  onCancel?: (row: any) => void;
+  onCancel?: (row: TData) => void;
 
-  onVoid?: (row: any) => void;
+  onVoid?: (row: TData) => void;
 
-  onPay?: (row: any) => void;
+  onPay?: (row: TData) => void;
 
-  onPrint?: (row: any) => void;
+  onPrint?: (row: TData) => void;
 
-  onDownload?: (row: any) => void;
+  onDownload?: (row: TData) => void;
 }
 
 /* =====================================================
    COMPONENT
 ===================================================== */
 
-export function CommenTable({
+export function CommenTable<
+  TData extends TableRecord = TableRecord,
+>({
   type,
   data,
   page,
@@ -164,7 +179,7 @@ export function CommenTable({
   onPay,
   onPrint,
   onDownload,
-}: TableProps) {
+}: TableProps<TData>) {
   /* ===================================================
      TABLE CONFIG
   =================================================== */
@@ -181,29 +196,24 @@ export function CommenTable({
    * Resolve whether an action is available.
    *
    * Page configuration can restrict an action, but cannot
-   * bypass the registry or the user's permissions.
+   * bypass registry configuration or user permissions.
    */
   const resolveActionVisibility = React.useCallback(
     (key: TableActionKey): boolean => {
-      // The page must explicitly request the action.
       if (actions[key] !== true) {
         return false;
       }
 
       const actionConfig = config.actions[key];
 
-      // Registry-disabled or unregistered actions are hidden.
       if (!actionConfig?.enabled) {
         return false;
       }
 
-      // No permission requirement: page and registry
-      // configuration are sufficient.
       if (!actionConfig.permission) {
         return true;
       }
 
-      // Check the existing centralized permission system.
       return can(
         actionConfig.permission.resource,
         actionConfig.permission.action,
@@ -213,8 +223,7 @@ export function CommenTable({
   );
 
   /**
-   * Calculate visibility for all actions and pass the result
-   * to RowActions.
+   * Resolve visibility for all registered actions.
    */
   const visibleActions = React.useMemo(
     () =>
@@ -240,11 +249,11 @@ export function CommenTable({
      COLUMN CONFIG
   =================================================== */
 
-  const columns = React.useMemo<ColumnDef<any>[]>(() => {
-    return [
+  const columns = React.useMemo<ColumnDef<TData, unknown>[]>(
+    () => {
       /* ROW NUMBER */
 
-      {
+      const rowNumberColumn: ColumnDef<TData, unknown> = {
         id: "no",
         header: "#",
         enableSorting: false,
@@ -259,139 +268,139 @@ export function CommenTable({
             1
           );
         },
-      },
+      };
 
       /* DYNAMIC COLUMNS */
 
-      ...config.columns.map((key) => ({
-        accessorKey: key,
-        header: key.toUpperCase(),
-        enableSorting: true,
+      const dynamicColumns: ColumnDef<TData, unknown>[] =
+        config.columns.map((key) => ({
+          accessorKey: key,
+          header: key.toUpperCase(),
+          enableSorting: true,
 
-        cell: ({ row }: any) =>
-          columnRenderers[key]?.(row.original) ??
-          row.original[key],
-      })),
+          cell: ({ row }) => {
+            const original = row.original;
+
+            const renderer = columnRenderers[key];
+
+            if (renderer) {
+              return renderer(original);
+            }
+
+            return original[key] as React.ReactNode;
+          },
+        }));
 
       /* ACTIONS */
 
-      {
+      const actionsColumn: ColumnDef<TData, unknown> = {
         id: "actions",
         header: "ACTIONS",
         enableSorting: false,
 
-        cell: ({ row }: any) => (
-          <RowActions
-            // Pass resolved action visibility, not raw page flags.
-            actions={visibleActions}
-            row={row.original}
+        cell: ({ row }) => {
+          const original = row.original;
 
-            /* CORE */
+          return (
+            <RowActions
+              actions={visibleActions}
+              row={original}
+              /* CORE */
+              onView={() => onView?.(original)}
+              onEdit={() => onEdit?.(original)}
+              onDelete={() =>
+                onDelete?.(String(original.id))
+              }
+              onCreate={onCreate}
+              /* STATUS */
+              onToggleStatus={() =>
+                onToggleStatus?.(original)
+              }
+              /* USER / GOVERNANCE */
+              onUpdatePassword={() =>
+                onUpdatePassword?.(original)
+              }
+              onUpdateRole={() =>
+                onUpdateRole?.(original)
+              }
+              onUpdateHierarchy={() =>
+                onUpdateHierarchy?.(original)
+              }
+              onManageAccess={() =>
+                onManageAccess?.(original)
+              }
+              /* FORMULA VARIABLES */
+              onManageFormulaVariables={() =>
+                onManageFormulaVariables?.(original)
+              }
+              /* WORKFLOW */
+              onSubmit={() => onSubmit?.(original)}
+              onReturn={() => onReturn?.(original)}
+              onApprove={() => onApprove?.(original)}
+              /* INVOICE */
+              onIssue={() => onIssue?.(original)}
+              onApplyDiscount={() =>
+                onApplyDiscount?.(original)
+              }
+              onApplyPenalty={() =>
+                onApplyPenalty?.(original)
+              }
+              onCancel={() => onCancel?.(original)}
+              onVoid={() => onVoid?.(original)}
+              onPay={() => onPay?.(original)}
+              onPrint={() => onPrint?.(original)}
+              onDownload={() => onDownload?.(original)}
+            />
+          );
+        },
+      };
 
-            onView={() => onView?.(row.original)}
-
-            onEdit={() => onEdit?.(row.original)}
-
-            onDelete={() => onDelete?.(row.original.id)}
-
-            onCreate={onCreate}
-
-            /* STATUS */
-
-            onToggleStatus={() =>
-              onToggleStatus?.(row.original)
-            }
-
-            /* USER / GOVERNANCE */
-
-            onUpdatePassword={() =>
-              onUpdatePassword?.(row.original)
-            }
-
-            onUpdateRole={() =>
-              onUpdateRole?.(row.original)
-            }
-
-            onUpdateHierarchy={() =>
-              onUpdateHierarchy?.(row.original)
-            }
-
-            onManageAccess={() =>
-              onManageAccess?.(row.original)
-            }
-
-            /* FORMULA VARIABLES */
-
-            onManageFormulaVariables={() =>
-              onManageFormulaVariables?.(row.original)
-            }
-
-            /* WORKFLOW */
-
-            onSubmit={() => onSubmit?.(row.original)}
-
-            onReturn={() => onReturn?.(row.original)}
-
-            onApprove={() => onApprove?.(row.original)}
-
-            /* INVOICE */
-
-            onIssue={() => onIssue?.(row.original)}
-
-            onApplyDiscount={() =>
-              onApplyDiscount?.(row.original)
-            }
-
-            onApplyPenalty={() =>
-              onApplyPenalty?.(row.original)
-            }
-
-            onCancel={() => onCancel?.(row.original)}
-
-            onVoid={() => onVoid?.(row.original)}
-
-            onPay={() => onPay?.(row.original)}
-
-            onPrint={() => onPrint?.(row.original)}
-
-            onDownload={() => onDownload?.(row.original)}
-          />
-        ),
-      },
-    ];
-  }, [
-    config.columns,
-    page,
-    pageSize,
-    visibleActions,
-    onView,
-    onEdit,
-    onDelete,
-    onCreate,
-    onToggleStatus,
-    onUpdatePassword,
-    onUpdateRole,
-    onUpdateHierarchy,
-    onManageAccess,
-    onManageFormulaVariables,
-    onSubmit,
-    onReturn,
-    onApprove,
-    onIssue,
-    onApplyDiscount,
-    onApplyPenalty,
-    onCancel,
-    onVoid,
-    onPay,
-    onPrint,
-    onDownload,
-  ]);
+      return [
+        rowNumberColumn,
+        ...dynamicColumns,
+        actionsColumn,
+      ];
+    },
+    [
+      config.columns,
+      page,
+      pageSize,
+      visibleActions,
+      onView,
+      onEdit,
+      onDelete,
+      onCreate,
+      onToggleStatus,
+      onUpdatePassword,
+      onUpdateRole,
+      onUpdateHierarchy,
+      onManageAccess,
+      onManageFormulaVariables,
+      onSubmit,
+      onReturn,
+      onApprove,
+      onIssue,
+      onApplyDiscount,
+      onApplyPenalty,
+      onCancel,
+      onVoid,
+      onPay,
+      onPrint,
+      onDownload,
+    ],
+  );
 
   /* ===================================================
      TABLE INSTANCE
   =================================================== */
 
-  const table = useReactTable({
+  // TanStack Table returns a mutable table instance.
+  // Keep this API call outside React.useMemo.
+  // The targeted suppression prevents React Compiler from
+  // attempting to memoize this incompatible library API.
+
+  // eslint-disable-next-line react-hooks/incompatible-library
+  const table = useReactTable<TData>({
     data,
     columns,
 
@@ -404,6 +413,8 @@ export function CommenTable({
     getCoreRowModel: getCoreRowModel(),
 
     getSortedRowModel: getSortedRowModel(),
+
+    getRowId: (originalRow) => String(originalRow.id),
   });
 
   /* ===================================================
@@ -432,7 +443,9 @@ export function CommenTable({
      SORT ICON
   =================================================== */
 
-  const renderSortIcon = (column: any) => {
+  const renderSortIcon = (
+    column: Column<TData, unknown>,
+  ) => {
     const sorted = column.getIsSorted();
 
     if (sorted === "asc") {
@@ -459,7 +472,7 @@ export function CommenTable({
         collisionDetection={closestCenter}
       >
         <SortableContext
-          items={data.map((item) => item.id)}
+          items={rows.map((row) => row.id)}
           strategy={verticalListSortingStrategy}
         >
           <Table>
@@ -522,7 +535,10 @@ export function CommenTable({
                 />
               ) : (
                 rows.map((row) => (
-                  <SortableRow key={row.id} row={row}>
+                  <SortableRow
+                    key={row.id}
+                    row={row}
+                  >
                     {row.getVisibleCells().map((cell) => (
                       <TableCell key={cell.id}>
                         {flexRender(

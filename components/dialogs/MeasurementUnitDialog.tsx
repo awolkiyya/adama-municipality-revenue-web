@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 
@@ -31,8 +31,6 @@ import {
 
 import type { MeasurementUnit } from "@/types/revenue/revenue-unit";
 
-import { cn } from "@/lib/utils";
-
 // ============================================================
 // TYPES
 // ============================================================
@@ -51,53 +49,17 @@ export type MeasurementUnitFormValues = {
 };
 
 type MeasurementUnitDialogProps = {
-  /**
-   * Controls whether the dialog is open.
-   */
   open: boolean;
-
-  /**
-   * Dialog open state handler.
-   */
   onOpenChange: (open: boolean) => void;
-
-  /**
-   * Dialog mode.
-   *
-   * create → create new measurement unit
-   * edit   → update existing measurement unit
-   * view   → read-only view
-   */
   mode: MeasurementUnitDialogMode;
-
-  /**
-   * Existing measurement unit.
-   *
-   * Required for edit/view.
-   * Null for create.
-   */
   unit?: MeasurementUnit | null;
-
-  /**
-   * Loading state from parent mutation.
-   */
   isLoading?: boolean;
 
-  /**
-   * Called when create/edit form is submitted.
-   */
   onSubmit?: (
-    data: MeasurementUnitFormValues,
+    data: MeasurementUnitFormValues
   ) => void;
 
-  /**
-   * Optional custom title.
-   */
   title?: string;
-
-  /**
-   * Optional custom description.
-   */
   description?: string;
 };
 
@@ -109,37 +71,28 @@ const measurementUnitSchema = z.object({
   code: z
     .string()
     .trim()
-    .min(
-      1,
-      "Measurement unit code is required.",
-    )
+    .min(1, "Measurement unit code is required.")
     .max(
       50,
-      "Measurement unit code cannot exceed 50 characters.",
+      "Measurement unit code cannot exceed 50 characters."
     ),
 
   name: z
     .string()
     .trim()
-    .min(
-      1,
-      "Measurement unit name is required.",
-    )
+    .min(1, "Measurement unit name is required.")
     .max(
       100,
-      "Measurement unit name cannot exceed 100 characters.",
+      "Measurement unit name cannot exceed 100 characters."
     ),
 
   symbol: z
     .string()
     .trim()
-    .min(
-      1,
-      "Measurement unit symbol is required.",
-    )
+    .min(1, "Measurement unit symbol is required.")
     .max(
       30,
-      "Measurement unit symbol cannot exceed 30 characters.",
+      "Measurement unit symbol cannot exceed 30 characters."
     ),
 
   description: z
@@ -147,7 +100,7 @@ const measurementUnitSchema = z.object({
     .trim()
     .max(
       500,
-      "Description cannot exceed 500 characters.",
+      "Description cannot exceed 500 characters."
     ),
 
   is_active: z.boolean(),
@@ -179,94 +132,66 @@ export function MeasurementUnitDialog({
   title,
   description,
 }: MeasurementUnitDialogProps) {
+
   // ==========================================================
   // FORM
   // ==========================================================
 
   const {
+    control,
     register,
     handleSubmit,
     reset,
-    watch,
     formState: {
       errors,
       isDirty,
     },
   } = useForm<MeasurementUnitFormValues>({
-    resolver: zodResolver(
-      measurementUnitSchema,
-    ),
-
-    defaultValues:
-      DEFAULT_VALUES,
+    resolver: zodResolver(measurementUnitSchema),
+    defaultValues: DEFAULT_VALUES,
   });
 
   // ==========================================================
   // DERIVED STATE
   // ==========================================================
 
-  const isCreate =
-    mode === "create";
+  const isCreate = mode === "create";
+  const isEdit = mode === "edit";
+  const isView = mode === "view";
 
-  const isEdit =
-    mode === "edit";
-
-  const isView =
-    mode === "view";
+  const isReadOnly = isView || isLoading;
 
   /**
-   * View mode is read-only.
+   * Subscribe specifically to is_active.
    *
-   * While a mutation is running, the form
-   * is also temporarily read-only.
+   * useWatch is compatible with React's compiler
+   * and React Hook Form's subscription model.
    */
-  const isReadOnly =
-    isView || isLoading;
-
-  const isActive =
-    watch("is_active");
+  const isActive = useWatch({
+    control,
+    name: "is_active",
+    defaultValue: true,
+  });
 
   // ==========================================================
   // INITIALIZE FORM
   // ==========================================================
 
   useEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    // --------------------------------------------------------
-    // CREATE
-    // --------------------------------------------------------
+    if (!open) return;
 
     if (mode === "create") {
-      reset({
-        ...DEFAULT_VALUES,
-      });
-
+      reset({ ...DEFAULT_VALUES });
       return;
     }
-
-    // --------------------------------------------------------
-    // EDIT / VIEW
-    // --------------------------------------------------------
 
     if (unit) {
       reset({
-        code:
-          unit.code ?? "",
-
-        name:
-          unit.name ?? "",
-
-        symbol:
-          unit.symbol ?? "",
-
-        description:
-          unit.description ?? "",
-
-        is_active:
-          unit.is_active ?? true,
+        code: unit.code ?? "",
+        name: unit.name ?? "",
+        symbol: unit.symbol ?? "",
+        description: unit.description ?? "",
+        is_active: unit.is_active ?? true,
       });
     }
   }, [
@@ -281,11 +206,9 @@ export function MeasurementUnitDialog({
   // ==========================================================
 
   const submitForm = (
-    data: MeasurementUnitFormValues,
+    data: MeasurementUnitFormValues
   ) => {
-    if (isView) {
-      return;
-    }
+    if (isView || isLoading) return;
 
     onSubmit?.(data);
   };
@@ -314,12 +237,8 @@ export function MeasurementUnitDialog({
   // CLOSE
   // ==========================================================
 
-  const handleClose = (
-    nextOpen: boolean,
-  ) => {
-    if (isLoading) {
-      return;
-    }
+  const handleClose = (nextOpen: boolean) => {
+    if (isLoading) return;
 
     onOpenChange(nextOpen);
   };
@@ -342,9 +261,7 @@ export function MeasurementUnitDialog({
           p-2
         "
       >
-        {/* ==================================================
-            HEADER
-        ================================================== */}
+        {/* HEADER */}
 
         <DialogHeader
           className="
@@ -360,8 +277,6 @@ export function MeasurementUnitDialog({
               gap-3
             "
           >
-            {/* ICON */}
-
             <div
               className="
                 flex
@@ -383,8 +298,6 @@ export function MeasurementUnitDialog({
               )}
             </div>
 
-            {/* TITLE */}
-
             <div
               className="
                 min-w-0
@@ -395,26 +308,16 @@ export function MeasurementUnitDialog({
                 {dialogTitle}
               </DialogTitle>
 
-              <DialogDescription
-                className="
-                  mt-1
-                "
-              >
+              <DialogDescription className="mt-1">
                 {dialogDescription}
               </DialogDescription>
             </div>
           </div>
         </DialogHeader>
 
-        {/* ==================================================
-            FORM
-        ================================================== */}
+        {/* FORM */}
 
-        <form
-          onSubmit={handleSubmit(
-            submitForm,
-          )}
-        >
+        <form onSubmit={handleSubmit(submitForm)}>
           <div
             className="
               max-h-[65vh]
@@ -424,26 +327,12 @@ export function MeasurementUnitDialog({
               py-6
             "
           >
-            {/* ==============================================
-                CODE
-            ============================================== */}
+            {/* CODE */}
 
-            <div
-              className="
-                space-y-2
-              "
-            >
-              <Label
-                htmlFor="measurement-unit-code"
-              >
+            <div className="space-y-2">
+              <Label htmlFor="measurement-unit-code">
                 Code
-
-                <span
-                  className="
-                    ml-1
-                    text-destructive
-                  "
-                >
+                <span className="ml-1 text-destructive">
                   *
                 </span>
               </Label>
@@ -451,49 +340,23 @@ export function MeasurementUnitDialog({
               <Input
                 id="measurement-unit-code"
                 placeholder="e.g. SQM"
-                disabled={
-                  isReadOnly
-                }
-                {...register(
-                  "code",
-                )}
+                disabled={isReadOnly}
+                {...register("code")}
               />
 
               {errors.code && (
-                <p
-                  className="
-                    text-xs
-                    text-destructive
-                  "
-                >
-                  {
-                    errors.code
-                      .message
-                  }
+                <p className="text-xs text-destructive">
+                  {errors.code.message}
                 </p>
               )}
             </div>
 
-            {/* ==============================================
-                NAME
-            ============================================== */}
+            {/* NAME */}
 
-            <div
-              className="
-                space-y-2
-              "
-            >
-              <Label
-                htmlFor="measurement-unit-name"
-              >
+            <div className="space-y-2">
+              <Label htmlFor="measurement-unit-name">
                 Name
-
-                <span
-                  className="
-                    ml-1
-                    text-destructive
-                  "
-                >
+                <span className="ml-1 text-destructive">
                   *
                 </span>
               </Label>
@@ -501,49 +364,23 @@ export function MeasurementUnitDialog({
               <Input
                 id="measurement-unit-name"
                 placeholder="e.g. Square Meter"
-                disabled={
-                  isReadOnly
-                }
-                {...register(
-                  "name",
-                )}
+                disabled={isReadOnly}
+                {...register("name")}
               />
 
               {errors.name && (
-                <p
-                  className="
-                    text-xs
-                    text-destructive
-                  "
-                >
-                  {
-                    errors.name
-                      .message
-                  }
+                <p className="text-xs text-destructive">
+                  {errors.name.message}
                 </p>
               )}
             </div>
 
-            {/* ==============================================
-                SYMBOL
-            ============================================== */}
+            {/* SYMBOL */}
 
-            <div
-              className="
-                space-y-2
-              "
-            >
-              <Label
-                htmlFor="measurement-unit-symbol"
-              >
+            <div className="space-y-2">
+              <Label htmlFor="measurement-unit-symbol">
                 Symbol
-
-                <span
-                  className="
-                    ml-1
-                    text-destructive
-                  "
-                >
+                <span className="ml-1 text-destructive">
                   *
                 </span>
               </Label>
@@ -551,83 +388,42 @@ export function MeasurementUnitDialog({
               <Input
                 id="measurement-unit-symbol"
                 placeholder="e.g. m²"
-                disabled={
-                  isReadOnly
-                }
-                {...register(
-                  "symbol",
-                )}
+                disabled={isReadOnly}
+                {...register("symbol")}
               />
 
               {errors.symbol && (
-                <p
-                  className="
-                    text-xs
-                    text-destructive
-                  "
-                >
-                  {
-                    errors.symbol
-                      .message
-                  }
+                <p className="text-xs text-destructive">
+                  {errors.symbol.message}
                 </p>
               )}
             </div>
 
-            {/* ==============================================
-                DESCRIPTION
-            ============================================== */}
+            {/* DESCRIPTION */}
 
-            <div
-              className="
-                space-y-2
-              "
-            >
-              <Label
-                htmlFor="measurement-unit-description"
-              >
+            <div className="space-y-2">
+              <Label htmlFor="measurement-unit-description">
                 Description
               </Label>
 
               <Textarea
                 id="measurement-unit-description"
                 placeholder="Describe this measurement unit..."
-                disabled={
-                  isReadOnly
-                }
+                disabled={isReadOnly}
                 rows={4}
-                {...register(
-                  "description",
-                )}
+                {...register("description")}
               />
 
               {errors.description && (
-                <p
-                  className="
-                    text-xs
-                    text-destructive
-                  "
-                >
-                  {
-                    errors
-                      .description
-                      .message
-                  }
+                <p className="text-xs text-destructive">
+                  {errors.description.message}
                 </p>
               )}
             </div>
 
-            {/* ==============================================
-                STATUS
-            ============================================== */}
+            {/* STATUS */}
 
-            <div
-              className="
-                rounded-lg
-                border
-                p-4
-              "
-            >
+            <div className="rounded-lg border p-4">
               <div
                 className="
                   flex
@@ -636,49 +432,22 @@ export function MeasurementUnitDialog({
                   gap-4
                 "
               >
-                <div
-                  className="
-                    min-w-0
-                  "
-                >
-                  <Label>
-                    Status
-                  </Label>
+                <div className="min-w-0">
+                  <Label>Status</Label>
 
-                  <p
-                    className="
-                      mt-1
-                      text-xs
-                      text-muted-foreground
-                    "
-                  >
+                  <p className="mt-1 text-xs text-muted-foreground">
                     {isActive
                       ? "This measurement unit is active."
                       : "This measurement unit is inactive."}
                   </p>
                 </div>
 
-                {/* STATUS */}
-
-                <label
-                  className="
-                    inline-flex
-                    cursor-pointer
-                    items-center
-                  "
-                >
+                <label className="inline-flex cursor-pointer items-center">
                   <input
                     type="checkbox"
-                    className="
-                      peer
-                      sr-only
-                    "
-                    disabled={
-                      isReadOnly
-                    }
-                    {...register(
-                      "is_active",
-                    )}
+                    className="peer sr-only"
+                    disabled={isReadOnly}
+                    {...register("is_active")}
                   />
 
                   <div
@@ -708,9 +477,7 @@ export function MeasurementUnitDialog({
               </div>
             </div>
 
-            {/* ==============================================
-                VIEW INFORMATION
-            ============================================== */}
+            {/* VIEW INFORMATION */}
 
             {isView && unit && (
               <div
@@ -722,19 +489,10 @@ export function MeasurementUnitDialog({
                   text-muted-foreground
                 "
               >
-                <div
-                  className="
-                    grid
-                    grid-cols-2
-                    gap-4
-                  "
-                >
-                  {/* ID */}
+                <div className="grid grid-cols-2 gap-4">
 
                   <div>
-                    <p>
-                      Unit ID
-                    </p>
+                    <p>Unit ID</p>
 
                     <p
                       className="
@@ -748,12 +506,8 @@ export function MeasurementUnitDialog({
                     </p>
                   </div>
 
-                  {/* CODE */}
-
                   <div>
-                    <p>
-                      Code
-                    </p>
+                    <p>Code</p>
 
                     <p
                       className="
@@ -766,13 +520,9 @@ export function MeasurementUnitDialog({
                     </p>
                   </div>
 
-                  {/* CREATED */}
-
                   {unit.created_at && (
                     <div>
-                      <p>
-                        Created
-                      </p>
+                      <p>Created</p>
 
                       <p
                         className="
@@ -782,19 +532,15 @@ export function MeasurementUnitDialog({
                         "
                       >
                         {new Date(
-                          unit.created_at,
+                          unit.created_at
                         ).toLocaleString()}
                       </p>
                     </div>
                   )}
-
-                  {/* UPDATED */}
 
                   {unit.updated_at && (
                     <div>
-                      <p>
-                        Updated
-                      </p>
+                      <p>Updated</p>
 
                       <p
                         className="
@@ -804,19 +550,18 @@ export function MeasurementUnitDialog({
                         "
                       >
                         {new Date(
-                          unit.updated_at,
+                          unit.updated_at
                         ).toLocaleString()}
                       </p>
                     </div>
                   )}
+
                 </div>
               </div>
             )}
           </div>
 
-          {/* =================================================
-              FOOTER
-          ================================================= */}
+          {/* FOOTER */}
 
           <DialogFooter
             className="
@@ -825,63 +570,34 @@ export function MeasurementUnitDialog({
               py-4
             "
           >
-            {/* ==============================================
-                VIEW MODE
-            ============================================== */}
-
             {isView ? (
               <Button
                 type="button"
                 variant="outline"
-                onClick={() =>
-                  handleClose(false)
-                }
-                disabled={
-                  isLoading
-                }
+                onClick={() => handleClose(false)}
+                disabled={isLoading}
               >
                 <X className="size-4" />
-
                 Close
               </Button>
             ) : (
               <>
-                {/* ==========================================
-                    CANCEL
-                ========================================== */}
-
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() =>
-                    handleClose(false)
-                  }
-                  disabled={
-                    isLoading
-                  }
+                  onClick={() => handleClose(false)}
+                  disabled={isLoading}
                 >
                   Cancel
                 </Button>
 
-                {/* ==========================================
-                    SUBMIT
-                ========================================== */}
-
                 <Button
                   type="submit"
-                  disabled={
-                    isLoading ||
-                    !isDirty
-                  }
+                  disabled={isLoading || !isDirty}
                 >
                   {isLoading ? (
                     <>
-                      <Loader2
-                        className="
-                          size-4
-                          animate-spin
-                        "
-                      />
+                      <Loader2 className="size-4 animate-spin" />
 
                       {isCreate
                         ? "Creating..."

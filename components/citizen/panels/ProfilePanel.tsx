@@ -1,3 +1,4 @@
+
 "use client";
 
 import {
@@ -17,7 +18,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useLocale } from "next-intl";
 import { useTheme } from "next-themes";
-import { useEffect, useState, useTransition, type ReactNode } from "react";
+import { useState, useTransition, type ReactNode } from "react";
 import { useSelector } from "react-redux";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -52,6 +53,7 @@ export function ProfilePanel() {
 
   /* The backend returned a user without a citizen profile */
   const citizen = user.citizen;
+
   if (!citizen) {
     return (
       <Card>
@@ -79,7 +81,9 @@ export function ProfilePanel() {
         <CardContent className="flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
           <div className="flex min-w-0 items-center gap-4">
             <Avatar className="size-16 shrink-0">
-              {user.avatar && <AvatarImage src={user.avatar} alt={fullName} />}
+              {user.avatar && (
+                <AvatarImage src={user.avatar} alt={fullName} />
+              )}
               <AvatarFallback className="bg-primary/10 text-lg font-semibold text-primary">
                 {getInitials(fullName)}
               </AvatarFallback>
@@ -89,6 +93,7 @@ export function ProfilePanel() {
               <h2 className="truncate text-lg font-semibold tracking-tight">
                 {fullName}
               </h2>
+
               <div className="mt-1 flex flex-wrap items-center gap-2">
                 <span className="text-sm text-muted-foreground">
                   Registered citizen
@@ -100,12 +105,17 @@ export function ProfilePanel() {
 
           <div className="min-w-0 sm:text-right">
             <p className="text-xs text-muted-foreground">Citizen ID</p>
+
             <div className="mt-1 flex items-center gap-1.5 sm:justify-end">
               <span className="truncate font-mono text-sm font-medium">
                 {citizen.citizen_uid || "Not available"}
               </span>
+
               {citizen.citizen_uid && (
-                <CopyButton value={citizen.citizen_uid} label="citizen ID" />
+                <CopyButton
+                  value={citizen.citizen_uid}
+                  label="citizen ID"
+                />
               )}
             </div>
           </div>
@@ -120,38 +130,55 @@ export function ProfilePanel() {
         >
           <div className="flex items-start gap-3">
             <AlertCircle className="mt-0.5 size-5 shrink-0 text-amber-600" />
+
             <div>
-              <p className="text-sm font-medium">Verify your phone number</p>
+              <p className="text-sm font-medium">
+                Verify your phone number
+              </p>
               <p className="text-sm text-muted-foreground">
                 Verified numbers receive payment confirmations and due-date
                 reminders.
               </p>
             </div>
           </div>
+
           <Button asChild size="sm" className="shrink-0">
             <Link href={VERIFY_PHONE_HREF}>Verify phone</Link>
           </Button>
         </div>
       )}
 
+      {/* Personal information */}
       <Section title="Personal information">
         <Row label="Full name" value={fullName} />
+
         <Row
           label="National ID"
           value={
             citizen.national_id ? (
-              <SensitiveValue value={citizen.national_id} label="national ID" />
+              <SensitiveValue
+                value={citizen.national_id}
+                label="national ID"
+              />
             ) : null
           }
         />
+
         <Row label="Gender" value={titleCase(citizen.gender)} />
+
         <Row
           label="Date of birth"
-          value={citizen.date_of_birth ? formatDate(citizen.date_of_birth) : null}
+          value={
+            citizen.date_of_birth
+              ? formatDate(citizen.date_of_birth)
+              : null
+          }
         />
+
         <Row label="Address" value={citizen.address} />
       </Section>
 
+      {/* Contact */}
       <Section title="Contact">
         <Row
           label="Phone"
@@ -159,6 +186,7 @@ export function ProfilePanel() {
             user.phone ? (
               <span className="flex flex-wrap items-center gap-2">
                 <span className="tabular-nums">{user.phone}</span>
+
                 <span
                   className={cn(
                     "rounded-full px-2 py-0.5 text-xs font-medium",
@@ -173,25 +201,38 @@ export function ProfilePanel() {
             ) : null
           }
         />
+
         <Row label="Email" value={user.email} />
+
         <Row
           label="Administrative unit"
           value={user.administrative_unit?.name}
         />
       </Section>
 
+      {/* Account */}
       <Section title="Account">
         <Row
           label="Status"
           value={<StatusPill active={Boolean(user.is_active)} />}
         />
-        <Row label="Registered" value={registered ? formatDate(registered) : null} />
+
+        <Row
+          label="Registered"
+          value={registered ? formatDate(registered) : null}
+        />
+
         <Row
           label="Last sign-in"
-          value={user.lastLoginAt ? formatDate(user.lastLoginAt) : null}
+          value={
+            user.lastLoginAt
+              ? formatDate(user.lastLoginAt)
+              : null
+          }
         />
       </Section>
 
+      {/* Preferences */}
       <Section title="Preferences">
         <Row label="Theme" value={<ThemeToggle />} />
         <Row label="Language" value={<LanguageToggle />} />
@@ -228,12 +269,19 @@ export function ProfilePanel() {
    PARTS
 --------------------------------------------------------------- */
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
+function Section({
+  title,
+  children,
+}: {
+  title: string;
+  children: ReactNode;
+}) {
   return (
     <section>
       <h3 className="mb-2 px-1 text-sm font-medium text-muted-foreground">
         {title}
       </h3>
+
       <Card>
         <CardContent className="p-0">
           <dl className="divide-y px-5">{children}</dl>
@@ -255,6 +303,7 @@ function Row({
   return (
     <div className="grid gap-1 py-3.5 sm:grid-cols-3 sm:gap-4">
       <dt className="text-sm text-muted-foreground">{label}</dt>
+
       <dd
         className={cn(
           "break-words text-sm sm:col-span-2",
@@ -283,36 +332,59 @@ function StatusPill({ active }: { active: boolean }) {
 }
 
 /** Hides all but the last 4 characters until the user asks to see them. */
-function SensitiveValue({ value, label }: { value: string; label: string }) {
+function SensitiveValue({
+  value,
+  label,
+}: {
+  value: string;
+  label: string;
+}) {
   const [visible, setVisible] = useState(false);
-  const masked = "•".repeat(Math.max(0, value.length - 4)) + value.slice(-4);
+
+  const masked =
+    "•".repeat(Math.max(0, value.length - 4)) + value.slice(-4);
 
   return (
     <span className="flex items-center gap-1.5">
-      <span className="font-mono tabular-nums">{visible ? value : masked}</span>
+      <span className="font-mono tabular-nums">
+        {visible ? value : masked}
+      </span>
+
       <button
         type="button"
-        onClick={() => setVisible((v) => !v)}
+        onClick={() => setVisible((current) => !current)}
         aria-label={`${visible ? "Hide" : "Show"} ${label}`}
         className="rounded p-1 text-muted-foreground hover:bg-muted"
       >
-        {visible ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+        {visible ? (
+          <EyeOff className="size-4" />
+        ) : (
+          <Eye className="size-4" />
+        )}
       </button>
+
       <CopyButton value={value} label={label} />
     </span>
   );
 }
 
-function CopyButton({ value, label }: { value: string; label: string }) {
+function CopyButton({
+  value,
+  label,
+}: {
+  value: string;
+  label: string;
+}) {
   const [copied, setCopied] = useState(false);
 
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(value);
       setCopied(true);
+
       setTimeout(() => setCopied(false), 1500);
     } catch {
-      /* clipboard unavailable: ignore */
+      /* Clipboard unavailable: ignore */
     }
   };
 
@@ -342,7 +414,11 @@ function Segmented({
 }: {
   label: string;
   value: string;
-  options: { value: string; label: string; icon?: ReactNode }[];
+  options: {
+    value: string;
+    label: string;
+    icon?: ReactNode;
+  }[];
   onChange: (value: string) => void;
   disabled?: boolean;
 }) {
@@ -352,16 +428,17 @@ function Segmented({
       aria-label={label}
       className="inline-flex flex-wrap gap-1 rounded-lg border bg-muted/40 p-1"
     >
-      {options.map((o) => {
-        const selected = o.value === value;
+      {options.map((option) => {
+        const selected = option.value === value;
+
         return (
           <button
-            key={o.value}
+            key={option.value}
             type="button"
             role="radio"
             aria-checked={selected}
             disabled={disabled}
-            onClick={() => onChange(o.value)}
+            onClick={() => onChange(option.value)}
             className={cn(
               "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60",
               selected
@@ -369,8 +446,8 @@ function Segmented({
                 : "text-muted-foreground hover:text-foreground"
             )}
           >
-            {o.icon}
-            {o.label}
+            {option.icon}
+            {option.label}
           </button>
         );
       })}
@@ -381,15 +458,6 @@ function Segmented({
 /** Light / Dark / System. Needs next-themes' ThemeProvider in your layout. */
 function ThemeToggle() {
   const { theme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-
-  // The saved theme is only known in the browser. Wait to avoid a flash
-  // of the wrong selection and a hydration mismatch.
-  useEffect(() => setMounted(true), []);
-
-  if (!mounted) {
-    return <div className="h-10 w-64 animate-pulse rounded-lg bg-muted" />;
-  }
 
   return (
     <Segmented
@@ -397,9 +465,21 @@ function ThemeToggle() {
       value={theme ?? "system"}
       onChange={setTheme}
       options={[
-        { value: "light", label: "Light", icon: <Sun className="size-4" /> },
-        { value: "dark", label: "Dark", icon: <Moon className="size-4" /> },
-        { value: "system", label: "System", icon: <Monitor className="size-4" /> },
+        {
+          value: "light",
+          label: "Light",
+          icon: <Sun className="size-4" />,
+        },
+        {
+          value: "dark",
+          label: "Dark",
+          icon: <Moon className="size-4" />,
+        },
+        {
+          value: "system",
+          label: "System",
+          icon: <Monitor className="size-4" />,
+        },
       ]}
     />
   );
@@ -415,11 +495,18 @@ function LanguageToggle() {
   const change = (next: string) => {
     if (next === locale) return;
 
-    const segments = pathname.split("/"); // ["", "en", "citizen", ...]
-    if (segments[1] === locale) segments[1] = next;
-    else segments.splice(1, 0, next); // default locale had no prefix
+    const segments = pathname.split("/");
+
+    // Example: ["", "en", "citizen", ...]
+    if (segments[1] === locale) {
+      segments[1] = next;
+    } else {
+      // Default locale had no prefix.
+      segments.splice(1, 0, next);
+    }
 
     const query = window.location.search;
+
     startTransition(() => {
       router.replace(segments.join("/") + query);
     });
@@ -438,19 +525,26 @@ function LanguageToggle() {
 
 function ProfileSkeleton() {
   const bar = "animate-pulse rounded bg-muted";
+
   return (
-    <div className="space-y-6" aria-busy="true" aria-label="Loading profile">
+    <div
+      className="space-y-6"
+      aria-busy="true"
+      aria-label="Loading profile"
+    >
       <Card>
         <CardContent className="flex items-center gap-4 p-6">
           <div className="size-16 animate-pulse rounded-full bg-muted" />
+
           <div className="space-y-2">
             <div className={cn(bar, "h-5 w-40")} />
             <div className={cn(bar, "h-4 w-28")} />
           </div>
         </CardContent>
       </Card>
-      {[0, 1].map((i) => (
-        <Card key={i}>
+
+      {[0, 1].map((index) => (
+        <Card key={index}>
           <CardContent className="space-y-4 p-5">
             <div className={cn(bar, "h-4 w-full")} />
             <div className={cn(bar, "h-4 w-4/5")} />
@@ -468,25 +562,34 @@ function ProfileSkeleton() {
 
 function getInitials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
+
   if (parts.length === 0) return "?";
-  return (parts[0][0] + (parts.length > 1 ? parts[parts.length - 1][0] : ""))
-    .toUpperCase();
+
+  return (
+    parts[0][0] +
+    (parts.length > 1 ? parts[parts.length - 1][0] : "")
+  ).toUpperCase();
 }
 
 function titleCase(value?: string | null): string | null {
   if (!value) return null;
+
   return value
     .toLowerCase()
     .replace(/_/g, " ")
-    .replace(/^\w/, (c) => c.toUpperCase());
+    .replace(/^\w/, (character) => character.toUpperCase());
 }
 
 function formatDate(value: string): string {
-  const d = new Date(value.length === 10 ? `${value}T00:00:00` : value);
-  if (Number.isNaN(d.getTime())) return value;
+  const date = new Date(
+    value.length === 10 ? `${value}T00:00:00` : value
+  );
+
+  if (Number.isNaN(date.getTime())) return value;
+
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric",
     year: "numeric",
-  }).format(d);
+  }).format(date);
 }

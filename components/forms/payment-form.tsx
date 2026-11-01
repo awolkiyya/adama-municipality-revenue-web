@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   AlertCircle,
   CheckCircle2,
@@ -18,7 +18,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -47,20 +46,18 @@ import { useCreateCashPayment } from "@/hooks/payment/payment.hook";
 |--------------------------------------------------------------------------
 */
 
+type UnknownRecord = Record<string, unknown>;
+
 type InvoiceView = {
   id: string;
   invoiceNumber: string;
-
   taxpayerName: string;
   taxpayerTin: string;
   taxpayerPhone: string;
-
   assessmentNumber: string;
-
   totalAmount: number;
   paidAmount: number;
   outstandingAmount: number;
-
   issueDate: string;
   dueDate: string;
 };
@@ -79,7 +76,59 @@ type PaymentFormProps = {
 
 /*
 |--------------------------------------------------------------------------
-| Helpers
+| Safe Object Helpers
+|--------------------------------------------------------------------------
+*/
+
+function isRecord(value: unknown): value is UnknownRecord {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value)
+  );
+}
+
+function getRecord(
+  value: unknown,
+): UnknownRecord | null {
+  return isRecord(value) ? value : null;
+}
+
+function getString(
+  value: unknown,
+  fallback = "",
+): string {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return String(value);
+  }
+
+  return fallback;
+}
+
+function getNumber(
+  value: unknown,
+  fallback = 0,
+): number {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : fallback;
+  }
+
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+
+    return Number.isFinite(parsed) ? parsed : fallback;
+  }
+
+  return fallback;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Formatting Helpers
 |--------------------------------------------------------------------------
 */
 
@@ -114,59 +163,41 @@ const formatDate = (value?: string | null) => {
 */
 
 const normalizeInvoice = (
-  raw: Record<string, any>,
+  raw: UnknownRecord,
 ): InvoiceView => {
-  const citizen = raw.citizen ?? {};
-  const financial = raw.financial ?? {};
-  const dates = raw.dates ?? {};
-  const assessment = raw.assessment ?? null;
+  const citizen = getRecord(raw.citizen);
+  const financial = getRecord(raw.financial);
+  const dates = getRecord(raw.dates);
+  const assessment = getRecord(raw.assessment);
+
+  const citizenName = getString(citizen?.name).trim();
 
   return {
-    id: String(raw.id ?? ""),
+    id: getString(raw.id),
 
-    invoiceNumber: String(
-      raw.invoice_number ?? "",
+    invoiceNumber: getString(raw.invoice_number),
+
+    taxpayerName: citizenName || "Unnamed taxpayer",
+
+    taxpayerTin: getString(
+      citizen?.tin ?? citizen?.taxpayer_tin,
     ),
 
-    taxpayerName:
-      citizen.name?.trim() ||
-      "Unnamed taxpayer",
+    taxpayerPhone: getString(citizen?.phone),
 
-    taxpayerTin: String(
-      citizen.tin ??
-        citizen.taxpayer_tin ??
-        "",
+    assessmentNumber: getString(
+      assessment?.assessment_number ?? assessment?.number,
     ),
 
-    taxpayerPhone: String(
-      citizen.phone ?? "",
-    ),
+    totalAmount: getNumber(financial?.total_amount),
 
-    assessmentNumber: String(
-      assessment?.assessment_number ??
-        assessment?.number ??
-        "",
-    ),
+    paidAmount: getNumber(financial?.paid_amount),
 
-    totalAmount: Number(
-      financial.total_amount ?? 0,
-    ),
+    outstandingAmount: getNumber(financial?.balance_due),
 
-    paidAmount: Number(
-      financial.paid_amount ?? 0,
-    ),
+    issueDate: getString(dates?.issued_at),
 
-    outstandingAmount: Number(
-      financial.balance_due ?? 0,
-    ),
-
-    issueDate: String(
-      dates.issued_at ?? "",
-    ),
-
-    dueDate: String(
-      dates.due_date ?? "",
-    ),
+    dueDate: getString(dates?.due_date),
   };
 };
 
@@ -181,14 +212,33 @@ export function PaymentForm({
   onCancel,
   onSuccess,
 }: PaymentFormProps) {
-  /*
-  |--------------------------------------------------------------------------
-  | Invoice ID
-  |--------------------------------------------------------------------------
-  */
-
   const invoiceId = initialInvoiceId.trim();
 
+  return (
+    <PaymentFormContent
+      key={invoiceId}
+      invoiceId={invoiceId}
+      onCancel={onCancel}
+      onSuccess={onSuccess}
+    />
+  );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Payment Form Content
+|--------------------------------------------------------------------------
+*/
+
+function PaymentFormContent({
+  invoiceId,
+  onCancel,
+  onSuccess,
+}: {
+  invoiceId: string;
+  onCancel?: () => void;
+  onSuccess?: () => void;
+}) {
   /*
   |--------------------------------------------------------------------------
   | Load Invoice
@@ -200,10 +250,7 @@ export function PaymentForm({
     isLoading: isLoadingInvoice,
     isError: isInvoiceError,
     error: invoiceError,
-  } = useInvoice(
-    invoiceId,
-    !!invoiceId,
-  );
+  } = useInvoice(invoiceId, Boolean(invoiceId));
 
   /*
   |--------------------------------------------------------------------------
@@ -211,8 +258,7 @@ export function PaymentForm({
   |--------------------------------------------------------------------------
   */
 
-  const createCashPayment =
-    useCreateCashPayment();
+  const createCashPayment = useCreateCashPayment();
 
   /*
   |--------------------------------------------------------------------------
@@ -221,29 +267,16 @@ export function PaymentForm({
   */
 
   const selectedInvoice = useMemo(() => {
-    if (!invoiceResponse) {
+    const response = getRecord(invoiceResponse);
+    const rawInvoice = getRecord(response?.data);
+
+    if (!rawInvoice) {
       return null;
     }
 
-    const response =
-      invoiceResponse as unknown as Record<
-        string,
-        unknown
-      >;
+    const id = getString(rawInvoice.id);
 
-    const rawInvoice =
-      response.data &&
-      typeof response.data === "object"
-        ? (response.data as Record<
-            string,
-            any
-          >)
-        : null;
-
-    if (
-      !rawInvoice ||
-      typeof rawInvoice.id !== "string"
-    ) {
+    if (!id) {
       return null;
     }
 
@@ -254,16 +287,18 @@ export function PaymentForm({
   |--------------------------------------------------------------------------
   | Payment State
   |--------------------------------------------------------------------------
+  |
+  | null means the amount has not been initialized by the user.
+  | In that case, the invoice outstanding balance is used as the default.
+  | An empty string means the user intentionally cleared the input.
+  |--------------------------------------------------------------------------
   */
 
-  const [amount, setAmount] = useState("");
+  const [amount, setAmount] = useState<string | null>(null);
 
   const [notes, setNotes] = useState("");
 
-  const [
-    showConfirmation,
-    setShowConfirmation,
-  ] = useState(false);
+  const [showConfirmation, setShowConfirmation] = useState(false);
 
   /*
   |--------------------------------------------------------------------------
@@ -271,32 +306,19 @@ export function PaymentForm({
   |--------------------------------------------------------------------------
   */
 
-  const [
-    showInvoiceDetails,
-    setShowInvoiceDetails,
-  ] = useState(false);
+  const [showInvoiceDetails, setShowInvoiceDetails] = useState(false);
 
   /*
   |--------------------------------------------------------------------------
-  | Default Amount
+  | Derived Amount
   |--------------------------------------------------------------------------
   */
 
-  useEffect(() => {
-    if (
-      selectedInvoice &&
-      amount === ""
-    ) {
-      setAmount(
-        selectedInvoice.outstandingAmount.toFixed(
-          2,
-        ),
-      );
-    }
-  }, [
-    selectedInvoice,
-    amount,
-  ]);
+  const amountValue =
+    amount ??
+    (selectedInvoice
+      ? selectedInvoice.outstandingAmount.toFixed(2)
+      : "");
 
   /*
   |--------------------------------------------------------------------------
@@ -304,21 +326,15 @@ export function PaymentForm({
   |--------------------------------------------------------------------------
   */
 
-  const maxAmount =
-    selectedInvoice?.outstandingAmount ?? 0;
+  const maxAmount = selectedInvoice?.outstandingAmount ?? 0;
 
   const numericAmount =
-    amount === ""
-      ? 0
-      : Number(amount);
+    amountValue === "" ? 0 : Number(amountValue);
 
   const amountError =
     numericAmount > maxAmount
-      ? `Payment amount cannot exceed ${formatCurrency(
-          maxAmount,
-        )} ETB.`
-      : numericAmount <= 0 &&
-          amount !== ""
+      ? `Payment amount cannot exceed ${formatCurrency(maxAmount)} ETB.`
+      : numericAmount <= 0 && amountValue !== ""
         ? "Payment amount must be greater than zero."
         : "";
 
@@ -328,14 +344,15 @@ export function PaymentForm({
   );
 
   const isFullSettlement =
-    !!selectedInvoice &&
+    Boolean(selectedInvoice) &&
     numericAmount === maxAmount &&
     numericAmount > 0;
 
   const isValid =
-    !!selectedInvoice &&
-    selectedInvoice.id === invoiceId &&
+    Boolean(selectedInvoice) &&
+    selectedInvoice!.id === invoiceId &&
     maxAmount > 0 &&
+    Number.isFinite(numericAmount) &&
     numericAmount > 0 &&
     numericAmount <= maxAmount &&
     !amountError;
@@ -346,26 +363,19 @@ export function PaymentForm({
   |--------------------------------------------------------------------------
   */
 
-  const handleAmountChange = (
-    value: string,
-  ) => {
+  const handleAmountChange = (value: string) => {
     if (value === "") {
       setAmount("");
       return;
     }
 
-    if (
-      !/^\d*\.?\d{0,2}$/.test(value)
-    ) {
+    if (!/^\d*\.?\d{0,2}$/.test(value)) {
       return;
     }
 
     const numericValue = Number(value);
 
-    if (
-      !Number.isNaN(numericValue) &&
-      numericValue < 0
-    ) {
+    if (!Number.isFinite(numericValue) || numericValue < 0) {
       return;
     }
 
@@ -383,11 +393,7 @@ export function PaymentForm({
       return;
     }
 
-    setAmount(
-      selectedInvoice.outstandingAmount.toFixed(
-        2,
-      ),
-    );
+    setAmount(selectedInvoice.outstandingAmount.toFixed(2));
   };
 
   /*
@@ -396,9 +402,7 @@ export function PaymentForm({
   |--------------------------------------------------------------------------
   */
 
-  const handleSubmit = (
-    event: React.FormEvent,
-  ) => {
+  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     if (!isValid) {
@@ -414,54 +418,43 @@ export function PaymentForm({
   |--------------------------------------------------------------------------
   */
 
-  const handleConfirmPayment =
-    async () => {
-      if (
-        !isValid ||
-        !selectedInvoice
-      ) {
-        return;
-      }
+  const handleConfirmPayment = async () => {
+    if (!isValid || !selectedInvoice) {
+      return;
+    }
 
-      try {
-        /*
-        |--------------------------------------------------------------------------
-        | Backend determines:
-        |
-        | received_by    = authenticated user
-        | payment_method = CASH
-        | payment_date   = now()
-        |--------------------------------------------------------------------------
-        */
+    try {
+      /*
+      |--------------------------------------------------------------------------
+      | Backend determines:
+      |
+      | received_by    = authenticated user
+      | payment_method = CASH
+      | payment_date   = now()
+      |--------------------------------------------------------------------------
+      */
 
-        await createCashPayment.mutateAsync(
-          {
-            invoice_id:
-              selectedInvoice.id,
+      await createCashPayment.mutateAsync({
+        invoice_id: selectedInvoice.id,
+        amount: numericAmount,
+        metadata: {
+          notes: notes.trim() || null,
+        },
+      });
 
-            amount:
-              numericAmount,
+      setShowConfirmation(false);
 
-            metadata: {
-              notes:
-                notes.trim() || null,
-            },
-          },
-        );
-
-        setShowConfirmation(false);
-
-        onSuccess?.();
-      } catch {
-        /*
-        |--------------------------------------------------------------------------
-        | Error is exposed through:
-        |
-        | createCashPayment.error
-        |--------------------------------------------------------------------------
-        */
-      }
-    };
+      onSuccess?.();
+    } catch {
+      /*
+      |--------------------------------------------------------------------------
+      | Error is exposed through:
+      |
+      | createCashPayment.error
+      |--------------------------------------------------------------------------
+      */
+    }
+  };
 
   /*
   |--------------------------------------------------------------------------
@@ -482,8 +475,7 @@ export function PaymentForm({
               </p>
 
               <p className="mt-1 text-xs text-muted-foreground">
-                Retrieving invoice details before
-                creating the payment.
+                Retrieving invoice details before creating the payment.
               </p>
             </div>
           </div>
@@ -503,13 +495,10 @@ export function PaymentForm({
       <Alert variant="destructive">
         <AlertCircle className="h-4 w-4" />
 
-        <AlertTitle>
-          Invoice is required
-        </AlertTitle>
+        <AlertTitle>Invoice is required</AlertTitle>
 
         <AlertDescription>
-          This page must be opened with an
-          invoice ID.
+          This page must be opened with an invoice ID.
         </AlertDescription>
       </Alert>
     );
@@ -521,18 +510,13 @@ export function PaymentForm({
   |--------------------------------------------------------------------------
   */
 
-  if (
-    isInvoiceError ||
-    !selectedInvoice
-  ) {
+  if (isInvoiceError || !selectedInvoice) {
     return (
       <div className="space-y-4">
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
 
-          <AlertTitle>
-            Unable to load invoice
-          </AlertTitle>
+          <AlertTitle>Unable to load invoice</AlertTitle>
 
           <AlertDescription>
             {invoiceError instanceof Error
@@ -558,10 +542,7 @@ export function PaymentForm({
   |--------------------------------------------------------------------------
   */
 
-  if (
-    selectedInvoice.outstandingAmount <=
-    0
-  ) {
+  if (selectedInvoice.outstandingAmount <= 0) {
     return (
       <Card>
         <CardContent className="py-10">
@@ -577,12 +558,9 @@ export function PaymentForm({
             <p className="mt-1 max-w-md text-sm text-muted-foreground">
               Invoice{" "}
               <span className="font-medium text-foreground">
-                {
-                  selectedInvoice.invoiceNumber
-                }
+                {selectedInvoice.invoiceNumber}
               </span>{" "}
-              has no outstanding balance.
-              A new cash payment cannot be
+              has no outstanding balance. A new cash payment cannot be
               created against it.
             </p>
 
@@ -608,12 +586,7 @@ export function PaymentForm({
 
   return (
     <>
-      <form
-        onSubmit={handleSubmit}
-        className=" space-y-6"
-      >
-     
-
+      <form onSubmit={handleSubmit} className="space-y-6">
         {/* =========================================================
             INVOICE
         ========================================================= */}
@@ -628,9 +601,7 @@ export function PaymentForm({
 
           <CardContent>
             <div className="rounded-lg border">
-              {/* ===================================================
-                  COMPACT INVOICE SUMMARY
-              =================================================== */}
+              {/* COMPACT INVOICE SUMMARY */}
 
               <div className="p-4">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -645,15 +616,11 @@ export function PaymentForm({
                       </p>
 
                       <p className="truncate font-semibold">
-                        {
-                          selectedInvoice.invoiceNumber
-                        }
+                        {selectedInvoice.invoiceNumber}
                       </p>
 
                       <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                        {
-                          selectedInvoice.taxpayerName
-                        }
+                        {selectedInvoice.taxpayerName}
                       </p>
                     </div>
                   </div>
@@ -664,50 +631,34 @@ export function PaymentForm({
                     </p>
 
                     <p className="text-xl font-semibold tracking-tight">
-                      {formatCurrency(
-                        selectedInvoice.outstandingAmount,
-                      )}{" "}
-                      <span className="text-sm font-medium">
-                        ETB
-                      </span>
+                      {formatCurrency(selectedInvoice.outstandingAmount)}{" "}
+                      <span className="text-sm font-medium">ETB</span>
                     </p>
                   </div>
                 </div>
 
-                {/* =================================================
-                    VIEW DETAILS
-                ================================================= */}
+                {/* VIEW DETAILS */}
 
                 <button
                   type="button"
                   onClick={() =>
-                    setShowInvoiceDetails(
-                      (current) => !current,
-                    )
+                    setShowInvoiceDetails((current) => !current)
                   }
                   className="mt-4 flex w-full items-center justify-between border-t pt-3 text-left text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-                  aria-expanded={
-                    showInvoiceDetails
-                  }
+                  aria-expanded={showInvoiceDetails}
                   aria-controls="invoice-details"
                 >
-                  <span>
-                    Invoice details
-                  </span>
+                  <span>Invoice details</span>
 
                   <ChevronDown
                     className={`h-4 w-4 transition-transform duration-200 ${
-                      showInvoiceDetails
-                        ? "rotate-180"
-                        : ""
+                      showInvoiceDetails ? "rotate-180" : ""
                     }`}
                   />
                 </button>
               </div>
 
-              {/* ===================================================
-                  EXPANDED DETAILS
-              =================================================== */}
+              {/* EXPANDED DETAILS */}
 
               {showInvoiceDetails && (
                 <div
@@ -721,9 +672,7 @@ export function PaymentForm({
                       </p>
 
                       <p className="mt-1 text-sm font-medium">
-                        {
-                          selectedInvoice.taxpayerName
-                        }
+                        {selectedInvoice.taxpayerName}
                       </p>
                     </div>
 
@@ -733,8 +682,7 @@ export function PaymentForm({
                       </p>
 
                       <p className="mt-1 text-sm font-medium">
-                        {selectedInvoice.taxpayerPhone ||
-                          "—"}
+                        {selectedInvoice.taxpayerPhone || "—"}
                       </p>
                     </div>
 
@@ -744,8 +692,7 @@ export function PaymentForm({
                       </p>
 
                       <p className="mt-1 text-sm font-medium">
-                        {selectedInvoice.taxpayerTin ||
-                          "—"}
+                        {selectedInvoice.taxpayerTin || "—"}
                       </p>
                     </div>
 
@@ -755,8 +702,7 @@ export function PaymentForm({
                       </p>
 
                       <p className="mt-1 text-sm font-medium">
-                        {selectedInvoice.assessmentNumber ||
-                          "—"}
+                        {selectedInvoice.assessmentNumber || "—"}
                       </p>
                     </div>
 
@@ -766,9 +712,7 @@ export function PaymentForm({
                       </p>
 
                       <p className="mt-1 text-sm font-medium">
-                        {formatDate(
-                          selectedInvoice.issueDate,
-                        )}
+                        {formatDate(selectedInvoice.issueDate)}
                       </p>
                     </div>
 
@@ -778,9 +722,7 @@ export function PaymentForm({
                       </p>
 
                       <p className="mt-1 text-sm font-medium">
-                        {formatDate(
-                          selectedInvoice.dueDate,
-                        )}
+                        {formatDate(selectedInvoice.dueDate)}
                       </p>
                     </div>
 
@@ -790,10 +732,7 @@ export function PaymentForm({
                       </p>
 
                       <p className="mt-1 text-sm font-medium">
-                        {formatCurrency(
-                          selectedInvoice.totalAmount,
-                        )}{" "}
-                        ETB
+                        {formatCurrency(selectedInvoice.totalAmount)} ETB
                       </p>
                     </div>
 
@@ -803,10 +742,7 @@ export function PaymentForm({
                       </p>
 
                       <p className="mt-1 text-sm font-medium">
-                        {formatCurrency(
-                          selectedInvoice.paidAmount,
-                        )}{" "}
-                        ETB
+                        {formatCurrency(selectedInvoice.paidAmount)} ETB
                       </p>
                     </div>
                   </div>
@@ -829,9 +765,7 @@ export function PaymentForm({
           </CardHeader>
 
           <CardContent className="space-y-6">
-            {/* =====================================================
-                PAYMENT METHOD
-            ===================================================== */}
+            {/* PAYMENT METHOD */}
 
             <div className="flex items-center justify-between border-b pb-4">
               <div>
@@ -847,28 +781,20 @@ export function PaymentForm({
               <Wallet className="h-5 w-5 text-muted-foreground" />
             </div>
 
-            {/* =====================================================
-                AMOUNT
-            ===================================================== */}
+            {/* AMOUNT */}
 
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-4">
                 <Label htmlFor="amount">
                   Amount collected{" "}
-                  <span className="text-destructive">
-                    *
-                  </span>
+                  <span className="text-destructive">*</span>
                 </Label>
 
                 <button
                   type="button"
                   className="text-xs font-medium text-primary hover:underline disabled:pointer-events-none disabled:opacity-50"
-                  onClick={
-                    handlePayFullAmount
-                  }
-                  disabled={
-                    createCashPayment.isPending
-                  }
+                  onClick={handlePayFullAmount}
+                  disabled={createCashPayment.isPending}
                 >
                   Collect full balance
                 </button>
@@ -882,17 +808,13 @@ export function PaymentForm({
                   max={maxAmount}
                   step="0.01"
                   inputMode="decimal"
-                  value={amount}
+                  value={amountValue}
                   onChange={(event) =>
-                    handleAmountChange(
-                      event.target.value,
-                    )
+                    handleAmountChange(event.target.value)
                   }
                   placeholder="0.00"
                   className="h-12 pr-16 text-lg font-semibold"
-                  disabled={
-                    createCashPayment.isPending
-                  }
+                  disabled={createCashPayment.isPending}
                 />
 
                 <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm font-medium text-muted-foreground">
@@ -901,28 +823,18 @@ export function PaymentForm({
               </div>
 
               <div className="flex items-center justify-between text-xs text-muted-foreground">
-                <span>
-                  Outstanding balance
-                </span>
+                <span>Outstanding balance</span>
 
                 <span className="font-medium text-foreground">
-                  {formatCurrency(
-                    maxAmount,
-                  )}{" "}
-                  ETB
+                  {formatCurrency(maxAmount)} ETB
                 </span>
               </div>
 
               {amountError && (
-                <Alert
-                  variant="destructive"
-                  className="mt-3"
-                >
+                <Alert variant="destructive" className="mt-3">
                   <AlertCircle className="h-4 w-4" />
 
-                  <AlertTitle>
-                    Invalid amount
-                  </AlertTitle>
+                  <AlertTitle>Invalid amount</AlertTitle>
 
                   <AlertDescription>
                     {amountError}
@@ -931,9 +843,7 @@ export function PaymentForm({
               )}
             </div>
 
-            {/* =====================================================
-                REMAINING BALANCE
-            ===================================================== */}
+            {/* REMAINING BALANCE */}
 
             <div className="flex items-center justify-between border-y py-4">
               <span className="text-sm text-muted-foreground">
@@ -941,41 +851,33 @@ export function PaymentForm({
               </span>
 
               <span className="text-lg font-semibold">
-                {formatCurrency(
-                  remainingBalance,
-                )}{" "}
-                ETB
+                {formatCurrency(remainingBalance)} ETB
               </span>
             </div>
 
-            {/* =====================================================
-                SETTLEMENT STATUS
-            ===================================================== */}
+            {/* SETTLEMENT STATUS */}
 
-            {numericAmount > 0 &&
-              !amountError && (
-                <div className="flex items-start gap-3">
-                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+            {numericAmount > 0 && !amountError && (
+              <div className="flex items-start gap-3">
+                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
 
-                  <div>
-                    <p className="text-sm font-medium">
-                      {isFullSettlement
-                        ? "Full settlement"
-                        : "Partial payment"}
-                    </p>
+                <div>
+                  <p className="text-sm font-medium">
+                    {isFullSettlement
+                      ? "Full settlement"
+                      : "Partial payment"}
+                  </p>
 
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {isFullSettlement
-                        ? "This payment will fully settle the invoice."
-                        : "The remaining balance will stay payable."}
-                    </p>
-                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {isFullSettlement
+                      ? "This payment will fully settle the invoice."
+                      : "The remaining balance will stay payable."}
+                  </p>
                 </div>
-              )}
+              </div>
+            )}
 
-            {/* =====================================================
-                NOTES
-            ===================================================== */}
+            {/* NOTES */}
 
             <div className="space-y-2">
               <Label htmlFor="notes">
@@ -988,22 +890,14 @@ export function PaymentForm({
               <Textarea
                 id="notes"
                 value={notes}
-                onChange={(event) =>
-                  setNotes(
-                    event.target.value,
-                  )
-                }
+                onChange={(event) => setNotes(event.target.value)}
                 placeholder="Add relevant collection information..."
                 rows={3}
-                disabled={
-                  createCashPayment.isPending
-                }
+                disabled={createCashPayment.isPending}
               />
             </div>
 
-            {/* =====================================================
-                COLLECTOR
-            ===================================================== */}
+            {/* COLLECTOR */}
 
             <div className="flex items-center gap-3 border-t pt-4">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted">
@@ -1022,13 +916,11 @@ export function PaymentForm({
             </div>
 
             <p className="-mt-3 text-xs text-muted-foreground">
-              The collector and collection time are
-              recorded automatically for audit purposes.
+              The collector and collection time are recorded automatically
+              for audit purposes.
             </p>
 
-            {/* =====================================================
-                ERROR
-            ===================================================== */}
+            {/* ERROR */}
 
             {createCashPayment.isError && (
               <Alert variant="destructive">
@@ -1039,17 +931,14 @@ export function PaymentForm({
                 </AlertTitle>
 
                 <AlertDescription>
-                  {createCashPayment.error instanceof
-                  Error
+                  {createCashPayment.error instanceof Error
                     ? createCashPayment.error.message
                     : "An error occurred while creating the cash payment. Please try again."}
                 </AlertDescription>
               </Alert>
             )}
 
-            {/* =====================================================
-                ACTIONS
-            ===================================================== */}
+            {/* ACTIONS */}
 
             <div className="flex flex-col-reverse gap-3 border-t pt-5 sm:flex-row sm:justify-end">
               <Button
@@ -1057,9 +946,7 @@ export function PaymentForm({
                 variant="outline"
                 className="sm:min-w-28"
                 onClick={onCancel}
-                disabled={
-                  createCashPayment.isPending
-                }
+                disabled={createCashPayment.isPending}
               >
                 Cancel
               </Button>
@@ -1067,10 +954,7 @@ export function PaymentForm({
               <Button
                 type="submit"
                 className="sm:min-w-40"
-                disabled={
-                  !isValid ||
-                  createCashPayment.isPending
-                }
+                disabled={!isValid || createCashPayment.isPending}
               >
                 <Wallet className="mr-2 h-4 w-4" />
                 Collect Payment
@@ -1087,9 +971,7 @@ export function PaymentForm({
       <Dialog
         open={showConfirmation}
         onOpenChange={(open) => {
-          if (
-            !createCashPayment.isPending
-          ) {
+          if (!createCashPayment.isPending) {
             setShowConfirmation(open);
           }
         }}
@@ -1101,15 +983,12 @@ export function PaymentForm({
             </DialogTitle>
 
             <DialogDescription>
-              Review the collection before creating
-              the payment record.
+              Review the collection before creating the payment record.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-5 py-2">
-            {/* ===================================================
-                BASIC INFORMATION
-            =================================================== */}
+            {/* BASIC INFORMATION */}
 
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-4 text-sm">
@@ -1118,9 +997,7 @@ export function PaymentForm({
                 </span>
 
                 <span className="font-medium">
-                  {
-                    selectedInvoice.invoiceNumber
-                  }
+                  {selectedInvoice.invoiceNumber}
                 </span>
               </div>
 
@@ -1130,9 +1007,7 @@ export function PaymentForm({
                 </span>
 
                 <span className="text-right font-medium">
-                  {
-                    selectedInvoice.taxpayerName
-                  }
+                  {selectedInvoice.taxpayerName}
                 </span>
               </div>
 
@@ -1147,9 +1022,7 @@ export function PaymentForm({
               </div>
             </div>
 
-            {/* ===================================================
-                AMOUNT
-            =================================================== */}
+            {/* AMOUNT */}
 
             <div className="rounded-lg bg-muted/40 p-4">
               <p className="text-xs text-muted-foreground">
@@ -1157,18 +1030,12 @@ export function PaymentForm({
               </p>
 
               <p className="mt-1 text-2xl font-semibold tracking-tight">
-                {formatCurrency(
-                  numericAmount,
-                )}{" "}
-                <span className="text-sm font-medium">
-                  ETB
-                </span>
+                {formatCurrency(numericAmount)}{" "}
+                <span className="text-sm font-medium">ETB</span>
               </p>
             </div>
 
-            {/* ===================================================
-                REMAINING
-            =================================================== */}
+            {/* REMAINING */}
 
             <div className="flex items-center justify-between border-y py-3 text-sm">
               <span className="text-muted-foreground">
@@ -1176,16 +1043,11 @@ export function PaymentForm({
               </span>
 
               <span className="font-semibold">
-                {formatCurrency(
-                  remainingBalance,
-                )}{" "}
-                ETB
+                {formatCurrency(remainingBalance)} ETB
               </span>
             </div>
 
-            {/* ===================================================
-                NOTES
-            =================================================== */}
+            {/* NOTES */}
 
             {notes.trim() && (
               <div>
@@ -1199,9 +1061,7 @@ export function PaymentForm({
               </div>
             )}
 
-            {/* ===================================================
-                AUDIT
-            =================================================== */}
+            {/* AUDIT */}
 
             <div className="flex items-start gap-3">
               <UserRound className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
@@ -1212,15 +1072,13 @@ export function PaymentForm({
                 </p>
 
                 <p className="mt-1 text-xs text-muted-foreground">
-                  The system records the authenticated
-                  collector and the payment time.
+                  The system records the authenticated collector and the
+                  payment time.
                 </p>
               </div>
             </div>
 
-            {/* ===================================================
-                CASH WARNING
-            =================================================== */}
+            {/* CASH WARNING */}
 
             <Alert>
               <AlertCircle className="h-4 w-4" />
@@ -1230,9 +1088,8 @@ export function PaymentForm({
               </AlertTitle>
 
               <AlertDescription>
-                Confirm that the cash has physically
-                been received from the taxpayer before
-                creating this payment.
+                Confirm that the cash has physically been received from the
+                taxpayer before creating this payment.
               </AlertDescription>
             </Alert>
           </div>
@@ -1241,24 +1098,16 @@ export function PaymentForm({
             <Button
               type="button"
               variant="outline"
-              onClick={() =>
-                setShowConfirmation(false)
-              }
-              disabled={
-                createCashPayment.isPending
-              }
+              onClick={() => setShowConfirmation(false)}
+              disabled={createCashPayment.isPending}
             >
               Review Again
             </Button>
 
             <Button
               type="button"
-              onClick={
-                handleConfirmPayment
-              }
-              disabled={
-                createCashPayment.isPending
-              }
+              onClick={handleConfirmPayment}
+              disabled={createCashPayment.isPending}
             >
               {createCashPayment.isPending ? (
                 <>

@@ -1,8 +1,10 @@
-"use client"
 
-import { useMemo, useState } from "react"
-import { useRouter } from "next/navigation"
-import { useSelector } from "react-redux"
+"use client";
+
+import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useSelector } from "react-redux";
+
 import {
   Landmark,
   Plus,
@@ -22,18 +24,19 @@ import {
   XCircle,
   CalendarClock,
   ArrowRightLeft,
-} from "lucide-react"
+} from "lucide-react";
 
-import ProtectedRoute from "@/components/access/ProtectedRoute"
-import Can from "@/components/access/Can"
+import ProtectedRoute from "@/components/access/ProtectedRoute";
+import Can from "@/components/access/Can";
 
-import { Banner } from "@/components/banner/topBanner"
-import { IconBadge } from "@/components/commen/icon-badge"
-import { FloatingParticles } from "@/components/design/FloatingParticles"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Separator } from "@/components/ui/separator"
-import { TooltipProvider } from "@/components/ui/tooltip"
+import { Banner } from "@/components/banner/topBanner";
+import { IconBadge } from "@/components/commen/icon-badge";
+import { FloatingParticles } from "@/components/design/FloatingParticles";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { TooltipProvider } from "@/components/ui/tooltip";
+
 import {
   Sheet,
   SheetContent,
@@ -41,37 +44,40 @@ import {
   SheetHeader,
   SheetTitle,
   SheetFooter,
-} from "@/components/ui/sheet"
+} from "@/components/ui/sheet";
 
-import { DataTablePagination } from "@/components/table/data-pagination"
-import { Filters } from "@/components/commen/Filters"
-import { ExportDropdown } from "@/components/commen/ExportDropdown"
-import { resolveActions } from "@/components/table/permissions/ResolveActions"
-import { CommentTableRegistry } from "@/components/table/registry"
-import { CommenTable } from "@/components/table/CommenTable"
-import { StatCard, StatCardGrid } from "@/components/cards/StatCard"
-import AppFilterBar from "@/components/app-filter-bar"
+import { DataTablePagination } from "@/components/table/data-pagination";
+import { Filters } from "@/components/commen/Filters";
+import { ExportDropdown } from "@/components/commen/ExportDropdown";
+import { resolveActions } from "@/components/table/permissions/ResolveActions";
+import { CommentTableRegistry } from "@/components/table/registry";
+import {
+  CommenTable,
+  type TableRecord,
+} from "@/components/table/CommenTable";
 
-import { useRevenueCategories } from "@/hooks/revenue/revenueCategory.hook"
+import { StatCard, StatCardGrid } from "@/components/cards/StatCard";
+import AppFilterBar from "@/components/app-filter-bar";
+
+import { useRevenueCategories } from "@/hooks/revenue/revenueCategory.hook";
+
 import type {
   RevenueCategory,
   RevenueCategoryFilters as ApiRevenueCategoryFilters,
   RevenueCategorySummary,
-} from "@/types/revenue/revenue-category"
-import type { CommentType, FilterField } from "@/types/commen"
-import type { RootState } from "@/lib/store/store"
+} from "@/types/revenue/revenue-category";
+
+import type { CommentType, FilterField } from "@/types/commen";
+import type { RootState } from "@/lib/store/store";
 
 // -----------------------------------------------------------------------------
-// Permission resource
+// PERMISSION RESOURCE
 // -----------------------------------------------------------------------------
-//
-// Replace this value if your permission seeder uses a different resource key.
-// The same resource must be used by ProtectedRoute, Can, and your API policy.
-//
 
-const REVENUE_CATEGORY_RESOURCE = "revenue_categorys"
+const REVENUE_CATEGORY_RESOURCE = "revenue_categorys";
+
 // -----------------------------------------------------------------------------
-// Filter configuration
+// FILTER CONFIGURATION
 // -----------------------------------------------------------------------------
 
 export const sectorFilters: FilterField[] = [
@@ -103,26 +109,28 @@ export const sectorFilters: FilterField[] = [
       { label: "Inactive", value: "INACTIVE" },
     ],
   },
-]
+];
 
 const INITIAL_FILTERS = {
   revenue_domain: "ALL",
   status: "ALL",
-} as const
+} as const;
 
 type RevenueCategoryDraftFilters = {
-  revenue_domain: string
-  status: string
-}
+  revenue_domain: string;
+  status: string;
+};
 
 // -----------------------------------------------------------------------------
-// Helpers
+// HELPERS
 // -----------------------------------------------------------------------------
 
-type CategoryRecord = Record<string, unknown>
+type CategoryRecord = Record<string, unknown>;
 
-function getCategoryRecord(category: RevenueCategory): CategoryRecord {
-  return category as unknown as CategoryRecord
+function getCategoryRecord(
+  category: RevenueCategory,
+): CategoryRecord {
+  return category as unknown as CategoryRecord;
 }
 
 function getString(
@@ -130,18 +138,18 @@ function getString(
   ...keys: string[]
 ): string | undefined {
   for (const key of keys) {
-    const value = record[key]
+    const value = record[key];
 
     if (typeof value === "string" && value.trim().length > 0) {
-      return value
+      return value;
     }
 
     if (typeof value === "number" && Number.isFinite(value)) {
-      return String(value)
+      return String(value);
     }
   }
 
-  return undefined
+  return undefined;
 }
 
 function getNumber(
@@ -149,10 +157,10 @@ function getNumber(
   ...keys: string[]
 ): number | undefined {
   for (const key of keys) {
-    const value = record[key]
+    const value = record[key];
 
     if (typeof value === "number" && Number.isFinite(value)) {
-      return value
+      return value;
     }
 
     if (
@@ -160,11 +168,11 @@ function getNumber(
       value.trim() !== "" &&
       Number.isFinite(Number(value))
     ) {
-      return Number(value)
+      return Number(value);
     }
   }
 
-  return undefined
+  return undefined;
 }
 
 function getBoolean(
@@ -172,42 +180,42 @@ function getBoolean(
   ...keys: string[]
 ): boolean | undefined {
   for (const key of keys) {
-    const value = record[key]
+    const value = record[key];
 
     if (typeof value === "boolean") {
-      return value
+      return value;
     }
 
     if (value === 1 || value === 0) {
-      return value === 1
+      return value === 1;
     }
 
     if (value === "1" || value === "0") {
-      return value === "1"
+      return value === "1";
     }
   }
 
-  return undefined
+  return undefined;
 }
 
 function formatLabel(value?: string): string {
-  if (!value) return "Not provided"
+  if (!value) return "Not provided";
 
   return value
     .replace(/([a-z])([A-Z])/g, "$1 $2")
     .replace(/[_\s]+/g, " ")
     .trim()
     .toLowerCase()
-    .replace(/\b\w/g, (character) => character.toUpperCase())
+    .replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
 function formatDate(value?: string): string | undefined {
-  if (!value) return undefined
+  if (!value) return undefined;
 
-  const date = new Date(value)
+  const date = new Date(value);
 
   if (Number.isNaN(date.getTime())) {
-    return value
+    return value;
   }
 
   return new Intl.DateTimeFormat(undefined, {
@@ -216,90 +224,108 @@ function formatDate(value?: string): string | undefined {
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
-  }).format(date)
+  }).format(date);
 }
 
 function formatCodeRange(
   startCode?: number,
-  endCode?: number
+  endCode?: number,
 ): string {
   if (startCode === undefined && endCode === undefined) {
-    return "Not provided"
+    return "Not provided";
   }
 
   if (startCode === undefined) {
-    return `Up to ${endCode}`
+    return `Up to ${endCode}`;
   }
 
   if (endCode === undefined) {
-    return `From ${startCode}`
+    return `From ${startCode}`;
   }
 
   if (startCode === endCode) {
-    return String(startCode)
+    return String(startCode);
   }
 
-  return `${startCode} – ${endCode}`
+  return `${startCode} – ${endCode}`;
 }
 
 // -----------------------------------------------------------------------------
-// Page content
+// TABLE RECORD ADAPTER
+// -----------------------------------------------------------------------------
+
+/**
+ * CommenTable expects Record<string, unknown>.
+ * RevenueCategory is a strongly typed API model without an index signature.
+ *
+ * This adapter creates a table-compatible copy while preserving all
+ * properties returned by the API.
+ */
+function toTableRecord(category: RevenueCategory): TableRecord {
+  return { ...category };
+}
+
+// -----------------------------------------------------------------------------
+// PAGE CONTENT
 // -----------------------------------------------------------------------------
 
 function RevenueCategoriesPageContent() {
-  const router = useRouter()
-  const user = useSelector((state: RootState) => state.auth.user)
+  const router = useRouter();
 
-  const [page, setPage] = useState(1)
-  const [perPage, setPerPage] = useState(10)
-  const [search, setSearch] = useState("")
+  const user = useSelector(
+    (state: RootState) => state.auth.user,
+  );
+
+  const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(10);
+  const [search, setSearch] = useState("");
 
   const [filters, setFilters] =
     useState<RevenueCategoryDraftFilters>({
       ...INITIAL_FILTERS,
-    })
+    });
 
   const [draftFilters, setDraftFilters] =
     useState<RevenueCategoryDraftFilters>({
       ...INITIAL_FILTERS,
-    })
+    });
 
   const [selectedCategory, setSelectedCategory] =
-    useState<RevenueCategory | null>(null)
+    useState<RevenueCategory | null>(null);
 
   // ---------------------------------------------------------------------------
-  // Filter state
+  // FILTER STATE
   // ---------------------------------------------------------------------------
 
   const activeFilterCount = useMemo(
     () =>
       Object.values(filters).filter(
-        (value) => value !== "ALL" && value !== ""
+        (value) => value !== "ALL" && value !== "",
       ).length,
-    [filters]
-  )
+    [filters],
+  );
 
   const hasAppliedFilters =
-    activeFilterCount > 0 || search.trim().length > 0
+    activeFilterCount > 0 || search.trim().length > 0;
 
   const hasPendingChanges =
     draftFilters.revenue_domain !== filters.revenue_domain ||
-    draftFilters.status !== filters.status
+    draftFilters.status !== filters.status;
 
   const applyFilters = () => {
-    setFilters({ ...draftFilters })
-    setPage(1)
-  }
+    setFilters({ ...draftFilters });
+    setPage(1);
+  };
 
   const clearFilters = () => {
-    setFilters({ ...INITIAL_FILTERS })
-    setDraftFilters({ ...INITIAL_FILTERS })
-    setSearch("")
-    setPage(1)
-  }
+    setFilters({ ...INITIAL_FILTERS });
+    setDraftFilters({ ...INITIAL_FILTERS });
+    setSearch("");
+    setPage(1);
+  };
 
   // ---------------------------------------------------------------------------
-  // API query
+  // API QUERY
   // ---------------------------------------------------------------------------
 
   const queryFilters = useMemo<ApiRevenueCategoryFilters>(
@@ -318,78 +344,102 @@ function RevenueCategoriesPageContent() {
       page,
       per_page: perPage,
     }),
-    [filters, search, page, perPage]
-  )
+    [filters, search, page, perPage],
+  );
 
-  const { data, isPending } = useRevenueCategories(queryFilters)
+  const { data, isPending } =
+    useRevenueCategories(queryFilters);
 
-  const revenueCategories = data?.data ?? []
-  const meta = data?.meta
-  const summary = meta?.summary as RevenueCategorySummary | undefined
+  const revenueCategories = data?.data ?? [];
+  const meta = data?.meta;
+  const summary = meta?.summary as
+    | RevenueCategorySummary
+    | undefined;
 
   // ---------------------------------------------------------------------------
-  // Table permissions
+  // TABLE DATA
   // ---------------------------------------------------------------------------
-  //
-  // Keep resolveActions so CommenTable only exposes row actions permitted by
-  // the authenticated user's permissions. ProtectedRoute handles page access,
-  // while Can below handles individual controls.
-  //
+
+  const tableData = useMemo<TableRecord[]>(
+    () => revenueCategories.map(toTableRecord),
+    [revenueCategories],
+  );
+
+  // ---------------------------------------------------------------------------
+  // TABLE PERMISSIONS
+  // ---------------------------------------------------------------------------
 
   const actions = useMemo(
     () =>
       resolveActions(
         CommentTableRegistry.revenueCategory,
-        user?.permissions ?? []
+        user?.permissions ?? [],
       ),
-    [user?.permissions]
-  )
+    [user?.permissions],
+  );
 
   // ---------------------------------------------------------------------------
-  // Selected category details
+  // SELECTED CATEGORY DETAILS
   // ---------------------------------------------------------------------------
 
   const selectedRecord = selectedCategory
     ? getCategoryRecord(selectedCategory)
-    : null
+    : null;
 
   const categoryId = selectedRecord
     ? getString(selectedRecord, "id")
-    : undefined
+    : undefined;
 
   const categoryName = selectedRecord
-    ? getString(selectedRecord, "name", "category_name", "title") ??
-      "Revenue Category"
-    : "Revenue Category"
+    ? getString(
+        selectedRecord,
+        "name",
+        "category_name",
+        "title",
+      ) ?? "Revenue Category"
+    : "Revenue Category";
 
   const categoryDomain = selectedRecord
     ? getString(
         selectedRecord,
         "revenueDomain",
         "revenue_domain",
-        "domain"
+        "domain",
       )
-    : undefined
+    : undefined;
 
   const categoryStartCode = selectedRecord
     ? getNumber(selectedRecord, "startCode", "start_code")
-    : undefined
+    : undefined;
 
   const categoryEndCode = selectedRecord
     ? getNumber(selectedRecord, "endCode", "end_code")
-    : undefined
+    : undefined;
 
   const categoryCodesCount = selectedRecord
-    ? getNumber(selectedRecord, "codesCount", "codes_count") ?? 0
-    : 0
+    ? getNumber(
+        selectedRecord,
+        "codesCount",
+        "codes_count",
+      ) ?? 0
+    : 0;
 
   const categoryDescription = selectedRecord
-    ? getString(selectedRecord, "description", "remarks")
-    : undefined
+    ? getString(
+        selectedRecord,
+        "description",
+        "remarks",
+      )
+    : undefined;
 
   const categoryActive = selectedRecord
-    ? getBoolean(selectedRecord, "isActive", "is_active", "active")
-    : undefined
+    ? getBoolean(
+        selectedRecord,
+        "isActive",
+        "is_active",
+        "active",
+      )
+    : undefined;
 
   const categoryStatus = selectedRecord
     ? getString(selectedRecord, "status") ??
@@ -398,55 +448,55 @@ function RevenueCategoriesPageContent() {
         : categoryActive
           ? "ACTIVE"
           : "INACTIVE")
-    : undefined
+    : undefined;
 
   const categorySortOrder = selectedRecord
     ? getNumber(selectedRecord, "sortOrder", "sort_order")
-    : undefined
+    : undefined;
 
   const categoryCreatedAt = selectedRecord
     ? getString(selectedRecord, "created_at", "createdAt")
-    : undefined
+    : undefined;
 
   const categoryUpdatedAt = selectedRecord
     ? getString(selectedRecord, "updated_at", "updatedAt")
-    : undefined
+    : undefined;
 
   const categoryIsActive =
     categoryActive ??
     (categoryStatus
       ? categoryStatus.toUpperCase() === "ACTIVE"
-      : undefined)
+      : undefined);
 
   const closeViewSheet = () => {
-    setSelectedCategory(null)
-  }
+    setSelectedCategory(null);
+  };
 
   const editSelectedCategory = () => {
-    if (!categoryId) return
+    if (!categoryId) return;
 
-    closeViewSheet()
+    closeViewSheet();
 
     router.push(
-      `/office/dashboard/revenue-managements/categories/${categoryId}`
-    )
-  }
+      `/office/dashboard/revenue-managements/categories/${encodeURIComponent(categoryId)}`,
+    );
+  };
 
   // ---------------------------------------------------------------------------
-  // Render
+  // RENDER
   // ---------------------------------------------------------------------------
 
   return (
     <TooltipProvider delayDuration={200}>
       <div className="mx-auto flex max-w-6xl flex-col gap-6 pb-10 md:p-10">
-        {/* Page header */}
+        {/* PAGE HEADER */}
 
         <Banner
           description="Organize municipal revenue categories by domain and maintain a consistent classification for revenue services and reporting."
           badge={
             <IconBadge
               className="gap-2 rounded-full p-3 text-xs"
-              icon={<Landmark className="h-4 w-4" />}
+              icon={<Landmark className="size-4" />}
             >
               Revenue Categories
             </IconBadge>
@@ -476,7 +526,7 @@ function RevenueCategoriesPageContent() {
                 <Button
                   onClick={() =>
                     router.push(
-                      "/office/dashboard/revenue-managements/categories/create"
+                      "/office/dashboard/revenue-managements/categories/create",
                     )
                   }
                 >
@@ -490,7 +540,7 @@ function RevenueCategoriesPageContent() {
         />
 
         <div className="flex flex-col gap-6">
-          {/* Statistics */}
+          {/* STATISTICS */}
 
           <StatCardGrid columns={4}>
             <StatCard
@@ -526,13 +576,13 @@ function RevenueCategoriesPageContent() {
             />
           </StatCardGrid>
 
-          {/* Search and filters */}
+          {/* SEARCH AND FILTERS */}
 
           <AppFilterBar
             search={search}
             onSearchChange={(value) => {
-              setSearch(value)
-              setPage(1)
+              setSearch(value);
+              setPage(1);
             }}
             searchPlaceholder="Search revenue categories..."
             searchLabel="Search revenue categories"
@@ -547,7 +597,9 @@ function RevenueCategoriesPageContent() {
               schema={sectorFilters}
               value={draftFilters}
               onChange={(value) =>
-                setDraftFilters(value as RevenueCategoryDraftFilters)
+                setDraftFilters(
+                  value as RevenueCategoryDraftFilters,
+                )
               }
               onReset={() =>
                 setDraftFilters({ ...INITIAL_FILTERS })
@@ -557,26 +609,32 @@ function RevenueCategoriesPageContent() {
             />
           </AppFilterBar>
 
-          {/* Revenue categories table */}
+          {/* REVENUE CATEGORIES TABLE */}
 
           <CommenTable
             type={"revenueCategory" as CommentType}
-            data={revenueCategories}
+            data={tableData}
             page={page}
             pageSize={perPage}
             isLoading={isPending}
             actions={actions}
             onView={(row) => {
-              setSelectedCategory(row as RevenueCategory)
+              const category = revenueCategories.find(
+                (item) => String(item.id) === String(row.id),
+              );
+
+              if (category) {
+                setSelectedCategory(category);
+              }
             }}
             onEdit={(row) => {
               router.push(
-                `/office/dashboard/revenue-managements/categories/${row.id}`
-              )
+                `/office/dashboard/revenue-managements/categories/${encodeURIComponent(String(row.id))}`,
+              );
             }}
           />
 
-          {/* Pagination */}
+          {/* PAGINATION */}
 
           <DataTablePagination
             page={page}
@@ -584,26 +642,26 @@ function RevenueCategoriesPageContent() {
             total={meta?.total ?? 0}
             onPageChange={setPage}
             onPageSizeChange={(size) => {
-              setPerPage(size)
-              setPage(1)
+              setPerPage(size);
+              setPage(1);
             }}
           />
         </div>
       </div>
 
-      {/* View revenue category sheet */}
+      {/* VIEW REVENUE CATEGORY SHEET */}
 
       <Sheet
         open={selectedCategory !== null}
         onOpenChange={(open) => {
-          if (!open) closeViewSheet()
+          if (!open) closeViewSheet();
         }}
       >
         <SheetContent
           side="right"
           className="flex w-full flex-col gap-0 overflow-y-auto p-0 sm:max-w-xl"
         >
-          {/* Sheet header */}
+          {/* SHEET HEADER */}
 
           <SheetHeader className="border-b px-6 py-5 pr-12 text-left">
             <div className="mb-3 flex items-center gap-3">
@@ -654,14 +712,16 @@ function RevenueCategoriesPageContent() {
             </div>
           </SheetHeader>
 
-          {/* Sheet body */}
+          {/* SHEET BODY */}
 
           <div className="flex-1 space-y-6 overflow-y-auto px-6 py-6">
-            {/* Overview */}
+            {/* OVERVIEW */}
 
             <section className="space-y-3">
               <div>
-                <h3 className="text-sm font-semibold">Overview</h3>
+                <h3 className="text-sm font-semibold">
+                  Overview
+                </h3>
 
                 <p className="mt-1 text-xs text-muted-foreground">
                   Basic classification information for this revenue category.
@@ -699,7 +759,7 @@ function RevenueCategoriesPageContent() {
 
             <Separator />
 
-            {/* Assigned code range */}
+            {/* ASSIGNED CODE RANGE */}
 
             <section className="space-y-3">
               <div>
@@ -721,7 +781,10 @@ function RevenueCategoriesPageContent() {
                 </div>
 
                 <p className="text-2xl font-semibold tracking-tight tabular-nums">
-                  {formatCodeRange(categoryStartCode, categoryEndCode)}
+                  {formatCodeRange(
+                    categoryStartCode,
+                    categoryEndCode,
+                  )}
                 </p>
 
                 {categoryStartCode !== undefined &&
@@ -741,12 +804,14 @@ function RevenueCategoriesPageContent() {
 
             <Separator />
 
-            {/* Revenue code count */}
+            {/* REVENUE CODE COUNT */}
 
             <section className="space-y-3">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h3 className="text-sm font-semibold">Revenue Codes</h3>
+                  <h3 className="text-sm font-semibold">
+                    Revenue Codes
+                  </h3>
 
                   <p className="mt-1 text-xs text-muted-foreground">
                     Number of revenue codes associated with this category.
@@ -796,11 +861,13 @@ function RevenueCategoriesPageContent() {
 
             <Separator />
 
-            {/* Description */}
+            {/* DESCRIPTION */}
 
             <section className="space-y-3">
               <div>
-                <h3 className="text-sm font-semibold">Description</h3>
+                <h3 className="text-sm font-semibold">
+                  Description
+                </h3>
 
                 <p className="mt-1 text-xs text-muted-foreground">
                   The purpose and scope of this revenue category.
@@ -821,7 +888,7 @@ function RevenueCategoriesPageContent() {
               </div>
             </section>
 
-            {/* Record information */}
+            {/* RECORD INFORMATION */}
 
             {(categorySortOrder !== undefined ||
               categoryCreatedAt ||
@@ -885,7 +952,7 @@ function RevenueCategoriesPageContent() {
             )}
           </div>
 
-          {/* Sheet footer */}
+          {/* SHEET FOOTER */}
 
           <SheetFooter className="border-t px-6 py-4 sm:flex-row sm:justify-between">
             <Button
@@ -914,11 +981,11 @@ function RevenueCategoriesPageContent() {
         </SheetContent>
       </Sheet>
     </TooltipProvider>
-  )
+  );
 }
 
 // -----------------------------------------------------------------------------
-// Protected page entry point
+// PROTECTED PAGE ENTRY POINT
 // -----------------------------------------------------------------------------
 
 export default function RevenueCategoriesPage() {
@@ -929,5 +996,5 @@ export default function RevenueCategoriesPage() {
     >
       <RevenueCategoriesPageContent />
     </ProtectedRoute>
-  )
+  );
 }

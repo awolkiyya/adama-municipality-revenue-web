@@ -8,7 +8,7 @@ import { AlertTriangle, RefreshCcw } from "lucide-react";
 import { UserFormData } from "@/types/user";
 
 export default function EditUserPage() {
-  const { id } = useParams();
+  const { id } = useParams<{ id: string }>();
   const router = useRouter();
 
   const {
@@ -16,8 +16,8 @@ export default function EditUserPage() {
     isLoading,
     isError,
     refetch,
-  } = useUser(id as string);
-  
+  } = useUser(id);
+
   const formData: UserFormData | null = user
     ? {
         name: user.name,
@@ -35,42 +35,42 @@ export default function EditUserPage() {
   const { mutateAsync: updateUser, isPending } = useUpdateUser();
 
   const handleSubmit = async (
-    data: any,
+    data: UserFormData,
     avatarFile?: File | null
   ) => {
-    const formData = new FormData();
-  
-    // IMPORTANT: clean append (no null, no empty strings)
+    const payload = new FormData();
+
     Object.entries(data).forEach(([key, value]) => {
-      if (value === null || value === undefined || value === "") return;
-  
-      // prevent sending avatar as string blob/url
-      if (key === "avatar") return;
-  
-      formData.append(key, String(value));
+      if (value === null || value === undefined || value === "") {
+        return;
+      }
+
+      // Do not submit the existing avatar URL as a file.
+      if (key === "avatar") {
+        return;
+      }
+
+      payload.append(key, String(value));
     });
-  
-    // file upload
+
+    // Upload a new avatar only when selected.
     if (avatarFile) {
-      formData.append("avatar", avatarFile);
+      payload.append("avatar", avatarFile);
     }
 
-    if (typeof data.is_active === "boolean") {
-      formData.append("is_active", data.is_active ? "1" : "0");
-    }
-  
-    // required for Laravel PUT simulation
-    formData.append("_method", "PUT");
-  
+    // Explicit boolean serialization for Laravel.
+    payload.set("is_active", data.is_active ? "1" : "0");
+
+    // Laravel PUT method simulation for multipart/form-data.
+    payload.append("_method", "PUT");
+
     await updateUser({
-      id: id as string,
-      data: formData,
+      id,
+      data: payload,
     });
-    };
+  };
 
-  // =========================
-  // LOADING STATE (SKELETON)
-  // =========================
+  // Loading state
   if (isLoading || !id) {
     return (
       <div className="max-w-4xl mx-auto p-6 space-y-6 animate-pulse">
@@ -85,14 +85,11 @@ export default function EditUserPage() {
     );
   }
 
-  // =========================
-  // ERROR STATE
-  // =========================
+  // Error state
   if (isError) {
     return (
       <div className="max-w-4xl mx-auto p-6 flex items-center justify-center">
         <div className="w-full rounded-xl border bg-muted/40 p-6 text-center space-y-4">
-
           <div className="flex justify-center">
             <div className="p-3 rounded-full bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400">
               <AlertTriangle className="w-6 h-6" />
@@ -123,15 +120,12 @@ export default function EditUserPage() {
               Go Back
             </button>
           </div>
-
         </div>
       </div>
     );
   }
 
-  // =========================
-  // NO DATA FOUND STATE
-  // =========================
+  // No data found
   if (!formData) {
     return (
       <div className="max-w-4xl mx-auto p-6 space-y-4">
@@ -153,11 +147,6 @@ export default function EditUserPage() {
     );
   }
 
-  console.log("formData",formData);
-
-  // =========================
-  // MAIN UI
-  // =========================
   return (
     <div className="max-w-4xl mx-auto md:p-6">
       <h1 className="text-2xl font-semibold mb-6">

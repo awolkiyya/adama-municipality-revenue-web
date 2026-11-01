@@ -753,7 +753,7 @@ export function TariffVersionFormSheet({
                   </Label>
 
                   <p className="text-xs text-muted-foreground">
-                    New assessments may use this version's pricing once
+                    New assessments may use this versions pricing once
                     activation is accepted by the server.
                   </p>
                 </div>

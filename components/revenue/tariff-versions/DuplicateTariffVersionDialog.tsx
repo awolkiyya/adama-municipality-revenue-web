@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Copy, Loader2, X } from "lucide-react";
 
 import {
@@ -20,6 +20,10 @@ import { useDuplicateTariffVersion } from "@/hooks/revenue/revenueVersion.hook";
 import type { TariffVersion } from "@/types/revenue/tariff-version";
 import { EthiopianDatePicker } from "@/components/input/EthiopianDatePicker";
 
+// =====================================================
+// TYPES
+// =====================================================
+
 interface DuplicateTariffVersionDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -32,16 +36,24 @@ interface DuplicateTariffVersionFormValues {
   effective_to: string;
 }
 
+// =====================================================
+// DATE HELPERS
+// =====================================================
+
 /**
  * Parse a Gregorian YYYY-MM-DD string into a local Date.
  * Using local date parts avoids UTC timezone date shifts.
  */
 function parseLocalDate(value: string): Date | undefined {
-  if (!value) return undefined;
+  if (!value) {
+    return undefined;
+  }
 
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
 
-  if (!match) return undefined;
+  if (!match) {
+    return undefined;
+  }
 
   const [, year, month, day] = match;
 
@@ -49,7 +61,11 @@ function parseLocalDate(value: string): Date | undefined {
   const parsedMonth = Number(month);
   const parsedDay = Number(day);
 
-  const date = new Date(parsedYear, parsedMonth - 1, parsedDay);
+  const date = new Date(
+    parsedYear,
+    parsedMonth - 1,
+    parsedDay
+  );
 
   if (
     date.getFullYear() !== parsedYear ||
@@ -73,8 +89,12 @@ function formatLocalDate(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
+// =====================================================
+// INITIAL VALUES
+// =====================================================
+
 function getInitialValues(
-  sourceVersion: TariffVersion | null,
+  sourceVersion: TariffVersion | null
 ): DuplicateTariffVersionFormValues {
   const currentYear = new Date().getFullYear();
 
@@ -93,23 +113,63 @@ function versionDisplayName(year: number): string {
   return `${year} Standard Tariff`;
 }
 
+// =====================================================
+// PUBLIC DIALOG COMPONENT
+// =====================================================
+
 export function DuplicateTariffVersionDialog({
+  open,
+  onOpenChange,
+  sourceVersion,
+}: DuplicateTariffVersionDialogProps) {
+  /*
+   * Remount the inner dialog content when:
+   * - The dialog opens or closes.
+   * - A different source version is selected.
+   * - The source version's relevant data changes.
+   *
+   * This resets the form without using an effect.
+   */
+  const dialogKey = JSON.stringify([
+    open,
+    sourceVersion?.id ?? null,
+    sourceVersion?.year ?? null,
+    sourceVersion?.name ?? null,
+    sourceVersion?.version ?? null,
+    sourceVersion?.tariffRulesCount ?? null,
+  ]);
+
+  return (
+    <DuplicateTariffVersionDialogContent
+      key={dialogKey}
+      open={open}
+      onOpenChange={onOpenChange}
+      sourceVersion={sourceVersion}
+    />
+  );
+}
+
+// =====================================================
+// DIALOG CONTENT
+// =====================================================
+
+function DuplicateTariffVersionDialogContent({
   open,
   onOpenChange,
   sourceVersion,
 }: DuplicateTariffVersionDialogProps) {
   const duplicateMutation = useDuplicateTariffVersion();
 
+  // Initialize the form from the selected source version.
+  // The keyed parent handles subsequent resets.
   const [values, setValues] =
     useState<DuplicateTariffVersionFormValues>(() =>
-      getInitialValues(sourceVersion),
+      getInitialValues(sourceVersion)
     );
 
-  useEffect(() => {
-    if (open && sourceVersion) {
-      setValues(getInitialValues(sourceVersion));
-    }
-  }, [open, sourceVersion]);
+  // =====================================================
+  // DERIVED VALUES
+  // =====================================================
 
   const targetYear = Number(values.year);
 
@@ -118,8 +178,13 @@ export function DuplicateTariffVersionDialog({
     Number.isInteger(targetYear) &&
     targetYear > 0;
 
-  const effectiveFromDate = parseLocalDate(values.effective_from);
-  const effectiveToDate = parseLocalDate(values.effective_to);
+  const effectiveFromDate = parseLocalDate(
+    values.effective_from
+  );
+
+  const effectiveToDate = parseLocalDate(
+    values.effective_to
+  );
 
   const validDates =
     Boolean(effectiveFromDate) &&
@@ -129,8 +194,14 @@ export function DuplicateTariffVersionDialog({
 
   const isPending = duplicateMutation.isPending;
 
+  // =====================================================
+  // ACTIONS
+  // =====================================================
+
   const handleClose = (nextOpen: boolean) => {
-    if (isPending) return;
+    if (isPending) {
+      return;
+    }
 
     onOpenChange(nextOpen);
   };
@@ -151,8 +222,35 @@ export function DuplicateTariffVersionDialog({
     });
   };
 
+  const handleStartDateChange = (date: Date) => {
+    setValues((current) => ({
+      ...current,
+      effective_from: formatLocalDate(date),
+    }));
+  };
+
+  const handleEndDateChange = (date: Date) => {
+    setValues((current) => ({
+      ...current,
+      effective_to: formatLocalDate(date),
+    }));
+  };
+
+  const handleClearEndDate = () => {
+    setValues((current) => ({
+      ...current,
+      effective_to: "",
+    }));
+  };
+
+  // =====================================================
+  // DUPLICATE
+  // =====================================================
+
   const handleDuplicate = async () => {
-    if (!sourceVersion || !validYear || !validDates) return;
+    if (!sourceVersion || !validYear || !validDates || isPending) {
+      return;
+    }
 
     try {
       await duplicateMutation.mutateAsync({
@@ -171,6 +269,10 @@ export function DuplicateTariffVersionDialog({
     }
   };
 
+  // =====================================================
+  // RENDER
+  // =====================================================
+
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
@@ -181,15 +283,16 @@ export function DuplicateTariffVersionDialog({
           </DialogTitle>
 
           <DialogDescription>
-            Create an independent copy of the selected tariff configuration.
-            Its rules and formulas will be copied by the backend. The source
-            version remains unchanged.
+            Create an independent copy of the selected tariff
+            configuration. Its rules and formulas will be copied
+            by the backend. The source version remains unchanged.
           </DialogDescription>
         </DialogHeader>
 
         {sourceVersion && (
           <div className="space-y-5">
             {/* Source version */}
+
             <div className="rounded-lg border bg-muted/30 p-3">
               <p className="text-xs text-muted-foreground">
                 Source version
@@ -208,8 +311,11 @@ export function DuplicateTariffVersionDialog({
             </div>
 
             {/* Target year */}
+
             <div className="space-y-2">
-              <Label htmlFor="duplicate-year">Target year</Label>
+              <Label htmlFor="duplicate-year">
+                Target year
+              </Label>
 
               <Input
                 id="duplicate-year"
@@ -221,27 +327,24 @@ export function DuplicateTariffVersionDialog({
                 onChange={(event) =>
                   handleYearChange(event.target.value)
                 }
+                disabled={isPending}
                 required
               />
 
               <p className="text-xs text-muted-foreground">
-                The backend should assign the correct version number for
-                this year.
+                The backend should assign the correct version number
+                for this year.
               </p>
             </div>
 
             {/* Effective start date */}
+
             <div className="space-y-2">
               <Label>Effective from</Label>
 
               <EthiopianDatePicker
                 value={effectiveFromDate}
-                onChange={(date) =>
-                  setValues((current) => ({
-                    ...current,
-                    effective_from: formatLocalDate(date),
-                  }))
-                }
+                onChange={handleStartDateChange}
                 placeholder="Select effective start date"
                 yearMode="FULL"
                 minYear={1900}
@@ -258,6 +361,7 @@ export function DuplicateTariffVersionDialog({
             </div>
 
             {/* Effective end date */}
+
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-3">
                 <Label>Effective to (optional)</Label>
@@ -268,12 +372,7 @@ export function DuplicateTariffVersionDialog({
                     variant="ghost"
                     size="sm"
                     className="h-7 px-2 text-xs text-muted-foreground"
-                    onClick={() =>
-                      setValues((current) => ({
-                        ...current,
-                        effective_to: "",
-                      }))
-                    }
+                    onClick={handleClearEndDate}
                     disabled={isPending}
                   >
                     <X className="mr-1 h-3.5 w-3.5" />
@@ -284,12 +383,7 @@ export function DuplicateTariffVersionDialog({
 
               <EthiopianDatePicker
                 value={effectiveToDate}
-                onChange={(date) =>
-                  setValues((current) => ({
-                    ...current,
-                    effective_to: formatLocalDate(date),
-                  }))
-                }
+                onChange={handleEndDateChange}
                 placeholder="Select effective end date"
                 yearMode="FULL"
                 minYear={1900}
@@ -318,16 +412,19 @@ export function DuplicateTariffVersionDialog({
             </div>
 
             {/* Important behavior */}
+
             <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3">
               <p className="text-xs leading-relaxed text-muted-foreground">
                 The duplicated version should remain inactive and
-                unapproved until its copied rules and formulas have been
-                reviewed and approved. Duplication must not change existing
-                assessments or invoices.
+                unapproved until its copied rules and formulas have
+                been reviewed and approved. Duplication must not
+                change existing assessments or invoices.
               </p>
             </div>
           </div>
         )}
+
+        {/* Footer */}
 
         <DialogFooter className="gap-2 sm:gap-0">
           <Button

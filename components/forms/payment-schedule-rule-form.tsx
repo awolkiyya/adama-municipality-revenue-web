@@ -73,10 +73,14 @@ export default function PaymentScheduleRuleForm({
 
   const parsedPercentage = useMemo(() => {
     const trimmed = firstInstallmentPercentage.trim();
+
     if (!trimmed) return null;
 
     const value = Number(trimmed);
-    if (!Number.isFinite(value) || value <= 0 || value > 100) return null;
+
+    if (!Number.isFinite(value) || value <= 0 || value > 100) {
+      return null;
+    }
 
     return value;
   }, [firstInstallmentPercentage]);
@@ -113,6 +117,7 @@ export default function PaymentScheduleRuleForm({
     }
 
     setErrors(nextErrors);
+
     return Object.keys(nextErrors).length === 0;
   };
 
@@ -124,6 +129,7 @@ export default function PaymentScheduleRuleForm({
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+
     if (!validate()) return;
 
     onSubmit?.({
@@ -169,9 +175,7 @@ export default function PaymentScheduleRuleForm({
   */
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6 ">
-
-
+    <form onSubmit={handleSubmit} className="space-y-6">
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 lg:items-start">
         {/* ================================================================ */}
         {/* MAIN COLUMN */}
@@ -184,8 +188,10 @@ export default function PaymentScheduleRuleForm({
                 <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-primary/10">
                   <CalendarClock className="size-4.5 text-primary" />
                 </div>
+
                 <div>
                   <CardTitle className="text-base">Revenue code</CardTitle>
+
                   <p className="mt-0.5 text-sm text-muted-foreground">
                     The rule applies to every assessment billed under this
                     code.
@@ -213,7 +219,7 @@ export default function PaymentScheduleRuleForm({
                   </p>
                 ) : mode === "edit" ? (
                   <p className="text-xs text-muted-foreground">
-                    The revenue code can't be changed after a rule is
+                    The revenue code can&apos;t be changed after a rule is
                     created — create a new rule instead.
                   </p>
                 ) : null}
@@ -224,6 +230,7 @@ export default function PaymentScheduleRuleForm({
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Scheduling</CardTitle>
+
               <p className="text-sm text-muted-foreground">
                 Turn payment scheduling on or off, and set the split for the
                 first installment.
@@ -231,9 +238,7 @@ export default function PaymentScheduleRuleForm({
             </CardHeader>
 
             <CardContent className="space-y-5">
-              {/* ---------------------------------------------------------- */}
               {/* ENABLE TOGGLE */}
-              {/* ---------------------------------------------------------- */}
 
               <div className="flex items-center justify-between gap-6 rounded-lg border p-4">
                 <div className="space-y-1">
@@ -243,6 +248,7 @@ export default function PaymentScheduleRuleForm({
                   >
                     Payment scheduling
                   </Label>
+
                   <p className="max-w-md text-sm text-muted-foreground">
                     When on, assessments using this revenue code can have
                     payment schedules generated during approval.
@@ -257,9 +263,7 @@ export default function PaymentScheduleRuleForm({
                 />
               </div>
 
-              {/* ---------------------------------------------------------- */}
               {/* FIRST INSTALLMENT */}
-              {/* ---------------------------------------------------------- */}
 
               {isEnabled ? (
                 <div className="space-y-3 rounded-lg border p-4">
@@ -267,6 +271,7 @@ export default function PaymentScheduleRuleForm({
                     <Label htmlFor="first-installment" className="font-medium">
                       First installment percentage
                     </Label>
+
                     <Badge variant="secondary" className="font-normal">
                       Optional
                     </Badge>
@@ -296,6 +301,7 @@ export default function PaymentScheduleRuleForm({
                             : ""
                         }`}
                       />
+
                       <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
                         %
                       </span>
@@ -331,7 +337,7 @@ export default function PaymentScheduleRuleForm({
                     <InstallmentSplitBar percentage={parsedPercentage} />
                   ) : (
                     <p className="text-xs text-muted-foreground">
-                      Leave blank if this revenue code doesn't require a
+                      Leave blank if this revenue code doesn&apos;t require a
                       fixed first-installment percentage — assessments can
                       still use scheduling without one.
                     </p>
@@ -341,9 +347,11 @@ export default function PaymentScheduleRuleForm({
                 <Alert>
                   <Info className="size-4" />
                   <AlertTitle>Scheduling is off</AlertTitle>
+
                   <AlertDescription>
-                    Assessments using this revenue code won't automatically
-                    receive payment schedules while this rule is inactive.
+                    Assessments using this revenue code won&apos;t
+                    automatically receive payment schedules while this rule is
+                    inactive.
                   </AlertDescription>
                 </Alert>
               )}
@@ -351,6 +359,7 @@ export default function PaymentScheduleRuleForm({
           </Card>
 
           {/* Actions live under the fields on small screens */}
+
           <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end lg:hidden">
             <FormActions
               mode={mode}
@@ -368,6 +377,7 @@ export default function PaymentScheduleRuleForm({
           <Card>
             <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
               <CardTitle className="text-base">Summary</CardTitle>
+
               {isEnabled ? (
                 <Badge
                   variant="outline"
@@ -385,6 +395,7 @@ export default function PaymentScheduleRuleForm({
               {!selectedRevenueCode ? (
                 <div className="flex items-start gap-2 rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
                   <AlertCircle className="mt-0.5 size-4 shrink-0" />
+
                   <span>
                     {mode === "edit"
                       ? "Loading revenue code details…"
@@ -397,10 +408,12 @@ export default function PaymentScheduleRuleForm({
                     <span className="text-xs font-medium text-muted-foreground">
                       Revenue code
                     </span>
+
                     <div className="flex flex-wrap items-baseline gap-x-2">
                       <span className="font-mono font-semibold">
                         {selectedRevenueCode.code}
                       </span>
+
                       <span className="text-sm text-muted-foreground">
                         {selectedRevenueCode.name}
                       </span>
@@ -412,28 +425,32 @@ export default function PaymentScheduleRuleForm({
                   <dl className="space-y-3 text-sm">
                     <div className="flex items-center justify-between gap-3">
                       <dt className="text-muted-foreground">Scheduling</dt>
+
                       <dd className="font-medium">
                         {isEnabled ? "Enabled" : "Disabled"}
                       </dd>
                     </div>
+
                     <div className="flex items-center justify-between gap-3">
                       <dt className="text-muted-foreground">
                         First installment
                       </dt>
+
                       <dd className="font-medium">
                         {parsedPercentage
                           ? `${parsedPercentage}%`
                           : "Not set"}
                       </dd>
                     </div>
-                  
                   </dl>
 
                   {isEnabled && !parsedPercentage && (
                     <>
                       <Separator />
+
                       <div className="flex gap-2 text-xs text-muted-foreground">
                         <Info className="mt-0.5 size-3.5 shrink-0" />
+
                         <p>
                           No first-installment percentage is set. Scheduling
                           will still apply without a fixed split.
@@ -447,6 +464,7 @@ export default function PaymentScheduleRuleForm({
           </Card>
 
           {/* Actions sit beside the summary on larger screens */}
+
           <div className="mt-6 hidden flex-col-reverse gap-3 sm:flex-row sm:justify-end lg:flex">
             <FormActions
               mode={mode}
@@ -461,9 +479,9 @@ export default function PaymentScheduleRuleForm({
 }
 
 /*
-|------------------------------------------------------------------------------
+|--------------------------------------------------------------------------
 | SUB-COMPONENTS
-|------------------------------------------------------------------------------
+|--------------------------------------------------------------------------
 */
 
 function InstallmentSplitBar({ percentage }: { percentage: number }) {
@@ -477,6 +495,7 @@ function InstallmentSplitBar({ percentage }: { percentage: number }) {
           style={{ width: `${percentage}%` }}
         />
       </div>
+
       <div className="flex justify-between text-xs text-muted-foreground">
         <span>First installment · {percentage}%</span>
         <span>Remaining · {remaining}%</span>
@@ -507,6 +526,7 @@ function FormActions({
 
       <Button type="submit" disabled={isSubmitting || !isDirty}>
         <Save className="mr-2 size-4" />
+
         {isSubmitting
           ? "Saving…"
           : mode === "create"

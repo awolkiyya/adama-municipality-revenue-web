@@ -1,5 +1,6 @@
-import { AxiosError } from "axios";
-import { ApiErrorResponse } from "@/types/api";
+
+import type { AxiosError } from "axios";
+import type { ApiErrorResponse } from "@/types/api";
 import { ApiError } from "./ApiError";
 
 export function normalizeApiError(error: unknown): ApiError {
@@ -8,7 +9,7 @@ export function normalizeApiError(error: unknown): ApiError {
 
     return new ApiError(
       response?.message || error.message || "Unexpected error",
-      error.response?.status,
+      error.response?.status
     );
   }
 
@@ -24,6 +25,11 @@ export function normalizeApiError(error: unknown): ApiError {
   );
 }
 
-function isAxiosError(error: any): error is AxiosError {
-  return error?.isAxiosError === true;
+function isAxiosError(error: unknown): error is AxiosError {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "isAxiosError" in error &&
+    error.isAxiosError === true
+  );
 }

@@ -6,7 +6,7 @@ type ToolbarProps = {
   className?: string;
 };
 
-export function Toolbar({ search, right, className }: ToolbarProps) {
+export function Toolbar({ search, right }: ToolbarProps) {
   return (
     <div className="flex flex-col  md:flex-row items-center justify-between gap-3">
   

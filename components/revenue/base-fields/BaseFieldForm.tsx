@@ -1,8 +1,8 @@
+
 "use client";
 
 import {
   useCallback,
-  useEffect,
   useMemo,
   useRef,
   useState,
@@ -98,7 +98,7 @@ function createInitialForm(
     name: field.name ?? "",
     code: field.code ?? "",
     data_type: field.data_type,
-    input_source: field.input_source ?? "MANUAL",
+    input_source: field.inputSource ?? "MANUAL",
     measurement_unit_id:
       field.measurement_unit_id != null
         ? String(field.measurement_unit_id)
@@ -138,7 +138,6 @@ function validateForm(
     errors.code =
       "Use uppercase letters, numbers, and underscores. Start with a letter.";
   } else if (existingCodes.has(code)) {
-    // existingCodes excludes the current field during editing.
     errors.code = "This field code is already in use.";
   }
 
@@ -154,8 +153,6 @@ function validateForm(
   if (requiresOptions(form.data_type)) {
     const options = normalizeOptions(form.options);
 
-    // Ignore completely empty rows, but do not silently submit
-    // a partially completed option.
     if (options.length === 0) {
       errors.options = "Add at least one option.";
     } else if (
@@ -213,7 +210,39 @@ function getFirstErrorTarget(
   return `base-field-${field}`;
 }
 
-export default function BaseFieldForm({
+/**
+ * Public wrapper.
+ *
+ * Changing the initial field creates a fresh form instance,
+ * avoiding state-reset effects.
+ */
+export default function BaseFieldForm(props: BaseFieldFormProps) {
+  const initialForm = createInitialForm(props.initialField);
+
+  const unit = (
+    props.initialField as
+      | (BaseField & {
+          measurement_unit?: MeasurementUnit | null;
+        })
+      | null
+      | undefined
+  )?.measurement_unit;
+
+  const formKey = JSON.stringify([
+    props.initialField?.id ?? null,
+    initialForm,
+    unit?.name ?? "",
+  ]);
+
+  return (
+    <BaseFieldFormContent
+      key={formKey}
+      {...props}
+    />
+  );
+}
+
+function BaseFieldFormContent({
   initialField = null,
   existingFields = [],
   loading = false,
@@ -226,7 +255,18 @@ export default function BaseFieldForm({
     createInitialForm(initialField),
   );
 
-  const [unitLabel, setUnitLabel] = useState("");
+  const [unitLabel, setUnitLabel] = useState(() => {
+    const unit = (
+      initialField as
+        | (BaseField & {
+            measurement_unit?: MeasurementUnit | null;
+          })
+        | null
+    )?.measurement_unit;
+
+    return unit?.name ?? "";
+  });
+
   const [codeTouched, setCodeTouched] = useState(editing);
   const [errors, setErrors] = useState<FieldFormErrors>({});
   const [submitting, setSubmitting] = useState(false);
@@ -235,13 +275,13 @@ export default function BaseFieldForm({
   );
   const [saved, setSaved] = useState(false);
 
-  const firstInputRef = useRef<HTMLInputElement>(null);
-
-  const initialSnapshotRef = useRef(
+  const [initialSnapshot, setInitialSnapshot] = useState(() =>
     JSON.stringify(
       getComparableForm(createInitialForm(initialField)),
     ),
   );
+
+  const firstInputRef = useRef<HTMLInputElement>(null);
 
   const existingCodes = useMemo(
     () =>
@@ -256,35 +296,11 @@ export default function BaseFieldForm({
     [existingFields, initialField],
   );
 
-  useEffect(() => {
-    const nextForm = createInitialForm(initialField);
-
-    setForm(nextForm);
-    setErrors({});
-    setSubmitError(null);
-    setSaved(false);
-    setCodeTouched(Boolean(initialField));
-
-    initialSnapshotRef.current = JSON.stringify(
-      getComparableForm(nextForm),
-    );
-
-    const unit = (
-      initialField as
-        | (BaseField & {
-            measurement_unit?: MeasurementUnit | null;
-          })
-        | null
-    )?.measurement_unit;
-
-    setUnitLabel(unit?.name ?? "");
-  }, [initialField]);
-
   const isDirty = useMemo(
     () =>
       JSON.stringify(getComparableForm(form)) !==
-      initialSnapshotRef.current,
-    [form],
+      initialSnapshot,
+    [form, initialSnapshot],
   );
 
   const clearError = useCallback(
@@ -312,7 +328,6 @@ export default function BaseFieldForm({
       setSubmitError(null);
       setSaved(false);
 
-      // Clear option errors when the option list changes.
       setErrors((previous) => {
         if (!previous.options) {
           return previous;
@@ -401,8 +416,6 @@ export default function BaseFieldForm({
       return;
     }
 
-    // Option-based field types must never be submitted
-    // without at least one complete option.
     if (
       optionsRequired &&
       normalizedForm.options.length === 0
@@ -424,15 +437,13 @@ export default function BaseFieldForm({
     try {
       setSubmitting(true);
 
-      // input_source is included in normalizedForm and therefore
-      // forwarded to the page-level handler with the other fields.
-      // The page-level handler must preserve it in the API payload.
       await onSubmit(normalizedForm);
 
-      initialSnapshotRef.current = JSON.stringify(
+      const savedSnapshot = JSON.stringify(
         getComparableForm(normalizedForm),
       );
 
+      setInitialSnapshot(savedSnapshot);
       setForm(normalizedForm);
       setSaved(true);
       setErrors({});

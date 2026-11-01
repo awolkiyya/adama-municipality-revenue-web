@@ -2,7 +2,7 @@
 "use client";
 
 import type { ChangeEvent, JSX } from "react";
-import { useEffect, useMemo, useState } from "react";
+import {  useMemo, useState } from "react";
 import {
   AlertCircle,
   Camera,
@@ -84,27 +84,7 @@ export interface RevenueDynamicFieldProps {
   disabled?: boolean;
 }
 
-// =====================================================
-// FILE TYPES
-// =====================================================
 
-type ExistingFileMetadata = {
-  id?: string;
-  fileId?: string;
-  name?: string;
-  originalName?: string;
-  originalFilename?: string;
-  filename?: string;
-  mimeType?: string;
-  mime_type?: string;
-  contentType?: string;
-  size?: number | string | null;
-  sizeBytes?: number | string | null;
-  status?: string;
-  url?: string;
-  downloadUrl?: string;
-  download_url?: string;
-};
 
 type DisplayFile = {
   key: string;

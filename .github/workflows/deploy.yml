@@ -1,64 +1,217 @@
-name: Deploy Frontend (Next.js + Docker)
+
+name: Deploy Adama Municipal Revenue Frontend
 
 on:
   push:
     branches:
       - main
 
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
 jobs:
-  deploy:
+
+  # ==========================================
+  # BUILD: Linux x64 production artifact
+  # ==========================================
+
+  build:
+    name: Build Next.js Production
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Deploy to Server
-        uses: appleboy/ssh-action@v1.0.3
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Next.js standalone
+        run: npm run build
+        env:
+          NODE_ENV: production
+          NEXT_TELEMETRY_DISABLED: 1
+          NEXT_PUBLIC_API_URL: http://196.190.216.33
+
+      - name: Prepare standalone deployment
+        run: |
+          set -e
+
+          test -f .next/standalone/server.js
+          test -d .next/static
+          test -d public
+
+          mkdir -p .next/standalone/.next
+
+          cp -a .next/static .next/standalone/.next/static
+
+          cp -a public .next/standalone/public
+
+          tar -czf adama-revenue-frontend.tar.gz \
+            -C .next/standalone .
+
+          ls -lh adama-revenue-frontend.tar.gz
+
+      - name: Upload production artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: adama-revenue-frontend
+          path: adama-revenue-frontend.tar.gz
+          retention-days: 7
+
+  # ==========================================
+  # DEPLOY: Ubuntu production server
+  # ==========================================
+
+  deploy:
+    name: Deploy to Ubuntu Server
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Download production artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: adama-revenue-frontend
+          path: ./artifact
+
+      - name: Transfer artifact to server
+        uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          fingerprint: ${{ secrets.SSH_FINGERPRINT }}
+          port: 22
+          source: "artifact/adama-revenue-frontend.tar.gz"
+          target: "/home/busadmin/"
+          strip_components: 1
+          timeout: 30s
+          command_timeout: 5m
+
+      - name: Deploy application
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          RELEASE_ID: ${{ github.sha }}
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          fingerprint: ${{ secrets.SSH_FINGERPRINT }}
           port: 22
           timeout: 30s
-          command_timeout: 15m
-          script_stop: true
+          command_timeout: 10m
+          envs: RELEASE_ID
 
           script: |
-            set -e
+            set -Eeuo pipefail
+
+            APP_DIR="/opt/adama-revenue"
+            RELEASES_DIR="$APP_DIR/releases"
+            RELEASE_DIR="$RELEASES_DIR/$RELEASE_ID"
+            ARCHIVE="/home/busadmin/adama-revenue-frontend.tar.gz"
 
             echo "======================================"
-            echo "🚀 Starting Commercial Enforcement Admin Deployment"
+            echo "Adama Revenue Frontend Deployment"
             echo "======================================"
 
-            cd /home/tradmin/apps/commercial_enforcement_web
+            echo "Release: $RELEASE_ID"
 
-            echo "📍 Current directory:"
-            pwd
+            # Check prerequisites
+            test -f "$ARCHIVE"
+            test -x /usr/bin/node
+            test -f /etc/systemd/system/adama-revenue-frontend.service
 
-            echo "📥 Pulling latest code..."
-            git fetch origin main
-            git reset --hard origin/main
+            mkdir -p "$RELEASES_DIR"
 
-            echo "🐳 Building Docker images..."
-            docker compose build --pull
+            # Remember currently active release
+            PREVIOUS_RELEASE=$(readlink -f "$APP_DIR/current" || true)
 
-            echo "🚀 Recreating containers..."
-            docker compose up -d --force-recreate frontend nginx
+            # Extract into temporary directory
+            TEMP_DIR="$RELEASES_DIR/.tmp-$RELEASE_ID"
 
-            echo "🧹 Cleaning unused images..."
-            docker image prune -af
-            docker builder prune -f
+            rm -rf "$TEMP_DIR"
+            mkdir -p "$TEMP_DIR"
 
-            echo "📦 Container status..."
-            docker compose ps
+            tar -xzf "$ARCHIVE" -C "$TEMP_DIR"
 
-            echo "⏳ Waiting for application..."
-            sleep 10
+            # Validate artifact
+            test -f "$TEMP_DIR/server.js"
+            test -d "$TEMP_DIR/.next/static"
+            test -d "$TEMP_DIR/public"
 
-            echo "🏥 Running health check..."
-            curl -f http://localhost/health
+            # Install release
+            rm -rf "$RELEASE_DIR"
+            mv "$TEMP_DIR" "$RELEASE_DIR"
+
+            # Activate release
+            ln -sfn "$RELEASE_DIR" "$APP_DIR/current"
+
+            # Restart application
+            sudo systemctl restart adama-revenue-frontend
+
+            # Wait for application readiness
+            echo "Checking application health..."
+
+            HEALTHY=0
+
+            for i in $(seq 1 30); do
+              if curl -fsS http://127.0.0.1:3000/en \
+                -o /dev/null; then
+                HEALTHY=1
+                break
+              fi
+
+              sleep 2
+            done
+
+            # Rollback if deployment failed
+            if [ "$HEALTHY" -ne 1 ]; then
+
+              echo "Deployment health check failed."
+
+              if [ -n "$PREVIOUS_RELEASE" ] && \
+                 [ -d "$PREVIOUS_RELEASE" ]; then
+
+                echo "Rolling back to previous release..."
+
+                ln -sfn "$PREVIOUS_RELEASE" "$APP_DIR/current"
+
+                sudo systemctl restart adama-revenue-frontend
+
+              else
+
+                sudo systemctl stop adama-revenue-frontend
+
+              fi
+
+              sudo journalctl \
+                -u adama-revenue-frontend \
+                -n 80 \
+                --no-pager
+
+              exit 1
+            fi
+
+            # Remove uploaded archive
+            rm -f "$ARCHIVE"
 
             echo "======================================"
-            echo "✅ Deployment completed successfully"
+            echo "Deployment successful"
             echo "======================================"
+
+            echo "Active release:"
+            readlink -f "$APP_DIR/current"
+
+            echo "Service status:"
+            sudo systemctl status \
+              adama-revenue-frontend \
+              --no-pager

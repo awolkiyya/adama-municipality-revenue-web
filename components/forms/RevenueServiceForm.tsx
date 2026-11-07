@@ -84,6 +84,15 @@ export interface RevenueServiceFormValues {
     description: string;
     serviceType: ServiceType | "";
     collectionMode: CollectionMode;
+
+    /*
+    |--------------------------------------------------------------------------
+    | Multiple Collection Entries
+    |--------------------------------------------------------------------------
+    */
+
+    allowMultiple: boolean;
+
     isActive: boolean;
     fields: RevenueServiceFieldRow[];
 }
@@ -154,7 +163,8 @@ const COLLECTION_MODE_OPTIONS: {
     {
         value: "BOTH",
         label: "Both",
-        description: "Available through assessment and field collection",
+        description:
+            "Available through assessment and field collection",
         icon: <SlidersHorizontal className="h-4 w-4" />,
     },
 ];
@@ -182,6 +192,7 @@ const DEFAULT_VALUES: RevenueServiceFormValues = {
     description: "",
     serviceType: "",
     collectionMode: "ASSESSMENT_ONLY",
+    allowMultiple: false,
     isActive: true,
     fields: [],
 };
@@ -249,9 +260,6 @@ export function RevenueServiceForm({
      * Keep complete selected base-field objects separately from the
      * parent baseFields list. AsyncDropdown loads options independently,
      * so a selected item might not exist in the parent's list.
-     *
-     * Keys are stable row IDs, not array indexes, so deleting a row
-     * cannot associate metadata with the wrong field.
      */
     const [selectedBaseFields, setSelectedBaseFields] =
         useState<Record<string, BaseField>>({});
@@ -259,6 +267,16 @@ export function RevenueServiceForm({
     const selectedType = SERVICE_TYPE_OPTIONS.find(
         (item) => item.value === values.serviceType
     );
+
+    /*
+    |--------------------------------------------------------------------------
+    | COLLECTION MODE HELPERS
+    |--------------------------------------------------------------------------
+    */
+
+    const supportsFieldCollection =
+        values.collectionMode === "FIELD_COLLECTION" ||
+        values.collectionMode === "BOTH";
 
     /*
     |--------------------------------------------------------------------------
@@ -313,6 +331,32 @@ export function RevenueServiceForm({
         setErrors((previous) => ({
             ...previous,
             [`fields.${index}.${key}`]: "",
+        }));
+    };
+
+    /*
+    |--------------------------------------------------------------------------
+    | CHANGE COLLECTION MODE
+    |--------------------------------------------------------------------------
+    */
+
+    const handleCollectionModeChange = (
+        collectionMode: CollectionMode
+    ) => {
+        setValues((previous) => ({
+            ...previous,
+            collectionMode,
+
+            // Multiple entries are relevant only to field collection.
+            allowMultiple:
+                collectionMode === "ASSESSMENT_ONLY"
+                    ? false
+                    : previous.allowMultiple,
+        }));
+
+        setErrors((previous) => ({
+            ...previous,
+            collectionMode: "",
         }));
     };
 
@@ -385,10 +429,6 @@ export function RevenueServiceForm({
         selectedValue: string,
         selectedItem: BaseField
     ) => {
-        /*
-         * Prefer the object returned by AsyncDropdown. It represents
-         * the actual selected API result and may not be in baseFields.
-         */
         const selectedField =
             selectedItem ??
             baseFields.find(
@@ -422,7 +462,6 @@ export function RevenueServiceForm({
 
             fields[index] = {
                 ...existing,
-                // Always store the backend UUID, never the code.
                 baseFieldId: selectedField.id,
                 label:
                     existing.label.trim() === ""
@@ -437,10 +476,6 @@ export function RevenueServiceForm({
             };
         });
 
-        /*
-         * Store the selected API object so its code, type and
-         * description render immediately.
-         */
         setSelectedBaseFields((previous) => ({
             ...previous,
             [String(index)]: selectedField,
@@ -534,7 +569,9 @@ export function RevenueServiceForm({
     |--------------------------------------------------------------------------
     */
 
-    const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    const handleSubmit = async (
+        event: FormEvent<HTMLFormElement>
+    ) => {
         event.preventDefault();
 
         const { isValid, data } = validate();
@@ -559,10 +596,6 @@ export function RevenueServiceForm({
                 await onSubmit(data as UpdateRevenueServiceInput);
             }
         } catch (error) {
-            /*
-             * Let the page/service layer handle its normal error
-             * notification, but don't silently swallow the error.
-             */
             console.error("Failed to save revenue service:", error);
         } finally {
             setIsSubmitting(false);
@@ -805,62 +838,105 @@ export function RevenueServiceForm({
                         </p>
                     </div>
 
-                    <div className="grid grid-cols-1 gap-3 p-6 sm:grid-cols-3">
-                        {COLLECTION_MODE_OPTIONS.map((option) => {
-                            const selected =
-                                values.collectionMode === option.value;
+                    <div className="space-y-5 p-6">
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                            {COLLECTION_MODE_OPTIONS.map((option) => {
+                                const selected =
+                                    values.collectionMode === option.value;
 
-                            return (
-                                <button
-                                    key={option.value}
-                                    type="button"
-                                    onClick={() =>
-                                        setField(
-                                            "collectionMode",
-                                            option.value
-                                        )
-                                    }
-                                    className={`flex flex-col items-start gap-3 rounded-xl border p-4 text-left transition ${
-                                        selected
-                                            ? "border-primary bg-primary/5 ring-1 ring-primary"
-                                            : "hover:border-foreground/30 hover:bg-muted/40"
-                                    }`}
-                                >
-                                    <div className="flex w-full items-center justify-between">
-                                        <div
-                                            className={`flex h-8 w-8 items-center justify-center rounded-lg ${
-                                                selected
-                                                    ? "bg-primary text-primary-foreground"
-                                                    : "bg-muted text-muted-foreground"
-                                            }`}
-                                        >
-                                            {option.icon}
+                                return (
+                                    <button
+                                        key={option.value}
+                                        type="button"
+                                        onClick={() =>
+                                            handleCollectionModeChange(
+                                                option.value
+                                            )
+                                        }
+                                        className={`flex flex-col items-start gap-3 rounded-xl border p-4 text-left transition ${
+                                            selected
+                                                ? "border-primary bg-primary/5 ring-1 ring-primary"
+                                                : "hover:border-foreground/30 hover:bg-muted/40"
+                                        }`}
+                                    >
+                                        <div className="flex w-full items-center justify-between">
+                                            <div
+                                                className={`flex h-8 w-8 items-center justify-center rounded-lg ${
+                                                    selected
+                                                        ? "bg-primary text-primary-foreground"
+                                                        : "bg-muted text-muted-foreground"
+                                                }`}
+                                            >
+                                                {option.icon}
+                                            </div>
+
+                                            {selected && (
+                                                <CheckCircle2 className="h-4 w-4 text-primary" />
+                                            )}
                                         </div>
 
-                                        {selected && (
-                                            <CheckCircle2 className="h-4 w-4 text-primary" />
+                                        <div>
+                                            <p className="text-sm font-medium">
+                                                {option.label}
+                                            </p>
+
+                                            <p className="text-xs text-muted-foreground">
+                                                {option.description}
+                                            </p>
+                                        </div>
+                                    </button>
+                                );
+                            })}
+                        </div>
+
+                        {errors.collectionMode && (
+                            <p className="text-xs text-red-500">
+                                {errors.collectionMode}
+                            </p>
+                        )}
+
+                        {/* MULTIPLE COLLECTION ENTRIES */}
+
+                        {supportsFieldCollection && (
+                            <div className="flex items-center justify-between gap-4 rounded-lg border bg-muted/30 px-4 py-4">
+                                <div className="min-w-0 space-y-1">
+                                    <div className="flex items-center gap-2">
+                                        <Label
+                                            htmlFor="allow-multiple-entries"
+                                            className="text-sm font-medium"
+                                        >
+                                            Allow Multiple Entries
+                                        </Label>
+
+                                        {values.allowMultiple && (
+                                            <Badge
+                                                variant="secondary"
+                                                className="text-[10px]"
+                                            >
+                                                Enabled
+                                            </Badge>
                                         )}
                                     </div>
 
-                                    <div>
-                                        <p className="text-sm font-medium">
-                                            {option.label}
-                                        </p>
+                                    <p className="max-w-xl text-xs leading-relaxed text-muted-foreground">
+                                        Allow field collectors to add multiple
+                                        entries for this service in a single
+                                        collection transaction. When disabled,
+                                        only one entry is permitted.
+                                    </p>
+                                </div>
 
-                                        <p className="text-xs text-muted-foreground">
-                                            {option.description}
-                                        </p>
-                                    </div>
-                                </button>
-                            );
-                        })}
+                                <Switch
+                                    id="allow-multiple-entries"
+                                    checked={values.allowMultiple}
+                                    onCheckedChange={(checked) =>
+                                        setField("allowMultiple", checked)
+                                    }
+                                    aria-label="Allow multiple collection entries"
+                                />
+                            </div>
+                        )}
                     </div>
-
-                    {errors.collectionMode && (
-                        <p className="px-6 pb-4 text-xs text-red-500">
-                            {errors.collectionMode}
-                        </p>
-                    )}
                 </section>
 
                 {/* SERVICE FIELDS */}

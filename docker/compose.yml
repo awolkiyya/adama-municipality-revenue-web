@@ -1,0 +1,38 @@
+
+services:
+  app:
+    image: ${IMAGE:?IMAGE is required}
+    restart: unless-stopped
+
+    environment:
+      NODE_ENV: production
+      HOSTNAME: 0.0.0.0
+      PORT: 3000
+      TZ: ${TZ:-Africa/Addis_Ababa}
+
+    expose:
+      - "3000"
+
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/').then(r => process.exit(r.status < 500 ? 0 : 1)).catch(() => process.exit(1))"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge

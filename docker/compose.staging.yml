@@ -1,0 +1,9 @@
+services:
+  app:
+    env_file:
+      - ../.env.staging
+
+    networks:
+      app-network:
+        aliases:
+          - staging-app

@@ -1,0 +1,7 @@
+# Let's Encrypt certificates and private keys
+conf/*
+!conf/.gitkeep
+
+# Temporary HTTP-01 challenge files
+www/*
+!www/.gitkeep

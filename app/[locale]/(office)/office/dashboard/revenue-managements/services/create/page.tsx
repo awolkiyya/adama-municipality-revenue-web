@@ -71,98 +71,54 @@ export default function CreateRevenueServicePage() {
     |--------------------------------------------------------------------------
     */
 
-    const handleSubmit = async (
-        values: CreateRevenueServiceInput
-    ) => {
-        console.log(
-            "FORM VALUES:",
-            values
-        );
+   
+const handleSubmit = async (
+    values: CreateRevenueServiceInput
+) => {
+    const payload: CreateRevenueServicePayload = {
+        revenue_code_id: values.revenueCodeId,
 
-        /*
-        |--------------------------------------------------------------------------
-        | Transform frontend model → API model
-        |--------------------------------------------------------------------------
-        */
+        name: values.name.trim(),
 
-        const payload: CreateRevenueServicePayload = {
-            revenue_code_id:
-                values.revenueCodeId,
+        description: values.description?.trim() || null,
 
-            name:
-                values.name.trim(),
+        service_type: values.serviceType || null,
 
-            description:
-                values.description?.trim() || null,
+        collection_mode: values.collectionMode,
 
-            service_type:
-                values.serviceType || null,
+        allow_multiple: values.allowMultiple ?? false,
 
-            collection_mode:
-                values.collectionMode,
+        is_active: values.isActive,
 
-            is_active:
-                values.isActive,
+        fields: (values.fields ?? []).map((field, index) => {
+            const baseField = baseFields.find(
+                (item) => item.id === field.baseFieldId
+            );
 
-            fields:
-                (values.fields ?? []).map(
-                    (field, index) => {
-                        /*
-                        |--------------------------------------------------------------------------
-                        | Verify Base Field
-                        |--------------------------------------------------------------------------
-                        */
+            if (!baseField) {
+                throw new Error(
+                    `Invalid base field: ${field.baseFieldId}`
+                );
+            }
 
-                        const baseField =
-                            baseFields.find(
-                                (item) =>
-                                    item.id ===
-                                    field.baseFieldId
-                            );
-
-                        if (!baseField) {
-                            throw new Error(
-                                `Invalid base field: ${field.baseFieldId}`
-                            );
-                        }
-
-                        return {
-                            base_field_id:
-                                baseField.id,
-
-                            sort_order:
-                                index,
-
-                            is_required:
-                                field.required,
-
-                            label:
-                                field.label?.trim() ||
-                                null,
-
-                            help_text:
-                                field.helpText?.trim() ||
-                                null,
-
-                            validation_rules:
-                                field.validationRules &&
-                                Object.keys(
-                                    field.validationRules
-                                ).length > 0
-                                    ? field.validationRules
-                                    : null,
-                        };
-                    }
-                ),
-        };
-
-        console.log(
-            "CREATE REVENUE SERVICE PAYLOAD:",
-            payload
-        );
-
-        await createService(payload);
+            return {
+                base_field_id: baseField.id,
+                sort_order: index,
+                is_required: field.required,
+                label: field.label?.trim() || null,
+                help_text: field.helpText?.trim() || null,
+                validation_rules:
+                    field.validationRules &&
+                    Object.keys(field.validationRules).length > 0
+                        ? field.validationRules
+                        : null,
+            };
+        }),
     };
+
+    await createService(payload);
+};
+
 
     /*
     |--------------------------------------------------------------------------

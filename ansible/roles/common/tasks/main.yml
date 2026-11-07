@@ -1,0 +1,29 @@
+---
+- name: Update APT package cache
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Upgrade installed packages
+  ansible.builtin.apt:
+    upgrade: safe
+
+- name: Install essential system packages
+  ansible.builtin.apt:
+    name: "{{ common_packages }}"
+    state: present
+
+- name: Configure server timezone
+  ansible.builtin.file:
+    src: "/usr/share/zoneinfo/{{ server_timezone }}"
+    dest: /etc/localtime
+    state: link
+    force: true
+
+- name: Configure timezone information
+  ansible.builtin.copy:
+    content: "{{ server_timezone }}\n"
+    dest: /etc/timezone
+    owner: root
+    group: root
+    mode: "0644"

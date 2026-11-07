@@ -422,7 +422,7 @@ function HeroWaves() {
 /* -------------------------------------------------------------------------- */
 
 // Make sure this matches the real file name/extension in /public/images
-const PREVIEW_SRC = "/images/fieldcollectionpreview.png";
+const PREVIEW_SRC = "/images/Adeemsa Appii fi Maxxansa Rasiitii.gif";
 const PREVIEW_ALT =
   "Handheld Android POS terminal with built-in receipt printer running the Adama Field Collection app";
 

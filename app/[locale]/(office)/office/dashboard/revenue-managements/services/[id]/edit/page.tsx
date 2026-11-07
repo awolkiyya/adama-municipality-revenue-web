@@ -51,15 +51,21 @@ type CollectionModeValue =
 type RevenueServiceFieldResponse = {
     base_field_id?: string | null;
     baseFieldId?: string | null;
+
     label?: string | null;
+
     isRequired?: boolean | null;
     required?: boolean | null;
+
     help_text?: string | null;
     helpText?: string | null;
+
     validation_rules?: Record<string, unknown> | null;
     validationRules?: Record<string, unknown> | null;
+
     sort_order?: number | null;
     sortOrder?: number | null;
+
     base_field?: {
         name?: string | null;
     } | null;
@@ -67,20 +73,31 @@ type RevenueServiceFieldResponse = {
 
 type RevenueServiceResponse = {
     id: string;
+
     revenueCodeId?: string | null;
     revenue_code_id?: string | null;
+
     revenueCode?: {
         id?: string | null;
     } | null;
+
     name?: string | null;
     description?: string | null;
 
-    // Use the same domain types as the form.
     serviceType?: ServiceTypeValue | null;
     service_type?: ServiceTypeValue | null;
 
     collectionMode?: CollectionModeValue | null;
     collection_mode?: CollectionModeValue | null;
+
+    /*
+    |--------------------------------------------------------------------------
+    | Multiple Collection Entries
+    |--------------------------------------------------------------------------
+    */
+
+    allowMultiple?: boolean | null;
+    allow_multiple?: boolean | null;
 
     is_active?: boolean | null;
     isActive?: boolean | null;
@@ -148,6 +165,26 @@ function toFormValues(
             service.collectionMode ??
             service.collection_mode ??
             "ASSESSMENT_ONLY",
+
+        /*
+        |--------------------------------------------------------------------------
+        | Multiple Collection Entries
+        |--------------------------------------------------------------------------
+        |
+        | Supports both Laravel snake_case and frontend camelCase.
+        |
+        */
+
+        allowMultiple:
+            service.allowMultiple ??
+            service.allow_multiple ??
+            false,
+
+        /*
+        |--------------------------------------------------------------------------
+        | Active Status
+        |--------------------------------------------------------------------------
+        */
 
         isActive:
             service.is_active ??
@@ -339,6 +376,21 @@ export default function EditRevenueServicePage() {
 
             collection_mode:
                 values.collectionMode,
+
+            /*
+            |--------------------------------------------------------------------------
+            | Multiple Collection Entries
+            |--------------------------------------------------------------------------
+            */
+
+            allow_multiple:
+                values.allowMultiple ?? false,
+
+            /*
+            |--------------------------------------------------------------------------
+            | Active Status
+            |--------------------------------------------------------------------------
+            */
 
             is_active:
                 values.isActive ?? true,

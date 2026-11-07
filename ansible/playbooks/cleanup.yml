@@ -1,0 +1,6 @@
+---
+- name: Clean Docker resources
+  hosts: frontend
+  become: true
+  roles:
+    - docker_cleanup

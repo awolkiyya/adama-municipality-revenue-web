@@ -1,0 +1,12 @@
+---
+deployment_base_dir: /opt/adama-revenue
+
+deployment_app_dir: "{{ deployment_base_dir }}/web_app"
+
+deployment_directories:
+  - "{{ deployment_base_dir }}"
+  - "{{ deployment_app_dir }}"
+
+deployment_directory_owner: busadmin
+deployment_directory_group: busadmin
+deployment_directory_mode: "0755"

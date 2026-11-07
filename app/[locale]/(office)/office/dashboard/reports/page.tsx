@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import {
@@ -98,68 +98,60 @@ function ReportsPage() {
   /* Permissions                                                              */
   /* ------------------------------------------------------------------------ */
 
-  const userPermissions = useMemo(
-    () =>
-      Array.isArray(user?.permissions)
-        ? user.permissions
-        : [],
-    [user?.permissions],
+  const userPermissions = Array.isArray(user?.permissions)
+    ? user.permissions
+    : [];
+
+  const permittedReports = REPORTS.filter((report) =>
+    userPermissions.some((permission) => {
+      if (typeof permission === "string") {
+        return permission === report.permission;
+      }
+
+      if (
+        permission &&
+        typeof permission === "object" &&
+        "name" in permission
+      ) {
+        return permission.name === report.permission;
+      }
+
+      if (
+        permission &&
+        typeof permission === "object" &&
+        "resource" in permission &&
+        "action" in permission
+      ) {
+        return (
+          permission.resource === report.permission &&
+          permission.action === "view"
+        );
+      }
+
+      return false;
+    }),
   );
-
-  const permittedReports = useMemo(() => {
-    return REPORTS.filter((report) =>
-      userPermissions.some((permission) => {
-        if (typeof permission === "string") {
-          return permission === report.permission;
-        }
-
-        if (
-          permission &&
-          typeof permission === "object" &&
-          "name" in permission
-        ) {
-          return permission.name === report.permission;
-        }
-
-        if (
-          permission &&
-          typeof permission === "object" &&
-          "resource" in permission &&
-          "action" in permission
-        ) {
-          return (
-            permission.resource === report.permission &&
-            permission.action === "view"
-          );
-        }
-
-        return false;
-      }),
-    );
-  }, [userPermissions]);
 
   /* ------------------------------------------------------------------------ */
   /* Filters                                                                  */
   /* ------------------------------------------------------------------------ */
 
-  const filteredReports = useMemo(() => {
-    const query = search.trim().toLocaleLowerCase(locale);
+  const query = search.trim().toLocaleLowerCase(locale);
 
-    return permittedReports.filter((report) => {
-      const matchesCategory =
-        category === "all" || report.category === category;
+  const filteredReports = permittedReports.filter((report) => {
+    const matchesCategory =
+      category === "all" || report.category === category;
 
-      const title = t(report.title).toLocaleLowerCase(locale);
-      const description = t(report.description).toLocaleLowerCase(locale);
+    const title = t(report.title).toLocaleLowerCase(locale);
+    const description = t(report.description).toLocaleLowerCase(locale);
 
-      const matchesSearch =
-        !query ||
-        title.includes(query) ||
-        description.includes(query);
+    const matchesSearch =
+      !query ||
+      title.includes(query) ||
+      description.includes(query);
 
-      return matchesCategory && matchesSearch;
-    });
-  }, [permittedReports, category, search, t, locale]);
+    return matchesCategory && matchesSearch;
+  });
 
   const clearFilters = () => {
     setSearch("");

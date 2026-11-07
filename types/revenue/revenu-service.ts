@@ -164,6 +164,7 @@ export interface RevenueService {
     serviceType?: ServiceType | null;
 
     collectionMode: CollectionMode;
+    allowMultiple: boolean;
 
     /*
      * Status
@@ -210,6 +211,8 @@ export interface CreateRevenueServicePayload {
 
     collection_mode: CollectionMode;
 
+    allow_multiple?: boolean;
+
     is_active?: boolean;
 
     fields?: RevenueServiceFieldPayload[];
@@ -231,6 +234,9 @@ export interface UpdateRevenueServicePayload {
     service_type?: ServiceType | null;
 
     collection_mode?: CollectionMode;
+    
+    allow_multiple?: boolean;
+
 
     is_active?: boolean;
 

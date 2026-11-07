@@ -1,0 +1,16 @@
+---
+# Remove all running and stopped containers.
+docker_cleanup_remove_containers: false
+
+# Remove unused Docker images.
+docker_cleanup_remove_images: false
+
+# Remove unused Docker networks.
+docker_cleanup_remove_networks: false
+
+# Remove unused Docker volumes.
+# Keep disabled to protect persistent data.
+docker_cleanup_remove_volumes: false
+
+# Remove Docker build cache.
+docker_cleanup_remove_build_cache: false

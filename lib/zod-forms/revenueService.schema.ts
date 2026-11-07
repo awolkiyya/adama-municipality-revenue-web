@@ -1,3 +1,4 @@
+
 import { z } from "zod";
 
 /*
@@ -27,13 +28,16 @@ export const collectionModeSchema = z.enum([
     "BOTH",
 ]);
 
-/**
- * Validation rules that can be configured for a
- * service-specific BaseField.
- *
- * These rules do NOT define the field's data type.
- * The canonical data type comes from BaseField.dataType.
- */
+/*
+|--------------------------------------------------------------------------
+| VALIDATION RULES
+|--------------------------------------------------------------------------
+|
+| These rules configure a service-specific BaseField.
+| The canonical data type comes from BaseField.dataType.
+|
+*/
+
 export const validationRulesSchema = z
     .object({
         min: z
@@ -104,10 +108,8 @@ export const validationRulesSchema = z
 | REVENUE SERVICE FIELD
 |--------------------------------------------------------------------------
 |
-| A RevenueServiceField does NOT define a new field type.
-|
-| It references a canonical BaseField and optionally overrides
-| presentation/configuration for this specific service.
+| A RevenueServiceField references a canonical BaseField.
+| It can override presentation and validation for this service.
 |
 */
 
@@ -126,9 +128,6 @@ export const revenueServiceFieldSchema = z.object({
     |--------------------------------------------------------------------------
     | Service-specific presentation
     |--------------------------------------------------------------------------
-    |
-    | If empty, backend/frontend can fall back to BaseField.name.
-    |
     */
 
     label: z
@@ -143,7 +142,9 @@ export const revenueServiceFieldSchema = z.object({
     |--------------------------------------------------------------------------
     */
 
-    required: z.boolean().default(true),
+    required: z
+        .boolean()
+        .default(true),
 
     /*
     |--------------------------------------------------------------------------
@@ -166,10 +167,9 @@ export const revenueServiceFieldSchema = z.object({
     |--------------------------------------------------------------------------
     */
 
-    validationRules:
-        validationRulesSchema
-            .nullable()
-            .optional(),
+    validationRules: validationRulesSchema
+        .nullable()
+        .optional(),
 
     /*
     |--------------------------------------------------------------------------
@@ -189,8 +189,7 @@ export const revenueServiceFieldSchema = z.object({
 | REVENUE SERVICE — BASE SHAPE
 |--------------------------------------------------------------------------
 |
-| Keep this as a plain ZodObject so create/update schemas can
-| safely use .partial() / .extend().
+| Shared by create and update schemas.
 |
 */
 
@@ -261,6 +260,22 @@ const baseRevenueServiceShape = {
 
     /*
     |--------------------------------------------------------------------------
+    | Multiple Collection Entries
+    |--------------------------------------------------------------------------
+    |
+    | Determines whether collectors can add multiple entries
+    | for this revenue service in one transaction.
+    |
+    | Default: false (single entry).
+    |
+    */
+
+    allowMultiple: z
+        .boolean()
+        .default(false),
+
+    /*
+    |--------------------------------------------------------------------------
     | Active Status
     |--------------------------------------------------------------------------
     */
@@ -294,14 +309,14 @@ const createRevenueServiceBaseSchema =
 | UPDATE
 |--------------------------------------------------------------------------
 |
-| The service ID is required here because your current frontend
-| update schema expects the ID in the request body.
+| The service ID is required because the current frontend
+| update schema expects it in the request body.
 |
-| If your API gets the ID exclusively from:
+| If the API gets the ID exclusively from:
 |
 |     /revenue-services/{id}
 |
-| then remove `id` from this schema.
+| remove `id` from this schema.
 |
 */
 
@@ -322,7 +337,7 @@ const updateRevenueServiceBaseSchema = z
 | Ensures:
 |
 | 1. No BaseField is selected twice.
-| 2. sortOrder is normalized/validated.
+| 2. Field sort order is valid.
 |
 */
 
@@ -341,9 +356,6 @@ function applyRevenueServiceFieldRefinements(
     |--------------------------------------------------------------------------
     | Duplicate BaseField detection
     |--------------------------------------------------------------------------
-    |
-    | One canonical BaseField should only appear once in a service.
-    |
     */
 
     const seenBaseFields =

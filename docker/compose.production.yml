@@ -1,0 +1,9 @@
+services:
+  app:
+    env_file:
+      - ../.env.production
+
+    networks:
+      app-network:
+        aliases:
+          - production-app

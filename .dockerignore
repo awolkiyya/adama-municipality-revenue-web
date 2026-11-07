@@ -1,0 +1,23 @@
+# Dependencies
+node_modules
+
+# Next.js build output
+.next
+out
+
+# Git
+.git
+.github
+
+# Environment files and secrets
+.env
+.env.*
+!.env.example
+
+# Editor and operating system files
+.vscode
+.DS_Store
+
+# Logs and test output
+npm-debug.log*
+coverage

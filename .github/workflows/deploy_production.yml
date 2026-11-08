@@ -1,4 +1,3 @@
-
 name: Deploy Production
 
 on:
@@ -57,13 +56,21 @@ jobs:
           mkdir -p "$HOME/.ssh"
           chmod 700 "$HOME/.ssh"
 
-          printf '%s\n' "$SSH_PRIVATE_KEY" > "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$SSH_PRIVATE_KEY" \
+            | tr -d '\r' \
+            > "$HOME/.ssh/id_ed25519"
+
           chmod 600 "$HOME/.ssh/id_ed25519"
 
-          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" \
+            | tr -d '\r' \
+            > "$HOME/.ssh/known_hosts"
+
           chmod 600 "$HOME/.ssh/known_hosts"
 
-          ssh-keygen -y -f "$HOME/.ssh/id_ed25519" > /dev/null
+          ssh-keygen -y \
+            -f "$HOME/.ssh/id_ed25519" \
+            > /dev/null
 
           echo "Production SSH configuration verified."
 
@@ -163,10 +170,20 @@ jobs:
 
           set -Eeuo pipefail
 
+          # ----------------------------------------------
+          # Production deployment configuration
+          # ----------------------------------------------
+
           APP_ROOT="/opt/adama-revenue/web_app"
           SOURCE_DIR="$APP_ROOT/source-production"
           ENV_FILE="$APP_ROOT/.env.production"
-          IMAGE="adama-revenue-web:production"
+
+          # IMPORTANT:
+          # Export IMAGE so every Docker Compose command
+          # can resolve ${IMAGE:?IMAGE is required}.
+          export IMAGE="adama-revenue-web:production"
+
+          EXPECTED_REPLICAS=3
 
           COMPOSE=(
             docker compose
@@ -175,23 +192,28 @@ jobs:
             -f docker/compose.production.yml
           )
 
-          EXPECTED_REPLICAS=3
-
           echo "=========================================="
           echo "Starting production deployment"
           echo "=========================================="
 
+          echo "Production image: $IMAGE"
+          echo "Expected replicas: $EXPECTED_REPLICAS"
+
           # ----------------------------------------------
-          # Check production configuration
+          # 1. Check production configuration
           # ----------------------------------------------
 
           echo "Checking production configuration..."
 
           test -d "$APP_ROOT"
-          test -s "$ENV_FILE"
+
+          if [ ! -s "$ENV_FILE" ]; then
+            echo "Production environment file is missing or empty."
+            exit 1
+          fi
 
           # ----------------------------------------------
-          # Prepare production source directory
+          # 2. Prepare production source directory
           # ----------------------------------------------
 
           echo "Preparing production source directory..."
@@ -211,13 +233,15 @@ jobs:
           test -f docker/compose.production.yml
 
           # ----------------------------------------------
-          # Read production API URL
+          # 3. Read production API URL
           # ----------------------------------------------
 
           echo "Reading production API URL..."
 
           NEXT_PUBLIC_API_URL="$(
-            sed -n 's/^NEXT_PUBLIC_API_URL=//p' "$ENV_FILE" | tail -n 1
+            sed -n 's/^NEXT_PUBLIC_API_URL=//p' "$ENV_FILE" \
+              | tail -n 1 \
+              | tr -d '\r'
           )"
 
           if [ -z "$NEXT_PUBLIC_API_URL" ]; then
@@ -226,15 +250,19 @@ jobs:
           fi
 
           # ----------------------------------------------
-          # Validate Docker Compose configuration
+          # 4. Validate Docker Compose configuration
           # ----------------------------------------------
 
           echo "Validating production Docker Compose configuration..."
 
-          IMAGE="$IMAGE" "${COMPOSE[@]}" config -q
+          docker compose \
+            -p my-next-production \
+            -f docker/compose.yml \
+            -f docker/compose.production.yml \
+            config -q
 
           # ----------------------------------------------
-          # Build production Docker image
+          # 5. Build production Docker image
           # ----------------------------------------------
 
           echo "Building production Docker image..."
@@ -246,19 +274,21 @@ jobs:
             -t "$IMAGE" \
             .
 
+          echo "Production Docker image built successfully."
+
           # ----------------------------------------------
-          # Deploy production application
+          # 6. Deploy production application
           # ----------------------------------------------
 
           echo "Deploying production application..."
 
-          IMAGE="$IMAGE" "${COMPOSE[@]}" up \
+          "${COMPOSE[@]}" up \
             -d \
             --remove-orphans \
             --scale app="$EXPECTED_REPLICAS"
 
           # ----------------------------------------------
-          # Verify production replicas
+          # 7. Verify production replicas
           # ----------------------------------------------
 
           echo "Waiting for all production replicas to become healthy..."
@@ -290,16 +320,22 @@ jobs:
                 echo "Container $CONTAINER_ID: $HEALTH_STATUS"
 
                 case "$HEALTH_STATUS" in
+
                   healthy)
                     ;;
+
                   unhealthy|missing)
                     echo "Production container failed its health check."
-                    docker logs --tail 100 "$CONTAINER_ID"
+
+                    docker logs --tail 100 "$CONTAINER_ID" || true
+
                     exit 1
                     ;;
+
                   *)
                     ALL_HEALTHY=false
                     ;;
+
                 esac
 
               done
@@ -312,6 +348,7 @@ jobs:
             fi
 
             if [ "$attempt" -eq 30 ]; then
+
               echo "Production health check timed out."
 
               "${COMPOSE[@]}" ps -a
@@ -327,13 +364,22 @@ jobs:
 
           done
 
+          # ----------------------------------------------
+          # 8. Final health validation
+          # ----------------------------------------------
+
           if [ "$DEPLOYMENT_HEALTHY" != true ]; then
+
             echo "Production deployment did not become healthy."
+
+            "${COMPOSE[@]}" ps -a
+
             exit 1
+
           fi
 
           # ----------------------------------------------
-          # Final deployment status
+          # 9. Final deployment status
           # ----------------------------------------------
 
           echo "=========================================="

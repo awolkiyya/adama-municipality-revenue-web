@@ -10,3 +10,8 @@ services:
       app-network:
         aliases:
           - production-app
+
+networks:
+  app-network:
+    external: true
+    name: web_app_frontend-network

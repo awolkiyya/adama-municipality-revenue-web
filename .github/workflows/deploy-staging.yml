@@ -153,7 +153,7 @@ jobs:
             -o ConnectTimeout=20 \
             -o StrictHostKeyChecking=yes \
             "$STAGING_USER@$STAGING_HOST" \
-            'bash -s --' "$ACME_TEST_TOKEN" "$ACME_TEST_RESPONSE" <<'REMOTE'
+            'bash -s' <<'REMOTE'
 
           set -Eeuo pipefail
 
@@ -170,22 +170,7 @@ jobs:
           ACME_WEBROOT="$APP_ROOT/certificates/www"
           ACME_CHALLENGE_DIR="$ACME_WEBROOT/.well-known/acme-challenge"
 
-          ACME_TEST_TOKEN="${1:?ACME test token is required}"
-          ACME_TEST_RESPONSE="${2:?ACME test response is required}"
-
-          ACME_TEST_FILE="$ACME_CHALLENGE_DIR/$ACME_TEST_TOKEN"
-
           export IMAGE
-
-          if [[ ! "$ACME_TEST_TOKEN" =~ ^[A-Za-z0-9_-]+$ ]]; then
-            echo "ERROR: Invalid ACME test token."
-            exit 1
-          fi
-
-          if [[ -z "$ACME_TEST_RESPONSE" ]]; then
-            echo "ERROR: ACME test response cannot be empty."
-            exit 1
-          fi
 
           cd "$APP_ROOT"
 
@@ -194,9 +179,9 @@ jobs:
           echo "========================================"
 
           echo "Server: $(hostname)"
+          echo "Deployment user: $(id)"
           echo "Source directory: $SOURCE_DIR"
           echo "Image: $IMAGE"
-          echo "ACME token: $ACME_TEST_TOKEN"
 
           # ------------------------------------------------
           # 6. Verify deployment prerequisites
@@ -223,15 +208,17 @@ jobs:
           echo "========================================"
 
           mkdir -p "$ACME_WEBROOT"
-
           mkdir -p "$ACME_CHALLENGE_DIR"
 
-          chmod 755 "$ACME_WEBROOT"
-          chmod 755 "$ACME_WEBROOT/.well-known"
-          chmod 755 "$ACME_CHALLENGE_DIR"
+          echo "ACME webroot:"
+          readlink -f "$ACME_WEBROOT"
 
-          echo "ACME webroot initialized."
-          echo "Webroot: $(readlink -f "$ACME_WEBROOT")"
+          echo "ACME challenge directory:"
+          readlink -f "$ACME_CHALLENGE_DIR"
+
+          ls -ld "$ACME_WEBROOT"
+          ls -ld "$ACME_WEBROOT/.well-known"
+          ls -ld "$ACME_CHALLENGE_DIR"
 
           # ------------------------------------------------
           # 8. Extract and validate source
@@ -243,7 +230,12 @@ jobs:
 
           EXTRACT_DIR="$(mktemp -d /tmp/adama-staging-source.XXXXXX)"
 
-          trap 'rm -rf -- "$EXTRACT_DIR"; rm -f -- "$ARCHIVE"' EXIT
+          cleanup_deployment() {
+            rm -rf -- "$EXTRACT_DIR"
+            rm -f -- "$ARCHIVE"
+          }
+
+          trap cleanup_deployment EXIT
 
           tar -xzf "$ARCHIVE" -C "$EXTRACT_DIR"
 
@@ -391,12 +383,7 @@ jobs:
               break
             fi
 
-            if [ "$STATUS" = "unhealthy" ]; then
-              break
-            fi
-
-            if [ "$STATUS" = "no-healthcheck" ]; then
-              echo "ERROR: Application container has no Docker healthcheck."
+            if [ "$STATUS" = "unhealthy" ] || [ "$STATUS" = "no-healthcheck" ]; then
               break
             fi
 
@@ -565,140 +552,7 @@ jobs:
           echo "Staging HTTP endpoint is responding."
 
           # ------------------------------------------------
-          # 24. Create temporary ACME test challenge
-          # ------------------------------------------------
-
-          echo "========================================"
-          echo "CREATING TEMPORARY ACME CHALLENGE"
-          echo "========================================"
-
-          mkdir -p "$ACME_CHALLENGE_DIR"
-
-          printf '%s' "$ACME_TEST_RESPONSE" > "$ACME_TEST_FILE"
-
-          chmod 644 "$ACME_TEST_FILE"
-
-          if [ ! -f "$ACME_TEST_FILE" ]; then
-            echo "ERROR: ACME challenge file was not created."
-            exit 1
-          fi
-
-          if ! printf '%s' "$ACME_TEST_RESPONSE" | cmp -s - "$ACME_TEST_FILE"; then
-            echo "ERROR: ACME challenge creation produced incorrect content."
-
-            echo "Expected bytes:"
-            printf '%s' "$ACME_TEST_RESPONSE" | od -An -tx1c
-
-            echo "Actual bytes:"
-            od -An -tx1c "$ACME_TEST_FILE"
-
-            exit 1
-          fi
-
-          echo "Temporary ACME challenge created successfully."
-          echo "Challenge file: $ACME_TEST_FILE"
-          echo "Challenge size: $(wc -c < "$ACME_TEST_FILE") bytes"
-
-          # ------------------------------------------------
-          # 25. Verify host file persistence
-          # ------------------------------------------------
-
-          echo "========================================"
-          echo "VERIFYING HOST FILE PERSISTENCE"
-          echo "========================================"
-
-          echo "Server: $(hostname)"
-          echo "Current directory: $(pwd)"
-          echo "Resolved webroot: $(readlink -f "$ACME_WEBROOT")"
-
-          ls -lah "$ACME_CHALLENGE_DIR"
-
-          stat "$ACME_TEST_FILE"
-
-          printf 'Host file content: '
-          cat "$ACME_TEST_FILE"
-          echo
-
-          # ------------------------------------------------
-          # 26. Verify challenge file inside Nginx
-          # ------------------------------------------------
-
-          echo "========================================"
-          echo "VERIFYING CHALLENGE FILE INSIDE NGINX"
-          echo "========================================"
-
-          CONTAINER_FILE="/var/www/certbot/.well-known/acme-challenge/$ACME_TEST_TOKEN"
-
-          if ! docker exec "$GATEWAY_CONTAINER_ID" test -s "$CONTAINER_FILE"; then
-            echo "ERROR: Challenge file is missing inside Nginx."
-            exit 1
-          fi
-
-          CONTAINER_RESPONSE="$(
-            docker exec "$GATEWAY_CONTAINER_ID" cat "$CONTAINER_FILE"
-          )"
-
-          if [ "$CONTAINER_RESPONSE" != "$ACME_TEST_RESPONSE" ]; then
-            echo "ERROR: Nginx challenge content does not match."
-
-            echo "Expected length: ${#ACME_TEST_RESPONSE}"
-            echo "Actual length:   ${#CONTAINER_RESPONSE}"
-
-            exit 1
-          fi
-
-          echo "ACME challenge file is accessible inside Nginx."
-
-          # ------------------------------------------------
-          # 27. Verify local HTTP-01 endpoint
-          # ------------------------------------------------
-
-          echo "========================================"
-          echo "TESTING LOCAL HTTP-01 ENDPOINT"
-          echo "========================================"
-
-          LOCAL_RESPONSE="$(
-            curl \
-              --noproxy '*' \
-              --fail \
-              --silent \
-              --show-error \
-              --connect-timeout 3 \
-              --max-time 10 \
-              "http://127.0.0.1/.well-known/acme-challenge/$ACME_TEST_TOKEN"
-          )"
-
-          if [ "$LOCAL_RESPONSE" != "$ACME_TEST_RESPONSE" ]; then
-            echo "ERROR: Local HTTP-01 verification failed."
-            echo "Expected: $ACME_TEST_RESPONSE"
-            echo "Received: $LOCAL_RESPONSE"
-            exit 1
-          fi
-
-          echo "Local HTTP-01 verification successful."
-
-          # ------------------------------------------------
-          # 28. Verify challenge file still exists
-          # ------------------------------------------------
-
-          echo "========================================"
-          echo "VERIFYING FINAL REMOTE CHALLENGE FILE"
-          echo "========================================"
-
-          if [ ! -s "$ACME_TEST_FILE" ]; then
-            echo "ERROR: Remote challenge file disappeared."
-            exit 1
-          fi
-
-          if ! printf '%s' "$ACME_TEST_RESPONSE" | cmp -s - "$ACME_TEST_FILE"; then
-            echo "ERROR: Remote challenge file changed after creation."
-            exit 1
-          fi
-
-          echo "Remote challenge file confirmed."
-
-          # ------------------------------------------------
-          # 29. Display deployment status
+          # 24. Display deployment status
           # ------------------------------------------------
 
           echo ""
@@ -734,7 +588,7 @@ jobs:
           REMOTE
 
       # --------------------------------------------------
-      # 6. Verify remote file and public ACME HTTP-01 endpoint
+      # 6. Create and verify ACME challenge + public endpoint
       # --------------------------------------------------
 
       - name: Verify public ACME HTTP-01 endpoint
@@ -754,7 +608,7 @@ jobs:
           ACTUAL_RESPONSE=""
 
           echo "========================================"
-          echo "VERIFYING REMOTE ACME CHALLENGE FILE"
+          echo "CREATING AND VERIFYING REMOTE ACME CHALLENGE"
           echo "========================================"
 
           test -n "$STAGING_HOST"
@@ -774,36 +628,80 @@ jobs:
           TOKEN="${1:?ACME token is required}"
           EXPECTED="${2:?ACME response is required}"
 
-          FILE="/opt/adama-revenue/web_app/certificates/www/.well-known/acme-challenge/$TOKEN"
+          APP_ROOT="/opt/adama-revenue/web_app"
+          WEBROOT="$APP_ROOT/certificates/www"
+          CHALLENGE_DIR="$WEBROOT/.well-known/acme-challenge"
+          FILE="$CHALLENGE_DIR/$TOKEN"
+          TEMP_FILE="$CHALLENGE_DIR/.${TOKEN}.tmp.$$"
 
-          echo "Remote server: $(hostname)"
-          echo "Challenge file: $FILE"
-
-          if [ ! -f "$FILE" ]; then
-            echo "ERROR: Remote challenge file does not exist."
-
-            echo "Challenge directory contents:"
-
-            ls -lah "$(dirname "$FILE")" || true
-
-            echo "Resolved webroot:"
-
-            readlink -f \
-              /opt/adama-revenue/web_app/certificates/www || true
-
+          if [[ ! "$TOKEN" =~ ^[A-Za-z0-9_-]+$ ]]; then
+            echo "ERROR: Invalid ACME test token."
             exit 1
           fi
 
-          echo "Remote file metadata:"
-          stat "$FILE"
+          if [ -z "$EXPECTED" ]; then
+            echo "ERROR: Expected ACME response is empty."
+            exit 1
+          fi
 
-          ACTUAL="$(cat "$FILE")"
+          echo "========================================"
+          echo "REMOTE CHALLENGE CREATION"
+          echo "========================================"
 
-          echo "Expected length: ${#EXPECTED}"
-          echo "Actual length:   ${#ACTUAL}"
+          echo "Remote server: $(hostname)"
+          echo "Deployment user: $(id)"
+          echo "Webroot: $WEBROOT"
+          echo "Challenge directory: $CHALLENGE_DIR"
+          echo "Challenge file: $FILE"
+
+          mkdir -p "$CHALLENGE_DIR"
+
+          echo "Directory permissions:"
+          ls -ld "$WEBROOT"
+          ls -ld "$WEBROOT/.well-known"
+          ls -ld "$CHALLENGE_DIR"
+
+          echo "Checking write permission..."
+
+          if [ ! -w "$CHALLENGE_DIR" ]; then
+            echo "ERROR: Deployment user cannot write to ACME challenge directory."
+            echo "Current user:"
+            id
+            echo "Directory ownership and permissions:"
+            namei -l "$CHALLENGE_DIR" || true
+            exit 1
+          fi
+
+          echo "Creating challenge file atomically..."
+
+          umask 022
+
+          printf '%s' "$EXPECTED" > "$TEMP_FILE"
+
+          chmod 644 "$TEMP_FILE"
+
+          mv -f -- "$TEMP_FILE" "$FILE"
+
+          # ------------------------------------------------
+          # Verify remote file
+          # ------------------------------------------------
+
+          echo "========================================"
+          echo "VERIFYING REMOTE CHALLENGE FILE"
+          echo "========================================"
+
+          if [ ! -f "$FILE" ]; then
+            echo "ERROR: Remote challenge file was not created."
+            exit 1
+          fi
+
+          if [ ! -s "$FILE" ]; then
+            echo "ERROR: Remote challenge file is empty."
+            exit 1
+          fi
 
           if ! printf '%s' "$EXPECTED" | cmp -s - "$FILE"; then
-            echo "ERROR: Remote ACME challenge content does not match."
+            echo "ERROR: Remote challenge content does not match."
 
             echo "Expected bytes:"
             printf '%s' "$EXPECTED" | od -An -tx1c
@@ -814,9 +712,111 @@ jobs:
             exit 1
           fi
 
-          echo "Remote ACME challenge file exists and matches."
+          echo "Remote challenge file successfully created."
+
+          echo "File metadata:"
+          stat "$FILE"
+
+          echo "Challenge directory contents:"
+          ls -lah "$CHALLENGE_DIR"
+
+          printf 'Remote file content: '
+          cat "$FILE"
+          echo
+
+          # ------------------------------------------------
+          # Verify Nginx container sees the same file
+          # ------------------------------------------------
+
+          echo "========================================"
+          echo "VERIFYING CHALLENGE FILE INSIDE NGINX"
+          echo "========================================"
+
+          SOURCE_DIR="$APP_ROOT/source-staging"
+
+          GATEWAY_CONTAINER_ID="$(
+            docker compose \
+              -p my-next-gateway \
+              -f "$SOURCE_DIR/docker/compose.gateway.yml" \
+              ps -q nginx
+          )"
+
+          if [ -z "$GATEWAY_CONTAINER_ID" ]; then
+            echo "ERROR: Nginx gateway container was not found."
+            exit 1
+          fi
+
+          CONTAINER_FILE="/var/www/certbot/.well-known/acme-challenge/$TOKEN"
+
+          if ! docker exec "$GATEWAY_CONTAINER_ID" test -s "$CONTAINER_FILE"; then
+            echo "ERROR: Challenge file is missing inside Nginx."
+            exit 1
+          fi
+
+          CONTAINER_RESPONSE="$(
+            docker exec "$GATEWAY_CONTAINER_ID" cat "$CONTAINER_FILE"
+          )"
+
+          if [ "$CONTAINER_RESPONSE" != "$EXPECTED" ]; then
+            echo "ERROR: Nginx challenge content does not match."
+            exit 1
+          fi
+
+          echo "Challenge file is accessible inside Nginx."
+
+          # ------------------------------------------------
+          # Verify local HTTP-01 endpoint
+          # ------------------------------------------------
+
+          echo "========================================"
+          echo "TESTING LOCAL HTTP-01 ENDPOINT"
+          echo "========================================"
+
+          LOCAL_RESPONSE="$(
+            curl \
+              --noproxy '*' \
+              --fail \
+              --silent \
+              --show-error \
+              --connect-timeout 3 \
+              --max-time 10 \
+              "http://127.0.0.1/.well-known/acme-challenge/$TOKEN"
+          )"
+
+          if [ "$LOCAL_RESPONSE" != "$EXPECTED" ]; then
+            echo "ERROR: Local HTTP-01 verification failed."
+            echo "Expected: $EXPECTED"
+            echo "Received: $LOCAL_RESPONSE"
+            exit 1
+          fi
+
+          echo "Local HTTP-01 verification successful."
+
+          # ------------------------------------------------
+          # Final remote file verification
+          # ------------------------------------------------
+
+          echo "========================================"
+          echo "FINAL REMOTE FILE VERIFICATION"
+          echo "========================================"
+
+          if [ ! -s "$FILE" ]; then
+            echo "ERROR: Remote challenge file disappeared."
+            exit 1
+          fi
+
+          if ! printf '%s' "$EXPECTED" | cmp -s - "$FILE"; then
+            echo "ERROR: Remote challenge file changed."
+            exit 1
+          fi
+
+          echo "Remote challenge file confirmed."
 
           REMOTE_CHECK
+
+          # ------------------------------------------------
+          # Public HTTP-01 endpoint verification
+          # ------------------------------------------------
 
           echo "========================================"
           echo "TESTING PUBLIC ACME HTTP-01 ENDPOINT"

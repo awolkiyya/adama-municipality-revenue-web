@@ -26,25 +26,85 @@ jobs:
       name: production
 
     steps:
+      # --------------------------------------------------
+      # 1. Checkout source code
+      # --------------------------------------------------
+
       - name: Checkout source code
         uses: actions/checkout@v5
+
+      # --------------------------------------------------
+      # 2. Configure SSH
+      # --------------------------------------------------
 
       - name: Configure SSH
         env:
           SSH_PRIVATE_KEY: ${{ secrets.PRODUCTION_SSH_KEY }}
           SSH_KNOWN_HOSTS: ${{ secrets.PRODUCTION_KNOWN_HOSTS }}
         run: |
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
+          set -Eeuo pipefail
 
-          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
+          if [ -z "$SSH_PRIVATE_KEY" ]; then
+            echo "::error::PRODUCTION_SSH_KEY is missing."
+            exit 1
+          fi
 
-          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
-          chmod 600 ~/.ssh/known_hosts
+          if [ -z "$SSH_KNOWN_HOSTS" ]; then
+            echo "::error::PRODUCTION_KNOWN_HOSTS is missing."
+            exit 1
+          fi
+
+          mkdir -p "$HOME/.ssh"
+          chmod 700 "$HOME/.ssh"
+
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$HOME/.ssh/id_ed25519"
+          chmod 600 "$HOME/.ssh/id_ed25519"
+
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+          ssh-keygen -y -f "$HOME/.ssh/id_ed25519" > /dev/null
+
+          echo "Production SSH configuration verified."
+
+      # --------------------------------------------------
+      # 3. Validate production connection settings
+      # --------------------------------------------------
+
+      - name: Validate production connection
+        env:
+          PRODUCTION_HOST: ${{ secrets.PRODUCTION_HOST }}
+          PRODUCTION_USER: ${{ secrets.PRODUCTION_USER }}
+        run: |
+          set -Eeuo pipefail
+
+          if [ -z "$PRODUCTION_HOST" ]; then
+            echo "::error::PRODUCTION_HOST is missing."
+            exit 1
+          fi
+
+          if [ -z "$PRODUCTION_USER" ]; then
+            echo "::error::PRODUCTION_USER is missing."
+            exit 1
+          fi
+
+          ssh \
+            -i "$HOME/.ssh/id_ed25519" \
+            -o IdentitiesOnly=yes \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=20 \
+            "$PRODUCTION_USER@$PRODUCTION_HOST" \
+            'echo "Production SSH connection successful."'
+
+      # --------------------------------------------------
+      # 4. Package application source
+      # --------------------------------------------------
 
       - name: Package application source
         run: |
+          set -Eeuo pipefail
+
           tar \
             --exclude='.git' \
             --exclude='node_modules' \
@@ -52,27 +112,53 @@ jobs:
             --exclude='.env' \
             --exclude='.env.*' \
             --exclude='coverage' \
+            --exclude='certificates' \
+            --exclude='*.log' \
             -czf "$RUNNER_TEMP/production-source.tar.gz" .
+
+          test -s "$RUNNER_TEMP/production-source.tar.gz"
+
+          echo "Production source package created."
+
+      # --------------------------------------------------
+      # 5. Transfer source code
+      # --------------------------------------------------
 
       - name: Transfer source code to production server
         env:
           PRODUCTION_HOST: ${{ secrets.PRODUCTION_HOST }}
           PRODUCTION_USER: ${{ secrets.PRODUCTION_USER }}
         run: |
+          set -Eeuo pipefail
+
           scp \
-            -i ~/.ssh/id_ed25519 \
+            -i "$HOME/.ssh/id_ed25519" \
+            -o IdentitiesOnly=yes \
+            -o BatchMode=yes \
             -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=20 \
             "$RUNNER_TEMP/production-source.tar.gz" \
             "$PRODUCTION_USER@$PRODUCTION_HOST:/tmp/adama-production-source.tar.gz"
+
+          echo "Production source transferred successfully."
+
+      # --------------------------------------------------
+      # 6. Build and deploy production application
+      # --------------------------------------------------
 
       - name: Build and deploy production application
         env:
           PRODUCTION_HOST: ${{ secrets.PRODUCTION_HOST }}
           PRODUCTION_USER: ${{ secrets.PRODUCTION_USER }}
         run: |
+          set -Eeuo pipefail
+
           ssh \
-            -i ~/.ssh/id_ed25519 \
+            -i "$HOME/.ssh/id_ed25519" \
+            -o IdentitiesOnly=yes \
+            -o BatchMode=yes \
             -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=20 \
             "$PRODUCTION_USER@$PRODUCTION_HOST" 'bash -s' <<'REMOTE'
 
           set -Eeuo pipefail
@@ -82,18 +168,51 @@ jobs:
           ENV_FILE="$APP_ROOT/.env.production"
           IMAGE="adama-revenue-web:production"
 
+          COMPOSE=(
+            docker compose
+            -p my-next-production
+            -f docker/compose.yml
+            -f docker/compose.production.yml
+          )
+
+          EXPECTED_REPLICAS=3
+
+          echo "=========================================="
+          echo "Starting production deployment"
+          echo "=========================================="
+
+          # ----------------------------------------------
+          # Check production configuration
+          # ----------------------------------------------
+
           echo "Checking production configuration..."
 
+          test -d "$APP_ROOT"
           test -s "$ENV_FILE"
+
+          # ----------------------------------------------
+          # Prepare production source directory
+          # ----------------------------------------------
 
           echo "Preparing production source directory..."
 
           mkdir -p "$SOURCE_DIR"
 
-          tar -xzf /tmp/adama-production-source.tar.gz -C "$SOURCE_DIR"
+          tar \
+            -xzf /tmp/adama-production-source.tar.gz \
+            -C "$SOURCE_DIR"
+
           rm -f /tmp/adama-production-source.tar.gz
 
           cd "$SOURCE_DIR"
+
+          test -f docker/Dockerfile
+          test -f docker/compose.yml
+          test -f docker/compose.production.yml
+
+          # ----------------------------------------------
+          # Read production API URL
+          # ----------------------------------------------
 
           echo "Reading production API URL..."
 
@@ -101,7 +220,22 @@ jobs:
             sed -n 's/^NEXT_PUBLIC_API_URL=//p' "$ENV_FILE" | tail -n 1
           )"
 
-          test -n "$NEXT_PUBLIC_API_URL"
+          if [ -z "$NEXT_PUBLIC_API_URL" ]; then
+            echo "NEXT_PUBLIC_API_URL is missing."
+            exit 1
+          fi
+
+          # ----------------------------------------------
+          # Validate Docker Compose configuration
+          # ----------------------------------------------
+
+          echo "Validating production Docker Compose configuration..."
+
+          IMAGE="$IMAGE" "${COMPOSE[@]}" config -q
+
+          # ----------------------------------------------
+          # Build production Docker image
+          # ----------------------------------------------
 
           echo "Building production Docker image..."
 
@@ -112,61 +246,105 @@ jobs:
             -t "$IMAGE" \
             .
 
-          echo "Starting production application..."
+          # ----------------------------------------------
+          # Deploy production application
+          # ----------------------------------------------
 
-          IMAGE="$IMAGE" docker compose \
-            -p my-next-production \
-            -f docker/compose.yml \
-            -f docker/compose.production.yml \
-            up -d --remove-orphans
+          echo "Deploying production application..."
 
-          echo "Waiting for production health check..."
+          IMAGE="$IMAGE" "${COMPOSE[@]}" up \
+            -d \
+            --remove-orphans \
+            --scale app="$EXPECTED_REPLICAS"
+
+          # ----------------------------------------------
+          # Verify production replicas
+          # ----------------------------------------------
+
+          echo "Waiting for all production replicas to become healthy..."
+
+          DEPLOYMENT_HEALTHY=false
 
           for attempt in $(seq 1 30); do
-            CONTAINER_ID="$(docker compose \
-              -p my-next-production \
-              -f docker/compose.yml \
-              -f docker/compose.production.yml \
-              ps -q app)"
 
-            if [ -n "$CONTAINER_ID" ]; then
-              HEALTH_STATUS="$(docker inspect \
-                --format '{{.State.Health.Status}}' \
-                "$CONTAINER_ID" 2>/dev/null || true)"
+            mapfile -t CONTAINER_IDS < <(
+              "${COMPOSE[@]}" ps -q --all app
+            )
 
-              if [ "$HEALTH_STATUS" = "healthy" ]; then
-                echo "Production application is healthy."
+            REPLICA_COUNT="${#CONTAINER_IDS[@]}"
+
+            echo "Attempt $attempt/30: $REPLICA_COUNT/$EXPECTED_REPLICAS replicas found."
+
+            if [ "$REPLICA_COUNT" -eq "$EXPECTED_REPLICAS" ]; then
+
+              ALL_HEALTHY=true
+
+              for CONTAINER_ID in "${CONTAINER_IDS[@]}"; do
+
+                HEALTH_STATUS="$(
+                  docker inspect \
+                    --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}missing{{end}}' \
+                    "$CONTAINER_ID"
+                )"
+
+                echo "Container $CONTAINER_ID: $HEALTH_STATUS"
+
+                case "$HEALTH_STATUS" in
+                  healthy)
+                    ;;
+                  unhealthy|missing)
+                    echo "Production container failed its health check."
+                    docker logs --tail 100 "$CONTAINER_ID"
+                    exit 1
+                    ;;
+                  *)
+                    ALL_HEALTHY=false
+                    ;;
+                esac
+
+              done
+
+              if [ "$ALL_HEALTHY" = true ]; then
+                DEPLOYMENT_HEALTHY=true
                 break
               fi
 
-              if [ "$HEALTH_STATUS" = "unhealthy" ]; then
-                echo "Production application is unhealthy."
-                docker logs --tail 100 "$CONTAINER_ID"
-                exit 1
-              fi
             fi
 
             if [ "$attempt" -eq 30 ]; then
               echo "Production health check timed out."
 
-              if [ -n "${CONTAINER_ID:-}" ]; then
-                docker logs --tail 100 "$CONTAINER_ID"
-              fi
+              "${COMPOSE[@]}" ps -a
+
+              for CONTAINER_ID in "${CONTAINER_IDS[@]}"; do
+                docker logs --tail 100 "$CONTAINER_ID" || true
+              done
 
               exit 1
             fi
 
             sleep 5
+
           done
 
-          echo "Production deployment status:"
+          if [ "$DEPLOYMENT_HEALTHY" != true ]; then
+            echo "Production deployment did not become healthy."
+            exit 1
+          fi
 
-          docker compose \
-            -p my-next-production \
-            -f docker/compose.yml \
-            -f docker/compose.production.yml \
-            ps
+          # ----------------------------------------------
+          # Final deployment status
+          # ----------------------------------------------
 
-          echo "Production deployment completed successfully."
+          echo "=========================================="
+          echo "Production deployment status"
+          echo "=========================================="
+
+          "${COMPOSE[@]}" ps
+
+          echo "=========================================="
+          echo "All production replicas are healthy."
+          echo "Production application deployment completed."
+          echo "=========================================="
 
           REMOTE

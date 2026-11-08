@@ -9,6 +9,7 @@ services:
     volumes:
       - ../nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ../nginx/gateway.conf:/etc/nginx/conf.d/default.conf:ro
+      - /opt/adama-revenue/web_app/certificates/www:/var/www/certbot:ro
 
     networks:
       - staging-network

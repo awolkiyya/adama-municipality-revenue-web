@@ -22,14 +22,21 @@ jobs:
     timeout-minutes: 45
 
     steps:
+      # 1. Checkout source code
       - name: Checkout source code
         uses: actions/checkout@v5
 
+      # 2. Configure SSH
       - name: Configure SSH
         env:
           SSH_PRIVATE_KEY: ${{ secrets.STAGING_SSH_KEY }}
           SSH_KNOWN_HOSTS: ${{ secrets.STAGING_KNOWN_HOSTS }}
         run: |
+          set -Eeuo pipefail
+
+          test -n "$SSH_PRIVATE_KEY"
+          test -n "$SSH_KNOWN_HOSTS"
+
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
 
@@ -39,8 +46,11 @@ jobs:
           printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
 
+      # 3. Package application source
       - name: Package application source
         run: |
+          set -Eeuo pipefail
+
           tar \
             --exclude='.git' \
             --exclude='node_modules' \
@@ -50,24 +60,41 @@ jobs:
             --exclude='coverage' \
             -czf "$RUNNER_TEMP/staging-source.tar.gz" .
 
-      - name: Transfer source code to staging server
+          test -s "$RUNNER_TEMP/staging-source.tar.gz"
+
+      # 4. Transfer source code to staging server
+      - name: Transfer source code
         env:
           STAGING_HOST: ${{ secrets.STAGING_HOST }}
           STAGING_USER: ${{ secrets.STAGING_USER }}
         run: |
+          set -Eeuo pipefail
+
+          test -n "$STAGING_HOST"
+          test -n "$STAGING_USER"
+
           scp \
             -i ~/.ssh/id_ed25519 \
+            -o IdentitiesOnly=yes \
+            -o BatchMode=yes \
+            -o ConnectTimeout=20 \
             -o StrictHostKeyChecking=yes \
             "$RUNNER_TEMP/staging-source.tar.gz" \
             "$STAGING_USER@$STAGING_HOST:/tmp/adama-staging-source.tar.gz"
 
+      # 5. Build and deploy Next.js application
       - name: Build and deploy staging application
         env:
           STAGING_HOST: ${{ secrets.STAGING_HOST }}
           STAGING_USER: ${{ secrets.STAGING_USER }}
         run: |
+          set -Eeuo pipefail
+
           ssh \
             -i ~/.ssh/id_ed25519 \
+            -o IdentitiesOnly=yes \
+            -o BatchMode=yes \
+            -o ConnectTimeout=20 \
             -o StrictHostKeyChecking=yes \
             "$STAGING_USER@$STAGING_HOST" 'bash -s' <<'REMOTE'
 
@@ -76,21 +103,39 @@ jobs:
           APP_ROOT="/opt/adama-revenue/web_app"
           SOURCE_DIR="$APP_ROOT/source-staging"
           ENV_FILE="$APP_ROOT/.env.staging"
+          ARCHIVE="/tmp/adama-staging-source.tar.gz"
 
-          export IMAGE="adama-revenue-web:staging"
+          IMAGE="adama-revenue-web:staging"
 
-          echo "Preparing staging source directory..."
+          export IMAGE
+
+          # Verify deployment prerequisites
+          echo "Checking deployment prerequisites..."
 
           test -s "$ENV_FILE"
+          test -s "$ARCHIVE"
+
+          tar -tzf "$ARCHIVE" > /dev/null
+
+          # Extract application source
+          echo "Preparing staging source directory..."
 
           rm -rf "$SOURCE_DIR"
           mkdir -p "$SOURCE_DIR"
 
-          tar -xzf /tmp/adama-staging-source.tar.gz -C "$SOURCE_DIR"
-          rm -f /tmp/adama-staging-source.tar.gz
+          tar -xzf "$ARCHIVE" -C "$SOURCE_DIR"
+          rm -f "$ARCHIVE"
 
           cd "$SOURCE_DIR"
 
+          test -f docker/Dockerfile
+          test -f docker/compose.yml
+          test -f docker/compose.staging.yml
+          test -f docker/compose.gateway.yml
+          test -f nginx/nginx.conf
+          test -f nginx/gateway.conf
+
+          # Read API URL for Next.js build
           echo "Reading staging API URL..."
 
           NEXT_PUBLIC_API_URL="$(
@@ -99,6 +144,16 @@ jobs:
 
           test -n "$NEXT_PUBLIC_API_URL"
 
+          case "$NEXT_PUBLIC_API_URL" in
+            http://*|https://*)
+              ;;
+            *)
+              echo "Invalid NEXT_PUBLIC_API_URL."
+              exit 1
+              ;;
+          esac
+
+          # Build Next.js image
           echo "Building staging Docker image..."
 
           docker build \
@@ -108,7 +163,17 @@ jobs:
             -t "$IMAGE" \
             .
 
-          echo "Starting staging application..."
+          # Validate application Compose configuration
+          echo "Validating application Compose configuration..."
+
+          docker compose \
+            -p my-next-staging \
+            -f docker/compose.yml \
+            -f docker/compose.staging.yml \
+            config -q
+
+          # Deploy application
+          echo "Deploying staging application..."
 
           docker compose \
             -p my-next-staging \
@@ -116,6 +181,7 @@ jobs:
             -f docker/compose.staging.yml \
             up -d --remove-orphans
 
+          # Wait for application health
           echo "Waiting for staging application health..."
 
           CONTAINER_ID="$(
@@ -128,34 +194,115 @@ jobs:
 
           test -n "$CONTAINER_ID"
 
-          for attempt in $(seq 1 30); do
-            STATUS="$(docker inspect \
-              --format='{{.State.Health.Status}}' \
-              "$CONTAINER_ID" 2>/dev/null || echo "unknown")"
+          HEALTHY=false
 
-            echo "Health status: $STATUS (attempt $attempt/30)"
+          for attempt in $(seq 1 30); do
+
+            STATUS="$(
+              docker inspect \
+                --format='{{.State.Health.Status}}' \
+                "$CONTAINER_ID" 2>/dev/null || echo "unknown"
+            )"
+
+            echo "Application health: $STATUS ($attempt/30)"
 
             if [ "$STATUS" = "healthy" ]; then
-              echo "Staging application is healthy."
+              HEALTHY=true
               break
             fi
 
             if [ "$STATUS" = "unhealthy" ]; then
-              echo "Staging application is unhealthy."
-              docker logs --tail 100 "$CONTAINER_ID"
-              exit 1
-            fi
-
-            if [ "$attempt" -eq 30 ]; then
-              echo "Staging health check timed out."
-              docker logs --tail 100 "$CONTAINER_ID"
-              exit 1
+              break
             fi
 
             sleep 5
           done
 
-          echo "Staging container status:"
+          if [ "$HEALTHY" != "true" ]; then
+            echo "Application health check failed."
+            docker logs --tail 100 "$CONTAINER_ID"
+            exit 1
+          fi
+
+          echo "Staging application is healthy."
+
+          # Verify staging Docker network
+          echo "Checking staging Docker network..."
+
+          docker network inspect my-next-staging_app-network > /dev/null
+
+          # Validate gateway Compose configuration
+          echo "Validating Nginx gateway Compose configuration..."
+
+          docker compose \
+            -p my-next-gateway \
+            -f docker/compose.gateway.yml \
+            config -q
+
+          # Validate Nginx configuration before deployment
+          echo "Testing Nginx configuration..."
+
+          docker compose \
+            -p my-next-gateway \
+            -f docker/compose.gateway.yml \
+            run --rm --no-deps nginx nginx -t
+
+          # Deploy Nginx gateway
+          echo "Deploying Nginx gateway..."
+
+          docker compose \
+            -p my-next-gateway \
+            -f docker/compose.gateway.yml \
+            up -d --force-recreate --remove-orphans
+
+          # Verify Nginx configuration inside running container
+          docker compose \
+            -p my-next-gateway \
+            -f docker/compose.gateway.yml \
+            exec -T nginx nginx -t
+
+          # Wait for HTTP access through Nginx
+          echo "Checking staging HTTP endpoint..."
+
+          GATEWAY_READY=false
+
+          for attempt in $(seq 1 15); do
+
+            HTTP_STATUS="$(
+              curl \
+                --silent \
+                --show-error \
+                --output /dev/null \
+                --write-out '%{http_code}' \
+                --max-time 5 \
+                http://127.0.0.1:8081/ || true
+            )"
+
+            echo "Gateway HTTP status: $HTTP_STATUS ($attempt/15)"
+
+            case "$HTTP_STATUS" in
+              2??|3??)
+                GATEWAY_READY=true
+                break
+                ;;
+            esac
+
+            sleep 2
+          done
+
+          if [ "$GATEWAY_READY" != "true" ]; then
+            echo "Nginx gateway verification failed."
+
+            docker compose \
+              -p my-next-gateway \
+              -f docker/compose.gateway.yml \
+              logs --tail 100 nginx
+
+            exit 1
+          fi
+
+          # Display deployment status
+          echo "Staging application status:"
 
           docker compose \
             -p my-next-staging \
@@ -163,6 +310,14 @@ jobs:
             -f docker/compose.staging.yml \
             ps
 
+          echo "Nginx gateway status:"
+
+          docker compose \
+            -p my-next-gateway \
+            -f docker/compose.gateway.yml \
+            ps
+
           echo "Staging deployment completed successfully."
+          echo "Staging URL: http://196.190.216.41:8081"
 
           REMOTE

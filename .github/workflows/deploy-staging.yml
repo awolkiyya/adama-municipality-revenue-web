@@ -1,0 +1,128 @@
+
+name: Deploy Staging
+
+on:
+  push:
+    branches:
+      - staging
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build and deploy staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v5
+
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.STAGING_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.STAGING_KNOWN_HOSTS }}
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Package application source
+        run: |
+          tar \
+            --exclude='.git' \
+            --exclude='node_modules' \
+            --exclude='.next' \
+            --exclude='.env' \
+            --exclude='.env.*' \
+            --exclude='coverage' \
+            -czf "$RUNNER_TEMP/staging-source.tar.gz" .
+
+      - name: Transfer source code to staging server
+        env:
+          STAGING_HOST: ${{ secrets.STAGING_HOST }}
+          STAGING_USER: ${{ secrets.STAGING_USER }}
+        run: |
+          scp \
+            -i ~/.ssh/id_ed25519 \
+            -o StrictHostKeyChecking=yes \
+            "$RUNNER_TEMP/staging-source.tar.gz" \
+            "$STAGING_USER@$STAGING_HOST:/tmp/adama-staging-source.tar.gz"
+
+      - name: Build and deploy staging application
+        env:
+          STAGING_HOST: ${{ secrets.STAGING_HOST }}
+          STAGING_USER: ${{ secrets.STAGING_USER }}
+        run: |
+          ssh \
+            -i ~/.ssh/id_ed25519 \
+            -o StrictHostKeyChecking=yes \
+            "$STAGING_USER@$STAGING_HOST" 'bash -s' <<'REMOTE'
+
+          set -Eeuo pipefail
+
+          APP_ROOT="/opt/adama-revenue/web_app"
+          SOURCE_DIR="$APP_ROOT/source"
+          ENV_FILE="$APP_ROOT/.env.staging"
+          IMAGE="adama-revenue-web:staging"
+
+          echo "Preparing staging source directory..."
+
+          test -s "$ENV_FILE"
+
+          rm -rf "$SOURCE_DIR"
+          mkdir -p "$SOURCE_DIR"
+
+          tar -xzf /tmp/adama-staging-source.tar.gz -C "$SOURCE_DIR"
+          rm -f /tmp/adama-staging-source.tar.gz
+
+          cd "$SOURCE_DIR"
+
+          echo "Reading staging API URL..."
+
+          NEXT_PUBLIC_API_URL="$(
+            sed -n 's/^NEXT_PUBLIC_API_URL=//p' "$ENV_FILE" | tail -n 1
+          )"
+
+          test -n "$NEXT_PUBLIC_API_URL"
+
+          echo "Building staging Docker image..."
+
+          docker build \
+            --pull \
+            --build-arg NEXT_PUBLIC_API_URL="$NEXT_PUBLIC_API_URL" \
+            -f docker/Dockerfile \
+            -t "$IMAGE" \
+            .
+
+          echo "Starting staging application..."
+
+          IMAGE="$IMAGE" docker compose \
+            -p my-next-staging \
+            -f docker/compose.yml \
+            -f docker/compose.staging.yml \
+            up -d --remove-orphans
+
+          echo "Checking staging container status..."
+
+          docker compose \
+            -p my-next-staging \
+            -f docker/compose.yml \
+            -f docker/compose.staging.yml \
+            ps
+
+          echo "Staging deployment completed."
+
+          REMOTE

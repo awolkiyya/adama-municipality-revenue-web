@@ -1,7 +1,10 @@
 services:
   app:
     env_file:
-      - ../.env.staging
+      - ../../.env.staging
+
+    deploy:
+      replicas: 1
 
     networks:
       app-network:

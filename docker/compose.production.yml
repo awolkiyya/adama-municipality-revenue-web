@@ -1,7 +1,10 @@
 services:
   app:
     env_file:
-      - ../.env.production
+      - ../../.env.production
+
+    deploy:
+      replicas: 3
 
     networks:
       app-network:

@@ -74,9 +74,10 @@ jobs:
           set -Eeuo pipefail
 
           APP_ROOT="/opt/adama-revenue/web_app"
-          SOURCE_DIR="$APP_ROOT/source"
+          SOURCE_DIR="$APP_ROOT/source-staging"
           ENV_FILE="$APP_ROOT/.env.staging"
-          IMAGE="adama-revenue-web:staging"
+
+          export IMAGE="adama-revenue-web:staging"
 
           echo "Preparing staging source directory..."
 
@@ -109,13 +110,52 @@ jobs:
 
           echo "Starting staging application..."
 
-          IMAGE="$IMAGE" docker compose \
+          docker compose \
             -p my-next-staging \
             -f docker/compose.yml \
             -f docker/compose.staging.yml \
             up -d --remove-orphans
 
-          echo "Checking staging container status..."
+          echo "Waiting for staging application health..."
+
+          CONTAINER_ID="$(
+            docker compose \
+              -p my-next-staging \
+              -f docker/compose.yml \
+              -f docker/compose.staging.yml \
+              ps -q app
+          )"
+
+          test -n "$CONTAINER_ID"
+
+          for attempt in $(seq 1 30); do
+            STATUS="$(docker inspect \
+              --format='{{.State.Health.Status}}' \
+              "$CONTAINER_ID" 2>/dev/null || echo "unknown")"
+
+            echo "Health status: $STATUS (attempt $attempt/30)"
+
+            if [ "$STATUS" = "healthy" ]; then
+              echo "Staging application is healthy."
+              break
+            fi
+
+            if [ "$STATUS" = "unhealthy" ]; then
+              echo "Staging application is unhealthy."
+              docker logs --tail 100 "$CONTAINER_ID"
+              exit 1
+            fi
+
+            if [ "$attempt" -eq 30 ]; then
+              echo "Staging health check timed out."
+              docker logs --tail 100 "$CONTAINER_ID"
+              exit 1
+            fi
+
+            sleep 5
+          done
+
+          echo "Staging container status:"
 
           docker compose \
             -p my-next-staging \
@@ -123,6 +163,6 @@ jobs:
             -f docker/compose.staging.yml \
             ps
 
-          echo "Staging deployment completed."
+          echo "Staging deployment completed successfully."
 
           REMOTE

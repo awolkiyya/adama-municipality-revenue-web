@@ -21,6 +21,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
+    env:
+      STAGING_PUBLIC_IP: 196.190.216.41
+      ACME_TEST_TOKEN: deployment-check
+      ACME_TEST_RESPONSE: acme-test-success
+
     steps:
 
       # --------------------------------------------------
@@ -53,13 +58,26 @@ jobs:
           printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
 
+          echo "SSH configured successfully."
+
       # --------------------------------------------------
-      # 3. Package application source
+      # 3. Validate and package source
       # --------------------------------------------------
 
       - name: Package application source
         run: |
           set -Eeuo pipefail
+
+          echo "========================================"
+          echo "Validating deployment source"
+          echo "========================================"
+
+          test -f docker/Dockerfile
+          test -f docker/compose.yml
+          test -f docker/compose.staging.yml
+          test -f docker/compose.gateway.yml
+          test -f nginx/nginx.conf
+          test -f nginx/gateway.conf
 
           echo "Verifying ACME HTTP-01 configuration..."
 
@@ -82,6 +100,7 @@ jobs:
             --exclude='.env' \
             --exclude='.env.*' \
             --exclude='coverage' \
+            --exclude='certificates' \
             -czf "$RUNNER_TEMP/staging-source.tar.gz" .
 
           test -s "$RUNNER_TEMP/staging-source.tar.gz"
@@ -92,7 +111,7 @@ jobs:
           echo "Commit: $GITHUB_SHA"
 
       # --------------------------------------------------
-      # 4. Transfer source code to staging server
+      # 4. Transfer source to staging server
       # --------------------------------------------------
 
       - name: Transfer source code
@@ -152,6 +171,14 @@ jobs:
 
           IMAGE="adama-revenue-web:staging"
 
+          ACME_WEBROOT="$APP_ROOT/certificates/www"
+
+          ACME_CHALLENGE_DIR="$ACME_WEBROOT/.well-known/acme-challenge"
+
+          ACME_TEST_FILE="$ACME_CHALLENGE_DIR/deployment-check"
+
+          EXPECTED_RESPONSE="acme-test-success"
+
           export IMAGE
 
           cd "$APP_ROOT"
@@ -180,7 +207,75 @@ jobs:
           tar -tzf "$ARCHIVE" > /dev/null
 
           # ------------------------------------------------
-          # 7. Update source-staging directly
+          # 7. Initialize ACME webroot
+          # ------------------------------------------------
+
+          echo "========================================"
+          echo "Initializing ACME HTTP-01 webroot"
+          echo "========================================"
+
+          # Docker creates the host bind-mount directory
+          # and initializes its permissions as root.
+          # This avoids requiring an interactive sudo password.
+
+          docker run \
+            --rm \
+            --entrypoint sh \
+            --volume "$ACME_WEBROOT:/webroot" \
+            nginx:1.28-alpine \
+            -c '
+              mkdir -p /webroot/.well-known/acme-challenge &&
+              chmod 755 /webroot &&
+              chmod 755 /webroot/.well-known &&
+              chmod 755 /webroot/.well-known/acme-challenge
+            '
+
+          echo "ACME webroot initialized."
+
+          # ------------------------------------------------
+          # 8. Extract and validate source
+          # ------------------------------------------------
+
+          echo "========================================"
+          echo "Extracting staging source"
+          echo "========================================"
+
+          EXTRACT_DIR="$(mktemp -d /tmp/adama-staging-source.XXXXXX)"
+
+          trap 'rm -rf -- "$EXTRACT_DIR"; rm -f -- "$ARCHIVE"' EXIT
+
+          tar -xzf "$ARCHIVE" -C "$EXTRACT_DIR"
+
+          # Validate extracted source before replacing
+          # the existing staging source.
+
+          test -f "$EXTRACT_DIR/docker/Dockerfile"
+          test -f "$EXTRACT_DIR/docker/compose.yml"
+          test -f "$EXTRACT_DIR/docker/compose.staging.yml"
+          test -f "$EXTRACT_DIR/docker/compose.gateway.yml"
+          test -f "$EXTRACT_DIR/nginx/nginx.conf"
+          test -f "$EXTRACT_DIR/nginx/gateway.conf"
+
+          # ------------------------------------------------
+          # 9. Verify ACME source configuration
+          # ------------------------------------------------
+
+          echo "========================================"
+          echo "Verifying ACME source configuration"
+          echo "========================================"
+
+          grep -Fq \
+            '/opt/adama-revenue/web_app/certificates/www:/var/www/certbot:ro' \
+            "$EXTRACT_DIR/docker/compose.gateway.yml"
+
+          grep -Fq \
+            'location ^~ /.well-known/acme-challenge/' \
+            "$EXTRACT_DIR/nginx/gateway.conf"
+
+          echo "ACME source configuration verified."
+
+          # ------------------------------------------------
+          # 10. Update source-staging
           # ------------------------------------------------
 
           echo "========================================"
@@ -189,49 +284,21 @@ jobs:
 
           mkdir -p "$SOURCE_DIR"
 
-          # Remove previous source contents.
-          # Keep source-staging as the only permanent directory.
+          # Keep source-staging as the only permanent
+          # deployment source directory.
 
           find "$SOURCE_DIR" \
             -mindepth 1 \
             -maxdepth 1 \
             -exec rm -rf -- {} +
 
-          # Extract the new source.
+          cp -a "$EXTRACT_DIR/." "$SOURCE_DIR/"
 
-          tar -xzf "$ARCHIVE" -C "$SOURCE_DIR"
-
-          rm -f "$ARCHIVE"
-
-          # Verify required files.
-
-          test -f "$SOURCE_DIR/docker/Dockerfile"
-          test -f "$SOURCE_DIR/docker/compose.yml"
-          test -f "$SOURCE_DIR/docker/compose.staging.yml"
-          test -f "$SOURCE_DIR/docker/compose.gateway.yml"
-          test -f "$SOURCE_DIR/nginx/nginx.conf"
-          test -f "$SOURCE_DIR/nginx/gateway.conf"
+          # Remove temporary extracted source.
+          rm -rf -- "$EXTRACT_DIR"
 
           # ------------------------------------------------
-          # 8. Verify ACME HTTP-01 configuration
-          # ------------------------------------------------
-
-          echo "========================================"
-          echo "Verifying ACME HTTP-01 configuration"
-          echo "========================================"
-
-          grep -Fq \
-            '/opt/adama-revenue/web_app/certificates/www:/var/www/certbot:ro' \
-            "$SOURCE_DIR/docker/compose.gateway.yml"
-
-          grep -Fq \
-            'location ^~ /.well-known/acme-challenge/' \
-            "$SOURCE_DIR/nginx/gateway.conf"
-
-          echo "ACME HTTP-01 configuration verified."
-
-          # ------------------------------------------------
-          # 9. Read staging API URL
+          # 11. Read staging API URL
           # ------------------------------------------------
 
           echo "Reading staging API URL..."
@@ -252,7 +319,7 @@ jobs:
           esac
 
           # ------------------------------------------------
-          # 10. Build Next.js Docker image
+          # 12. Build Next.js Docker image
           # ------------------------------------------------
 
           echo "========================================"
@@ -269,7 +336,7 @@ jobs:
           echo "Docker image built successfully."
 
           # ------------------------------------------------
-          # 11. Validate application Compose configuration
+          # 13. Validate application Compose configuration
           # ------------------------------------------------
 
           echo "Validating application Compose configuration..."
@@ -281,7 +348,7 @@ jobs:
             config -q
 
           # ------------------------------------------------
-          # 12. Deploy Next.js application
+          # 14. Deploy Next.js application
           # ------------------------------------------------
 
           echo "========================================"
@@ -295,7 +362,7 @@ jobs:
             up -d --remove-orphans
 
           # ------------------------------------------------
-          # 13. Wait for application health
+          # 15. Wait for application health
           # ------------------------------------------------
 
           echo "Waiting for staging application health..."
@@ -346,7 +413,7 @@ jobs:
           echo "Staging application is healthy."
 
           # ------------------------------------------------
-          # 14. Verify staging Docker network
+          # 16. Verify staging Docker network
           # ------------------------------------------------
 
           echo "Checking staging Docker network..."
@@ -354,7 +421,7 @@ jobs:
           docker network inspect my-next-staging_app-network > /dev/null
 
           # ------------------------------------------------
-          # 15. Validate Nginx gateway Compose configuration
+          # 17. Validate Nginx gateway Compose configuration
           # ------------------------------------------------
 
           echo "Validating Nginx gateway Compose configuration..."
@@ -365,7 +432,7 @@ jobs:
             config -q
 
           # ------------------------------------------------
-          # 16. Test Nginx configuration
+          # 18. Test Nginx configuration
           # ------------------------------------------------
 
           echo "Testing Nginx configuration..."
@@ -376,7 +443,7 @@ jobs:
             run --rm --no-deps nginx nginx -t
 
           # ------------------------------------------------
-          # 17. Deploy Nginx gateway automatically
+          # 19. Deploy Nginx gateway automatically
           # ------------------------------------------------
 
           echo "========================================"
@@ -389,33 +456,71 @@ jobs:
             up -d --force-recreate --remove-orphans
 
           # ------------------------------------------------
-          # 18. Verify live Nginx configuration
+          # 20. Identify running Nginx container
           # ------------------------------------------------
 
-          echo "Verifying live Nginx configuration..."
+          GATEWAY_CONTAINER_ID="$(
+            docker compose \
+              -p my-next-gateway \
+              -f "$SOURCE_DIR/docker/compose.gateway.yml" \
+              ps -q nginx
+          )"
 
-          docker compose \
-            -p my-next-gateway \
-            -f "$SOURCE_DIR/docker/compose.gateway.yml" \
-            exec -T nginx nginx -t
-
-          docker exec my-next-gateway-nginx-1 \
-            nginx -T 2>&1 | grep -F \
-            'location ^~ /.well-known/acme-challenge/'
+          test -n "$GATEWAY_CONTAINER_ID"
 
           # ------------------------------------------------
-          # 19. Verify ACME webroot mount
+          # 21. Verify live Nginx configuration
           # ------------------------------------------------
 
-          echo "Verifying ACME webroot mount..."
+          echo "========================================"
+          echo "Verifying live Nginx configuration"
+          echo "========================================"
 
-          docker inspect my-next-gateway-nginx-1 \
-            --format '{{range .Mounts}}{{println .Source "->" .Destination}}{{end}}' \
-            | grep -F \
-            '/opt/adama-revenue/web_app/certificates/www -> /var/www/certbot'
+          docker exec "$GATEWAY_CONTAINER_ID" nginx -t
+
+          LIVE_NGINX_CONFIG="$(
+            docker exec "$GATEWAY_CONTAINER_ID" nginx -T 2>&1
+          )"
+
+          if ! grep -Fq \
+            'location ^~ /.well-known/acme-challenge/' \
+            <<< "$LIVE_NGINX_CONFIG"; then
+
+            echo "ERROR: ACME location is missing from live Nginx."
+
+            exit 1
+          fi
+
+          echo "Live Nginx ACME configuration verified."
 
           # ------------------------------------------------
-          # 20. Verify staging HTTP endpoint
+          # 22. Verify ACME webroot volume
+          # ------------------------------------------------
+
+          echo "========================================"
+          echo "Verifying ACME webroot volume"
+          echo "========================================"
+
+          MOUNTS="$(
+            docker inspect "$GATEWAY_CONTAINER_ID" \
+              --format '{{range .Mounts}}{{println .Source "->" .Destination}}{{end}}'
+          )"
+
+          EXPECTED_MOUNT="$ACME_WEBROOT -> /var/www/certbot"
+
+          if ! grep -Fxq "$EXPECTED_MOUNT" <<< "$MOUNTS"; then
+
+            echo "ERROR: ACME webroot mount is missing."
+
+            echo "$MOUNTS"
+
+            exit 1
+          fi
+
+          echo "ACME webroot volume verified."
+
+          # ------------------------------------------------
+          # 23. Verify staging HTTP endpoint
           # ------------------------------------------------
 
           echo "========================================"
@@ -449,7 +554,7 @@ jobs:
 
           if [ "$GATEWAY_READY" != "true" ]; then
 
-            echo "ERROR: Nginx gateway verification failed."
+            echo "ERROR: Staging HTTP endpoint is unavailable."
 
             docker compose \
               -p my-next-gateway \
@@ -462,45 +567,82 @@ jobs:
           echo "Staging HTTP endpoint is responding."
 
           # ------------------------------------------------
-          # 21. Verify ACME challenge endpoint
+          # 24. Create temporary ACME test challenge
           # ------------------------------------------------
 
           echo "========================================"
-          echo "Checking ACME HTTP-01 challenge"
+          echo "Creating temporary ACME challenge"
           echo "========================================"
 
-          CHALLENGE_FILE="$APP_ROOT/certificates/www/.well-known/acme-challenge/test"
+          # Remove any previous test file.
 
-          if [ -f "$CHALLENGE_FILE" ]; then
+          docker run \
+            --rm \
+            --entrypoint sh \
+            --volume "$ACME_WEBROOT:/webroot" \
+            nginx:1.28-alpine \
+            -c 'rm -f /webroot/.well-known/acme-challenge/deployment-check'
 
-            EXPECTED_RESPONSE="acme-test-success"
+          # Create a fresh test file using Docker root.
+          # No interactive sudo is required.
 
-            ACTUAL_RESPONSE="$(
-              curl \
-                --fail \
-                --silent \
-                --show-error \
-                --max-time 10 \
-                http://127.0.0.1/.well-known/acme-challenge/test
-            )"
+          docker run \
+            --rm \
+            --entrypoint sh \
+            --volume "$ACME_WEBROOT:/webroot" \
+            nginx:1.28-alpine \
+            -c 'printf "%s" "acme-test-success" > /webroot/.well-known/acme-challenge/deployment-check && chmod 644 /webroot/.well-known/acme-challenge/deployment-check'
 
-            if [ "$ACTUAL_RESPONSE" != "$EXPECTED_RESPONSE" ]; then
-              echo "ERROR: ACME challenge response does not match."
-              echo "Received: $ACTUAL_RESPONSE"
-              exit 1
-            fi
+          # ------------------------------------------------
+          # 25. Verify challenge file inside Nginx
+          # ------------------------------------------------
 
-            echo "ACME HTTP-01 challenge is working."
+          echo "Verifying challenge file inside Nginx..."
 
-          else
+          CONTAINER_RESPONSE="$(
+            docker exec "$GATEWAY_CONTAINER_ID" \
+              cat /var/www/certbot/.well-known/acme-challenge/deployment-check
+          )"
 
-            echo "ACME test file not present."
-            echo "Skipping challenge content verification."
+          if [ "$CONTAINER_RESPONSE" != "$EXPECTED_RESPONSE" ]; then
 
+            echo "ERROR: Nginx cannot read the ACME challenge file."
+
+            exit 1
           fi
 
+          echo "ACME challenge file is accessible inside Nginx."
+
           # ------------------------------------------------
-          # 22. Display deployment status
+          # 26. Verify local HTTP-01 endpoint
+          # ------------------------------------------------
+
+          echo "========================================"
+          echo "Testing local HTTP-01 endpoint"
+          echo "========================================"
+
+          ACTUAL_RESPONSE="$(
+            curl \
+              --fail \
+              --silent \
+              --show-error \
+              --max-time 10 \
+              http://127.0.0.1/.well-known/acme-challenge/deployment-check
+          )"
+
+          if [ "$ACTUAL_RESPONSE" != "$EXPECTED_RESPONSE" ]; then
+
+            echo "ERROR: Local HTTP-01 verification failed."
+
+            echo "Received: $ACTUAL_RESPONSE"
+
+            exit 1
+          fi
+
+          echo "Local HTTP-01 verification successful."
+
+          # ------------------------------------------------
+          # 27. Display deployment status
           # ------------------------------------------------
 
           echo ""
@@ -534,3 +676,106 @@ jobs:
           echo "Image:       $IMAGE"
 
           REMOTE
+
+      # --------------------------------------------------
+      # 6. Verify public ACME HTTP-01 endpoint
+      # --------------------------------------------------
+
+      - name: Verify public ACME HTTP-01 endpoint
+        run: |
+          set -Eeuo pipefail
+
+          URL="http://${STAGING_PUBLIC_IP}/.well-known/acme-challenge/${ACME_TEST_TOKEN}"
+
+          EXPECTED_RESPONSE="$ACME_TEST_RESPONSE"
+
+          RESPONSE_FILE="$RUNNER_TEMP/acme-public-response.txt"
+
+          echo "========================================"
+          echo "Testing public ACME HTTP-01 endpoint"
+          echo "========================================"
+
+          PUBLIC_READY=false
+
+          for attempt in $(seq 1 10); do
+
+            HTTP_STATUS="$(
+              curl \
+                --noproxy '*' \
+                --silent \
+                --show-error \
+                --output "$RESPONSE_FILE" \
+                --write-out '%{http_code}' \
+                --connect-timeout 5 \
+                --max-time 10 \
+                "$URL" 2>/dev/null || true
+            )"
+
+            ACTUAL_RESPONSE="$(cat "$RESPONSE_FILE" 2>/dev/null || true)"
+
+            echo "Public HTTP status: $HTTP_STATUS ($attempt/10)"
+
+            if [ "$HTTP_STATUS" = "200" ] && \
+               [ "$ACTUAL_RESPONSE" = "$EXPECTED_RESPONSE" ]; then
+
+              PUBLIC_READY=true
+
+              break
+            fi
+
+            echo "Public ACME verification not successful yet."
+
+            sleep 3
+          done
+
+          if [ "$PUBLIC_READY" != "true" ]; then
+
+            echo "ERROR: Public ACME HTTP-01 verification failed."
+
+            echo "URL: $URL"
+            echo "HTTP status: $HTTP_STATUS"
+            echo "Response: $ACTUAL_RESPONSE"
+
+            exit 1
+          fi
+
+          echo "========================================"
+          echo "PUBLIC ACME HTTP-01 VERIFIED"
+          echo "========================================"
+
+          echo "Public IP: $STAGING_PUBLIC_IP"
+          echo "HTTP status: 200"
+          echo "Challenge response: verified"
+
+      # --------------------------------------------------
+      # 7. Always clean up temporary ACME test file
+      # --------------------------------------------------
+
+      - name: Clean up temporary ACME challenge
+        if: always()
+        continue-on-error: true
+        env:
+          STAGING_HOST: ${{ secrets.STAGING_HOST }}
+          STAGING_USER: ${{ secrets.STAGING_USER }}
+        run: |
+          set -Eeuo pipefail
+
+          echo "========================================"
+          echo "Cleaning temporary ACME test file"
+          echo "========================================"
+
+          if [ ! -f ~/.ssh/id_ed25519 ]; then
+            echo "SSH key unavailable. Skipping remote cleanup."
+            exit 0
+          fi
+
+          ssh \
+            -i ~/.ssh/id_ed25519 \
+            -o IdentitiesOnly=yes \
+            -o BatchMode=yes \
+            -o ConnectTimeout=20 \
+            -o StrictHostKeyChecking=yes \
+            "$STAGING_USER@$STAGING_HOST" \
+            'docker run --rm --entrypoint sh --volume /opt/adama-revenue/web_app/certificates/www:/webroot nginx:1.28-alpine -c "rm -f /webroot/.well-known/acme-challenge/deployment-check"'
+
+          echo "Temporary ACME test file removed."

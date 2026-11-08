@@ -1,3 +1,4 @@
+
 name: Deploy Staging
 
 on:
@@ -192,6 +193,7 @@ jobs:
           echo "STAGING DEPLOYMENT"
           echo "========================================"
 
+          echo "Server: $(hostname)"
           echo "Source directory: $SOURCE_DIR"
           echo "Image: $IMAGE"
           echo "ACME token: $ACME_TEST_TOKEN"
@@ -222,22 +224,14 @@ jobs:
 
           mkdir -p "$ACME_WEBROOT"
 
-          docker run \
-            --rm \
-            --entrypoint sh \
-            --volume "$ACME_WEBROOT:/webroot" \
-            nginx:1.28-alpine \
-            -c '
-              set -eu
-              mkdir -p /webroot/.well-known/acme-challenge
-              chmod 755 /webroot
-              chmod 755 /webroot/.well-known
-              chmod 755 /webroot/.well-known/acme-challenge
-            '
-
           mkdir -p "$ACME_CHALLENGE_DIR"
 
+          chmod 755 "$ACME_WEBROOT"
+          chmod 755 "$ACME_WEBROOT/.well-known"
+          chmod 755 "$ACME_CHALLENGE_DIR"
+
           echo "ACME webroot initialized."
+          echo "Webroot: $(readlink -f "$ACME_WEBROOT")"
 
           # ------------------------------------------------
           # 8. Extract and validate source
@@ -606,7 +600,27 @@ jobs:
           echo "Challenge size: $(wc -c < "$ACME_TEST_FILE") bytes"
 
           # ------------------------------------------------
-          # 25. Verify challenge file inside Nginx
+          # 25. Verify host file persistence
+          # ------------------------------------------------
+
+          echo "========================================"
+          echo "VERIFYING HOST FILE PERSISTENCE"
+          echo "========================================"
+
+          echo "Server: $(hostname)"
+          echo "Current directory: $(pwd)"
+          echo "Resolved webroot: $(readlink -f "$ACME_WEBROOT")"
+
+          ls -lah "$ACME_CHALLENGE_DIR"
+
+          stat "$ACME_TEST_FILE"
+
+          printf 'Host file content: '
+          cat "$ACME_TEST_FILE"
+          echo
+
+          # ------------------------------------------------
+          # 26. Verify challenge file inside Nginx
           # ------------------------------------------------
 
           echo "========================================"
@@ -636,7 +650,7 @@ jobs:
           echo "ACME challenge file is accessible inside Nginx."
 
           # ------------------------------------------------
-          # 26. Verify local HTTP-01 endpoint
+          # 27. Verify local HTTP-01 endpoint
           # ------------------------------------------------
 
           echo "========================================"
@@ -664,8 +678,12 @@ jobs:
           echo "Local HTTP-01 verification successful."
 
           # ------------------------------------------------
-          # 27. Verify challenge file still exists
+          # 28. Verify challenge file still exists
           # ------------------------------------------------
+
+          echo "========================================"
+          echo "VERIFYING FINAL REMOTE CHALLENGE FILE"
+          echo "========================================"
 
           if [ ! -s "$ACME_TEST_FILE" ]; then
             echo "ERROR: Remote challenge file disappeared."
@@ -680,7 +698,7 @@ jobs:
           echo "Remote challenge file confirmed."
 
           # ------------------------------------------------
-          # 28. Display deployment status
+          # 29. Display deployment status
           # ------------------------------------------------
 
           echo ""
@@ -716,7 +734,7 @@ jobs:
           REMOTE
 
       # --------------------------------------------------
-      # 6. Verify public ACME HTTP-01 endpoint
+      # 6. Verify remote file and public ACME HTTP-01 endpoint
       # --------------------------------------------------
 
       - name: Verify public ACME HTTP-01 endpoint
@@ -739,6 +757,9 @@ jobs:
           echo "VERIFYING REMOTE ACME CHALLENGE FILE"
           echo "========================================"
 
+          test -n "$STAGING_HOST"
+          test -n "$STAGING_USER"
+
           ssh \
             -i "$HOME/.ssh/id_ed25519" \
             -o IdentitiesOnly=yes \
@@ -755,19 +776,33 @@ jobs:
 
           FILE="/opt/adama-revenue/web_app/certificates/www/.well-known/acme-challenge/$TOKEN"
 
+          echo "Remote server: $(hostname)"
           echo "Challenge file: $FILE"
 
           if [ ! -f "$FILE" ]; then
             echo "ERROR: Remote challenge file does not exist."
+
+            echo "Challenge directory contents:"
+
+            ls -lah "$(dirname "$FILE")" || true
+
+            echo "Resolved webroot:"
+
+            readlink -f \
+              /opt/adama-revenue/web_app/certificates/www || true
+
             exit 1
           fi
+
+          echo "Remote file metadata:"
+          stat "$FILE"
 
           ACTUAL="$(cat "$FILE")"
 
           echo "Expected length: ${#EXPECTED}"
           echo "Actual length:   ${#ACTUAL}"
 
-          if [ "$ACTUAL" != "$EXPECTED" ]; then
+          if ! printf '%s' "$EXPECTED" | cmp -s - "$FILE"; then
             echo "ERROR: Remote ACME challenge content does not match."
 
             echo "Expected bytes:"
@@ -814,6 +849,7 @@ jobs:
 
             if [ "$HTTP_STATUS" = "200" ] && \
                [ "$ACTUAL_RESPONSE" = "$EXPECTED_RESPONSE" ]; then
+
               PUBLIC_READY=true
               break
             fi

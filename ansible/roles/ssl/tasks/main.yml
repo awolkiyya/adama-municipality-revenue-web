@@ -1,185 +1,45 @@
 
 ---
-# --------------------------------------------------
-# 1. Install Snap
-# --------------------------------------------------
+# ============================================================
+# ADAMA MUNICIPAL REVENUE - PRODUCTION SSL ROLE
+# PRODUCTION HTTPS / IP ADDRESS CERTIFICATE
+# ============================================================
 
-- name: Install Snap package manager
-  ansible.builtin.apt:
-    name: snapd
-    state: present
-    update_cache: true
-    cache_valid_time: 3600
+# ------------------------------------------------------------
+# 1. Install and validate Certbot
+# ------------------------------------------------------------
 
-- name: Ensure Snap service is enabled and running
-  ansible.builtin.service:
-    name: snapd
-    state: started
-    enabled: true
+- name: Install and validate Certbot
+  ansible.builtin.import_tasks: install.yml
 
-# --------------------------------------------------
-# 2. Install Certbot
-# --------------------------------------------------
 
-- name: Install Certbot using Snap
-  community.general.snap:
-    name: "{{ ssl_certbot_snap_name }}"
-    channel: "{{ ssl_certbot_snap_channel }}"
-    classic: true
-    state: present
+# ------------------------------------------------------------
+# 2. Create persistent production SSL directories
+# ------------------------------------------------------------
 
-- name: Verify Certbot binary exists
-  ansible.builtin.stat:
-    path: "{{ ssl_certbot_binary }}"
-  register: ssl_certbot_binary_stat
+- name: Create production SSL directories
+  ansible.builtin.import_tasks: directories.yml
 
-- name: Ensure Certbot binary exists
-  ansible.builtin.assert:
-    that:
-      - ssl_certbot_binary_stat.stat.exists
-    fail_msg: "Certbot Snap installation failed."
 
-- name: Get Certbot version
-  ansible.builtin.command:
-    argv:
-      - "{{ ssl_certbot_binary }}"
-      - "--version"
-  register: ssl_certbot_version
-  changed_when: false
+# ------------------------------------------------------------
+# 3. Issue or validate production IP certificate
+# ------------------------------------------------------------
 
-# --------------------------------------------------
-# 3. Create persistent directories
-# --------------------------------------------------
+- name: Issue or validate production certificate
+  ansible.builtin.import_tasks: issue.yml
 
-- name: Create SSL certificate directories
-  ansible.builtin.file:
-    path: "{{ item.path }}"
-    state: directory
-    owner: "{{ ssl_owner }}"
-    group: "{{ ssl_group }}"
-    mode: "{{ item.mode }}"
-  loop:
-    - path: "{{ ssl_base_dir }}"
-      mode: "0755"
 
-    - path: "{{ ssl_webroot_dir }}"
-      mode: "0755"
+# ------------------------------------------------------------
+# 4. Validate production Nginx gateway
+# ------------------------------------------------------------
 
-    - path: "{{ ssl_config_dir }}"
-      mode: "0750"
+- name: Validate production Nginx gateway
+  ansible.builtin.import_tasks: nginx.yml
 
-    - path: "{{ ssl_certbot_work_dir }}"
-      mode: "0700"
 
-    - path: "{{ ssl_certbot_logs_dir }}"
-      mode: "0750"
+# ------------------------------------------------------------
+# 5. Configure automatic certificate renewal
+# ------------------------------------------------------------
 
-- name: Create ACME HTTP-01 challenge directory
-  ansible.builtin.file:
-    path: "{{ ssl_webroot_dir }}/.well-known/acme-challenge"
-    state: directory
-    owner: "{{ ssl_owner }}"
-    group: "{{ ssl_group }}"
-    mode: "0755"
-
-# --------------------------------------------------
-# 4. Disable old renewal timers
-# --------------------------------------------------
-
-- name: Disable legacy APT Certbot renewal timer
-  ansible.builtin.systemd:
-    name: certbot.timer
-    state: stopped
-    enabled: false
-  when: ssl_disable_apt_certbot_timer | bool
-  failed_when: false
-
-- name: Disable default Snap Certbot renewal timer
-  ansible.builtin.systemd:
-    name: snap.certbot.renew.timer
-    state: stopped
-    enabled: false
-  when: ssl_disable_snap_certbot_timer | bool
-  failed_when: false
-
-# --------------------------------------------------
-# 5. Install dedicated renewal service
-# --------------------------------------------------
-
-- name: Install Certbot renewal systemd service
-  ansible.builtin.copy:
-    dest: "/etc/systemd/system/{{ ssl_certbot_service }}"
-    owner: root
-    group: root
-    mode: "0644"
-    content: |
-      [Unit]
-      Description=Renew Let's Encrypt IP Address Certificate
-      Wants=network-online.target
-      After=network-online.target
-
-      [Service]
-      Type=oneshot
-      ExecStart={{ ssl_certbot_binary }} renew --quiet --config-dir={{ ssl_config_dir }} --work-dir={{ ssl_certbot_work_dir }} --logs-dir={{ ssl_certbot_logs_dir }}
-  notify: Reload systemd configuration
-
-# --------------------------------------------------
-# 6. Install dedicated renewal timer
-# --------------------------------------------------
-
-- name: Install Certbot renewal systemd timer
-  ansible.builtin.copy:
-    dest: "/etc/systemd/system/{{ ssl_certbot_timer }}"
-    owner: root
-    group: root
-    mode: "0644"
-    content: |
-      [Unit]
-      Description=Automatic Let's Encrypt Certificate Renewal
-
-      [Timer]
-      OnCalendar=*-*-* 00,12:00:00
-      RandomizedDelaySec=1h
-      Persistent=true
-
-      [Install]
-      WantedBy=timers.target
-  notify: Reload systemd configuration
-
-- name: Apply systemd configuration changes
-  ansible.builtin.meta: flush_handlers
-
-# --------------------------------------------------
-# 7. Enable renewal timer
-# --------------------------------------------------
-
-- name: Enable and start Certbot renewal timer
-  ansible.builtin.systemd:
-    name: "{{ ssl_certbot_timer }}"
-    state: started
-    enabled: true
-    daemon_reload: true
-
-# --------------------------------------------------
-# 8. Verify configuration
-# --------------------------------------------------
-
-- name: Verify renewal timer
-  ansible.builtin.command:
-    argv:
-      - systemctl
-      - is-enabled
-      - "{{ ssl_certbot_timer }}"
-  register: ssl_renewal_timer_status
-  changed_when: false
-  failed_when: ssl_renewal_timer_status.stdout != "enabled"
-
-- name: Display SSL provisioning summary
-  ansible.builtin.debug:
-    msg:
-      - "Certbot: {{ ssl_certbot_version.stdout }}"
-      - "Certificate IP: {{ ssl_certificate_ip }}"
-      - "Certificate storage: {{ ssl_config_dir }}"
-      - "ACME webroot: {{ ssl_webroot_dir }}"
-      - "Renewal service: {{ ssl_certbot_service }}"
-      - "Renewal timer: {{ ssl_certbot_timer }}"
+- name: Configure production certificate renewal
+  ansible.builtin.import_tasks: renewal.yml

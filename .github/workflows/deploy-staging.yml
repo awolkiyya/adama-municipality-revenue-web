@@ -61,6 +61,20 @@ jobs:
         run: |
           set -Eeuo pipefail
 
+          echo "Verifying ACME HTTP-01 configuration..."
+
+          grep -Fq \
+            '/opt/adama-revenue/web_app/certificates/www:/var/www/certbot:ro' \
+            docker/compose.gateway.yml
+
+          grep -Fq \
+            'location ^~ /.well-known/acme-challenge/' \
+            nginx/gateway.conf
+
+          echo "ACME configuration verified."
+
+          echo "Packaging staging source..."
+
           tar \
             --exclude='.git' \
             --exclude='node_modules' \
@@ -71,6 +85,11 @@ jobs:
             -czf "$RUNNER_TEMP/staging-source.tar.gz" .
 
           test -s "$RUNNER_TEMP/staging-source.tar.gz"
+
+          tar -tzf "$RUNNER_TEMP/staging-source.tar.gz" > /dev/null
+
+          echo "Source package created successfully."
+          echo "Commit: $GITHUB_SHA"
 
       # --------------------------------------------------
       # 4. Transfer source code to staging server
@@ -95,6 +114,8 @@ jobs:
             "$RUNNER_TEMP/staging-source.tar.gz" \
             "$STAGING_USER@$STAGING_HOST:/tmp/adama-staging-source.tar.gz"
 
+          echo "Source transferred successfully."
+
       # --------------------------------------------------
       # 5. Build and deploy application + gateway
       # --------------------------------------------------
@@ -103,6 +124,7 @@ jobs:
         env:
           STAGING_HOST: ${{ secrets.STAGING_HOST }}
           STAGING_USER: ${{ secrets.STAGING_USER }}
+          GITHUB_SHA: ${{ github.sha }}
         run: |
           set -Eeuo pipefail
 
@@ -123,10 +145,9 @@ jobs:
           APP_ROOT="/opt/adama-revenue/web_app"
 
           SOURCE_DIR="$APP_ROOT/source-staging"
-          DEPLOY_SOURCE_DIR="$APP_ROOT/.source-staging-deploy"
-          OLD_SOURCE_DIR="$APP_ROOT/.source-staging-previous"
 
           ENV_FILE="$APP_ROOT/.env.staging"
+
           ARCHIVE="/tmp/adama-staging-source.tar.gz"
 
           IMAGE="adama-revenue-web:staging"
@@ -134,6 +155,13 @@ jobs:
           export IMAGE
 
           cd "$APP_ROOT"
+
+          echo "========================================"
+          echo "STAGING DEPLOYMENT"
+          echo "========================================"
+
+          echo "Source directory: $SOURCE_DIR"
+          echo "Image: $IMAGE"
 
           # ------------------------------------------------
           # 6. Verify deployment prerequisites
@@ -152,29 +180,58 @@ jobs:
           tar -tzf "$ARCHIVE" > /dev/null
 
           # ------------------------------------------------
-          # 7. Prepare new source directory
+          # 7. Update source-staging directly
           # ------------------------------------------------
 
-          echo "Preparing staging source..."
+          echo "========================================"
+          echo "Updating staging source"
+          echo "========================================"
 
-          rm -rf "$DEPLOY_SOURCE_DIR"
-          mkdir -p "$DEPLOY_SOURCE_DIR"
+          mkdir -p "$SOURCE_DIR"
 
-          tar -xzf "$ARCHIVE" -C "$DEPLOY_SOURCE_DIR"
+          # Remove previous source contents.
+          # Keep source-staging as the only permanent directory.
+
+          find "$SOURCE_DIR" \
+            -mindepth 1 \
+            -maxdepth 1 \
+            -exec rm -rf -- {} +
+
+          # Extract the new source.
+
+          tar -xzf "$ARCHIVE" -C "$SOURCE_DIR"
 
           rm -f "$ARCHIVE"
 
           # Verify required files.
 
-          test -f "$DEPLOY_SOURCE_DIR/docker/Dockerfile"
-          test -f "$DEPLOY_SOURCE_DIR/docker/compose.yml"
-          test -f "$DEPLOY_SOURCE_DIR/docker/compose.staging.yml"
-          test -f "$DEPLOY_SOURCE_DIR/docker/compose.gateway.yml"
-          test -f "$DEPLOY_SOURCE_DIR/nginx/nginx.conf"
-          test -f "$DEPLOY_SOURCE_DIR/nginx/gateway.conf"
+          test -f "$SOURCE_DIR/docker/Dockerfile"
+          test -f "$SOURCE_DIR/docker/compose.yml"
+          test -f "$SOURCE_DIR/docker/compose.staging.yml"
+          test -f "$SOURCE_DIR/docker/compose.gateway.yml"
+          test -f "$SOURCE_DIR/nginx/nginx.conf"
+          test -f "$SOURCE_DIR/nginx/gateway.conf"
 
           # ------------------------------------------------
-          # 8. Read staging API URL
+          # 8. Verify ACME HTTP-01 configuration
+          # ------------------------------------------------
+
+          echo "========================================"
+          echo "Verifying ACME HTTP-01 configuration"
+          echo "========================================"
+
+          grep -Fq \
+            '/opt/adama-revenue/web_app/certificates/www:/var/www/certbot:ro' \
+            "$SOURCE_DIR/docker/compose.gateway.yml"
+
+          grep -Fq \
+            'location ^~ /.well-known/acme-challenge/' \
+            "$SOURCE_DIR/nginx/gateway.conf"
+
+          echo "ACME HTTP-01 configuration verified."
+
+          # ------------------------------------------------
+          # 9. Read staging API URL
           # ------------------------------------------------
 
           echo "Reading staging API URL..."
@@ -195,7 +252,7 @@ jobs:
           esac
 
           # ------------------------------------------------
-          # 9. Build Next.js Docker image
+          # 10. Build Next.js Docker image
           # ------------------------------------------------
 
           echo "========================================"
@@ -205,26 +262,26 @@ jobs:
           docker build \
             --pull \
             --build-arg NEXT_PUBLIC_API_URL="$NEXT_PUBLIC_API_URL" \
-            -f "$DEPLOY_SOURCE_DIR/docker/Dockerfile" \
+            -f "$SOURCE_DIR/docker/Dockerfile" \
             -t "$IMAGE" \
-            "$DEPLOY_SOURCE_DIR"
+            "$SOURCE_DIR"
 
           echo "Docker image built successfully."
 
           # ------------------------------------------------
-          # 10. Validate application Compose configuration
+          # 11. Validate application Compose configuration
           # ------------------------------------------------
 
           echo "Validating application Compose configuration..."
 
           docker compose \
             -p my-next-staging \
-            -f "$DEPLOY_SOURCE_DIR/docker/compose.yml" \
-            -f "$DEPLOY_SOURCE_DIR/docker/compose.staging.yml" \
+            -f "$SOURCE_DIR/docker/compose.yml" \
+            -f "$SOURCE_DIR/docker/compose.staging.yml" \
             config -q
 
           # ------------------------------------------------
-          # 11. Deploy Next.js application
+          # 12. Deploy Next.js application
           # ------------------------------------------------
 
           echo "========================================"
@@ -233,12 +290,12 @@ jobs:
 
           docker compose \
             -p my-next-staging \
-            -f "$DEPLOY_SOURCE_DIR/docker/compose.yml" \
-            -f "$DEPLOY_SOURCE_DIR/docker/compose.staging.yml" \
+            -f "$SOURCE_DIR/docker/compose.yml" \
+            -f "$SOURCE_DIR/docker/compose.staging.yml" \
             up -d --remove-orphans
 
           # ------------------------------------------------
-          # 12. Wait for application health
+          # 13. Wait for application health
           # ------------------------------------------------
 
           echo "Waiting for staging application health..."
@@ -246,8 +303,8 @@ jobs:
           CONTAINER_ID="$(
             docker compose \
               -p my-next-staging \
-              -f "$DEPLOY_SOURCE_DIR/docker/compose.yml" \
-              -f "$DEPLOY_SOURCE_DIR/docker/compose.staging.yml" \
+              -f "$SOURCE_DIR/docker/compose.yml" \
+              -f "$SOURCE_DIR/docker/compose.staging.yml" \
               ps -q app
           )"
 
@@ -289,7 +346,7 @@ jobs:
           echo "Staging application is healthy."
 
           # ------------------------------------------------
-          # 13. Verify staging Docker network
+          # 14. Verify staging Docker network
           # ------------------------------------------------
 
           echo "Checking staging Docker network..."
@@ -297,40 +354,26 @@ jobs:
           docker network inspect my-next-staging_app-network > /dev/null
 
           # ------------------------------------------------
-          # 14. Validate Nginx gateway Compose configuration
+          # 15. Validate Nginx gateway Compose configuration
           # ------------------------------------------------
 
           echo "Validating Nginx gateway Compose configuration..."
 
           docker compose \
             -p my-next-gateway \
-            -f "$DEPLOY_SOURCE_DIR/docker/compose.gateway.yml" \
+            -f "$SOURCE_DIR/docker/compose.gateway.yml" \
             config -q
 
           # ------------------------------------------------
-          # 15. Test Nginx configuration
+          # 16. Test Nginx configuration
           # ------------------------------------------------
 
           echo "Testing Nginx configuration..."
 
           docker compose \
             -p my-next-gateway \
-            -f "$DEPLOY_SOURCE_DIR/docker/compose.gateway.yml" \
+            -f "$SOURCE_DIR/docker/compose.gateway.yml" \
             run --rm --no-deps nginx nginx -t
-
-          # ------------------------------------------------
-          # 16. Promote new source directory
-          # ------------------------------------------------
-
-          echo "Promoting staging source..."
-
-          rm -rf "$OLD_SOURCE_DIR"
-
-          if [ -d "$SOURCE_DIR" ]; then
-            mv "$SOURCE_DIR" "$OLD_SOURCE_DIR"
-          fi
-
-          mv "$DEPLOY_SOURCE_DIR" "$SOURCE_DIR"
 
           # ------------------------------------------------
           # 17. Deploy Nginx gateway automatically
@@ -346,18 +389,33 @@ jobs:
             up -d --force-recreate --remove-orphans
 
           # ------------------------------------------------
-          # 18. Verify Nginx configuration
+          # 18. Verify live Nginx configuration
           # ------------------------------------------------
 
-          echo "Verifying Nginx configuration..."
+          echo "Verifying live Nginx configuration..."
 
           docker compose \
             -p my-next-gateway \
             -f "$SOURCE_DIR/docker/compose.gateway.yml" \
             exec -T nginx nginx -t
 
+          docker exec my-next-gateway-nginx-1 \
+            nginx -T 2>&1 | grep -F \
+            'location ^~ /.well-known/acme-challenge/'
+
           # ------------------------------------------------
-          # 19. Verify staging HTTP endpoint
+          # 19. Verify ACME webroot mount
+          # ------------------------------------------------
+
+          echo "Verifying ACME webroot mount..."
+
+          docker inspect my-next-gateway-nginx-1 \
+            --format '{{range .Mounts}}{{println .Source "->" .Destination}}{{end}}' \
+            | grep -F \
+            '/opt/adama-revenue/web_app/certificates/www -> /var/www/certbot'
+
+          # ------------------------------------------------
+          # 20. Verify staging HTTP endpoint
           # ------------------------------------------------
 
           echo "========================================"
@@ -404,13 +462,45 @@ jobs:
           echo "Staging HTTP endpoint is responding."
 
           # ------------------------------------------------
-          # 20. Remove previous source
+          # 21. Verify ACME challenge endpoint
           # ------------------------------------------------
 
-          rm -rf "$OLD_SOURCE_DIR"
+          echo "========================================"
+          echo "Checking ACME HTTP-01 challenge"
+          echo "========================================"
+
+          CHALLENGE_FILE="$APP_ROOT/certificates/www/.well-known/acme-challenge/test"
+
+          if [ -f "$CHALLENGE_FILE" ]; then
+
+            EXPECTED_RESPONSE="acme-test-success"
+
+            ACTUAL_RESPONSE="$(
+              curl \
+                --fail \
+                --silent \
+                --show-error \
+                --max-time 10 \
+                http://127.0.0.1/.well-known/acme-challenge/test
+            )"
+
+            if [ "$ACTUAL_RESPONSE" != "$EXPECTED_RESPONSE" ]; then
+              echo "ERROR: ACME challenge response does not match."
+              echo "Received: $ACTUAL_RESPONSE"
+              exit 1
+            fi
+
+            echo "ACME HTTP-01 challenge is working."
+
+          else
+
+            echo "ACME test file not present."
+            echo "Skipping challenge content verification."
+
+          fi
 
           # ------------------------------------------------
-          # 21. Display deployment status
+          # 22. Display deployment status
           # ------------------------------------------------
 
           echo ""

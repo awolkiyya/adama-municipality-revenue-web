@@ -75,21 +75,6 @@ jobs:
           test -f docker/Dockerfile
           test -f docker/compose.yml
           test -f docker/compose.staging.yml
-          test -f docker/compose.gateway.yml
-          test -f nginx/nginx.conf
-          test -f nginx/gateway.conf
-
-          echo "Verifying ACME HTTP-01 configuration..."
-
-          grep -Fq \
-            '/opt/adama-revenue/web_app/certificates/www:/var/www/certbot:ro' \
-            docker/compose.gateway.yml
-
-          grep -Fq \
-            'location ^~ /.well-known/acme-challenge/' \
-            nginx/gateway.conf
-
-          echo "ACME source configuration verified."
 
           echo "Packaging staging source..."
 
@@ -101,11 +86,18 @@ jobs:
             --exclude='.env.*' \
             --exclude='coverage' \
             --exclude='certificates' \
+            --exclude='nginx' \
+            --exclude='docker/compose.gateway.yml' \
             -czf "$RUNNER_TEMP/staging-source.tar.gz" .
 
           test -s "$RUNNER_TEMP/staging-source.tar.gz"
 
           tar -tzf "$RUNNER_TEMP/staging-source.tar.gz" > /dev/null
+
+          if tar -tzf "$RUNNER_TEMP/staging-source.tar.gz" | grep -Eq '(^|/)nginx/|(^|/)compose\.gateway\.yml$'; then
+            echo "ERROR: Shared gateway files must not be included in the staging package."
+            exit 1
+          fi
 
           echo "Source package created successfully."
           echo "Commit: $GITHUB_SHA"
@@ -136,7 +128,7 @@ jobs:
           echo "Source transferred successfully."
 
       # --------------------------------------------------
-      # 5. Build and deploy application + gateway
+      # 5. Build and deploy staging application
       # --------------------------------------------------
 
       - name: Build and deploy staging
@@ -167,6 +159,7 @@ jobs:
           ARCHIVE="/tmp/adama-staging-source.tar.gz"
           IMAGE="adama-revenue-web:staging"
 
+          GATEWAY_COMPOSE_FILE="$APP_ROOT/gateway/docker/compose.gateway.yml"
           ACME_WEBROOT="$APP_ROOT/certificates/www"
           ACME_CHALLENGE_DIR="$ACME_WEBROOT/.well-known/acme-challenge"
 
@@ -193,6 +186,7 @@ jobs:
 
           test -s "$ENV_FILE"
           test -s "$ARCHIVE"
+          test -s "$GATEWAY_COMPOSE_FILE"
 
           docker --version
           docker compose version
@@ -242,30 +236,9 @@ jobs:
           test -f "$EXTRACT_DIR/docker/Dockerfile"
           test -f "$EXTRACT_DIR/docker/compose.yml"
           test -f "$EXTRACT_DIR/docker/compose.staging.yml"
-          test -f "$EXTRACT_DIR/docker/compose.gateway.yml"
-          test -f "$EXTRACT_DIR/nginx/nginx.conf"
-          test -f "$EXTRACT_DIR/nginx/gateway.conf"
 
           # ------------------------------------------------
-          # 9. Verify ACME source configuration
-          # ------------------------------------------------
-
-          echo "========================================"
-          echo "VERIFYING ACME SOURCE CONFIGURATION"
-          echo "========================================"
-
-          grep -Fq \
-            '/opt/adama-revenue/web_app/certificates/www:/var/www/certbot:ro' \
-            "$EXTRACT_DIR/docker/compose.gateway.yml"
-
-          grep -Fq \
-            'location ^~ /.well-known/acme-challenge/' \
-            "$EXTRACT_DIR/nginx/gateway.conf"
-
-          echo "ACME source configuration verified."
-
-          # ------------------------------------------------
-          # 10. Update source-staging
+          # 9. Update source-staging
           # ------------------------------------------------
 
           echo "========================================"
@@ -407,58 +380,28 @@ jobs:
           docker network inspect my-next-staging_app-network > /dev/null
 
           # ------------------------------------------------
-          # 17. Validate Nginx gateway Compose configuration
-          # ------------------------------------------------
-
-          echo "Validating Nginx gateway Compose configuration..."
-
-          docker compose \
-            -p my-next-gateway \
-            -f "$SOURCE_DIR/docker/compose.gateway.yml" \
-            config -q
-
-          # ------------------------------------------------
-          # 18. Test Nginx configuration
-          # ------------------------------------------------
-
-          echo "Testing Nginx configuration..."
-
-          docker compose \
-            -p my-next-gateway \
-            -f "$SOURCE_DIR/docker/compose.gateway.yml" \
-            run --rm --no-deps nginx nginx -t
-
-          # ------------------------------------------------
-          # 19. Deploy Nginx gateway
+          # 16. Identify the existing shared Nginx gateway
           # ------------------------------------------------
 
           echo "========================================"
-          echo "DEPLOYING NGINX GATEWAY"
+          echo "CHECKING SHARED NGINX GATEWAY"
           echo "========================================"
-
-          docker compose \
-            -p my-next-gateway \
-            -f "$SOURCE_DIR/docker/compose.gateway.yml" \
-            up -d --force-recreate --remove-orphans
-
-          # ------------------------------------------------
-          # 20. Identify running Nginx container
-          # ------------------------------------------------
 
           GATEWAY_CONTAINER_ID="$(
             docker compose \
               -p my-next-gateway \
-              -f "$SOURCE_DIR/docker/compose.gateway.yml" \
+              -f "$GATEWAY_COMPOSE_FILE" \
               ps -q nginx
           )"
 
           if [ -z "$GATEWAY_CONTAINER_ID" ]; then
-            echo "ERROR: Nginx gateway container was not found."
+            echo "ERROR: Shared Nginx gateway container was not found."
+            echo "The staging workflow does not deploy or recreate the gateway."
             exit 1
           fi
 
           # ------------------------------------------------
-          # 21. Verify live Nginx configuration
+          # 17. Verify live Nginx configuration
           # ------------------------------------------------
 
           echo "========================================"
@@ -482,7 +425,7 @@ jobs:
           echo "Live Nginx ACME configuration verified."
 
           # ------------------------------------------------
-          # 22. Verify ACME webroot volume
+          # 18. Verify ACME webroot volume
           # ------------------------------------------------
 
           echo "========================================"
@@ -504,7 +447,7 @@ jobs:
           echo "ACME webroot volume verified."
 
           # ------------------------------------------------
-          # 23. Verify staging HTTP endpoint
+          # 19. Verify staging HTTP endpoint
           # ------------------------------------------------
 
           echo "========================================"
@@ -543,7 +486,7 @@ jobs:
 
             docker compose \
               -p my-next-gateway \
-              -f "$SOURCE_DIR/docker/compose.gateway.yml" \
+              -f "$GATEWAY_COMPOSE_FILE" \
               logs --tail 100 nginx
 
             exit 1
@@ -552,7 +495,7 @@ jobs:
           echo "Staging HTTP endpoint is responding."
 
           # ------------------------------------------------
-          # 24. Display deployment status
+          # 20. Display deployment status
           # ------------------------------------------------
 
           echo ""
@@ -568,12 +511,12 @@ jobs:
 
           echo ""
           echo "========================================"
-          echo "NGINX GATEWAY STATUS"
+          echo "SHARED NGINX GATEWAY STATUS"
           echo "========================================"
 
           docker compose \
             -p my-next-gateway \
-            -f "$SOURCE_DIR/docker/compose.gateway.yml" \
+            -f "$GATEWAY_COMPOSE_FILE" \
             ps
 
           echo ""
@@ -582,7 +525,7 @@ jobs:
           echo "========================================"
 
           echo "Application: http://196.190.216.41"
-          echo "Gateway:     my-next-gateway"
+          echo "Shared gateway: my-next-gateway (not modified)"
           echo "Image:       $IMAGE"
 
           REMOTE
@@ -732,12 +675,12 @@ jobs:
           echo "VERIFYING CHALLENGE FILE INSIDE NGINX"
           echo "========================================"
 
-          SOURCE_DIR="$APP_ROOT/source-staging"
+          GATEWAY_COMPOSE_FILE="$APP_ROOT/gateway/docker/compose.gateway.yml"
 
           GATEWAY_CONTAINER_ID="$(
             docker compose \
               -p my-next-gateway \
-              -f "$SOURCE_DIR/docker/compose.gateway.yml" \
+              -f "$GATEWAY_COMPOSE_FILE" \
               ps -q nginx
           )"
 

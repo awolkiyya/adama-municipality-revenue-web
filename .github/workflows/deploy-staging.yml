@@ -22,11 +22,18 @@ jobs:
     timeout-minutes: 45
 
     steps:
+
+      # --------------------------------------------------
       # 1. Checkout source code
+      # --------------------------------------------------
+
       - name: Checkout source code
         uses: actions/checkout@v5
 
+      # --------------------------------------------------
       # 2. Configure SSH
+      # --------------------------------------------------
+
       - name: Configure SSH
         env:
           SSH_PRIVATE_KEY: ${{ secrets.STAGING_SSH_KEY }}
@@ -46,7 +53,10 @@ jobs:
           printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
 
+      # --------------------------------------------------
       # 3. Package application source
+      # --------------------------------------------------
+
       - name: Package application source
         run: |
           set -Eeuo pipefail
@@ -62,7 +72,10 @@ jobs:
 
           test -s "$RUNNER_TEMP/staging-source.tar.gz"
 
+      # --------------------------------------------------
       # 4. Transfer source code to staging server
+      # --------------------------------------------------
+
       - name: Transfer source code
         env:
           STAGING_HOST: ${{ secrets.STAGING_HOST }}
@@ -82,8 +95,11 @@ jobs:
             "$RUNNER_TEMP/staging-source.tar.gz" \
             "$STAGING_USER@$STAGING_HOST:/tmp/adama-staging-source.tar.gz"
 
-      # 5. Build and deploy Next.js application
-      - name: Build and deploy staging application
+      # --------------------------------------------------
+      # 5. Build and deploy application + gateway
+      # --------------------------------------------------
+
+      - name: Build and deploy staging
         env:
           STAGING_HOST: ${{ secrets.STAGING_HOST }}
           STAGING_USER: ${{ secrets.STAGING_USER }}
@@ -100,8 +116,16 @@ jobs:
 
           set -Eeuo pipefail
 
+          # ------------------------------------------------
+          # Deployment configuration
+          # ------------------------------------------------
+
           APP_ROOT="/opt/adama-revenue/web_app"
+
           SOURCE_DIR="$APP_ROOT/source-staging"
+          DEPLOY_SOURCE_DIR="$APP_ROOT/.source-staging-deploy"
+          OLD_SOURCE_DIR="$APP_ROOT/.source-staging-previous"
+
           ENV_FILE="$APP_ROOT/.env.staging"
           ARCHIVE="/tmp/adama-staging-source.tar.gz"
 
@@ -109,33 +133,50 @@ jobs:
 
           export IMAGE
 
-          # Verify deployment prerequisites
-          echo "Checking deployment prerequisites..."
+          cd "$APP_ROOT"
+
+          # ------------------------------------------------
+          # 6. Verify deployment prerequisites
+          # ------------------------------------------------
+
+          echo "========================================"
+          echo "Checking deployment prerequisites"
+          echo "========================================"
 
           test -s "$ENV_FILE"
           test -s "$ARCHIVE"
 
+          docker --version
+          docker compose version
+
           tar -tzf "$ARCHIVE" > /dev/null
 
-          # Extract application source
-          echo "Preparing staging source directory..."
+          # ------------------------------------------------
+          # 7. Prepare new source directory
+          # ------------------------------------------------
 
-          rm -rf "$SOURCE_DIR"
-          mkdir -p "$SOURCE_DIR"
+          echo "Preparing staging source..."
 
-          tar -xzf "$ARCHIVE" -C "$SOURCE_DIR"
+          rm -rf "$DEPLOY_SOURCE_DIR"
+          mkdir -p "$DEPLOY_SOURCE_DIR"
+
+          tar -xzf "$ARCHIVE" -C "$DEPLOY_SOURCE_DIR"
+
           rm -f "$ARCHIVE"
 
-          cd "$SOURCE_DIR"
+          # Verify required files.
 
-          test -f docker/Dockerfile
-          test -f docker/compose.yml
-          test -f docker/compose.staging.yml
-          test -f docker/compose.gateway.yml
-          test -f nginx/nginx.conf
-          test -f nginx/gateway.conf
+          test -f "$DEPLOY_SOURCE_DIR/docker/Dockerfile"
+          test -f "$DEPLOY_SOURCE_DIR/docker/compose.yml"
+          test -f "$DEPLOY_SOURCE_DIR/docker/compose.staging.yml"
+          test -f "$DEPLOY_SOURCE_DIR/docker/compose.gateway.yml"
+          test -f "$DEPLOY_SOURCE_DIR/nginx/nginx.conf"
+          test -f "$DEPLOY_SOURCE_DIR/nginx/gateway.conf"
 
-          # Read API URL for Next.js build
+          # ------------------------------------------------
+          # 8. Read staging API URL
+          # ------------------------------------------------
+
           echo "Reading staging API URL..."
 
           NEXT_PUBLIC_API_URL="$(
@@ -148,47 +189,65 @@ jobs:
             http://*|https://*)
               ;;
             *)
-              echo "Invalid NEXT_PUBLIC_API_URL."
+              echo "ERROR: Invalid NEXT_PUBLIC_API_URL."
               exit 1
               ;;
           esac
 
-          # Build Next.js image
-          echo "Building staging Docker image..."
+          # ------------------------------------------------
+          # 9. Build Next.js Docker image
+          # ------------------------------------------------
+
+          echo "========================================"
+          echo "Building staging Docker image"
+          echo "========================================"
 
           docker build \
             --pull \
             --build-arg NEXT_PUBLIC_API_URL="$NEXT_PUBLIC_API_URL" \
-            -f docker/Dockerfile \
+            -f "$DEPLOY_SOURCE_DIR/docker/Dockerfile" \
             -t "$IMAGE" \
-            .
+            "$DEPLOY_SOURCE_DIR"
 
-          # Validate application Compose configuration
+          echo "Docker image built successfully."
+
+          # ------------------------------------------------
+          # 10. Validate application Compose configuration
+          # ------------------------------------------------
+
           echo "Validating application Compose configuration..."
 
           docker compose \
             -p my-next-staging \
-            -f docker/compose.yml \
-            -f docker/compose.staging.yml \
+            -f "$DEPLOY_SOURCE_DIR/docker/compose.yml" \
+            -f "$DEPLOY_SOURCE_DIR/docker/compose.staging.yml" \
             config -q
 
-          # Deploy application
-          echo "Deploying staging application..."
+          # ------------------------------------------------
+          # 11. Deploy Next.js application
+          # ------------------------------------------------
+
+          echo "========================================"
+          echo "Deploying staging application"
+          echo "========================================"
 
           docker compose \
             -p my-next-staging \
-            -f docker/compose.yml \
-            -f docker/compose.staging.yml \
+            -f "$DEPLOY_SOURCE_DIR/docker/compose.yml" \
+            -f "$DEPLOY_SOURCE_DIR/docker/compose.staging.yml" \
             up -d --remove-orphans
 
-          # Wait for application health
+          # ------------------------------------------------
+          # 12. Wait for application health
+          # ------------------------------------------------
+
           echo "Waiting for staging application health..."
 
           CONTAINER_ID="$(
             docker compose \
               -p my-next-staging \
-              -f docker/compose.yml \
-              -f docker/compose.staging.yml \
+              -f "$DEPLOY_SOURCE_DIR/docker/compose.yml" \
+              -f "$DEPLOY_SOURCE_DIR/docker/compose.staging.yml" \
               ps -q app
           )"
 
@@ -219,50 +278,91 @@ jobs:
           done
 
           if [ "$HEALTHY" != "true" ]; then
-            echo "Application health check failed."
+
+            echo "ERROR: Staging application health check failed."
+
             docker logs --tail 100 "$CONTAINER_ID"
+
             exit 1
           fi
 
           echo "Staging application is healthy."
 
-          # Verify staging Docker network
+          # ------------------------------------------------
+          # 13. Verify staging Docker network
+          # ------------------------------------------------
+
           echo "Checking staging Docker network..."
 
           docker network inspect my-next-staging_app-network > /dev/null
 
-          # Validate gateway Compose configuration
+          # ------------------------------------------------
+          # 14. Validate Nginx gateway Compose configuration
+          # ------------------------------------------------
+
           echo "Validating Nginx gateway Compose configuration..."
 
           docker compose \
             -p my-next-gateway \
-            -f docker/compose.gateway.yml \
+            -f "$DEPLOY_SOURCE_DIR/docker/compose.gateway.yml" \
             config -q
 
-          # Validate Nginx configuration before deployment
+          # ------------------------------------------------
+          # 15. Test Nginx configuration
+          # ------------------------------------------------
+
           echo "Testing Nginx configuration..."
 
           docker compose \
             -p my-next-gateway \
-            -f docker/compose.gateway.yml \
+            -f "$DEPLOY_SOURCE_DIR/docker/compose.gateway.yml" \
             run --rm --no-deps nginx nginx -t
 
-          # Deploy Nginx gateway
-          echo "Deploying Nginx gateway..."
+          # ------------------------------------------------
+          # 16. Promote new source directory
+          # ------------------------------------------------
+
+          echo "Promoting staging source..."
+
+          rm -rf "$OLD_SOURCE_DIR"
+
+          if [ -d "$SOURCE_DIR" ]; then
+            mv "$SOURCE_DIR" "$OLD_SOURCE_DIR"
+          fi
+
+          mv "$DEPLOY_SOURCE_DIR" "$SOURCE_DIR"
+
+          # ------------------------------------------------
+          # 17. Deploy Nginx gateway automatically
+          # ------------------------------------------------
+
+          echo "========================================"
+          echo "Deploying Nginx gateway"
+          echo "========================================"
 
           docker compose \
             -p my-next-gateway \
-            -f docker/compose.gateway.yml \
+            -f "$SOURCE_DIR/docker/compose.gateway.yml" \
             up -d --force-recreate --remove-orphans
 
-          # Verify Nginx configuration inside running container
+          # ------------------------------------------------
+          # 18. Verify Nginx configuration
+          # ------------------------------------------------
+
+          echo "Verifying Nginx configuration..."
+
           docker compose \
             -p my-next-gateway \
-            -f docker/compose.gateway.yml \
+            -f "$SOURCE_DIR/docker/compose.gateway.yml" \
             exec -T nginx nginx -t
 
-          # Wait for HTTP access through Nginx
-          echo "Checking staging HTTP endpoint..."
+          # ------------------------------------------------
+          # 19. Verify staging HTTP endpoint
+          # ------------------------------------------------
+
+          echo "========================================"
+          echo "Checking staging HTTP endpoint"
+          echo "========================================"
 
           GATEWAY_READY=false
 
@@ -271,11 +371,10 @@ jobs:
             HTTP_STATUS="$(
               curl \
                 --silent \
-                --show-error \
                 --output /dev/null \
                 --write-out '%{http_code}' \
                 --max-time 5 \
-                http://127.0.0.1:8081/ || true
+                http://127.0.0.1/ || true
             )"
 
             echo "Gateway HTTP status: $HTTP_STATUS ($attempt/15)"
@@ -291,33 +390,57 @@ jobs:
           done
 
           if [ "$GATEWAY_READY" != "true" ]; then
-            echo "Nginx gateway verification failed."
+
+            echo "ERROR: Nginx gateway verification failed."
 
             docker compose \
               -p my-next-gateway \
-              -f docker/compose.gateway.yml \
+              -f "$SOURCE_DIR/docker/compose.gateway.yml" \
               logs --tail 100 nginx
 
             exit 1
           fi
 
-          # Display deployment status
-          echo "Staging application status:"
+          echo "Staging HTTP endpoint is responding."
+
+          # ------------------------------------------------
+          # 20. Remove previous source
+          # ------------------------------------------------
+
+          rm -rf "$OLD_SOURCE_DIR"
+
+          # ------------------------------------------------
+          # 21. Display deployment status
+          # ------------------------------------------------
+
+          echo ""
+          echo "========================================"
+          echo "STAGING APPLICATION STATUS"
+          echo "========================================"
 
           docker compose \
             -p my-next-staging \
-            -f docker/compose.yml \
-            -f docker/compose.staging.yml \
+            -f "$SOURCE_DIR/docker/compose.yml" \
+            -f "$SOURCE_DIR/docker/compose.staging.yml" \
             ps
 
-          echo "Nginx gateway status:"
+          echo ""
+          echo "========================================"
+          echo "NGINX GATEWAY STATUS"
+          echo "========================================"
 
           docker compose \
             -p my-next-gateway \
-            -f docker/compose.gateway.yml \
+            -f "$SOURCE_DIR/docker/compose.gateway.yml" \
             ps
 
-          echo "Staging deployment completed successfully."
-          echo "Staging URL: http://196.190.216.41:8081"
+          echo ""
+          echo "========================================"
+          echo "STAGING DEPLOYMENT COMPLETED"
+          echo "========================================"
+
+          echo "Application: http://196.190.216.41"
+          echo "Gateway:     my-next-gateway"
+          echo "Image:       $IMAGE"
 
           REMOTE

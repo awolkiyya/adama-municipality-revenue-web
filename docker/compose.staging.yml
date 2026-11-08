@@ -10,3 +10,8 @@ services:
       app-network:
         aliases:
           - staging-app
+
+networks:
+  app-network:
+    external: true
+    name: my-next-staging_app-network

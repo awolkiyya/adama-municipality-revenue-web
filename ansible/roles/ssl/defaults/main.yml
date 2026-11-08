@@ -1,0 +1,29 @@
+
+---
+ssl_certificate_ip: "196.190.216.41"
+
+# Persistent certificate storage.
+ssl_base_dir: "/opt/adama-revenue/web_app/certificates"
+ssl_webroot_dir: "{{ ssl_base_dir }}/www"
+ssl_config_dir: "{{ ssl_base_dir }}/conf"
+
+# Ownership.
+ssl_owner: "busadmin"
+ssl_group: "busadmin"
+
+# Certbot Snap.
+ssl_certbot_snap_name: "certbot"
+ssl_certbot_snap_channel: "latest/stable"
+ssl_certbot_binary: "/snap/bin/certbot"
+
+# Certbot working directories.
+ssl_certbot_work_dir: "/var/lib/letsencrypt"
+ssl_certbot_logs_dir: "/var/log/letsencrypt"
+
+# Dedicated renewal systemd units.
+ssl_certbot_service: "adama-certbot-renew.service"
+ssl_certbot_timer: "adama-certbot-renew.timer"
+
+# Disable legacy renewal timers.
+ssl_disable_apt_certbot_timer: true
+ssl_disable_snap_certbot_timer: true

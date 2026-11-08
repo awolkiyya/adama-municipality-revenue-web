@@ -31,7 +31,7 @@ jobs:
 
       - name: Configure SSH
         env:
-          SSH_PRIVATE_KEY: ${{ secrets.PRODUCTION_SSH_KEY }}
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_HOST}}
           SSH_KNOWN_HOSTS: ${{ secrets.PRODUCTION_KNOWN_HOSTS }}
         run: |
           mkdir -p ~/.ssh

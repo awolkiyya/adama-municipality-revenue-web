@@ -203,6 +203,23 @@ jobs:
           # 1. Check production configuration
           # ----------------------------------------------
 
+          COMPOSE=(
+            docker compose
+            -p my-next-production
+            -f docker/compose.yml
+            -f docker/compose.production.yml
+          )
+
+          EXPECTED_REPLICAS=3
+
+          echo "=========================================="
+          echo "Starting production deployment"
+          echo "=========================================="
+
+          # ----------------------------------------------
+          # Check production configuration
+          # ----------------------------------------------
+
           echo "Checking production configuration..."
 
           test -d "$APP_ROOT"
@@ -214,6 +231,10 @@ jobs:
 
           # ----------------------------------------------
           # 2. Prepare production source directory
+          # ----------------------------------------------
+
+          # ----------------------------------------------
+          # Prepare production source directory
           # ----------------------------------------------
 
           echo "Preparing production source directory..."

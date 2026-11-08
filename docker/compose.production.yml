@@ -1,9 +1,17 @@
 services:
   app:
     env_file:
-      - ../.env.production
+      - ../../.env.production
+
+    deploy:
+      replicas: 3
 
     networks:
       app-network:
         aliases:
           - production-app
+
+networks:
+  app-network:
+    external: true
+    name: web_app_frontend-network

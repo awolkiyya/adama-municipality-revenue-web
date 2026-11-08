@@ -1,3 +1,4 @@
+
 ---
 - name: Provision frontend server
   hosts: frontend
@@ -5,26 +6,13 @@
   gather_facts: true
 
   roles:
-    # 1. Base operating system configuration
     - common
-
-    # 2. Server security and SSH hardening
     - security
-
-    # 3. Firewall configuration
     - firewall
-
-    # 4. Docker Engine and Compose installation
     - docker
-
-    # 5. Application and persistent storage directories
     - directories
-
-    # 6. Server monitoring
     - monitoring
 
-    # 7. Deployment
-    - deployment
-
-    # 8. SSL certificate management
-    - ssl
+    - role: ssl
+      tags:
+        - ssl

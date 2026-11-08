@@ -1,0 +1,172 @@
+
+name: Deploy Production
+
+on:
+  push:
+    branches:
+      - main
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build and deploy production
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    # GitHub requires reviewer approval before this job executes.
+    environment:
+      name: production
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v5
+
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.PRODUCTION_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.PRODUCTION_KNOWN_HOSTS }}
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Package application source
+        run: |
+          tar \
+            --exclude='.git' \
+            --exclude='node_modules' \
+            --exclude='.next' \
+            --exclude='.env' \
+            --exclude='.env.*' \
+            --exclude='coverage' \
+            -czf "$RUNNER_TEMP/production-source.tar.gz" .
+
+      - name: Transfer source code to production server
+        env:
+          PRODUCTION_HOST: ${{ secrets.PRODUCTION_HOST }}
+          PRODUCTION_USER: ${{ secrets.PRODUCTION_USER }}
+        run: |
+          scp \
+            -i ~/.ssh/id_ed25519 \
+            -o StrictHostKeyChecking=yes \
+            "$RUNNER_TEMP/production-source.tar.gz" \
+            "$PRODUCTION_USER@$PRODUCTION_HOST:/tmp/adama-production-source.tar.gz"
+
+      - name: Build and deploy production application
+        env:
+          PRODUCTION_HOST: ${{ secrets.PRODUCTION_HOST }}
+          PRODUCTION_USER: ${{ secrets.PRODUCTION_USER }}
+        run: |
+          ssh \
+            -i ~/.ssh/id_ed25519 \
+            -o StrictHostKeyChecking=yes \
+            "$PRODUCTION_USER@$PRODUCTION_HOST" 'bash -s' <<'REMOTE'
+
+          set -Eeuo pipefail
+
+          APP_ROOT="/opt/adama-revenue/web_app"
+          SOURCE_DIR="$APP_ROOT/source-production"
+          ENV_FILE="$APP_ROOT/.env.production"
+          IMAGE="adama-revenue-web:production"
+
+          echo "Checking production configuration..."
+
+          test -s "$ENV_FILE"
+
+          echo "Preparing production source directory..."
+
+          mkdir -p "$SOURCE_DIR"
+
+          tar -xzf /tmp/adama-production-source.tar.gz -C "$SOURCE_DIR"
+          rm -f /tmp/adama-production-source.tar.gz
+
+          cd "$SOURCE_DIR"
+
+          echo "Reading production API URL..."
+
+          NEXT_PUBLIC_API_URL="$(
+            sed -n 's/^NEXT_PUBLIC_API_URL=//p' "$ENV_FILE" | tail -n 1
+          )"
+
+          test -n "$NEXT_PUBLIC_API_URL"
+
+          echo "Building production Docker image..."
+
+          docker build \
+            --pull \
+            --build-arg NEXT_PUBLIC_API_URL="$NEXT_PUBLIC_API_URL" \
+            -f docker/Dockerfile \
+            -t "$IMAGE" \
+            .
+
+          echo "Starting production application..."
+
+          IMAGE="$IMAGE" docker compose \
+            -p my-next-production \
+            -f docker/compose.yml \
+            -f docker/compose.production.yml \
+            up -d --remove-orphans
+
+          echo "Waiting for production health check..."
+
+          for attempt in $(seq 1 30); do
+            CONTAINER_ID="$(docker compose \
+              -p my-next-production \
+              -f docker/compose.yml \
+              -f docker/compose.production.yml \
+              ps -q app)"
+
+            if [ -n "$CONTAINER_ID" ]; then
+              HEALTH_STATUS="$(docker inspect \
+                --format '{{.State.Health.Status}}' \
+                "$CONTAINER_ID" 2>/dev/null || true)"
+
+              if [ "$HEALTH_STATUS" = "healthy" ]; then
+                echo "Production application is healthy."
+                break
+              fi
+
+              if [ "$HEALTH_STATUS" = "unhealthy" ]; then
+                echo "Production application is unhealthy."
+                docker logs --tail 100 "$CONTAINER_ID"
+                exit 1
+              fi
+            fi
+
+            if [ "$attempt" -eq 30 ]; then
+              echo "Production health check timed out."
+
+              if [ -n "${CONTAINER_ID:-}" ]; then
+                docker logs --tail 100 "$CONTAINER_ID"
+              fi
+
+              exit 1
+            fi
+
+            sleep 5
+          done
+
+          echo "Production deployment status:"
+
+          docker compose \
+            -p my-next-production \
+            -f docker/compose.yml \
+            -f docker/compose.production.yml \
+            ps
+
+          echo "Production deployment completed successfully."
+
+          REMOTE

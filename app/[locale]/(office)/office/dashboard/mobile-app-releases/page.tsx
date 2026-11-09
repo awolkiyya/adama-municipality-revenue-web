@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useMemo, useState } from "react";
@@ -55,18 +56,27 @@ import AppDataTableLayout from "@/components/app-data-table-layout";
 import { Banner } from "@/components/banner/topBanner";
 import { FloatingParticles } from "@/components/design/FloatingParticles";
 
-
 import {
   useMobileAppReleases,
   usePublishMobileAppRelease,
   useWithdrawMobileAppRelease,
 } from "@/hooks/use-mobile-app-releases";
 
-import type {
-  MobileAppRelease,
-  MobileAppReleaseFilters,
+import {
+  MOBILE_APP_TYPES,
+  type MobileAppRelease,
+  type MobileAppReleaseFilters,
+  type MobileAppType,
 } from "@/types/mobile-app-release";
-import { formatSize, getStatus, isApkReady, ReleaseStatus, StatusBadge } from "@/utils/elease-utils";
+
+import {
+  formatSize,
+  getStatus,
+  isApkReady,
+  ReleaseStatus,
+  StatusBadge,
+} from "@/utils/elease-utils";
+
 import { formatEthiopianDate } from "@/lib/utils";
 import { ReleaseDetailsSheet } from "@/components/sheets/release-details-sheet";
 
@@ -76,6 +86,7 @@ import { ReleaseDetailsSheet } from "@/components/sheets/release-details-sheet";
 
 type StatusFilter = "all" | ReleaseStatus;
 type PolicyFilter = "all" | "mandatory" | "optional";
+type AppTypeFilter = "all" | MobileAppType;
 
 type ReleaseResponse = {
   data?: MobileAppRelease[];
@@ -98,7 +109,16 @@ type PendingAction = {
 
 const DEFAULT_PAGE_SIZE = 10;
 
-const EMPTY_FILTERS: { status: StatusFilter; policy: PolicyFilter } = {
+const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\/+$/, "");
+
+
+
+const EMPTY_FILTERS: {
+  appType: AppTypeFilter;
+  status: StatusFilter;
+  policy: PolicyFilter;
+} = {
+  appType: "all",
   status: "all",
   policy: "all",
 };
@@ -108,7 +128,36 @@ const EMPTY_FILTERS: { status: StatusFilter; policy: PolicyFilter } = {
 /* -------------------------------------------------------------------------- */
 
 function errorMessage(error: unknown, fallback: string): string {
-  return error instanceof Error && error.message.trim() ? error.message : fallback;
+  return error instanceof Error && error.message.trim()
+    ? error.message
+    : fallback;
+}
+
+function getAppTypeLabel(appType: MobileAppType | string): string {
+  return (
+    MOBILE_APP_TYPES.find((item) => item.value === appType)?.label ??
+    appType
+      .replace(/_/g, " ")
+      .replace(/\b\w/g, (char) => char.toUpperCase())
+  );
+}
+
+function getAppTypeDescription(appType: MobileAppType | string): string {
+  return (
+    MOBILE_APP_TYPES.find((item) => item.value === appType)?.description ??
+    "Android application"
+  );
+}
+
+function getDownloadUrl(downloadUrl: string): string {
+  const baseUrl = API_URL || window.location.origin;
+  const url = new URL(downloadUrl, baseUrl);
+
+  if (!["http:", "https:"].includes(url.protocol)) {
+    throw new Error("Invalid download protocol.");
+  }
+
+  return url.href;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -143,7 +192,7 @@ function RowActions({
           variant="ghost"
           size="icon"
           className="h-8 w-8"
-          aria-label={`Actions for version ${release.version_name}`}
+          aria-label={`Actions for ${getAppTypeLabel(release.app_type)} version ${release.version_name}`}
           disabled={busy}
         >
           {busy ? (
@@ -180,7 +229,10 @@ function RowActions({
 
         {status === "published" && (
           <>
-            <DropdownMenuItem disabled={!release.is_downloadable} onSelect={onDownload}>
+            <DropdownMenuItem
+              disabled={!release.is_downloadable || !release.download_url}
+              onSelect={onDownload}
+            >
               <Download className="mr-2 h-4 w-4 text-muted-foreground" />
               Download APK
             </DropdownMenuItem>
@@ -209,29 +261,45 @@ export default function MobileAppReleasesPage() {
   const locale = useLocale();
 
   const basePath = `/${locale}/office/dashboard/mobile-app-releases`;
-  const editUrl = (id: string) => `${basePath}/${encodeURIComponent(id)}/edit`;
 
-  /* Draft values live in the filter bar; applied values drive the query. */
+  const editUrl = (id: string) =>
+    `${basePath}/${encodeURIComponent(id)}/edit`;
+
+  /* ------------------------------ Filter state --------------------------- */
+
   const [search, setSearch] = useState("");
   const [appliedSearch, setAppliedSearch] = useState("");
+
   const [draftFilters, setDraftFilters] = useState(EMPTY_FILTERS);
   const [appliedFilters, setAppliedFilters] = useState(EMPTY_FILTERS);
 
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+
   const [pending, setPending] = useState<PendingAction>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  /* ------------------------------- Data ----------------------------------- */
+  /* ------------------------------- Data ---------------------------------- */
 
   const filters = useMemo<MobileAppReleaseFilters>(
     () => ({
       search: appliedSearch || undefined,
-      status: appliedFilters.status === "all" ? undefined : appliedFilters.status,
+
+      app_type:
+        appliedFilters.appType === "all"
+          ? undefined
+          : appliedFilters.appType,
+
+      status:
+        appliedFilters.status === "all"
+          ? undefined
+          : appliedFilters.status,
+
       is_mandatory:
         appliedFilters.policy === "all"
           ? undefined
           : appliedFilters.policy === "mandatory",
+
       page,
       per_page: pageSize,
       sort_by: "version_code",
@@ -240,47 +308,91 @@ export default function MobileAppReleasesPage() {
     [appliedSearch, appliedFilters, page, pageSize],
   );
 
-  const { data, isLoading, isError, error, refetch, isFetching } =
-    useMobileAppReleases(filters);
+  const {
+    data,
+    isLoading,
+    isError,
+    error,
+    refetch,
+    isFetching,
+  } = useMobileAppReleases(filters);
 
   const publishMutation = usePublishMobileAppRelease();
   const withdrawMutation = useWithdrawMobileAppRelease();
-  const isActionPending = publishMutation.isPending || withdrawMutation.isPending;
+
+  const isActionPending =
+    publishMutation.isPending || withdrawMutation.isPending;
 
   const result = data as ReleaseResponse | undefined;
-  const releases = Array.isArray(result?.data) ? result.data : [];
+
+  const releases = Array.isArray(result?.data)
+    ? result.data
+    : [];
+
   const total = Number(result?.meta?.total ?? releases.length) || 0;
 
-  /* The open release is read from the list, so it refreshes after any action. */
-  const selected = releases.find((r) => r.id === selectedId) ?? null;
+  /* ----------------------------- Selection ------------------------------- */
 
-  /* Prefer the API's overall summary; fall back to counting this page. */
+  const selected =
+    releases.find((release) => release.id === selectedId) ?? null;
+
+  /* ----------------------------- Summary --------------------------------- */
+
   const apiSummary = result?.meta?.summary;
 
   const summary = {
     total: apiSummary?.total ?? total,
+
     published:
-      apiSummary?.published ?? releases.filter((r) => getStatus(r) === "published").length,
-    drafts: apiSummary?.drafts ?? releases.filter((r) => getStatus(r) === "draft").length,
-    mandatory: apiSummary?.mandatory ?? releases.filter((r) => r.is_mandatory).length,
+      apiSummary?.published ??
+      releases.filter(
+        (release) => getStatus(release) === "published",
+      ).length,
+
+    drafts:
+      apiSummary?.drafts ??
+      releases.filter(
+        (release) => getStatus(release) === "draft",
+      ).length,
+
+    mandatory:
+      apiSummary?.mandatory ??
+      releases.filter((release) => release.is_mandatory).length,
   };
 
+  /*
+   * The latest release must belong to the selected application.
+   * The API summary should also be scoped by app_type when an
+   * application filter is active.
+   */
   const latest =
     apiSummary?.latest ??
-    releases.find((r) => getStatus(r) === "published" && r.is_latest);
+    releases.find(
+      (release) =>
+        getStatus(release) === "published" &&
+        release.is_latest &&
+        (
+          appliedFilters.appType === "all" ||
+          release.app_type === appliedFilters.appType
+        ),
+    );
 
-  /* ------------------------------ Filters --------------------------------- */
+  /* ------------------------------ Filters -------------------------------- */
 
   const hasFilters =
     Boolean(appliedSearch) ||
+    appliedFilters.appType !== "all" ||
     appliedFilters.status !== "all" ||
     appliedFilters.policy !== "all";
 
   const activeFilterCount =
-    Number(appliedFilters.status !== "all") + Number(appliedFilters.policy !== "all");
+    Number(appliedFilters.appType !== "all") +
+    Number(appliedFilters.status !== "all") +
+    Number(appliedFilters.policy !== "all");
 
   const hasPendingChanges =
     search.trim() !== appliedSearch ||
+    draftFilters.appType !== appliedFilters.appType ||
     draftFilters.status !== appliedFilters.status ||
     draftFilters.policy !== appliedFilters.policy;
 
@@ -293,37 +405,54 @@ export default function MobileAppReleasesPage() {
   function clearFilters() {
     setSearch("");
     setAppliedSearch("");
+
     setDraftFilters(EMPTY_FILTERS);
     setAppliedFilters(EMPTY_FILTERS);
+
     setPage(1);
   }
 
-  /* ------------------------------ Actions --------------------------------- */
+  /* ------------------------------ Actions -------------------------------- */
 
   function requestPublish(release: MobileAppRelease) {
     if (!isApkReady(release)) {
-      toast.error("Upload a valid APK and wait until it is READY before publishing.");
+      toast.error(
+        "Upload a valid APK and wait until it is READY before publishing.",
+      );
       return;
     }
-    setPending({ type: "publish", release });
+
+    setPending({
+      type: "publish",
+      release,
+    });
   }
 
   function confirmPending() {
     if (!pending || isActionPending) return;
 
     const { type, release } = pending;
-    const mutation = type === "publish" ? publishMutation : withdrawMutation;
+
+    const mutation =
+      type === "publish"
+        ? publishMutation
+        : withdrawMutation;
 
     mutation.mutate(
-      { id: release.id, payload: {} },
       {
-        onSuccess: () =>
+        id: release.id,
+        payload: {},
+      },
+      {
+        onSuccess: () => {
           toast.success(
             type === "publish"
-              ? `Published v${release.version_name}.`
-              : `Withdrawn v${release.version_name}.`,
-          ),
-        onError: (e) =>
+              ? `Published ${getAppTypeLabel(release.app_type)} v${release.version_name}.`
+              : `Withdrawn ${getAppTypeLabel(release.app_type)} v${release.version_name}.`,
+          );
+        },
+
+        onError: (e) => {
           toast.error(
             errorMessage(
               e,
@@ -331,8 +460,12 @@ export default function MobileAppReleasesPage() {
                 ? "Couldn't publish this release."
                 : "Couldn't withdraw this release.",
             ),
-          ),
-        onSettled: () => setPending(null),
+          );
+        },
+
+        onSettled: () => {
+          setPending(null);
+        },
       },
     );
   }
@@ -344,21 +477,26 @@ export default function MobileAppReleasesPage() {
     }
 
     try {
-      const url = new URL(release.download_url, window.location.origin);
-      if (!["http:", "https:"].includes(url.protocol)) throw new Error();
-      window.open(url.href, "_blank", "noopener,noreferrer");
+      const url = getDownloadUrl(release.download_url);
+
+      window.open(
+        url,
+        "_blank",
+        "noopener,noreferrer",
+      );
     } catch {
       toast.error("The download link is invalid.");
     }
   }
 
-  /* -------------------------------- UI ------------------------------------ */
+  /* -------------------------------- UI ----------------------------------- */
 
   return (
-    <div className="mx-auto w-full max-w-4xl space-y-6">
+    <div className="mx-auto w-full max-w-5xl space-y-6">
+      {/* Page banner */}
       <Banner
         title="Mobile App Releases"
-        description="Upload, publish, and withdraw Android versions."
+        description="Manage Android application versions, publish updates, and distribute APK files."
         icon={<Smartphone className="h-4 w-4" />}
         background={
           <FloatingParticles
@@ -379,7 +517,11 @@ export default function MobileAppReleasesPage() {
               onClick={() => void refetch()}
               disabled={isFetching}
             >
-              <RefreshCw className={`mr-2 h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
+              <RefreshCw
+                className={`mr-2 h-4 w-4 ${
+                  isFetching ? "animate-spin" : ""
+                }`}
+              />
               Refresh
             </Button>
 
@@ -401,19 +543,25 @@ export default function MobileAppReleasesPage() {
         <SummaryCard
           label="Total releases"
           value={summary.total}
-          description="All releases"
+          description="All applications"
           icon={FileArchive}
           tone="primary"
           loading={isLoading}
         />
+
         <SummaryCard
           label="Published"
           value={summary.published}
-          description={latest ? `Latest: v${latest.version_name}` : "Published releases"}
+          description={
+            latest
+              ? `${getAppTypeLabel(latest.app_type)}: v${latest.version_name}`
+              : "Published releases"
+          }
           icon={CheckCircle2}
           tone="success"
           loading={isLoading}
         />
+
         <SummaryCard
           label="Drafts"
           value={summary.drafts}
@@ -423,6 +571,7 @@ export default function MobileAppReleasesPage() {
           attention={summary.drafts > 0}
           loading={isLoading}
         />
+
         <SummaryCard
           label="Mandatory updates"
           value={summary.mandatory}
@@ -440,23 +589,67 @@ export default function MobileAppReleasesPage() {
         searchPlaceholder="Search version or APK name"
         searchLabel="Search releases"
         title="Find releases"
-        description="Search by version and filter by status or update type."
+        description="Search releases and filter by application, status, or update policy."
         activeFilterCount={activeFilterCount}
         hasFilters={hasFilters || hasPendingChanges}
         onApply={applyFilters}
         onClear={clearFilters}
       >
+        {/* Application filter */}
         <div className="space-y-2">
-          <label className="text-sm font-medium">Status</label>
+          <label className="text-sm font-medium">
+            Application
+          </label>
+
+          <Select
+            value={draftFilters.appType}
+            onValueChange={(value) =>
+              setDraftFilters((current) => ({
+                ...current,
+                appType: value as AppTypeFilter,
+              }))
+            }
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="All applications" />
+            </SelectTrigger>
+
+            <SelectContent>
+              <SelectItem value="all">
+                All applications
+              </SelectItem>
+
+              {MOBILE_APP_TYPES.map((app) => (
+                <SelectItem
+                  key={app.value}
+                  value={app.value}
+                >
+                  {app.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Status filter */}
+        <div className="space-y-2">
+          <label className="text-sm font-medium">
+            Status
+          </label>
+
           <Select
             value={draftFilters.status}
             onValueChange={(value) =>
-              setDraftFilters((c) => ({ ...c, status: value as StatusFilter }))
+              setDraftFilters((current) => ({
+                ...current,
+                status: value as StatusFilter,
+              }))
             }
           >
             <SelectTrigger className="w-full">
               <SelectValue placeholder="All statuses" />
             </SelectTrigger>
+
             <SelectContent>
               <SelectItem value="all">All statuses</SelectItem>
               <SelectItem value="published">Published</SelectItem>
@@ -466,17 +659,25 @@ export default function MobileAppReleasesPage() {
           </Select>
         </div>
 
+        {/* Update policy filter */}
         <div className="space-y-2">
-          <label className="text-sm font-medium">Update type</label>
+          <label className="text-sm font-medium">
+            Update type
+          </label>
+
           <Select
             value={draftFilters.policy}
             onValueChange={(value) =>
-              setDraftFilters((c) => ({ ...c, policy: value as PolicyFilter }))
+              setDraftFilters((current) => ({
+                ...current,
+                policy: value as PolicyFilter,
+              }))
             }
           >
             <SelectTrigger className="w-full">
               <SelectValue placeholder="All updates" />
             </SelectTrigger>
+
             <SelectContent>
               <SelectItem value="all">All updates</SelectItem>
               <SelectItem value="mandatory">Mandatory</SelectItem>
@@ -487,16 +688,24 @@ export default function MobileAppReleasesPage() {
       </AppFilterBar>
 
       {/* Releases */}
-      <section aria-label="Releases" className="min-w-0 space-y-2">
+      <section
+        aria-label="Releases"
+        className="min-w-0 space-y-2"
+      >
         <div className="flex h-5 items-center justify-between text-sm text-muted-foreground">
           <span>
             {isLoading
               ? "Loading…"
-              : `${total.toLocaleString()} ${total === 1 ? "release" : "releases"}`}
+              : `${total.toLocaleString()} ${
+                  total === 1 ? "release" : "releases"
+                }`}
           </span>
 
           {isFetching && !isLoading && (
-            <span className="inline-flex items-center gap-1.5 text-xs" role="status">
+            <span
+              className="inline-flex items-center gap-1.5 text-xs"
+              role="status"
+            >
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
               Updating
             </span>
@@ -514,12 +723,20 @@ export default function MobileAppReleasesPage() {
         ) : isError ? (
           <div className="flex min-h-[240px] flex-col items-center justify-center gap-3 rounded-xl border bg-card p-6 text-center">
             <AlertCircle className="h-6 w-6 text-destructive" />
+
             <div className="space-y-1">
-              <h2 className="font-semibold">Couldn&apos;t load releases</h2>
+            <h2 className="font-semibold">
+              Couldn&apos;t load releases
+            </h2>
+
               <p className="text-sm text-muted-foreground">
-                {errorMessage(error, "Check your connection and try again.")}
+                {errorMessage(
+                  error,
+                  "Check your connection and try again.",
+                )}
               </p>
             </div>
+
             <Button
               variant="outline"
               size="sm"
@@ -553,15 +770,36 @@ export default function MobileAppReleasesPage() {
           >
             <div className="w-full overflow-hidden rounded-none border-none bg-card">
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[720px] border-collapse text-sm">
+                <table className="w-full min-w-[950px] border-collapse text-sm">
                   <thead>
                     <tr className="border-b bg-muted/40 text-left text-xs font-medium text-muted-foreground">
-                      <th scope="col" className="h-11 px-5">Version</th>
-                      <th scope="col" className="h-11 px-5">APK</th>
-                      <th scope="col" className="h-11 px-5">Status</th>
-                      <th scope="col" className="h-11 px-5">Published</th>
-                      <th scope="col" className="h-11 w-16 px-5 text-right">
-                        <span className="sr-only">Actions</span>
+                      <th scope="col" className="h-11 px-5">
+                        Application
+                      </th>
+
+                      <th scope="col" className="h-11 px-5">
+                        Version
+                      </th>
+
+                      <th scope="col" className="h-11 px-5">
+                        APK
+                      </th>
+
+                      <th scope="col" className="h-11 px-5">
+                        Status
+                      </th>
+
+                      <th scope="col" className="h-11 px-5">
+                        Published
+                      </th>
+
+                      <th
+                        scope="col"
+                        className="h-11 w-16 px-5 text-right"
+                      >
+                        <span className="sr-only">
+                          Actions
+                        </span>
                       </th>
                     </tr>
                   </thead>
@@ -569,34 +807,66 @@ export default function MobileAppReleasesPage() {
                   <tbody className="divide-y">
                     {releases.map((release) => {
                       const status = getStatus(release);
-                      const apkStatus = release.apk?.status?.toUpperCase();
+                      const apkStatus =
+                        release.apk?.status?.toUpperCase();
 
                       return (
-                        <tr key={release.id} className="transition-colors hover:bg-muted/30">
-                          {/* Version, with latest and mandatory flags inline */}
+                        <tr
+                          key={release.id}
+                          className="transition-colors hover:bg-muted/30"
+                        >
+                          {/* Application */}
+                          <td className="px-5 py-3.5 align-middle">
+                            <div className="flex items-center gap-2.5">
+                              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                                <Smartphone className="h-4 w-4" />
+                              </div>
+
+                              <div className="min-w-0">
+                                <p className="font-medium">
+                                  {getAppTypeLabel(release.app_type)}
+                                </p>
+
+                                <p className="text-xs text-muted-foreground">
+                                  {getAppTypeDescription(release.app_type)}
+                                </p>
+                              </div>
+                            </div>
+                          </td>
+
+                          {/* Version */}
                           <td className="px-5 py-3.5 align-middle">
                             <div className="flex flex-wrap items-center gap-2">
                               <button
                                 type="button"
-                                onClick={() => setSelectedId(release.id)}
+                                onClick={() =>
+                                  setSelectedId(release.id)
+                                }
                                 className="font-semibold tracking-tight hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                               >
                                 v{release.version_name || "—"}
                               </button>
 
                               {release.is_latest && (
-                                <Badge variant="secondary" className="text-[10px]">
+                                <Badge
+                                  variant="secondary"
+                                  className="text-[10px]"
+                                >
                                   Latest
                                 </Badge>
                               )}
 
                               {release.is_mandatory && (
-                                <Badge variant="outline" className="gap-1 text-[10px]">
+                                <Badge
+                                  variant="outline"
+                                  className="gap-1 text-[10px]"
+                                >
                                   <ShieldAlert className="h-3 w-3" />
                                   Mandatory
                                 </Badge>
                               )}
                             </div>
+
                             <p className="text-xs text-muted-foreground">
                               Code {release.version_code}
                             </p>
@@ -606,6 +876,7 @@ export default function MobileAppReleasesPage() {
                           <td className="px-5 py-3.5 align-middle">
                             <div className="flex items-center gap-2.5">
                               <FileArchive className="h-4 w-4 shrink-0 text-muted-foreground" />
+
                               <div className="min-w-0">
                                 <p
                                   className="max-w-[220px] truncate font-medium"
@@ -613,35 +884,59 @@ export default function MobileAppReleasesPage() {
                                 >
                                   {release.apk?.original_name || "APK file"}
                                 </p>
+
                                 <p className="text-xs text-muted-foreground">
-                                  {formatSize(release.apk?.size_bytes)}
-                                  {apkStatus && apkStatus !== "READY" && (
-                                    <span className="text-amber-600 dark:text-amber-400">
-                                      {" "}· {apkStatus}
-                                    </span>
+                                  {formatSize(
+                                    release.apk?.size_bytes,
                                   )}
+
+                                  {apkStatus &&
+                                    apkStatus !== "READY" && (
+                                      <span className="text-amber-600 dark:text-amber-400">
+                                        {" "}· {apkStatus}
+                                      </span>
+                                    )}
                                 </p>
                               </div>
                             </div>
                           </td>
 
+                          {/* Status */}
                           <td className="px-5 py-3.5 align-middle">
                             <StatusBadge status={status} />
                           </td>
 
+                          {/* Published date */}
                           <td className="whitespace-nowrap px-5 py-3.5 align-middle text-muted-foreground">
-                            {status === "published" ? formatEthiopianDate(release.published_at!) : "—"}
+                            {status === "published" && release.published_at
+                              ? formatEthiopianDate(release.published_at)
+                              : "—"}
                           </td>
 
+                          {/* Actions */}
                           <td className="px-5 py-3.5 text-right align-middle">
                             <RowActions
                               release={release}
-                              busy={isActionPending && pending?.release.id === release.id}
+                              busy={
+                                isActionPending &&
+                                pending?.release.id === release.id
+                              }
                               editHref={editUrl(release.id)}
-                              onView={() => setSelectedId(release.id)}
-                              onPublish={() => requestPublish(release)}
-                              onWithdraw={() => setPending({ type: "withdraw", release })}
-                              onDownload={() => downloadApk(release)}
+                              onView={() =>
+                                setSelectedId(release.id)
+                              }
+                              onPublish={() =>
+                                requestPublish(release)
+                              }
+                              onWithdraw={() =>
+                                setPending({
+                                  type: "withdraw",
+                                  release,
+                                })
+                              }
+                              onDownload={() =>
+                                downloadApk(release)
+                              }
                             />
                           </td>
                         </tr>
@@ -655,42 +950,71 @@ export default function MobileAppReleasesPage() {
         )}
       </section>
 
-      {/* Details */}
+      {/* Release details */}
       <ReleaseDetailsSheet
         release={selected}
         open={Boolean(selected)}
         onOpenChange={(open) => {
           if (!open) setSelectedId(null);
         }}
-        busy={isActionPending && pending?.release.id === selected?.id}
-        editHref={selected ? editUrl(selected.id) : basePath}
-        onPublish={() => selected && requestPublish(selected)}
-        onWithdraw={() => selected && setPending({ type: "withdraw", release: selected })}
-        onDownload={() => selected && downloadApk(selected)}
+        busy={
+          isActionPending &&
+          pending?.release.id === selected?.id
+        }
+        editHref={
+          selected
+            ? editUrl(selected.id)
+            : basePath
+        }
+        onPublish={() => {
+          if (selected) requestPublish(selected);
+        }}
+        onWithdraw={() => {
+          if (selected) {
+            setPending({
+              type: "withdraw",
+              release: selected,
+            });
+          }
+        }}
+        onDownload={() => {
+          if (selected) downloadApk(selected);
+        }}
       />
 
-      {/* Confirmation */}
+      {/* Publish / withdraw confirmation */}
       <AlertDialog
         open={Boolean(pending)}
         onOpenChange={(open) => {
-          if (!open && !isActionPending) setPending(null);
+          if (!open && !isActionPending) {
+            setPending(null);
+          }
         }}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {pending?.type === "publish" ? "Publish" : "Withdraw"} v
-              {pending?.release.version_name}?
+              {pending?.type === "publish"
+                ? "Publish"
+                : "Withdraw"}{" "}
+              {pending
+                ? getAppTypeLabel(pending.release.app_type)
+                : "release"}{" "}
+              v{pending?.release.version_name}?
             </AlertDialogTitle>
+
             <AlertDialogDescription>
               {pending?.type === "publish"
-                ? "This version will become available to users."
+                ? "This version will become available to users of this application."
                 : "Users may no longer be able to download this version."}
             </AlertDialogDescription>
           </AlertDialogHeader>
 
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={isActionPending}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={isActionPending}>
+              Cancel
+            </AlertDialogCancel>
+
             <AlertDialogAction
               disabled={isActionPending}
               onClick={(event) => {
@@ -703,8 +1027,13 @@ export default function MobileAppReleasesPage() {
                   : undefined
               }
             >
-              {isActionPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {pending?.type === "publish" ? "Publish" : "Withdraw"}
+              {isActionPending && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              )}
+
+              {pending?.type === "publish"
+                ? "Publish"
+                : "Withdraw"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

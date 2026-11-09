@@ -1,4 +1,3 @@
-
 "use client";
 
 import Link from "next/link";
@@ -26,11 +25,15 @@ import {
 /* Helpers                                                                    */
 /* -------------------------------------------------------------------------- */
 
-/** Convert APK size from bytes to MB. */
+/**
+ * Convert APK size from bytes to MB.
+ */
 function formatApkSize(
   size: number | null | undefined,
 ): string | undefined {
-  if (size == null || size <= 0) return undefined;
+  if (size == null || size <= 0) {
+    return undefined;
+  }
 
   return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
@@ -42,6 +45,7 @@ function formatApkSize(
 export default function EditMobileAppReleasePage() {
   const router = useRouter();
   const locale = useLocale();
+
   const params = useParams<{ id: string }>();
 
   // Release ID is a UUID string.
@@ -64,9 +68,14 @@ export default function EditMobileAppReleasePage() {
   /* ------------------------------------------------------------------------ */
 
   function handleSubmit(values: ReleaseFormSubmit) {
+    if (updateMutation.isPending) {
+      return;
+    }
+
     updateMutation.mutate(
       {
         id,
+        // app_type is intentionally excluded from the update payload.
         payload: toUpdatePayload(values),
       },
       {
@@ -77,6 +86,7 @@ export default function EditMobileAppReleasePage() {
 
           router.push(basePath);
         },
+
         onError: (e) => {
           toast.error(
             e instanceof Error
@@ -95,7 +105,7 @@ export default function EditMobileAppReleasePage() {
   const banner = (
     <Banner
       title="Edit Release"
-      description="Update the version details or replace the APK."
+      description="Update the version details or replace the APK. The application type cannot be changed."
       icon={<Smartphone className="h-4 w-4" />}
       background={
         <FloatingParticles
@@ -163,6 +173,9 @@ export default function EditMobileAppReleasePage() {
           isSubmitting={updateMutation.isPending}
           onSubmit={handleSubmit}
           initialValues={{
+            // Application type is displayed but disabled in edit mode.
+            appType: release.app_type,
+
             versionName: release.version_name,
             versionCode: String(release.version_code),
             releaseNotes: release.release_notes ?? "",

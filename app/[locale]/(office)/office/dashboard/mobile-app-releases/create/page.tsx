@@ -10,12 +10,18 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Banner } from "@/components/banner/topBanner";
 import { FloatingParticles } from "@/components/design/FloatingParticles";
+
 import {
   ReleaseForm,
   type ReleaseFormSubmit,
   toCreatePayload,
 } from "@/components/forms/ReleaseForm";
+
 import { useCreateMobileAppRelease } from "@/hooks/use-mobile-app-releases";
+
+/* -------------------------------------------------------------------------- */
+/* Page                                                                       */
+/* -------------------------------------------------------------------------- */
 
 export default function CreateMobileAppReleasePage() {
   const router = useRouter();
@@ -27,6 +33,10 @@ export default function CreateMobileAppReleasePage() {
 
   const createRelease = useCreateMobileAppRelease();
 
+  /* ------------------------------------------------------------------------ */
+  /* Submit                                                                    */
+  /* ------------------------------------------------------------------------ */
+
   async function handleSubmit(values: ReleaseFormSubmit) {
     if (isSubmitting || createRelease.isPending) {
       return;
@@ -35,29 +45,32 @@ export default function CreateMobileAppReleasePage() {
     setIsSubmitting(true);
 
     try {
+      // Converts appType to app_type for the Laravel API.
       const payload = toCreatePayload(values);
 
       const release = await createRelease.mutateAsync(payload);
 
       toast.success(
-        `Release v${release.version_name} created successfully as a draft.`,
+        `${release.app_type.replaceAll("_", " ")} release v${release.version_name} created successfully as a draft.`,
       );
 
       router.push(basePath);
     } catch (error: unknown) {
-      const message = getCreateReleaseError(error);
-
-      toast.error(message);
+      toast.error(getCreateReleaseError(error));
     } finally {
       setIsSubmitting(false);
     }
   }
 
+  /* ------------------------------------------------------------------------ */
+  /* Render                                                                    */
+  /* ------------------------------------------------------------------------ */
+
   return (
     <div className="mx-auto w-full max-w-3xl space-y-6 pb-10">
       <Banner
         title="New Release"
-        description="Upload an APK and set the version details. Releases start as drafts."
+        description="Select a mobile application, upload its APK, and configure the release. New releases start as drafts."
         icon={<Smartphone className="h-4 w-4" />}
         background={
           <FloatingParticles
@@ -85,6 +98,10 @@ export default function CreateMobileAppReleasePage() {
     </div>
   );
 }
+
+/* -------------------------------------------------------------------------- */
+/* Error Handling                                                             */
+/* -------------------------------------------------------------------------- */
 
 /**
  * Extract a readable message from Axios/Laravel errors.
@@ -115,7 +132,8 @@ function getCreateReleaseError(error: unknown): string {
         )
         .filter(
           (message): message is string =>
-            typeof message === "string" && message.trim().length > 0,
+            typeof message === "string" &&
+            message.trim().length > 0,
         );
 
       if (validationMessages.length > 0) {

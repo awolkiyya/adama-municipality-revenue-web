@@ -725,9 +725,9 @@ export default function MobileAppReleasesPage() {
             <AlertCircle className="h-6 w-6 text-destructive" />
 
             <div className="space-y-1">
-              <h2 className="font-semibold">
-                Couldn't load releases
-              </h2>
+            <h2 className="font-semibold">
+              Couldn&apos;t load releases
+            </h2>
 
               <p className="text-sm text-muted-foreground">
                 {errorMessage(

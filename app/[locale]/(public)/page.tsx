@@ -25,6 +25,7 @@ import {
   Menu,
   Printer,
   Receipt,
+  RefreshCw,
   Search,
   ShieldCheck,
   Smartphone,
@@ -92,6 +93,7 @@ type MobileAppRelease = {
   is_downloadable: boolean;
   download_url?: string | null;
   apk_download_url?: string | null;
+  is_mandatory:boolean;
   apk?: {
     uuid?: string;
     original_name?: string | null;
@@ -384,28 +386,55 @@ function getApiErrorMessage(
  * API resources may return either an absolute URL or a relative download path.
  * Relative paths are resolved against NEXT_PUBLIC_API_URL.
  */
-function resolveDownloadUrl(release: MobileAppRelease): string {
-  const path =
-    release.download_url ??
-    release.apk_download_url ??
-    `/api/v1/mobile-app-releases/${release.id}/download`;
+// function resolveDownloadUrl(release: MobileAppRelease): string {
+//   const path =
+//     release.download_url ??
+//     release.apk_download_url ??
+//     `/api/v1/mobile-app-releases/${release.id}/download`;
 
-  if (!path) return "";
+//   if (!path) return "";
 
-  if (/^https?:\/\//i.test(path)) {
-    return path;
-  }
+//   if (/^https?:\/\//i.test(path)) {
+//     return path;
+//   }
 
-  if (!API_URL) {
-    return path;
-  }
+//   if (!API_URL) {
+//     return path;
+//   }
 
-  return `${API_URL}${path.startsWith("/") ? "" : "/"}${path}`;
-}
+//   return `${API_URL}${path.startsWith("/") ? "" : "/"}${path}`;
+// }
+
 
 /* -------------------------------------------------------------------------- */
 /* Mobile app release download                                                */
 /* -------------------------------------------------------------------------- */
+
+function resolveDownloadUrl(release: MobileAppRelease): string {
+  const downloadUrl = (
+    release as MobileAppRelease & {
+      download_url?: string | null;
+    }
+  ).download_url;
+
+  if (!downloadUrl || !API_URL) {
+    return "";
+  }
+
+  try {
+    const configuredApiUrl = new URL(API_URL);
+    const resolvedUrl = new URL(downloadUrl, configuredApiUrl);
+
+    // Always use the configured API host.
+    // This prevents internal development IPs from being exposed to users.
+    resolvedUrl.protocol = configuredApiUrl.protocol;
+    resolvedUrl.host = configuredApiUrl.host;
+
+    return resolvedUrl.toString();
+  } catch {
+    return "";
+  }
+}
 
 function MobileAppReleaseDownload({
   appType,
@@ -421,6 +450,8 @@ function MobileAppReleaseDownload({
   const [release, setRelease] = useState<MobileAppRelease | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [notFound, setNotFound] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -428,6 +459,7 @@ function MobileAppReleaseDownload({
     async function loadLatestRelease() {
       setLoading(true);
       setError(null);
+      setNotFound(false);
       setRelease(null);
 
       if (!API_URL) {
@@ -439,8 +471,10 @@ function MobileAppReleaseDownload({
       }
 
       try {
+        const apiBaseUrl = API_URL.replace(/\/+$/, "");
+
         const response = await fetch(
-          `${API_URL}/api/v1/mobile-app-releases/latest?app_type=${encodeURIComponent(
+          `${apiBaseUrl}/api/v1/mobile-app-releases/latest?app_type=${encodeURIComponent(
             appType,
           )}`,
           {
@@ -455,18 +489,32 @@ function MobileAppReleaseDownload({
 
         const payload: unknown = await response.json().catch(() => null);
 
+        /*
+         * No published release is an expected business condition.
+         */
+        if (response.status === 404) {
+          setNotFound(true);
+          return;
+        }
+
         if (!response.ok) {
           throw new Error(
             getApiErrorMessage(
               payload,
-              response.status === 404
-                ? "No published release is available yet."
-                : "Unable to load the latest app release.",
+              "Unable to load the latest app release. Please try again.",
             ),
           );
         }
 
-        // Supports both { data: release } and a direct release response.
+        /*
+         * Support both:
+         *
+         * { data: { ...release } }
+         *
+         * and:
+         *
+         * { ...release }
+         */
         const body =
           typeof payload === "object" &&
           payload !== null &&
@@ -474,13 +522,18 @@ function MobileAppReleaseDownload({
             ? payload.data
             : payload;
 
+        /*
+         * Validate the API response.
+         */
         if (
           typeof body !== "object" ||
           body === null ||
           !("id" in body) ||
-          !("app_type" in body) ||
           !("version_name" in body) ||
-          !("is_downloadable" in body)
+          !("is_downloadable" in body) ||
+          typeof body.id !== "string" ||
+          typeof body.version_name !== "string" ||
+          typeof body.is_downloadable !== "boolean"
         ) {
           throw new Error(
             "The release information returned by the server is invalid.",
@@ -489,7 +542,22 @@ function MobileAppReleaseDownload({
 
         const latestRelease = body as MobileAppRelease;
 
-        if (latestRelease.app_type !== appType) {
+        /*
+         * Validate application type when the API provides it.
+         *
+         * The current Laravel response does not include app_type,
+         * so the endpoint's app_type query parameter is authoritative.
+         */
+        const responseAppType = (
+          latestRelease as MobileAppRelease & {
+            app_type?: MobileAppType;
+          }
+        ).app_type;
+
+        if (
+          responseAppType &&
+          responseAppType !== appType
+        ) {
           throw new Error(
             "The server returned a release for a different application.",
           );
@@ -497,17 +565,14 @@ function MobileAppReleaseDownload({
 
         setRelease(latestRelease);
       } catch (cause) {
-        if (
-          cause instanceof DOMException &&
-          cause.name === "AbortError"
-        ) {
+        if (controller.signal.aborted) {
           return;
         }
 
         setError(
           cause instanceof Error
             ? cause.message
-            : "Unable to load the app release.",
+            : "Unable to load the app release. Please try again.",
         );
       } finally {
         if (!controller.signal.aborted) {
@@ -521,14 +586,25 @@ function MobileAppReleaseDownload({
     return () => {
       controller.abort();
     };
-  }, [appType]);
+  }, [appType, retryCount]);
 
-  const downloadUrl = release ? resolveDownloadUrl(release) : "";
-  const canDownload = Boolean(release?.is_downloadable && downloadUrl);
+  /*
+   * Resolve the download URL against the configured API host.
+   */
+  const downloadUrl = release
+    ? resolveDownloadUrl(release)
+    : "";
+
+  const canDownload = Boolean(
+    release?.is_downloadable && downloadUrl,
+  );
 
   return (
     <div className="space-y-4">
-      {/* App identity */}
+      {/* ------------------------------------------------------------------ */}
+      {/* App Identity                                                       */}
+      {/* ------------------------------------------------------------------ */}
+
       <div className="flex items-center gap-3">
         <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
           <Smartphone className="size-5" />
@@ -538,11 +614,17 @@ function MobileAppReleaseDownload({
           <p className="truncate text-sm font-bold text-foreground">
             {appName}
           </p>
-          <p className="text-xs text-muted-foreground">{description}</p>
+
+          <p className="text-xs text-muted-foreground">
+            {description}
+          </p>
         </div>
       </div>
 
-      {/* Loading */}
+      {/* ------------------------------------------------------------------ */}
+      {/* Loading                                                            */}
+      {/* ------------------------------------------------------------------ */}
+
       {loading && (
         <div className="flex min-h-24 items-center justify-center gap-2 rounded-xl border bg-muted/30 text-sm text-muted-foreground">
           <Loader2 className="size-4 animate-spin" />
@@ -550,24 +632,74 @@ function MobileAppReleaseDownload({
         </div>
       )}
 
-      {/* Error */}
-      {!loading && error && (
-        <div className="flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/5 p-3">
-          <AlertCircle className="mt-0.5 size-4 shrink-0 text-destructive" />
+      {/* ------------------------------------------------------------------ */}
+      {/* No Published Release                                               */}
+      {/* ------------------------------------------------------------------ */}
 
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-destructive">
-              Release unavailable
-            </p>
-            <p className="mt-0.5 text-sm leading-5 text-muted-foreground">
-              {error}
-            </p>
+      {!loading && notFound && (
+        <div className="rounded-xl border bg-muted/30 p-4">
+          <div className="flex items-start gap-2">
+            <AlertCircle className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-foreground">
+                Coming soon
+              </p>
+
+              <p className="mt-1 text-sm leading-5 text-muted-foreground">
+                No published release is currently available for{" "}
+                {appName}. Please check again later.
+              </p>
+            </div>
           </div>
+
+          <button
+            type="button"
+            onClick={() => setRetryCount((count) => count + 1)}
+            className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg border bg-background px-4 py-2.5 text-sm font-medium text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          >
+            <RefreshCw className="size-4" />
+            Check again
+          </button>
         </div>
       )}
 
-      {/* Release details */}
-      {!loading && !error && release && (
+      {/* ------------------------------------------------------------------ */}
+      {/* Error                                                              */}
+      {/* ------------------------------------------------------------------ */}
+
+      {!loading && error && (
+        <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-3">
+          <div className="flex items-start gap-2">
+            <AlertCircle className="mt-0.5 size-4 shrink-0 text-destructive" />
+
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-destructive">
+                Release unavailable
+              </p>
+
+              <p className="mt-0.5 text-sm leading-5 text-muted-foreground">
+                {error}
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setRetryCount((count) => count + 1)}
+            className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg border bg-background px-4 py-2.5 text-sm font-medium text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          >
+            <RefreshCw className="size-4" />
+            Try again
+          </button>
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------------ */}
+      {/* Release Details                                                    */}
+      {/* ------------------------------------------------------------------ */}
+
+      {!loading && !error && !notFound && release && (
         <>
           <dl className="grid grid-cols-3 divide-x overflow-hidden rounded-xl border bg-card">
             <div className="min-w-0 px-2 py-3 text-center sm:px-3">
@@ -601,14 +733,20 @@ function MobileAppReleaseDownload({
             </div>
           </dl>
 
-          {/* Download action */}
+          {/* ---------------------------------------------------------------- */}
+          {/* Download Action                                                  */}
+          {/* ---------------------------------------------------------------- */}
+
           {canDownload ? (
             <a
               href={downloadUrl}
+              download
               className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3.5 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
               <Download className="size-4" />
+
               Download for Android
+
               <ArrowRight className="ml-auto size-4" />
             </a>
           ) : (
@@ -616,32 +754,57 @@ function MobileAppReleaseDownload({
               <p className="text-sm font-semibold text-foreground">
                 Download unavailable
               </p>
+
               <p className="mt-1 text-xs text-muted-foreground">
                 This release is not currently available for download.
+                Please contact the system administrator if the problem persists.
               </p>
             </div>
           )}
+
+          {/* ---------------------------------------------------------------- */}
+          {/* APK Filename                                                     */}
+          {/* ---------------------------------------------------------------- */}
 
           {release.apk?.original_name && (
             <p className="truncate text-center text-xs text-muted-foreground">
               {release.apk.original_name}
             </p>
           )}
+
+          {/* ---------------------------------------------------------------- */}
+          {/* Mandatory Update Notice                                          */}
+          {/* ---------------------------------------------------------------- */}
+
+          {release.is_mandatory && (
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
+              <p className="text-xs leading-5 text-foreground">
+                <span className="font-semibold">
+                  Required update:
+                </span>{" "}
+                This release is marked as mandatory.
+              </p>
+            </div>
+          )}
         </>
       )}
 
-      {/* Security note */}
+      {/* ------------------------------------------------------------------ */}
+      {/* Security Note                                                      */}
+      {/* ------------------------------------------------------------------ */}
+
       <div className="flex items-start gap-2.5 rounded-xl bg-muted/50 p-3">
         <ShieldCheck className="mt-0.5 size-4 shrink-0 text-primary" />
 
         <p className="text-xs leading-5 text-muted-foreground">
-          Download the official Adama Municipal Revenue Android application.
-          Install it on a compatible Android device.
+          Download the official Adama Municipal Revenue Android
+          application. Install it on a compatible Android device.
         </p>
       </div>
     </div>
   );
 }
+
 
 /* -------------------------------------------------------------------------- */
 /* Small components                                                           */

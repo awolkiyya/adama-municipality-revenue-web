@@ -21,9 +21,9 @@ const BASE_URL = "/mobile-app-releases";
 
 /**
  * Timeout for uploading an APK and receiving the API response.
- * Five minutes.
  */
 const APK_UPLOAD_TIMEOUT = 300_000;
+
 
 /**
  * Extract a release object from either a standard API envelope

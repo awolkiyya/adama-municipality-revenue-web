@@ -104,84 +104,67 @@ export const mobileAppReleasesService = {
     payload: CreateMobileAppReleasePayload,
   ): Promise<MobileAppRelease> {
     const formData = new FormData();
-
+  
+    formData.append("app_type", payload.app_type);
     formData.append("version_name", payload.version_name);
     formData.append("version_code", String(payload.version_code));
     formData.append("apk", payload.apk, payload.apk.name);
-
+  
     if (payload.release_notes !== undefined) {
       formData.append("release_notes", payload.release_notes ?? "");
     }
-
+  
     if (payload.is_mandatory !== undefined) {
-      formData.append(
-        "is_mandatory",
-        String(payload.is_mandatory),
-      );
+      formData.append("is_mandatory", String(payload.is_mandatory));
     }
-
+  
     const startedAt = Date.now();
-
-    console.info(
-      "[MobileAppReleases] Starting release creation.",
-      {
-        version_name: payload.version_name,
-        version_code: payload.version_code,
-        apk_name: payload.apk.name,
-        apk_size_bytes: payload.apk.size,
-        apk_type: payload.apk.type,
-        is_mandatory: payload.is_mandatory,
-      },
-    );
-
+  
+    console.info("[MobileAppReleases] Starting release creation.", {
+      app_type: payload.app_type,
+      version_name: payload.version_name,
+      version_code: payload.version_code,
+      apk_name: payload.apk.name,
+      apk_size_bytes: payload.apk.size,
+      apk_type: payload.apk.type,
+      is_mandatory: payload.is_mandatory,
+    });
+  
     try {
       const response = await api.post(BASE_URL, formData, {
         timeout: APK_UPLOAD_TIMEOUT,
       });
-
-      console.info(
-        "[MobileAppReleases] Release creation response received.",
-        {
-          status: response.status,
-          duration_ms: Date.now() - startedAt,
-        },
-      );
-
+  
+      console.info("[MobileAppReleases] Release creation response received.", {
+        status: response.status,
+        duration_ms: Date.now() - startedAt,
+      });
+  
       const release = extractRelease(response.data);
-
+  
       if (
         !release ||
         typeof release !== "object" ||
         typeof release.id !== "string" ||
         release.id.length === 0
       ) {
-        console.error(
-          "[MobileAppReleases] Unexpected create response format.",
-          {
-            status: response.status,
-            response_data: response.data,
-          },
-        );
-
         throw new Error(
           "The server returned an unexpected response after creating the release.",
         );
       }
-
+  
       return release;
     } catch (error: unknown) {
-      console.error(
-        "[MobileAppReleases] Release creation request failed.",
-        {
-          ...getRequestErrorDetails(error),
-          duration_ms: Date.now() - startedAt,
-          version_name: payload.version_name,
-          version_code: payload.version_code,
-          apk_name: payload.apk.name,
-          apk_size_bytes: payload.apk.size,
-        },
-      );
-
+      console.error("[MobileAppReleases] Release creation request failed.", {
+        ...getRequestErrorDetails(error),
+        duration_ms: Date.now() - startedAt,
+        app_type: payload.app_type,
+        version_name: payload.version_name,
+        version_code: payload.version_code,
+        apk_name: payload.apk.name,
+        apk_size_bytes: payload.apk.size,
+      });
+  
       throw error;
     }
   },

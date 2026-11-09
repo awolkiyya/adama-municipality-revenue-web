@@ -26,9 +26,10 @@ const nextConfig: NextConfig = {
   allowedDevOrigins: ["192.168.3.1", "172.25.10.74"],
 
   // Request body size for proxy operations
-  experimental: {
-    proxyClientMaxBodySize: "64mb",
-  },
+  // Request body size for proxy operations
+experimental: {
+  proxyClientMaxBodySize: "300mb",
+},
 
   // Laravel API and Sanctum proxy
   async rewrites() {

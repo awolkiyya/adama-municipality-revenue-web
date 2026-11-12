@@ -41,7 +41,7 @@ export interface BaseField {
   name: string;
   code: string;
   data_type: BaseFieldDataType;
-  inputSource: BaseFieldInputSource;
+  input_source: BaseFieldInputSource;
   measurement_unit_id?: string | null;
   unit_code?: string | null;
   description?: string | null;

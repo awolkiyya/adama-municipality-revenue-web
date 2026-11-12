@@ -10,6 +10,7 @@ import { useSelector } from "react-redux";
 import { Banner } from "@/components/banner/topBanner";
 import { IconBadge } from "@/components/commen/icon-badge";
 import { Button } from "@/components/ui/button";
+
 import {
   CalendarClock,
   Plus,
@@ -60,6 +61,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import CopyFormulaDialog from "@/components/forms/CopyFormulaDialog";
 
 /* =========================================================================
    TYPES
@@ -239,6 +241,14 @@ function getConditionValue(
   return (
     condition[camelKey] ??
     (snakeKey ? condition[snakeKey] : undefined)
+  );
+}
+
+function isFormulaRule(rule: TariffRuleApiRecord): boolean {
+  return (
+    normalizeCalculationType(
+      getRuleValue(rule, "calculationType", "calculation_type"),
+    ) === "formula"
   );
 }
 
@@ -592,8 +602,6 @@ function TariffRuleDetailSheet({
             </div>
           ) : (
             <div className="space-y-6 px-6 py-5">
-              {/* Service information */}
-
               <DetailSection
                 title="Service Information"
                 icon={<Database className="size-4" />}
@@ -640,8 +648,6 @@ function TariffRuleDetailSheet({
               </DetailSection>
 
               <Separator />
-
-              {/* Calculation configuration */}
 
               <DetailSection
                 title="Calculation Configuration"
@@ -806,8 +812,6 @@ function TariffRuleDetailSheet({
 
               <Separator />
 
-              {/* Rule conditions */}
-
               <DetailSection
                 title="Conditions"
                 icon={<FileText className="size-4" />}
@@ -879,8 +883,7 @@ function TariffRuleDetailSheet({
                               )}
 
                               {!displayFieldCode &&
-                                displayFieldName ===
-                                  "Unnamed field" && (
+                                displayFieldName === "Unnamed field" && (
                                   <p className="mt-1 break-all font-mono text-xs text-muted-foreground">
                                     {String(fieldId ?? "No field ID")}
                                   </p>
@@ -931,8 +934,6 @@ function TariffRuleDetailSheet({
               </DetailSection>
 
               <Separator />
-
-              {/* Additional information */}
 
               <DetailSection
                 title="Additional Information"
@@ -1084,6 +1085,14 @@ export default function TariffVersionDetailPage() {
   const [selectedViewRule, setSelectedViewRule] =
     useState<TariffRuleApiRecord | null>(null);
 
+  /* Copy formula dialog */
+
+  const [copyFormulaDialogOpen, setCopyFormulaDialogOpen] =
+    useState(false);
+
+  const [selectedSourceRule, setSelectedSourceRule] =
+    useState<TariffRuleApiRecord | null>(null);
+
   /* Services */
 
   const { data: servicesData } = useRevenueServices();
@@ -1094,6 +1103,7 @@ export default function TariffVersionDetailPage() {
   const deleteRule = useDeleteTariffRule();
 
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+
   const [selectedDeleteRuleId, setSelectedDeleteRuleId] =
     useState<string | null>(null);
 
@@ -1119,12 +1129,6 @@ export default function TariffVersionDetailPage() {
           ? false
           : undefined,
   });
-
-  /*
-   * API response adaptation:
-   * TariffRuleRecord does not declare an index signature,
-   * while the local API record type supports dynamic API fields.
-   */
 
   const rules = (data?.data ?? []) as unknown as TariffRuleApiRecord[];
 
@@ -1332,12 +1336,72 @@ export default function TariffVersionDetailPage() {
 
   const handleManageFormulaVariables = useCallback(
     (rule: TariffRuleApiRecord) => {
+      if (!isFormulaRule(rule)) {
+        toast.error("Formula variables are only available for formula rules.");
+        return;
+      }
+
       router.push(
         `/${locale}/office/dashboard/revenue-managements/tariff-versions/${id}/tariff-rule/${rule.id}/formula-variables`,
       );
     },
     [router, locale, id],
   );
+
+  /* Open Copy Formula dialog */
+
+  const handleCopyFormula = useCallback(
+    (rule: TariffRuleApiRecord) => {
+      const originalRule = rules.find(
+        (item) => String(item.id) === String(rule.id),
+      );
+
+      if (!originalRule) {
+        toast.error("Unable to find the selected tariff rule.");
+        return;
+      }
+
+      if (!isFormulaRule(originalRule)) {
+        toast.error("Only formula rules can be copied.");
+        return;
+      }
+
+      setSelectedSourceRule(originalRule);
+      setCopyFormulaDialogOpen(true);
+    },
+    [rules],
+  );
+
+  /* Handle Copy Formula dialog visibility */
+
+  const handleCopyFormulaDialogChange = useCallback(
+    (open: boolean) => {
+      setCopyFormulaDialogOpen(open);
+
+      if (!open) {
+        setSelectedSourceRule(null);
+      }
+    },
+    [],
+  );
+
+  /* Called by CopyFormulaDialog after successful copy */
+
+  const handleFormulaCopied = useCallback(() => {
+    setCopyFormulaDialogOpen(false);
+    setSelectedSourceRule(null);
+
+    toast.success("Formula copied successfully.");
+
+    /*
+     * Refresh server-rendered content.
+     *
+     * If useTariffRules uses React Query, also invalidate its
+     * query key inside the copy mutation hook. router.refresh()
+     * alone does not invalidate React Query's client-side cache.
+     */
+    router.refresh();
+  }, [router]);
 
   /* Delete rule */
 
@@ -1446,6 +1510,7 @@ export default function TariffVersionDetailPage() {
         onEdit={handleEditRule}
         onDelete={handleDeleteRule}
         onManageFormulaVariables={handleManageFormulaVariables}
+        onCopyFormula={handleCopyFormula}
       />
 
       {/* Pagination */}
@@ -1468,6 +1533,29 @@ export default function TariffVersionDetailPage() {
             setSelectedViewRule(null);
           }
         }}
+      />
+
+      {/* Copy formula */}
+
+      <CopyFormulaDialog
+        open={copyFormulaDialogOpen}
+        onOpenChange={handleCopyFormulaDialogChange}
+        tariffVersionId={String(id)}
+        sourceRuleId={
+          selectedSourceRule
+            ? String(selectedSourceRule.id)
+            : null
+        }
+        sourceRuleName={
+          selectedSourceRule
+            ? String(
+                selectedSourceRule.name ??
+                  selectedSourceRule.code ??
+                  selectedSourceRule.id,
+              )
+            : ""
+        }
+        onCopied={handleFormulaCopied}
       />
 
       {/* Delete confirmation */}

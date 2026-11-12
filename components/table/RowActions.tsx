@@ -1,3 +1,4 @@
+
 "use client";
 
 import {
@@ -23,6 +24,7 @@ import {
   Edit,
   KeyRound,
   Variable,
+  Copy,
 
   // Invoice actions
   FileCheck,
@@ -34,204 +36,104 @@ import {
   Download,
 } from "lucide-react";
 
-
 /* =====================================================
    TYPES
 ===================================================== */
 
 type Props = {
-
   actions: {
-
-    /* -------------------------------------------------
-       CORE ACTIONS
-    ------------------------------------------------- */
-
+    /* CORE */
     view?: boolean;
-
     edit?: boolean;
-
     delete?: boolean;
-
     create?: boolean;
 
-
-    /* -------------------------------------------------
-       STATUS
-    ------------------------------------------------- */
-
+    /* STATUS */
     toggleStatus?: boolean;
 
-
-    /* -------------------------------------------------
-       ACCESS / SECURITY
-    ------------------------------------------------- */
-
+    /* ACCESS / SECURITY */
     manageAccess?: boolean;
-
     updatePassword?: boolean;
-
     updateRole?: boolean;
-
     updateHierarchy?: boolean;
 
-
-    /* -------------------------------------------------
-       TARIFF
-    ------------------------------------------------- */
-
+    /* TARIFF */
     manageFormulaVariables?: boolean;
+    copyFormula?: boolean;
 
-
-    /* -------------------------------------------------
-       WORKFLOW
-    ------------------------------------------------- */
-
+    /* WORKFLOW */
     submit?: boolean;
-
     return?: boolean;
-
     approve?: boolean;
 
-
-    /* -------------------------------------------------
-       INVOICE ACTIONS
-    ------------------------------------------------- */
-
+    /* INVOICE */
     issue?: boolean;
-
     applyDiscount?: boolean;
-
     applyPenalty?: boolean;
-
     cancel?: boolean;
-
     void?: boolean;
-
     pay?: boolean;
-
     print?: boolean;
-
     download?: boolean;
 
-
-    /* -------------------------------------------------
-       OTHER DOMAIN ACTIONS
-    ------------------------------------------------- */
-
+    /* OTHER DOMAIN ACTIONS */
     createActivity?: boolean;
-
     export?: boolean;
-
     impersonate?: boolean;
-
     createResolution?: boolean;
-
     escalatePenality?: boolean;
-
     requestClosure?: boolean;
   };
 
-
-  /* ---------------------------------------------------
-     CORE CALLBACKS
-  --------------------------------------------------- */
-
+  /* CORE CALLBACKS */
   onView?: () => void;
-
   onEdit?: () => void;
-
   onDelete?: () => void;
-
   onCreate?: () => void;
 
-
-  /* ---------------------------------------------------
-     STATUS CALLBACK
-  --------------------------------------------------- */
-
+  /* STATUS */
   onToggleStatus?: () => void;
 
-
-  /* ---------------------------------------------------
-     ACCESS / SECURITY CALLBACKS
-  --------------------------------------------------- */
-
+  /* ACCESS / SECURITY */
   onManageAccess?: () => void;
-
   onUpdatePassword?: () => void;
-
   onUpdateRole?: () => void;
-
   onUpdateHierarchy?: () => void;
 
-
-  /* ---------------------------------------------------
-     TARIFF CALLBACK
-  --------------------------------------------------- */
-
+  /* TARIFF */
   onManageFormulaVariables?: () => void;
+  onCopyFormula?: () => void;
 
-
-  /* ---------------------------------------------------
-     WORKFLOW CALLBACKS
-  --------------------------------------------------- */
-
+  /* WORKFLOW */
   onSubmit?: () => void;
-
   onReturn?: () => void;
-
   onApprove?: () => void;
 
-
-  /* ---------------------------------------------------
-     INVOICE CALLBACKS
-  --------------------------------------------------- */
-
+  /* INVOICE */
   onIssue?: () => void;
-
   onApplyDiscount?: () => void;
-
   onApplyPenalty?: () => void;
-
   onCancel?: () => void;
-
   onVoid?: () => void;
-
   onPay?: () => void;
-
   onPrint?: () => void;
-
   onDownload?: () => void;
 
-
-  /* ---------------------------------------------------
-     OTHER DOMAIN CALLBACKS
-  --------------------------------------------------- */
-
+  /* OTHER DOMAIN ACTIONS */
   onCreateResolution?: () => void;
-
   onEscalatePenality?: () => void;
-
   onRequestClosure?: () => void;
 
-
-  /* ---------------------------------------------------
-     ROW
-  --------------------------------------------------- */
-
+  /* ROW */
   row?: object;
 };
-
 
 /* =====================================================
    COMPONENT
 ===================================================== */
 
 export function RowActions({
-
   actions,
-
   row,
 
   /* Core */
@@ -251,6 +153,7 @@ export function RowActions({
 
   /* Tariff */
   onManageFormulaVariables,
+  onCopyFormula,
 
   /* Workflow */
   onSubmit,
@@ -271,10 +174,7 @@ export function RowActions({
   onCreateResolution,
   onEscalatePenality,
   onRequestClosure,
-
 }: Props) {
-
-
   /* ===================================================
      GOVERNANCE ACTIONS
   =================================================== */
@@ -287,19 +187,25 @@ export function RowActions({
     actions.escalatePenality ||
     actions.createResolution;
 
-
   /* ===================================================
-     FORMULA VARIABLE ACTION
+     FORMULA ACTIONS
   =================================================== */
 
-  const canManageFormulaVariables =
-    actions.manageFormulaVariables &&
+  const isFormulaRule =
     String(
       row && "calculationType" in row
         ? row.calculationType
         : ""
     ).toLowerCase() === "formula";
 
+  const canManageFormulaVariables =
+    actions.manageFormulaVariables && isFormulaRule;
+
+  const canCopyFormula =
+    actions.copyFormula && isFormulaRule;
+
+  const hasFormulaActions =
+    canManageFormulaVariables || canCopyFormula;
 
   /* ===================================================
      INVOICE ACTIONS
@@ -315,7 +221,6 @@ export function RowActions({
     actions.cancel ||
     actions.void;
 
-
   /* ===================================================
      WORKFLOW ACTIONS
   =================================================== */
@@ -325,507 +230,233 @@ export function RowActions({
     actions.return ||
     actions.approve;
 
-
   /* ===================================================
      RENDER
   =================================================== */
 
   return (
-
     <DropdownMenu>
-
-      {/* =================================================
-          TRIGGER
-      ================================================= */}
-
+      {/* TRIGGER */}
       <DropdownMenuTrigger asChild>
-
-        <Button
-          variant="ghost"
-          size="icon"
-        >
-
+        <Button variant="ghost" size="icon">
           <MoreHorizontal className="h-4 w-4" />
-
         </Button>
-
       </DropdownMenuTrigger>
 
-
-      {/* =================================================
-          MENU
-      ================================================= */}
-
-      <DropdownMenuContent
-        align="end"
-        className="w-56"
-      >
-
-
-        {/* =================================================
-            CORE ACTIONS
-        ================================================= */}
-
+      {/* MENU */}
+      <DropdownMenuContent align="end" className="w-56">
+        {/* CORE ACTIONS */}
 
         {actions.view && (
-
-          <DropdownMenuItem
-            onClick={onView}
-          >
-
+          <DropdownMenuItem onClick={onView}>
             <Eye className="mr-2 h-4 w-4" />
-
             View
-
           </DropdownMenuItem>
-
         )}
-
 
         {actions.edit && (
-
-          <DropdownMenuItem
-            onClick={onEdit}
-          >
-
+          <DropdownMenuItem onClick={onEdit}>
             <Pencil className="mr-2 h-4 w-4" />
-
             Edit
-
           </DropdownMenuItem>
-
         )}
-
 
         {actions.create && (
-
-          <DropdownMenuItem
-            onClick={onCreate}
-          >
-
+          <DropdownMenuItem onClick={onCreate}>
             <Plus className="mr-2 h-4 w-4" />
-
             Create
-
           </DropdownMenuItem>
-
         )}
-
 
         {actions.toggleStatus && (
-
-          <DropdownMenuItem
-            onClick={onToggleStatus}
-          >
-
+          <DropdownMenuItem onClick={onToggleStatus}>
             <Edit className="mr-2 h-4 w-4" />
-
             Update Status
-
           </DropdownMenuItem>
-
         )}
 
+        {/* WORKFLOW ACTIONS */}
 
-        {/* =================================================
-            WORKFLOW ACTIONS
-        ================================================= */}
-
-        {hasWorkflowActions && (
-
-          <DropdownMenuSeparator />
-
-        )}
-
+        {hasWorkflowActions && <DropdownMenuSeparator />}
 
         {actions.submit && (
-
-          <DropdownMenuItem
-            onClick={onSubmit}
-          >
-
+          <DropdownMenuItem onClick={onSubmit}>
             <Send className="mr-2 h-4 w-4" />
-
             Submit
-
           </DropdownMenuItem>
-
         )}
-
 
         {actions.return && (
-
-          <DropdownMenuItem
-            onClick={onReturn}
-          >
-
+          <DropdownMenuItem onClick={onReturn}>
             <Send className="mr-2 h-4 w-4 rotate-180" />
-
             Return
-
           </DropdownMenuItem>
-
         )}
-
 
         {actions.approve && (
-
-          <DropdownMenuItem
-            onClick={onApprove}
-          >
-
+          <DropdownMenuItem onClick={onApprove}>
             <FileCheck className="mr-2 h-4 w-4" />
-
             Approve
-
           </DropdownMenuItem>
-
         )}
 
+        {/* INVOICE ACTIONS */}
 
-        {/* =================================================
-            INVOICE ACTIONS
-        ================================================= */}
-
-        {hasInvoiceActions && (
-
-          <DropdownMenuSeparator />
-
-        )}
-
-
-        {/* ISSUE */}
+        {hasInvoiceActions && <DropdownMenuSeparator />}
 
         {actions.issue && (
-
-          <DropdownMenuItem
-            onClick={onIssue}
-          >
-
+          <DropdownMenuItem onClick={onIssue}>
             <FileCheck className="mr-2 h-4 w-4" />
-
             Issue Invoice
-
           </DropdownMenuItem>
-
         )}
-
-
-        {/* DISCOUNT */}
 
         {actions.applyDiscount && (
-
-          <DropdownMenuItem
-            onClick={onApplyDiscount}
-          >
-
+          <DropdownMenuItem onClick={onApplyDiscount}>
             <Percent className="mr-2 h-4 w-4" />
-
             Apply Discount
-
           </DropdownMenuItem>
-
         )}
-
-
-        {/* PENALTY */}
 
         {actions.applyPenalty && (
-
-          <DropdownMenuItem
-            onClick={onApplyPenalty}
-          >
-
+          <DropdownMenuItem onClick={onApplyPenalty}>
             <BadgeDollarSign className="mr-2 h-4 w-4" />
-
             Apply Penalty
-
           </DropdownMenuItem>
-
         )}
-
-
-        {/* PAYMENT */}
 
         {actions.pay && (
-
-          <DropdownMenuItem
-            onClick={onPay}
-          >
-
+          <DropdownMenuItem onClick={onPay}>
             <CreditCard className="mr-2 h-4 w-4" />
-
             Record Payment
-
           </DropdownMenuItem>
-
         )}
-
-
-        {/* PRINT */}
 
         {actions.print && (
-
-          <DropdownMenuItem
-            onClick={onPrint}
-          >
-
+          <DropdownMenuItem onClick={onPrint}>
             <Printer className="mr-2 h-4 w-4" />
-
             Print Invoice
-
           </DropdownMenuItem>
-
         )}
-
-
-        {/* DOWNLOAD */}
 
         {actions.download && (
-
-          <DropdownMenuItem
-            onClick={onDownload}
-          >
-
+          <DropdownMenuItem onClick={onDownload}>
             <Download className="mr-2 h-4 w-4" />
-
             Download Invoice
-
           </DropdownMenuItem>
-
         )}
-
-
-        {/* CANCEL */}
 
         {actions.cancel && (
-
           <DropdownMenuItem
             onClick={onCancel}
-            className="
-              text-orange-600
-              focus:text-orange-600
-            "
+            className="text-orange-600 focus:text-orange-600"
           >
-
             <Ban className="mr-2 h-4 w-4" />
-
             Cancel Invoice
-
           </DropdownMenuItem>
-
         )}
-
-
-        {/* VOID */}
 
         {actions.void && (
-
           <DropdownMenuItem
             onClick={onVoid}
-            className="
-              text-red-600
-              focus:text-red-600
-            "
+            className="text-red-600 focus:text-red-600"
           >
-
             <Ban className="mr-2 h-4 w-4" />
-
             Void Invoice
-
           </DropdownMenuItem>
-
         )}
 
-
-        {/* =================================================
-            DOMAIN ACTIONS
-        ================================================= */}
-
+        {/* DOMAIN ACTIONS */}
 
         {actions.requestClosure && (
-
           <>
-
             <DropdownMenuSeparator />
-
-            <DropdownMenuItem
-              onClick={onRequestClosure}
-            >
-
+            <DropdownMenuItem onClick={onRequestClosure}>
               <Send className="mr-2 h-4 w-4" />
-
               Request Closure
-
             </DropdownMenuItem>
-
           </>
-
         )}
 
+        {/* TARIFF FORMULA ACTIONS */}
 
-        {/* =================================================
-            FORMULA VARIABLES
-        ================================================= */}
-
+        {hasFormulaActions && <DropdownMenuSeparator />}
 
         {canManageFormulaVariables && (
-
-          <>
-
-            <DropdownMenuSeparator />
-
-            <DropdownMenuItem
-              onClick={
-                onManageFormulaVariables
-              }
-            >
-
-              <Variable className="mr-2 h-4 w-4" />
-
-              Manage Formula Variables
-
-            </DropdownMenuItem>
-
-          </>
-
+          <DropdownMenuItem onClick={onManageFormulaVariables}>
+            <Variable className="mr-2 h-4 w-4" />
+            Manage Formula Variables
+          </DropdownMenuItem>
         )}
 
-
-        {/* =================================================
-            SECURITY / GOVERNANCE
-        ================================================= */}
-
-
-        {hasGovernanceActions && (
-
-          <DropdownMenuSeparator />
-
+        {canCopyFormula && (
+          <DropdownMenuItem onClick={onCopyFormula}>
+            <Copy className="mr-2 h-4 w-4" />
+            Copy Formula
+          </DropdownMenuItem>
         )}
 
+        {/* SECURITY / GOVERNANCE */}
+
+        {hasGovernanceActions && <DropdownMenuSeparator />}
 
         {actions.manageAccess && (
-
-          <DropdownMenuItem
-            onClick={onManageAccess}
-          >
-
+          <DropdownMenuItem onClick={onManageAccess}>
             <KeyRound className="mr-2 h-4 w-4" />
-
             Manage Access
-
           </DropdownMenuItem>
-
         )}
-
 
         {actions.updatePassword && (
-
-          <DropdownMenuItem
-            onClick={onUpdatePassword}
-          >
-
+          <DropdownMenuItem onClick={onUpdatePassword}>
             <Lock className="mr-2 h-4 w-4" />
-
             Update Password
-
           </DropdownMenuItem>
-
         )}
-
 
         {actions.updateRole && (
-
-          <DropdownMenuItem
-            onClick={onUpdateRole}
-          >
-
+          <DropdownMenuItem onClick={onUpdateRole}>
             <UserCog className="mr-2 h-4 w-4" />
-
             Update Role
-
           </DropdownMenuItem>
-
         )}
-
 
         {actions.updateHierarchy && (
-
-          <DropdownMenuItem
-            onClick={onUpdateHierarchy}
-          >
-
+          <DropdownMenuItem onClick={onUpdateHierarchy}>
             <Shield className="mr-2 h-4 w-4" />
-
             Update Structure
-
           </DropdownMenuItem>
-
         )}
-
 
         {actions.escalatePenality && (
-
-          <DropdownMenuItem
-            onClick={onEscalatePenality}
-          >
-
+          <DropdownMenuItem onClick={onEscalatePenality}>
             <Shield className="mr-2 h-4 w-4" />
-
             Escalate Penalty
-
           </DropdownMenuItem>
-
         )}
-
 
         {actions.createResolution && (
-
-          <DropdownMenuItem
-            onClick={onCreateResolution}
-          >
-
+          <DropdownMenuItem onClick={onCreateResolution}>
             <Shield className="mr-2 h-4 w-4" />
-
             Create Resolution
-
           </DropdownMenuItem>
-
         )}
 
-
-        {/* =================================================
-            DANGEROUS ACTION
-        ================================================= */}
-
+        {/* DANGEROUS ACTION */}
 
         {actions.delete && (
-
           <>
-
             <DropdownMenuSeparator />
-
             <DropdownMenuItem
               onClick={onDelete}
-              className="
-                text-red-600
-                focus:text-red-600
-              "
+              className="text-red-600 focus:text-red-600"
             >
-
               <Trash2 className="mr-2 h-4 w-4" />
-
               Delete
-
             </DropdownMenuItem>
-
           </>
-
         )}
-
-
       </DropdownMenuContent>
-
     </DropdownMenu>
   );
 }

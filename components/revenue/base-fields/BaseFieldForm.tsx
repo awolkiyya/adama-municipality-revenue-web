@@ -69,15 +69,28 @@ function requiresOptions(
   );
 }
 
+/**
+ * Normalize options using only properties supported by the API.
+ *
+ * Supported option properties:
+ * - id (when updating an existing option)
+ * - value
+ * - label
+ * - sort_order
+ * - is_default
+ *
+ * Unsupported properties such as is_active, description,
+ * and base_field_id are intentionally excluded.
+ */
 function normalizeOptions(
   options: BaseFieldOption[],
 ): BaseFieldOption[] {
   return options.map((option, index) => ({
-    ...option,
-    label: String(option.label ?? "").trim(),
+    ...(option.id ? { id: option.id } : {}),
     value: String(option.value ?? "")
       .trim()
       .toUpperCase(),
+    label: String(option.label ?? "").trim(),
     sort_order: index + 1,
     is_default: Boolean(option.is_default),
   }));
@@ -98,16 +111,16 @@ function createInitialForm(
     name: field.name ?? "",
     code: field.code ?? "",
     data_type: field.data_type,
-    input_source: field.inputSource ?? "MANUAL",
+    input_source: field.input_source ?? "MANUAL",
     measurement_unit_id:
       field.measurement_unit_id != null
         ? String(field.measurement_unit_id)
         : "",
     description: field.description ?? "",
     is_active: Boolean(field.is_active),
-    options: (field.options ?? []).map((option) => ({
-      ...option,
-    })),
+
+    // Remove unsupported option properties when initializing.
+    options: normalizeOptions(field.options ?? []),
   };
 }
 
@@ -386,6 +399,8 @@ function BaseFieldFormContent({
           ? form.measurement_unit_id
           : "",
       description: form.description.trim(),
+
+      // Ensure only supported option properties reach the API.
       options: optionsRequired
         ? normalizeOptions(form.options)
         : [],

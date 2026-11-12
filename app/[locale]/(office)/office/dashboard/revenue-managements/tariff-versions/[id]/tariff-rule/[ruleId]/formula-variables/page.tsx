@@ -1,16 +1,17 @@
-
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowLeft, Calculator, CalendarClock, Sigma } from "lucide-react";
+import {
+  ArrowLeft,
+  Copy,
+  Sigma,
+} from "lucide-react";
 
-import { Banner } from "@/components/banner/topBanner";
-import { IconBadge } from "@/components/commen/icon-badge";
 import { Button } from "@/components/ui/button";
-import { FloatingParticles } from "@/components/design/FloatingParticles";
 import FormulaVariablesForm from "@/components/forms/FormulaVariablesForm";
+import CopyFormulaDialog from "@/components/forms/CopyFormulaDialog";
 
 export default function FormulaVariablesPage() {
   const { id, locale, ruleId } = useParams<{
@@ -20,6 +21,8 @@ export default function FormulaVariablesPage() {
   }>();
 
   const router = useRouter();
+
+  const [copyDialogOpen, setCopyDialogOpen] = useState(false);
 
   const rulesUrl =
     `/${locale}/office/dashboard/revenue-managements/` +
@@ -34,8 +37,15 @@ export default function FormulaVariablesPage() {
     router.push(rulesUrl);
   }, [router, rulesUrl]);
 
+  const handleCopied = useCallback(() => {
+    setCopyDialogOpen(false);
+    toast.success("Formula configuration copied successfully.");
+    router.refresh();
+  }, [router]);
+
   return (
     <div className="mx-auto max-w-4xl space-y-6 pb-10">
+
       <Button
         type="button"
         variant="ghost"
@@ -45,28 +55,43 @@ export default function FormulaVariablesPage() {
         <ArrowLeft className="mr-2 size-4" />
         Back to tariff rules
       </Button>
-      
 
-      <section className="space-y-2">
-        <div className="flex items-center gap-3">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-            <Sigma className="h-4.5 w-4.5" />
+      <section className="space-y-4">
+
+        <div className="flex flex-wrap items-center justify-between gap-3">
+
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <Sigma className="size-5" />
+            </div>
+
+            <div className="min-w-0">
+              <h1 className="text-xl font-semibold tracking-tight">
+                Formula Variables
+              </h1>
+
+              <p className="text-sm text-muted-foreground">
+                Manage the variables associated with this tariff rule.
+              </p>
+            </div>
           </div>
 
-          <div className="min-w-0">
-            <h1 className="text-xl font-semibold tracking-tight">
-              Formula Variables
-            </h1>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setCopyDialogOpen(true)}
+          >
+            <Copy className="mr-2 size-4" />
+            Copy from rule
+          </Button>
 
-            <p className="text-sm text-muted-foreground">
-              Manage the variables associated with this tariff rule.
-            </p>
-          </div>
         </div>
 
         <p className="text-xs text-muted-foreground">
           Rule ID: {ruleId}
         </p>
+
       </section>
 
       <FormulaVariablesForm
@@ -76,6 +101,15 @@ export default function FormulaVariablesPage() {
         onSaved={handleSaved}
         onCancel={handleBack}
       />
+
+      <CopyFormulaDialog
+        open={copyDialogOpen}
+        onOpenChange={setCopyDialogOpen}
+        destinationRuleId={ruleId}
+        tariffVersionId={id}
+        onCopied={handleCopied}
+      />
+
     </div>
   );
 }

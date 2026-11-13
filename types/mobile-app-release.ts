@@ -270,3 +270,27 @@ export type PublishMobileAppReleasePayload = Record<string, never>;
 export interface WithdrawMobileAppReleasePayload {
   reason?: string;
 }
+
+
+export interface LatestReleaseResult {
+  release: MobileAppRelease | null;
+  notFound: boolean;
+}
+
+// export interface MobileAppRelease {
+//     id: string;
+//     app_type: MobileAppType;
+//     version_name: string;
+//     version_code: number;
+//     status?: string;
+//     is_downloadable: boolean;
+//     download_url?: string | null;
+//     apk_download_url?: string | null;
+//     is_mandatory:boolean;
+//     apk?: {
+//       uuid?: string;
+//       original_name?: string | null;
+//       extension?: string | null;
+//       size_bytes?: number | null;
+//     } | null;
+//   };

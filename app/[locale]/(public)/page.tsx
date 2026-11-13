@@ -50,6 +50,8 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { api } from "@/lib/api";
+import { useLatestMobileAppRelease } from "@/hooks/use-latest-mobile-app-release";
+import { MobileAppRelease, MobileAppType } from "@/types/mobile-app-release";
 
 /* -------------------------------------------------------------------------- */
 /* API configuration                                                         */
@@ -83,25 +85,7 @@ type Item = {
   icon: LucideIcon;
 };
 
-type MobileAppType = "taxpayer" | "field_collector";
 
-type MobileAppRelease = {
-  id: string;
-  app_type: MobileAppType;
-  version_name: string;
-  version_code: number;
-  status?: string;
-  is_downloadable: boolean;
-  download_url?: string | null;
-  apk_download_url?: string | null;
-  is_mandatory:boolean;
-  apk?: {
-    uuid?: string;
-    original_name?: string | null;
-    extension?: string | null;
-    size_bytes?: number | null;
-  } | null;
-};
 
 type PublicReceipt = {
   verified: boolean;
@@ -437,157 +421,27 @@ function resolveDownloadUrl(release: MobileAppRelease): string {
   }
 }
 
-function MobileAppReleaseDownload({
-  appType,
-  appName,
-  description,
-  platform = "Android",
-}: {
+
+interface MobileAppReleaseDownloadProps {
   appType: MobileAppType;
   appName: string;
   description: string;
   platform?: string;
-}) {
-  const [release, setRelease] = useState<MobileAppRelease | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [notFound, setNotFound] = useState(false);
-  const [retryCount, setRetryCount] = useState(0);
+}
 
-  useEffect(() => {
-    const controller = new AbortController();
-
-    async function loadLatestRelease() {
-      setLoading(true);
-      setError(null);
-      setNotFound(false);
-      setRelease(null);
-
-      if (!API_URL) {
-        setError(
-          "The API address is not configured. Please contact the system administrator.",
-        );
-        setLoading(false);
-        return;
-      }
-
-      try {
-        const apiBaseUrl = API_URL.replace(/\/+$/, "");
-
-        const response = await api.get(
-          `${apiBaseUrl}/api/v1/mobile-app-releases/latest?app_type=${encodeURIComponent(
-            appType,
-          )}`,
-          // {
-          //   method: "GET",
-          //   headers: {
-          //     Accept: "application/json",
-          //   },
-          //   cache: "no-store",
-          //   signal: controller.signal,
-          // },
-        );
-
-        const payload = response.data;
-
-        /*
-         * No published release is an expected business condition.
-         */
-        if (response.status === 404) {
-          setNotFound(true);
-          return;
-        }
-
-        // if (!response.ok) {
-        //   throw new Error(
-        //     getApiErrorMessage(
-        //       payload,
-        //       "Unable to load the latest app release. Please try again.",
-        //     ),
-        //   );
-        // }
-
-        /*
-         * Support both:
-         *
-         * { data: { ...release } }
-         *
-         * and:
-         *
-         * { ...release }
-         */
-        const body =
-          typeof payload === "object" &&
-          payload !== null &&
-          "data" in payload
-            ? payload.data
-            : payload;
-
-        /*
-         * Validate the API response.
-         */
-        if (
-          typeof body !== "object" ||
-          body === null ||
-          !("id" in body) ||
-          !("version_name" in body) ||
-          !("is_downloadable" in body) ||
-          typeof body.id !== "string" ||
-          typeof body.version_name !== "string" ||
-          typeof body.is_downloadable !== "boolean"
-        ) {
-          throw new Error(
-            "The release information returned by the server is invalid.",
-          );
-        }
-
-        const latestRelease = body as MobileAppRelease;
-
-        /*
-         * Validate application type when the API provides it.
-         *
-         * The current Laravel response does not include app_type,
-         * so the endpoint's app_type query parameter is authoritative.
-         */
-        const responseAppType = (
-          latestRelease as MobileAppRelease & {
-            app_type?: MobileAppType;
-          }
-        ).app_type;
-
-        if (
-          responseAppType &&
-          responseAppType !== appType
-        ) {
-          throw new Error(
-            "The server returned a release for a different application.",
-          );
-        }
-
-        setRelease(latestRelease);
-      } catch (cause) {
-        if (controller.signal.aborted) {
-          return;
-        }
-
-        setError(
-          cause instanceof Error
-            ? cause.message
-            : "Unable to load the app release. Please try again.",
-        );
-      } finally {
-        if (!controller.signal.aborted) {
-          setLoading(false);
-        }
-      }
-    }
-
-    void loadLatestRelease();
-
-    return () => {
-      controller.abort();
-    };
-  }, [appType, retryCount]);
+export function MobileAppReleaseDownload({
+  appType,
+  appName,
+  description,
+  platform = "Android",
+}: MobileAppReleaseDownloadProps) {
+  const {
+    release,
+    loading,
+    error,
+    notFound,
+    retry,
+  } = useLatestMobileAppRelease(appType);
 
   /*
    * Resolve the download URL against the configured API host.
@@ -656,7 +510,7 @@ function MobileAppReleaseDownload({
 
           <button
             type="button"
-            onClick={() => setRetryCount((count) => count + 1)}
+            onClick={retry}
             className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg border bg-background px-4 py-2.5 text-sm font-medium text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
             <RefreshCw className="size-4" />
@@ -687,7 +541,7 @@ function MobileAppReleaseDownload({
 
           <button
             type="button"
-            onClick={() => setRetryCount((count) => count + 1)}
+            onClick={retry}
             className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg border bg-background px-4 py-2.5 text-sm font-medium text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
             <RefreshCw className="size-4" />

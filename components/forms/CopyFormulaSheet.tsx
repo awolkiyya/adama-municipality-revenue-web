@@ -1,7 +1,7 @@
+
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
+import { useCallback, useMemo, useState } from "react";
 
 import {
   AlertTriangle,
@@ -32,17 +32,15 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
+import type { TariffRuleRecord } from "@/types/revenue/tariff-form";
+import {
+  useCopyTariffFormula,
+  useTariffRules,
+} from "@/hooks/revenue/revenueTariffRule.hook";
+
 // ============================================================================
 // TYPES
 // ============================================================================
-
-interface TariffRule {
-  id: string;
-  name?: string | null;
-  code?: string | null;
-  calculation_type?: string | null;
-  calculationType?: string | null;
-}
 
 interface CopyFormulaSheetProps {
   open: boolean;
@@ -54,6 +52,7 @@ interface CopyFormulaSheetProps {
 }
 
 type CopyOptionKey = "variables" | "expression" | "conditions";
+
 type CopyOptions = Record<CopyOptionKey, boolean>;
 
 // ============================================================================
@@ -95,32 +94,52 @@ const OPTION_META: {
 const normalizeCalculationType = (value: unknown): string =>
   String(value ?? "").trim().toLowerCase();
 
-const getRuleName = (rule: TariffRule): string =>
-  rule.name || rule.code || `Tariff Rule ${rule.id}`;
+const getRuleName = (rule: TariffRuleRecord): string =>
+  rule.name || `Tariff Rule ${rule.id}`;
 
-const isFormulaRule = (rule: TariffRule): boolean =>
-  normalizeCalculationType(rule.calculation_type ?? rule.calculationType) ===
-  "formula";
+const getRuleCode = (rule: TariffRuleRecord): string =>
+  String(
+    (rule as TariffRuleRecord & { code?: string }).code ?? "",
+  );
 
-function getRulesFromResponse(result: unknown): TariffRule[] {
-  if (typeof result !== "object" || result === null || !("data" in result)) {
-    return [];
+const isFormulaRule = (rule: TariffRuleRecord): boolean => {
+  const calculationType =
+    rule.calculationType ??
+    (rule as TariffRuleRecord & { calculation_type?: string })
+      .calculation_type;
+
+  return normalizeCalculationType(calculationType) === "formula";
+};
+
+/**
+ * Supports common Laravel API response shapes:
+ *
+ * { data: [...] }
+ * { data: { data: [...] } }
+ * { data: { data: { data: [...] } } }
+ */
+function extractRules(result: unknown): TariffRuleRecord[] {
+  let current: unknown = result;
+
+  for (let depth = 0; depth < 4; depth++) {
+    if (Array.isArray(current)) {
+      return current as TariffRuleRecord[];
+    }
+
+    if (
+      typeof current !== "object" ||
+      current === null ||
+      !("data" in current)
+    ) {
+      return [];
+    }
+
+    current = (current as { data?: unknown }).data;
   }
 
-  const responseData = (result as { data?: unknown }).data;
-
-  if (Array.isArray(responseData)) return responseData as TariffRule[];
-
-  if (
-    typeof responseData === "object" &&
-    responseData !== null &&
-    "data" in responseData
-  ) {
-    const nested = (responseData as { data?: unknown }).data;
-    return Array.isArray(nested) ? (nested as TariffRule[]) : [];
-  }
-
-  return [];
+  return Array.isArray(current)
+    ? (current as TariffRuleRecord[])
+    : [];
 }
 
 // ============================================================================
@@ -135,89 +154,85 @@ export default function CopyFormulaSheet({
   sourceRuleName,
   onCopied,
 }: CopyFormulaSheetProps) {
-  const [rules, setRules] = useState<TariffRule[]>([]);
+  // --------------------------------------------------------------------------
+  // LOCAL UI STATE
+  // --------------------------------------------------------------------------
+
   const [destinationRuleId, setDestinationRuleId] = useState("");
   const [search, setSearch] = useState("");
-  const [loadingRules, setLoadingRules] = useState(false);
-  const [copying, setCopying] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [confirmOverwrite, setConfirmOverwrite] = useState(false);
+
   const [copyOptions, setCopyOptions] = useState<CopyOptions>({
     ...INITIAL_COPY_OPTIONS,
   });
 
   // --------------------------------------------------------------------------
-  // LOAD DESTINATION RULES
+  // REACT QUERY: DESTINATION RULES
   // --------------------------------------------------------------------------
 
-  const loadRules = useCallback(
-    async (signal?: AbortSignal) => {
-      if (!tariffVersionId || !sourceRuleId) {
-        setRules([]);
-        return;
-      }
+  const {
+    data: tariffRulesResponse,
+    isLoading: loadingRules,
+    isFetching: fetchingRules,
+    isError: rulesError,
+    error: rulesErrorObject,
+    refetch: refetchRules,
+  } = useTariffRules({
+    tariff_version_id: tariffVersionId,
+    per_page: 100,
+  });
 
-      setLoadingRules(true);
-      setLoadError(null);
+  // --------------------------------------------------------------------------
+  // REACT QUERY: COPY MUTATION
+  // --------------------------------------------------------------------------
 
-      try {
-        // Replace with your actual route / API service if it differs.
-        const response = await fetch(
-          `/api/v1/revenue/tariff-versions/${encodeURIComponent(
-            tariffVersionId,
-          )}/tariff-rules`,
-          {
-            method: "GET",
-            credentials: "include",
-            headers: { Accept: "application/json" },
-            signal,
-          },
-        );
+  const copyFormulaMutation = useCopyTariffFormula();
 
-        const result = await response.json().catch(() => null);
+  const copying = copyFormulaMutation.isPending;
 
-        if (!response.ok) {
-          throw new Error(result?.message || "Unable to load tariff rules.");
-        }
+  // --------------------------------------------------------------------------
+  // DERIVED RULES
+  // --------------------------------------------------------------------------
 
-        const destinationRules = getRulesFromResponse(result).filter(
-          (rule) =>
-            String(rule.id) !== String(sourceRuleId) && isFormulaRule(rule),
-        );
+  const rules = useMemo(() => {
+    return extractRules(tariffRulesResponse).filter(
+      (rule) =>
+        String(rule.id) !== String(sourceRuleId) &&
+        isFormulaRule(rule),
+    );
+  }, [tariffRulesResponse, sourceRuleId]);
 
-        if (signal?.aborted) return;
+  const filteredRules = useMemo(() => {
+    const query = search.trim().toLowerCase();
 
-        setRules(destinationRules);
-        setDestinationRuleId((current) =>
-          destinationRules.some((r) => String(r.id) === current)
-            ? current
-            : "",
-        );
-      } catch (error) {
-        if (signal?.aborted) return;
-        console.error("Failed to load destination tariff rules:", error);
-        setLoadError(
-          error instanceof Error
-            ? error.message
-            : "Unable to load destination tariff rules.",
-        );
-        setRules([]);
-      } finally {
-        if (!signal?.aborted) setLoadingRules(false);
-      }
-    },
-    [tariffVersionId, sourceRuleId],
+    if (!query) {
+      return rules;
+    }
+
+    return rules.filter((rule) => {
+      const name = getRuleName(rule).toLowerCase();
+      const code = getRuleCode(rule).toLowerCase();
+
+      return name.includes(query) || code.includes(query);
+    });
+  }, [rules, search]);
+
+  const selectedDestination = useMemo(
+    () =>
+      rules.find(
+        (rule) => String(rule.id) === destinationRuleId,
+      ) ?? null,
+    [rules, destinationRuleId],
   );
 
-  useEffect(() => {
-    if (!open || !sourceRuleId) return;
-    const controller = new AbortController();
-    loadRules(controller.signal);
-    return () => controller.abort();
-  }, [open, sourceRuleId, loadRules]);
+  const selectedCount = Object.values(copyOptions).filter(
+    Boolean,
+  ).length;
+
+  const allSelected = selectedCount === OPTION_META.length;
 
   // --------------------------------------------------------------------------
-  // RESET + VISIBILITY
+  // RESET
   // --------------------------------------------------------------------------
 
   const resetSheet = useCallback(() => {
@@ -225,136 +240,116 @@ export default function CopyFormulaSheet({
     setSearch("");
     setConfirmOverwrite(false);
     setCopyOptions({ ...INITIAL_COPY_OPTIONS });
-    setLoadError(null);
-    setRules([]);
   }, []);
+
+  // --------------------------------------------------------------------------
+  // OPEN / CLOSE
+  // --------------------------------------------------------------------------
 
   const handleOpenChange = useCallback(
     (value: boolean) => {
-      if (!value && copying) return;
-      if (!value) resetSheet();
+      if (!value && copying) {
+        return;
+      }
+
+      if (!value) {
+        resetSheet();
+      }
+
       onOpenChange(value);
     },
     [copying, onOpenChange, resetSheet],
   );
 
   // --------------------------------------------------------------------------
-  // DERIVED STATE
+  // COPY OPTION HANDLERS
   // --------------------------------------------------------------------------
 
-  const filteredRules = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    if (!query) return rules;
-    return rules.filter((rule) =>
-      `${rule.name ?? ""} ${rule.code ?? ""}`.toLowerCase().includes(query),
-    );
-  }, [rules, search]);
-
-  const selectedDestination = useMemo(
-    () => rules.find((r) => String(r.id) === destinationRuleId) ?? null,
-    [rules, destinationRuleId],
-  );
-
-  const selectedCount = Object.values(copyOptions).filter(Boolean).length;
-  const allSelected = selectedCount === OPTION_META.length;
-
-  const toggleAll = (checked: boolean) =>
+  const toggleAll = useCallback((checked: boolean) => {
     setCopyOptions({
       variables: checked,
       expression: checked,
       conditions: checked,
     });
+  }, []);
 
-  const toggleOption = (key: CopyOptionKey, checked: boolean) =>
-    setCopyOptions((prev) => ({ ...prev, [key]: checked }));
+  const toggleOption = useCallback(
+    (key: CopyOptionKey, checked: boolean) => {
+      setCopyOptions((previous) => ({
+        ...previous,
+        [key]: checked,
+      }));
+    },
+    [],
+  );
+
+  // --------------------------------------------------------------------------
+  // VALIDATION
+  // --------------------------------------------------------------------------
 
   const canSubmit =
     !copying &&
     !loadingRules &&
-    !loadError &&
+    !rulesError &&
     Boolean(sourceRuleId) &&
-    Boolean(destinationRuleId) &&
+    Boolean(selectedDestination) &&
     selectedCount > 0 &&
-    confirmOverwrite;
+    confirmOverwrite &&
+    String(sourceRuleId) !== String(destinationRuleId);
 
   // --------------------------------------------------------------------------
-  // COPY
+  // COPY FORMULA
   // --------------------------------------------------------------------------
 
   const handleCopy = useCallback(async () => {
-    if (!sourceRuleId) {
-      toast.error("The source tariff rule is missing.");
-      return;
-    }
-    if (!destinationRuleId) {
-      toast.error("Please select a destination tariff rule.");
-      return;
-    }
-    if (sourceRuleId === destinationRuleId) {
-      toast.error("Source and destination rules cannot be the same.");
-      return;
-    }
-    if (!Object.values(copyOptions).some(Boolean)) {
-      toast.error("Select at least one configuration to copy.");
+    if (!sourceRuleId || !selectedDestination) {
       return;
     }
 
-    setCopying(true);
+    if (String(sourceRuleId) === String(selectedDestination.id)) {
+      return;
+    }
+
+    if (selectedCount === 0 || !confirmOverwrite) {
+      return;
+    }
 
     try {
-      // Proposed API contract. Confirm the actual Laravel route before production.
-      const response = await fetch(
-        `/api/v1/revenue/tariff-versions/${encodeURIComponent(
-          tariffVersionId,
-        )}/tariff-rules/${encodeURIComponent(destinationRuleId)}/copy-formula`,
-        {
-          method: "POST",
-          credentials: "include",
-          headers: {
-            Accept: "application/json",
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            source_rule_id: sourceRuleId,
-            options: copyOptions,
-          }),
-        },
-      );
-
-      const result = await response.json().catch(() => null);
-
-      if (!response.ok) {
-        throw new Error(
-          result?.message || "Failed to copy formula configuration.",
-        );
-      }
-
-      toast.success(
-        result?.message || "Formula configuration copied successfully.",
-      );
+      await copyFormulaMutation.mutateAsync({
+        tariffVersionId,
+        sourceRuleId,
+        destinationRuleId: String(selectedDestination.id),
+        options: copyOptions,
+        overwrite: true,
+      });
 
       resetSheet();
       onOpenChange(false);
       onCopied?.();
-    } catch (error) {
-      console.error("Formula copy failed:", error);
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : "Unable to copy formula configuration.",
-      );
-    } finally {
-      setCopying(false);
+    } catch {
+      // Error notification is handled by useCopyTariffFormula().
     }
   }, [
     sourceRuleId,
-    destinationRuleId,
-    copyOptions,
+    selectedDestination,
+    selectedCount,
+    confirmOverwrite,
+    copyFormulaMutation,
     tariffVersionId,
+    copyOptions,
     resetSheet,
     onOpenChange,
     onCopied,
   ]);
+
+  // --------------------------------------------------------------------------
+  // ERROR MESSAGE
+  // --------------------------------------------------------------------------
+
+  const loadErrorMessage =
+    rulesErrorObject instanceof Error
+      ? rulesErrorObject.message
+      : "Unable to load destination tariff rules.";
 
   // --------------------------------------------------------------------------
   // RENDER
@@ -366,28 +361,37 @@ export default function CopyFormulaSheet({
         side="right"
         className="flex w-full flex-col gap-0 p-0 sm:max-w-lg"
       >
+        {/* HEADER */}
         <SheetHeader className="border-b p-6 text-left">
           <div className="mb-2 flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
             <Copy className="size-5" />
           </div>
+
           <SheetTitle>Copy formula configuration</SheetTitle>
+
           <SheetDescription>
-            Reuse a formula setup by copying it into another rule in this
-            tariff version.
+            Reuse a formula setup by copying its selected
+            configuration into another rule in this tariff version.
           </SheetDescription>
         </SheetHeader>
 
         <ScrollArea className="min-h-0 flex-1">
           <div className="space-y-6 p-6">
-            {/* FROM → TO SUMMARY */}
+            {/* COPY DIRECTION */}
             <section className="space-y-2" aria-label="Copy direction">
+              {/* SOURCE */}
               <div className="flex items-start gap-3 rounded-lg border bg-muted/40 p-3">
                 <Sigma className="mt-0.5 size-4 shrink-0 text-primary" />
+
                 <div className="min-w-0 flex-1 space-y-1">
-                  <p className="text-xs text-muted-foreground">Copy from</p>
+                  <p className="text-xs text-muted-foreground">
+                    Copy from
+                  </p>
+
                   <p className="break-words text-sm font-medium">
                     {sourceRuleName || "Selected formula rule"}
                   </p>
+
                   <p className="break-all font-mono text-xs text-muted-foreground">
                     {sourceRuleId || "No source rule selected"}
                   </p>
@@ -398,6 +402,7 @@ export default function CopyFormulaSheet({
                 <ArrowDown className="size-4 text-muted-foreground" />
               </div>
 
+              {/* DESTINATION */}
               <div
                 className={cn(
                   "flex items-start gap-3 rounded-lg border p-3 transition-colors",
@@ -414,13 +419,18 @@ export default function CopyFormulaSheet({
                       : "text-muted-foreground/50",
                   )}
                 />
+
                 <div className="min-w-0 flex-1 space-y-1">
-                  <p className="text-xs text-muted-foreground">Copy to</p>
+                  <p className="text-xs text-muted-foreground">
+                    Copy to
+                  </p>
+
                   {selectedDestination ? (
                     <>
                       <p className="break-words text-sm font-medium">
                         {getRuleName(selectedDestination)}
                       </p>
+
                       <Badge variant="secondary" className="font-normal">
                         Formula
                       </Badge>
@@ -440,123 +450,156 @@ export default function CopyFormulaSheet({
             <section className="space-y-3">
               <div className="flex items-center justify-between">
                 <Label>Destination tariff rule</Label>
-                {!loadingRules && rules.length > 0 && (
+
+                {!loadingRules && !rulesError && rules.length > 0 && (
                   <span className="text-xs text-muted-foreground">
                     {filteredRules.length} of {rules.length}
                   </span>
                 )}
               </div>
 
+              {/* SEARCH */}
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+
                 <Input
                   value={search}
-                  onChange={(e) => setSearch(e.target.value)}
+                  onChange={(event) => setSearch(event.target.value)}
                   placeholder="Search by name or code"
                   className="pl-9"
-                  disabled={loadingRules || copying || rules.length === 0}
+                  disabled={
+                    loadingRules ||
+                    fetchingRules ||
+                    copying ||
+                    rules.length === 0
+                  }
                 />
               </div>
 
+              {/* LOADING */}
               {loadingRules && (
                 <div className="space-y-2">
-                  {[0, 1, 2].map((i) => (
-                    <Skeleton key={i} className="h-14 w-full rounded-lg" />
+                  {[0, 1, 2].map((index) => (
+                    <Skeleton
+                      key={index}
+                      className="h-14 w-full rounded-lg"
+                    />
                   ))}
                 </div>
               )}
 
-              {loadError && (
+              {/* ERROR */}
+              {rulesError && (
                 <div className="flex items-start justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-3">
-                  <p className="text-xs text-destructive">{loadError}</p>
+                  <p className="text-xs text-destructive">
+                    {loadErrorMessage}
+                  </p>
+
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
                     className="shrink-0"
-                    onClick={() => loadRules()}
-                    disabled={loadingRules}
+                    onClick={() => void refetchRules()}
+                    disabled={fetchingRules}
                   >
-                    <RefreshCw className="mr-1.5 size-3.5" />
+                    {fetchingRules ? (
+                      <Loader2 className="mr-1.5 size-3.5 animate-spin" />
+                    ) : (
+                      <RefreshCw className="mr-1.5 size-3.5" />
+                    )}
                     Retry
                   </Button>
                 </div>
               )}
 
-              {!loadingRules && !loadError && rules.length === 0 && (
-                <p className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">
-                  No other formula rules are available in this tariff version.
-                </p>
-              )}
-
+              {/* EMPTY */}
               {!loadingRules &&
-                !loadError &&
-                rules.length > 0 &&
-                filteredRules.length === 0 && (
+                !rulesError &&
+                rules.length === 0 && (
                   <p className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">
-                    No rules match “{search}”.
+                    No other formula rules are available in this
+                    tariff version.
                   </p>
                 )}
 
-              {!loadingRules && filteredRules.length > 0 && (
-                <div
-                  role="radiogroup"
-                  aria-label="Destination tariff rule"
-                  className="max-h-64 space-y-2 overflow-y-auto pr-1"
-                >
-                  {filteredRules.map((rule) => {
-                    const id = String(rule.id);
-                    const selected = id === destinationRuleId;
-                    return (
-                      <button
-                        key={id}
-                        type="button"
-                        role="radio"
-                        aria-checked={selected}
-                        disabled={copying}
-                        onClick={() => setDestinationRuleId(id)}
-                        className={cn(
-                          "flex w-full items-center gap-3 rounded-lg border p-3 text-left transition-colors",
-                          "hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                          selected && "border-primary bg-primary/5",
-                        )}
-                      >
-                        <span
+              {/* NO SEARCH RESULTS */}
+              {!loadingRules &&
+                !rulesError &&
+                rules.length > 0 &&
+                filteredRules.length === 0 && (
+                  <p className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">
+                    No rules match &quot;{search}&quot;.
+                  </p>
+                )}
+
+              {/* RULE LIST */}
+              {!loadingRules &&
+                !rulesError &&
+                filteredRules.length > 0 && (
+                  <div
+                    role="radiogroup"
+                    aria-label="Destination tariff rule"
+                    className="max-h-64 space-y-2 overflow-y-auto pr-1"
+                  >
+                    {filteredRules.map((rule) => {
+                      const id = String(rule.id);
+                      const selected = id === destinationRuleId;
+                      const code = getRuleCode(rule);
+
+                      return (
+                        <button
+                          key={id}
+                          type="button"
+                          role="radio"
+                          aria-checked={selected}
+                          disabled={copying}
+                          onClick={() => setDestinationRuleId(id)}
                           className={cn(
-                            "flex size-4 shrink-0 items-center justify-center rounded-full border",
-                            selected
-                              ? "border-primary bg-primary"
-                              : "border-muted-foreground/40",
+                            "flex w-full items-center gap-3 rounded-lg border p-3 text-left transition-colors",
+                            "hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                            selected && "border-primary bg-primary/5",
                           )}
                         >
-                          {selected && (
-                            <span className="size-1.5 rounded-full bg-primary-foreground" />
-                          )}
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-medium">
-                            {getRuleName(rule)}
+                          <span
+                            className={cn(
+                              "flex size-4 shrink-0 items-center justify-center rounded-full border",
+                              selected
+                                ? "border-primary bg-primary"
+                                : "border-muted-foreground/40",
+                            )}
+                          >
+                            {selected && (
+                              <span className="size-1.5 rounded-full bg-primary-foreground" />
+                            )}
                           </span>
-                          {rule.code && rule.name && (
-                            <span className="block truncate font-mono text-xs text-muted-foreground">
-                              {rule.code}
+
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-medium">
+                              {getRuleName(rule)}
                             </span>
-                          )}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
+
+                            {code && (
+                              <span className="mt-0.5 block truncate font-mono text-xs text-muted-foreground">
+                                {code}
+                              </span>
+                            )}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
             </section>
 
             <Separator />
 
-            {/* WHAT TO COPY */}
+            {/* COPY OPTIONS */}
             <section className="space-y-3">
               <div className="flex items-center justify-between">
                 <div>
                   <h4 className="text-sm font-medium">What to copy</h4>
+
                   <p className="text-xs text-muted-foreground">
                     {selectedCount} of {OPTION_META.length} selected
                   </p>
@@ -585,6 +628,7 @@ export default function CopyFormulaSheet({
                       }
                       className="mt-0.5"
                     />
+
                     <div className="space-y-0.5">
                       <Label
                         htmlFor={`copy-${key}`}
@@ -592,6 +636,7 @@ export default function CopyFormulaSheet({
                       >
                         {label}
                       </Label>
+
                       <p className="text-xs text-muted-foreground">
                         {description}
                       </p>
@@ -605,13 +650,15 @@ export default function CopyFormulaSheet({
             <section className="space-y-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
               <div className="flex items-start gap-3">
                 <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600" />
+
                 <div className="space-y-1">
                   <p className="text-sm font-medium">
-                    This may replace existing configuration
+                    Existing configuration may be replaced
                   </p>
+
                   <p className="text-xs leading-relaxed text-muted-foreground">
-                    Selected items on the destination rule can be overwritten.
-                    The server checks existing data before applying changes.
+                    The selected items on the destination rule may be
+                    overwritten. Review your selection before continuing.
                   </p>
                 </div>
               </div>
@@ -621,8 +668,11 @@ export default function CopyFormulaSheet({
                   id="confirm-overwrite"
                   checked={confirmOverwrite}
                   disabled={copying}
-                  onCheckedChange={(c) => setConfirmOverwrite(c === true)}
+                  onCheckedChange={(checked) =>
+                    setConfirmOverwrite(checked === true)
+                  }
                 />
+
                 <Label
                   htmlFor="confirm-overwrite"
                   className="cursor-pointer text-xs"
@@ -634,6 +684,7 @@ export default function CopyFormulaSheet({
           </div>
         </ScrollArea>
 
+        {/* FOOTER */}
         <SheetFooter className="flex-row justify-end gap-2 border-t p-4 sm:space-x-0">
           <Button
             type="button"
@@ -644,7 +695,11 @@ export default function CopyFormulaSheet({
             Cancel
           </Button>
 
-          <Button type="button" onClick={handleCopy} disabled={!canSubmit}>
+          <Button
+            type="button"
+            onClick={handleCopy}
+            disabled={!canSubmit}
+          >
             {copying ? (
               <>
                 <Loader2 className="mr-2 size-4 animate-spin" />
@@ -653,7 +708,10 @@ export default function CopyFormulaSheet({
             ) : (
               <>
                 <Copy className="mr-2 size-4" />
-                Copy {selectedCount > 0 ? `${selectedCount} item${selectedCount > 1 ? "s" : ""}` : "configuration"}
+                Copy{" "}
+                {selectedCount > 0
+                  ? `${selectedCount} item${selectedCount > 1 ? "s" : ""}`
+                  : "configuration"}
               </>
             )}
           </Button>

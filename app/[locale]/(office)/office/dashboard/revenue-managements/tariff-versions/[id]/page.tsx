@@ -61,7 +61,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import CopyFormulaDialog from "@/components/forms/CopyFormulaDialog";
+import CopyFormulaSheet from "@/components/forms/CopyFormulaSheet";
 
 /* =========================================================================
    TYPES
@@ -1385,23 +1385,13 @@ export default function TariffVersionDetailPage() {
     [],
   );
 
-  /* Called by CopyFormulaDialog after successful copy */
+
+  /* Called by CopyFormulaSheet after successful copy */
 
   const handleFormulaCopied = useCallback(() => {
     setCopyFormulaDialogOpen(false);
     setSelectedSourceRule(null);
-
-    toast.success("Formula copied successfully.");
-
-    /*
-     * Refresh server-rendered content.
-     *
-     * If useTariffRules uses React Query, also invalidate its
-     * query key inside the copy mutation hook. router.refresh()
-     * alone does not invalidate React Query's client-side cache.
-     */
-    router.refresh();
-  }, [router]);
+  }, []);
 
   /* Delete rule */
 
@@ -1537,7 +1527,7 @@ export default function TariffVersionDetailPage() {
 
       {/* Copy formula */}
 
-      <CopyFormulaDialog
+      <CopyFormulaSheet
         open={copyFormulaDialogOpen}
         onOpenChange={handleCopyFormulaDialogChange}
         tariffVersionId={String(id)}

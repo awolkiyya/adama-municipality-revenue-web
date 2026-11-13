@@ -21,6 +21,30 @@ export type TariffRuleQueryParams = {
   [key: string]: unknown;
 };
 
+
+
+export type CopyTariffFormulaOptions = {
+  variables: boolean;
+  expression: boolean;
+  conditions: boolean;
+};
+
+export type CopyTariffFormulaPayload = {
+  source_rule_id: string;
+  options: CopyTariffFormulaOptions;
+  overwrite: boolean;
+};
+
+export type CopyTariffFormulaResponse = {
+  message?: string;
+  data?: {
+    source_rule_id?: string;
+    destination_rule_id?: string;
+    copied?: CopyTariffFormulaOptions;
+  };
+};
+
+
 export const tariffRuleService = {
   /**
    * GET ALL TARIFF RULES
@@ -173,4 +197,32 @@ export const tariffRuleService = {
       throw normalizeApiError(error);
     }
   },
+
+
+
+  /**
+   * COPY FORMULA CONFIGURATION
+   *
+   * Copies selected formula configuration from a source rule
+   * into a destination rule within the same tariff version.
+   */
+  copyFormula: async (
+    tariffVersionId: string,
+    destinationRuleId: string,
+    data: CopyTariffFormulaPayload
+  ): Promise<ApiResponse<CopyTariffFormulaResponse["data"]>> => {
+    try {
+      const res = await api.post<
+        ApiResponse<CopyTariffFormulaResponse["data"]>
+      >(
+        `/revenue/tariff-versions/${tariffVersionId}/tariff-rules/${destinationRuleId}/copy-formula`,
+        data
+      );
+
+      return res.data;
+    } catch (error) {
+      throw normalizeApiError(error);
+    }
+  },
+
 };

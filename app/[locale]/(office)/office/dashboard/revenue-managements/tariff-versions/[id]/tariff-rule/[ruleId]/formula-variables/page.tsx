@@ -11,7 +11,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import FormulaVariablesForm from "@/components/forms/FormulaVariablesForm";
-import CopyFormulaDialog from "@/components/forms/CopyFormulaDialog";
+import CopyFormulaDialog from "@/components/forms/CopyFormulaSheet";
 
 export default function FormulaVariablesPage() {
   const { id, locale, ruleId } = useParams<{

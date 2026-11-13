@@ -509,3 +509,76 @@ import { CreateTariffRulePayload, TariffRuleRecord, UpdateTariffRulePayload } fr
   
   
   };
+
+  /* --------------------------------------
+   COPY TARIFF FORMULA
+-------------------------------------- */
+
+export const useCopyTariffFormula = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      tariffVersionId,
+      sourceRuleId,
+      destinationRuleId,
+      options,
+      overwrite,
+    }: {
+      tariffVersionId: string;
+      sourceRuleId: string;
+      destinationRuleId: string;
+      options: {
+        variables: boolean;
+        expression: boolean;
+        conditions: boolean;
+      };
+      overwrite: boolean;
+    }) =>
+      tariffRuleService.copyFormula(
+        tariffVersionId,
+        destinationRuleId,
+        {
+          source_rule_id: sourceRuleId,
+          options,
+          overwrite,
+        },
+      ),
+
+    onSuccess: (_, variables) => {
+      // Refresh the tariff rules list.
+      queryClient.invalidateQueries({
+        queryKey: ["tariff-rules"],
+      });
+
+      // Refresh source and destination rule details.
+      queryClient.invalidateQueries({
+        queryKey: ["tariff-rule", variables.sourceRuleId],
+      });
+
+      queryClient.invalidateQueries({
+        queryKey: ["tariff-rule", variables.destinationRuleId],
+      });
+
+      // Refresh destination formula variables.
+      queryClient.invalidateQueries({
+        queryKey: [
+          "tariff-formula-variables",
+          variables.destinationRuleId,
+        ],
+      });
+
+      toast.success(
+        "Formula configuration copied successfully.",
+      );
+    },
+
+    onError: (error) => {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Failed to copy formula configuration.",
+      );
+    },
+  });
+};

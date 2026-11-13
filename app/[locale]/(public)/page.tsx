@@ -49,6 +49,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { api } from "@/lib/api";
 
 /* -------------------------------------------------------------------------- */
 /* API configuration                                                         */
@@ -473,21 +474,21 @@ function MobileAppReleaseDownload({
       try {
         const apiBaseUrl = API_URL.replace(/\/+$/, "");
 
-        const response = await fetch(
+        const response = await api.get(
           `${apiBaseUrl}/api/v1/mobile-app-releases/latest?app_type=${encodeURIComponent(
             appType,
           )}`,
-          {
-            method: "GET",
-            headers: {
-              Accept: "application/json",
-            },
-            cache: "no-store",
-            signal: controller.signal,
-          },
+          // {
+          //   method: "GET",
+          //   headers: {
+          //     Accept: "application/json",
+          //   },
+          //   cache: "no-store",
+          //   signal: controller.signal,
+          // },
         );
 
-        const payload: unknown = await response.json().catch(() => null);
+        const payload = response.data;
 
         /*
          * No published release is an expected business condition.
@@ -497,14 +498,14 @@ function MobileAppReleaseDownload({
           return;
         }
 
-        if (!response.ok) {
-          throw new Error(
-            getApiErrorMessage(
-              payload,
-              "Unable to load the latest app release. Please try again.",
-            ),
-          );
-        }
+        // if (!response.ok) {
+        //   throw new Error(
+        //     getApiErrorMessage(
+        //       payload,
+        //       "Unable to load the latest app release. Please try again.",
+        //     ),
+        //   );
+        // }
 
         /*
          * Support both:

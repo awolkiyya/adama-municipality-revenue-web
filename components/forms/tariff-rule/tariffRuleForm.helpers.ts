@@ -201,20 +201,31 @@ import {
   }
   
   // -----------------------------------------------------------------------------
-  // Labels
+  // Operator labels
   // -----------------------------------------------------------------------------
-  
+
   export const OPERATOR_LABELS: Record<
-    Condition["operator"],
-    string
+  Condition["operator"],
+  string
   > = {
-    equals: "is",
-    not_equals: "is not",
-    contains: "contains",
-    greater_than: "is greater than",
-    greater_than_or_equal: "is greater than or equal to",
-    less_than: "is less than",
-    less_than_or_equal: "is less than or equal to",
+  // Standard operators
+  equals: "is",
+  not_equals: "is not",
+  contains: "contains",
+
+  // Numeric comparison operators
+  greater_than: "is greater than",
+  greater_than_or_equal: "is greater than or equal to",
+  less_than: "is less than",
+  less_than_or_equal: "is less than or equal to",
+
+  // Ordered comparison operators
+  ordered_greater_than: "is greater than (ordered)",
+  ordered_greater_than_or_equal:
+    "is greater than or equal to (ordered)",
+  ordered_less_than: "is less than (ordered)",
+  ordered_less_than_or_equal:
+    "is less than or equal to (ordered)",
   };
   
   export const ROUNDING_LABELS: Record<RoundingRule, string> = {

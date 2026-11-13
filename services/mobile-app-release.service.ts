@@ -1,6 +1,9 @@
 import { api } from "@/lib/api";
 import { MobileAppRelease, MobileAppType } from "@/types/mobile-app-release";
 
+const BASE_URL = "/mobile-app-releases";
+
+
 function isMobileAppRelease(
   value: unknown,
 ): value is MobileAppRelease {
@@ -32,11 +35,9 @@ export async function getLatestMobileAppRelease(
     );
   }
 
-  const apiBaseUrl = apiUrl.replace(/\/+$/, "");
-
   try {
     const response = await api.get(
-      `${apiBaseUrl}/api/v1/mobile-app-releases/latest`,
+      `${BASE_URL}/latest`,
       {
         params: {
           app_type: appType,

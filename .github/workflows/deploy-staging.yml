@@ -5,7 +5,6 @@ on:
   push:
     branches:
       - staging
-
   workflow_dispatch:
 
 permissions:
@@ -27,7 +26,6 @@ jobs:
       ACME_TEST_RESPONSE: "acme-test-success"
 
     steps:
-
       # --------------------------------------------------
       # 1. Checkout source code
       # --------------------------------------------------
@@ -94,8 +92,9 @@ jobs:
 
           tar -tzf "$RUNNER_TEMP/staging-source.tar.gz" > /dev/null
 
-          if tar -tzf "$RUNNER_TEMP/staging-source.tar.gz" | grep -Eq '(^|/)nginx/|(^|/)compose\.gateway\.yml$'; then
-            echo "ERROR: Shared gateway files must not be included in the staging package."
+          if tar -tzf "$RUNNER_TEMP/staging-source.tar.gz" |
+            grep -Eq '(^|/)nginx/|(^|/)compose\.gateway\.yml$'; then
+            echo "ERROR: Shared gateway files must not be included."
             exit 1
           fi
 
@@ -145,7 +144,7 @@ jobs:
             -o ConnectTimeout=20 \
             -o StrictHostKeyChecking=yes \
             "$STAGING_USER@$STAGING_HOST" \
-            'bash -s' <<'REMOTE'
+            'bash -s --' "$GITHUB_SHA" <<'REMOTE'
 
           set -Eeuo pipefail
 
@@ -153,15 +152,26 @@ jobs:
           # Deployment configuration
           # ------------------------------------------------
 
+          GIT_COMMIT="${1:?Git commit SHA is required}"
+
           APP_ROOT="/opt/adama-revenue/web_app"
           SOURCE_DIR="$APP_ROOT/source-staging"
           ENV_FILE="$APP_ROOT/.env.staging"
           ARCHIVE="/tmp/adama-staging-source.tar.gz"
+
           IMAGE="adama-revenue-web:staging"
+          RELEASE_IMAGE="adama-revenue-web:staging-$GIT_COMMIT"
 
           GATEWAY_COMPOSE_FILE="$APP_ROOT/gateway/docker/compose.gateway.yml"
+
           ACME_WEBROOT="$APP_ROOT/certificates/www"
           ACME_CHALLENGE_DIR="$ACME_WEBROOT/.well-known/acme-challenge"
+
+          COMPOSE_PROJECT="my-next-staging"
+          GATEWAY_PROJECT="my-next-gateway"
+
+          COMPOSE_FILE="$SOURCE_DIR/docker/compose.yml"
+          STAGING_COMPOSE_FILE="$SOURCE_DIR/docker/compose.staging.yml"
 
           export IMAGE
 
@@ -173,8 +183,10 @@ jobs:
 
           echo "Server: $(hostname)"
           echo "Deployment user: $(id)"
+          echo "Commit: $GIT_COMMIT"
           echo "Source directory: $SOURCE_DIR"
-          echo "Image: $IMAGE"
+          echo "Stable image: $IMAGE"
+          echo "Release image: $RELEASE_IMAGE"
 
           # ------------------------------------------------
           # 6. Verify deployment prerequisites
@@ -201,14 +213,10 @@ jobs:
           echo "INITIALIZING ACME HTTP-01 WEBROOT"
           echo "========================================"
 
-          mkdir -p "$ACME_WEBROOT"
           mkdir -p "$ACME_CHALLENGE_DIR"
 
           echo "ACME webroot:"
           readlink -f "$ACME_WEBROOT"
-
-          echo "ACME challenge directory:"
-          readlink -f "$ACME_CHALLENGE_DIR"
 
           ls -ld "$ACME_WEBROOT"
           ls -ld "$ACME_WEBROOT/.well-known"
@@ -224,12 +232,58 @@ jobs:
 
           EXTRACT_DIR="$(mktemp -d /tmp/adama-staging-source.XXXXXX)"
 
+          DEPLOY_STARTED=false
+          DEPLOY_SUCCESS=false
+          PREVIOUS_IMAGE_ID=""
+
           cleanup_deployment() {
             rm -rf -- "$EXTRACT_DIR"
             rm -f -- "$ARCHIVE"
           }
 
-          trap cleanup_deployment EXIT
+          rollback_deployment() {
+            if [ "$DEPLOY_STARTED" = "true" ] &&
+               [ "$DEPLOY_SUCCESS" != "true" ] &&
+               [ -n "$PREVIOUS_IMAGE_ID" ]; then
+
+              echo "========================================"
+              echo "DEPLOYMENT FAILED - ROLLING BACK"
+              echo "========================================"
+
+              docker tag "$PREVIOUS_IMAGE_ID" "$IMAGE"
+
+              docker compose \
+                -p "$COMPOSE_PROJECT" \
+                -f "$COMPOSE_FILE" \
+                -f "$STAGING_COMPOSE_FILE" \
+                up -d \
+                --no-build \
+                --pull never \
+                --force-recreate \
+                app || {
+                  echo "ERROR: Automatic rollback failed."
+                  return 1
+                }
+
+              echo "Previous application image restored."
+            fi
+          }
+
+          deployment_exit() {
+            EXIT_CODE=$?
+
+            trap - EXIT
+
+            if [ "$EXIT_CODE" -ne 0 ]; then
+              rollback_deployment || true
+            fi
+
+            cleanup_deployment
+
+            exit "$EXIT_CODE"
+          }
+
+          trap deployment_exit EXIT
 
           tar -xzf "$ARCHIVE" -C "$EXTRACT_DIR"
 
@@ -238,7 +292,7 @@ jobs:
           test -f "$EXTRACT_DIR/docker/compose.staging.yml"
 
           # ------------------------------------------------
-          # 9. Update source-staging
+          # 9. Update staging source
           # ------------------------------------------------
 
           echo "========================================"
@@ -257,13 +311,17 @@ jobs:
           rm -rf -- "$EXTRACT_DIR"
 
           # ------------------------------------------------
-          # 11. Read staging API URL
+          # 10. Read staging API URL
           # ------------------------------------------------
 
-          echo "Reading staging API URL..."
+          echo "========================================"
+          echo "READING STAGING ENVIRONMENT"
+          echo "========================================"
 
           NEXT_PUBLIC_API_URL="$(
-            sed -n 's/^NEXT_PUBLIC_API_URL=//p' "$ENV_FILE" | tail -n 1
+            sed -n 's/^NEXT_PUBLIC_API_URL=//p' "$ENV_FILE" |
+            tail -n 1 |
+            sed 's/^["'\'']//; s/["'\'']$//'
           )"
 
           test -n "$NEXT_PUBLIC_API_URL"
@@ -277,8 +335,56 @@ jobs:
               ;;
           esac
 
+          echo "Staging API URL validated."
+
           # ------------------------------------------------
-          # 12. Build Next.js Docker image
+          # 11. Validate Compose configuration
+          # ------------------------------------------------
+
+          echo "========================================"
+          echo "VALIDATING COMPOSE CONFIGURATION"
+          echo "========================================"
+
+          docker compose \
+            -p "$COMPOSE_PROJECT" \
+            -f "$COMPOSE_FILE" \
+            -f "$STAGING_COMPOSE_FILE" \
+            config -q
+
+          # Ensure the app service uses the exact image
+          # that this workflow builds and deploys.
+
+          CONFIGURED_APP_IMAGE="$(
+            docker compose \
+              -p "$COMPOSE_PROJECT" \
+              -f "$COMPOSE_FILE" \
+              -f "$STAGING_COMPOSE_FILE" \
+              config --format json |
+            python3 -c '
+          import json
+          import sys
+
+          config = json.load(sys.stdin)
+          app = config.get("services", {}).get("app")
+
+          if not app:
+              raise SystemExit("ERROR: Compose service app was not found.")
+
+          print(app.get("image", ""))
+          '
+          )"
+
+          if [ "$CONFIGURED_APP_IMAGE" != "$IMAGE" ]; then
+            echo "ERROR: Compose app image does not match workflow image."
+            echo "Expected: $IMAGE"
+            echo "Actual:   $CONFIGURED_APP_IMAGE"
+            exit 1
+          fi
+
+          echo "Compose application image verified: $IMAGE"
+
+          # ------------------------------------------------
+          # 12. Build unique release image
           # ------------------------------------------------
 
           echo "========================================"
@@ -288,49 +394,97 @@ jobs:
           docker build \
             --pull \
             --build-arg NEXT_PUBLIC_API_URL="$NEXT_PUBLIC_API_URL" \
+            --label "org.opencontainers.image.revision=$GIT_COMMIT" \
+            --label "org.opencontainers.image.source=adama-revenue-web" \
+            --label "org.opencontainers.image.version=$GIT_COMMIT" \
             -f "$SOURCE_DIR/docker/Dockerfile" \
-            -t "$IMAGE" \
+            -t "$RELEASE_IMAGE" \
             "$SOURCE_DIR"
 
-          echo "Docker image built successfully."
+          echo "Release image built successfully."
 
           # ------------------------------------------------
-          # 13. Validate application Compose configuration
+          # 13. Verify release image metadata
           # ------------------------------------------------
 
-          echo "Validating application Compose configuration..."
+          echo "========================================"
+          echo "VERIFYING RELEASE IMAGE"
+          echo "========================================"
 
-          docker compose \
-            -p my-next-staging \
-            -f "$SOURCE_DIR/docker/compose.yml" \
-            -f "$SOURCE_DIR/docker/compose.staging.yml" \
-            config -q
+          BUILT_COMMIT="$(
+            docker image inspect "$RELEASE_IMAGE" \
+              --format '{{index .Config.Labels "org.opencontainers.image.revision"}}'
+          )"
+
+          if [ "$BUILT_COMMIT" != "$GIT_COMMIT" ]; then
+            echo "ERROR: Built image commit does not match deployment commit."
+            exit 1
+          fi
+
+          echo "Built image commit verified: $BUILT_COMMIT"
 
           # ------------------------------------------------
-          # 14. Deploy Next.js application
+          # 14. Preserve previous image for rollback
+          # ------------------------------------------------
+
+          echo "========================================"
+          echo "PREPARING DEPLOYMENT ROLLBACK"
+          echo "========================================"
+
+          if docker image inspect "$IMAGE" > /dev/null 2>&1; then
+            PREVIOUS_IMAGE_ID="$(
+              docker image inspect "$IMAGE" --format '{{.Id}}'
+            )"
+
+            echo "Previous image found: $PREVIOUS_IMAGE_ID"
+          else
+            echo "No previous staging image found."
+          fi
+
+          # Tag the new immutable release as the stable
+          # image expected by Docker Compose.
+
+          docker tag "$RELEASE_IMAGE" "$IMAGE"
+
+          NEW_IMAGE_ID="$(
+            docker image inspect "$IMAGE" --format '{{.Id}}'
+          )"
+
+          echo "New staging image: $NEW_IMAGE_ID"
+
+          # ------------------------------------------------
+          # 15. Deploy Next.js application
           # ------------------------------------------------
 
           echo "========================================"
           echo "DEPLOYING STAGING APPLICATION"
           echo "========================================"
 
+          DEPLOY_STARTED=true
+
           docker compose \
-            -p my-next-staging \
-            -f "$SOURCE_DIR/docker/compose.yml" \
-            -f "$SOURCE_DIR/docker/compose.staging.yml" \
-            up -d --remove-orphans
+            -p "$COMPOSE_PROJECT" \
+            -f "$COMPOSE_FILE" \
+            -f "$STAGING_COMPOSE_FILE" \
+            up -d \
+            --no-build \
+            --pull never \
+            --remove-orphans \
+            --force-recreate
 
           # ------------------------------------------------
-          # 15. Wait for application health
+          # 16. Verify deployed container and image
           # ------------------------------------------------
 
-          echo "Waiting for staging application health..."
+          echo "========================================"
+          echo "VERIFYING DEPLOYED CONTAINER"
+          echo "========================================"
 
           CONTAINER_ID="$(
             docker compose \
-              -p my-next-staging \
-              -f "$SOURCE_DIR/docker/compose.yml" \
-              -f "$SOURCE_DIR/docker/compose.staging.yml" \
+              -p "$COMPOSE_PROJECT" \
+              -f "$COMPOSE_FILE" \
+              -f "$STAGING_COMPOSE_FILE" \
               ps -q app
           )"
 
@@ -338,6 +492,39 @@ jobs:
             echo "ERROR: Staging application container was not found."
             exit 1
           fi
+
+          DEPLOYED_IMAGE_ID="$(
+            docker inspect "$CONTAINER_ID" --format '{{.Image}}'
+          )"
+
+          if [ "$DEPLOYED_IMAGE_ID" != "$NEW_IMAGE_ID" ]; then
+            echo "ERROR: Running container is not using the newly built image."
+            echo "Expected: $NEW_IMAGE_ID"
+            echo "Actual:   $DEPLOYED_IMAGE_ID"
+            exit 1
+          fi
+
+          DEPLOYED_COMMIT="$(
+            docker inspect "$CONTAINER_ID" \
+              --format '{{index .Config.Labels "org.opencontainers.image.revision"}}'
+          )"
+
+          if [ "$DEPLOYED_COMMIT" != "$GIT_COMMIT" ]; then
+            echo "ERROR: Running container has an unexpected commit."
+            echo "Expected: $GIT_COMMIT"
+            echo "Actual:   $DEPLOYED_COMMIT"
+            exit 1
+          fi
+
+          echo "Running container commit verified: $DEPLOYED_COMMIT"
+
+          # ------------------------------------------------
+          # 17. Wait for application health
+          # ------------------------------------------------
+
+          echo "========================================"
+          echo "WAITING FOR APPLICATION HEALTH"
+          echo "========================================"
 
           HEALTHY=false
 
@@ -356,7 +543,8 @@ jobs:
               break
             fi
 
-            if [ "$STATUS" = "unhealthy" ] || [ "$STATUS" = "no-healthcheck" ]; then
+            if [ "$STATUS" = "unhealthy" ] ||
+               [ "$STATUS" = "no-healthcheck" ]; then
               break
             fi
 
@@ -372,15 +560,19 @@ jobs:
           echo "Staging application is healthy."
 
           # ------------------------------------------------
-          # 16. Verify staging Docker network
+          # 18. Verify staging Docker network
           # ------------------------------------------------
 
-          echo "Checking staging Docker network..."
+          echo "========================================"
+          echo "VERIFYING STAGING DOCKER NETWORK"
+          echo "========================================"
 
-          docker network inspect my-next-staging_app-network > /dev/null
+          docker network inspect "${COMPOSE_PROJECT}_app-network" > /dev/null
+
+          echo "Staging Docker network verified."
 
           # ------------------------------------------------
-          # 16. Identify the existing shared Nginx gateway
+          # 19. Identify shared Nginx gateway
           # ------------------------------------------------
 
           echo "========================================"
@@ -389,19 +581,19 @@ jobs:
 
           GATEWAY_CONTAINER_ID="$(
             docker compose \
-              -p my-next-gateway \
+              -p "$GATEWAY_PROJECT" \
               -f "$GATEWAY_COMPOSE_FILE" \
               ps -q nginx
           )"
 
           if [ -z "$GATEWAY_CONTAINER_ID" ]; then
             echo "ERROR: Shared Nginx gateway container was not found."
-            echo "The staging workflow does not deploy or recreate the gateway."
+            echo "This workflow does not deploy or recreate the gateway."
             exit 1
           fi
 
           # ------------------------------------------------
-          # 17. Verify live Nginx configuration
+          # 20. Verify live Nginx configuration
           # ------------------------------------------------
 
           echo "========================================"
@@ -425,7 +617,7 @@ jobs:
           echo "Live Nginx ACME configuration verified."
 
           # ------------------------------------------------
-          # 18. Verify ACME webroot volume
+          # 21. Verify ACME webroot volume
           # ------------------------------------------------
 
           echo "========================================"
@@ -437,9 +629,11 @@ jobs:
               --format '{{range .Mounts}}{{if eq .Destination "/var/www/certbot"}}{{.Source}}{{end}}{{end}}'
           )"
 
-          if [ "$ACTUAL_MOUNT_SOURCE" != "$ACME_WEBROOT" ]; then
+          EXPECTED_MOUNT_SOURCE="$(readlink -f "$ACME_WEBROOT")"
+
+          if [ "$(readlink -f "$ACTUAL_MOUNT_SOURCE")" != "$EXPECTED_MOUNT_SOURCE" ]; then
             echo "ERROR: ACME webroot mount is incorrect."
-            echo "Expected: $ACME_WEBROOT"
+            echo "Expected: $EXPECTED_MOUNT_SOURCE"
             echo "Actual:   $ACTUAL_MOUNT_SOURCE"
             exit 1
           fi
@@ -447,7 +641,7 @@ jobs:
           echo "ACME webroot volume verified."
 
           # ------------------------------------------------
-          # 19. Verify staging HTTP endpoint
+          # 22. Verify staging HTTP endpoint
           # ------------------------------------------------
 
           echo "========================================"
@@ -485,7 +679,7 @@ jobs:
             echo "ERROR: Staging HTTP endpoint is unavailable."
 
             docker compose \
-              -p my-next-gateway \
+              -p "$GATEWAY_PROJECT" \
               -f "$GATEWAY_COMPOSE_FILE" \
               logs --tail 100 nginx
 
@@ -495,7 +689,13 @@ jobs:
           echo "Staging HTTP endpoint is responding."
 
           # ------------------------------------------------
-          # 20. Display deployment status
+          # 23. Mark deployment successful
+          # ------------------------------------------------
+
+          DEPLOY_SUCCESS=true
+
+          # ------------------------------------------------
+          # 24. Display deployment status
           # ------------------------------------------------
 
           echo ""
@@ -504,9 +704,9 @@ jobs:
           echo "========================================"
 
           docker compose \
-            -p my-next-staging \
-            -f "$SOURCE_DIR/docker/compose.yml" \
-            -f "$SOURCE_DIR/docker/compose.staging.yml" \
+            -p "$COMPOSE_PROJECT" \
+            -f "$COMPOSE_FILE" \
+            -f "$STAGING_COMPOSE_FILE" \
             ps
 
           echo ""
@@ -515,7 +715,7 @@ jobs:
           echo "========================================"
 
           docker compose \
-            -p my-next-gateway \
+            -p "$GATEWAY_PROJECT" \
             -f "$GATEWAY_COMPOSE_FILE" \
             ps
 
@@ -525,13 +725,15 @@ jobs:
           echo "========================================"
 
           echo "Application: http://196.190.216.41"
-          echo "Shared gateway: my-next-gateway (not modified)"
+          echo "Commit:      $GIT_COMMIT"
           echo "Image:       $IMAGE"
+          echo "Release:     $RELEASE_IMAGE"
+          echo "Gateway:     $GATEWAY_PROJECT (not modified)"
 
           REMOTE
 
       # --------------------------------------------------
-      # 6. Create and verify ACME challenge + public endpoint
+      # 6. Verify public ACME HTTP-01 endpoint
       # --------------------------------------------------
 
       - name: Verify public ACME HTTP-01 endpoint
@@ -544,7 +746,6 @@ jobs:
           URL="http://${STAGING_PUBLIC_IP}/.well-known/acme-challenge/${ACME_TEST_TOKEN}"
 
           EXPECTED_RESPONSE="$ACME_TEST_RESPONSE"
-
           RESPONSE_FILE="$RUNNER_TEMP/acme-public-response.txt"
 
           HTTP_STATUS="000"
@@ -574,6 +775,7 @@ jobs:
           APP_ROOT="/opt/adama-revenue/web_app"
           WEBROOT="$APP_ROOT/certificates/www"
           CHALLENGE_DIR="$WEBROOT/.well-known/acme-challenge"
+
           FILE="$CHALLENGE_DIR/$TOKEN"
           TEMP_FILE="$CHALLENGE_DIR/.${TOKEN}.tmp.$$"
 
@@ -587,93 +789,45 @@ jobs:
             exit 1
           fi
 
-          echo "========================================"
-          echo "REMOTE CHALLENGE CREATION"
-          echo "========================================"
-
           echo "Remote server: $(hostname)"
           echo "Deployment user: $(id)"
           echo "Webroot: $WEBROOT"
-          echo "Challenge directory: $CHALLENGE_DIR"
-          echo "Challenge file: $FILE"
 
           mkdir -p "$CHALLENGE_DIR"
 
-          echo "Directory permissions:"
-          ls -ld "$WEBROOT"
-          ls -ld "$WEBROOT/.well-known"
-          ls -ld "$CHALLENGE_DIR"
-
-          echo "Checking write permission..."
-
           if [ ! -w "$CHALLENGE_DIR" ]; then
-            echo "ERROR: Deployment user cannot write to ACME challenge directory."
-            echo "Current user:"
-            id
-            echo "Directory ownership and permissions:"
+            echo "ERROR: Deployment user cannot write to ACME directory."
             namei -l "$CHALLENGE_DIR" || true
             exit 1
           fi
 
-          echo "Creating challenge file atomically..."
-
           umask 022
 
           printf '%s' "$EXPECTED" > "$TEMP_FILE"
-
           chmod 644 "$TEMP_FILE"
-
           mv -f -- "$TEMP_FILE" "$FILE"
 
           # ------------------------------------------------
-          # Verify remote file
+          # Verify remote challenge file
           # ------------------------------------------------
 
-          echo "========================================"
-          echo "VERIFYING REMOTE CHALLENGE FILE"
-          echo "========================================"
-
-          if [ ! -f "$FILE" ]; then
-            echo "ERROR: Remote challenge file was not created."
-            exit 1
-          fi
-
           if [ ! -s "$FILE" ]; then
-            echo "ERROR: Remote challenge file is empty."
+            echo "ERROR: Remote challenge file is empty or missing."
             exit 1
           fi
 
           if ! printf '%s' "$EXPECTED" | cmp -s - "$FILE"; then
             echo "ERROR: Remote challenge content does not match."
-
-            echo "Expected bytes:"
-            printf '%s' "$EXPECTED" | od -An -tx1c
-
-            echo "Actual bytes:"
-            od -An -tx1c "$FILE"
-
             exit 1
           fi
 
-          echo "Remote challenge file successfully created."
+          echo "Remote challenge file verified."
 
-          echo "File metadata:"
           stat "$FILE"
 
-          echo "Challenge directory contents:"
-          ls -lah "$CHALLENGE_DIR"
-
-          printf 'Remote file content: '
-          cat "$FILE"
-          echo
-
           # ------------------------------------------------
-          # Verify Nginx container sees the same file
+          # Verify Nginx container sees the challenge file
           # ------------------------------------------------
-
-          echo "========================================"
-          echo "VERIFYING CHALLENGE FILE INSIDE NGINX"
-          echo "========================================"
 
           GATEWAY_COMPOSE_FILE="$APP_ROOT/gateway/docker/compose.gateway.yml"
 
@@ -705,15 +859,11 @@ jobs:
             exit 1
           fi
 
-          echo "Challenge file is accessible inside Nginx."
+          echo "Nginx challenge file verified."
 
           # ------------------------------------------------
           # Verify local HTTP-01 endpoint
           # ------------------------------------------------
-
-          echo "========================================"
-          echo "TESTING LOCAL HTTP-01 ENDPOINT"
-          echo "========================================"
 
           LOCAL_RESPONSE="$(
             curl \
@@ -728,20 +878,14 @@ jobs:
 
           if [ "$LOCAL_RESPONSE" != "$EXPECTED" ]; then
             echo "ERROR: Local HTTP-01 verification failed."
-            echo "Expected: $EXPECTED"
-            echo "Received: $LOCAL_RESPONSE"
             exit 1
           fi
 
-          echo "Local HTTP-01 verification successful."
+          echo "Local HTTP-01 endpoint verified."
 
           # ------------------------------------------------
           # Final remote file verification
           # ------------------------------------------------
-
-          echo "========================================"
-          echo "FINAL REMOTE FILE VERIFICATION"
-          echo "========================================"
 
           if [ ! -s "$FILE" ]; then
             echo "ERROR: Remote challenge file disappeared."
@@ -758,7 +902,7 @@ jobs:
           REMOTE_CHECK
 
           # ------------------------------------------------
-          # Public HTTP-01 endpoint verification
+          # Verify public HTTP-01 endpoint
           # ------------------------------------------------
 
           echo "========================================"
@@ -766,7 +910,6 @@ jobs:
           echo "========================================"
 
           echo "URL: $URL"
-          echo "Expected response: $EXPECTED_RESPONSE"
 
           PUBLIC_READY=false
 
@@ -790,14 +933,12 @@ jobs:
 
             echo "Public HTTP status: $HTTP_STATUS ($attempt/15)"
 
-            if [ "$HTTP_STATUS" = "200" ] && \
+            if [ "$HTTP_STATUS" = "200" ] &&
                [ "$ACTUAL_RESPONSE" = "$EXPECTED_RESPONSE" ]; then
 
               PUBLIC_READY=true
               break
             fi
-
-            echo "Public ACME verification not successful yet."
 
             sleep 3
           done
@@ -824,7 +965,7 @@ jobs:
           echo "Challenge response: verified"
 
       # --------------------------------------------------
-      # 7. Always clean up temporary ACME test file
+      # 7. Always clean up temporary ACME challenge
       # --------------------------------------------------
 
       - name: Clean up temporary ACME challenge
@@ -845,8 +986,9 @@ jobs:
             exit 0
           fi
 
-          if [ -z "${STAGING_HOST:-}" ] || [ -z "${STAGING_USER:-}" ]; then
-            echo "SSH connection settings unavailable. Skipping remote cleanup."
+          if [ -z "${STAGING_HOST:-}" ] ||
+             [ -z "${STAGING_USER:-}" ]; then
+            echo "SSH connection settings unavailable. Skipping cleanup."
             exit 0
           fi
 
@@ -874,7 +1016,7 @@ jobs:
             rm -f -- "$FILE"
             echo "Temporary ACME challenge removed."
           else
-            echo "Temporary ACME challenge does not exist. Nothing to remove."
+            echo "Temporary ACME challenge does not exist."
           fi
 
           REMOTE_CLEANUP

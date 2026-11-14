@@ -228,7 +228,7 @@ import type {
         "",
   
       taxpayerName:
-        collection.taxpayer?.name ??
+        collection.taxpayer?.full_name ??
         "Unknown taxpayer",
   
       taxpayerPhone:

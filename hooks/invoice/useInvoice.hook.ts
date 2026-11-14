@@ -1,4 +1,3 @@
-// hooks/revenue/invoice.hook.ts
 
 "use client";
 
@@ -23,8 +22,20 @@ import type {
 import {
   invoiceService,
 } from "@/services/invoice/invoice.service";
-import { InvoiceDetail } from "@/types/invoice/invoice-detail";
 
+import type {
+  InvoiceDetail,
+} from "@/types/invoice/invoice-detail";
+
+// =====================================================
+// TYPES
+// =====================================================
+
+export type UnpaidInvoiceFilters = {
+  search: string;
+  page?: number;
+  per_page?: number;
+};
 
 // =====================================================
 // QUERY KEYS
@@ -57,6 +68,22 @@ export const invoiceKeys = {
   ],
 
   // ---------------------------------------------------
+  // UNPAID INVOICES
+  // ---------------------------------------------------
+
+  unpaid: () => [
+    ...invoiceKeys.all,
+    "unpaid",
+  ],
+
+  unpaidList: (
+    params: UnpaidInvoiceFilters,
+  ) => [
+    ...invoiceKeys.unpaid(),
+    params,
+  ],
+
+  // ---------------------------------------------------
   // DETAILS
   // ---------------------------------------------------
 
@@ -74,56 +101,113 @@ export const invoiceKeys = {
 
 };
 
-
 // =====================================================
 // GET INVOICES
 // =====================================================
 //
 // GET /invoices
 //
-// Supports:
-//
-// - search
-// - invoice_number
-// - citizen_number
-// - citizen_name
-// - assessment_number
-// - citizen_id
-// - assessment_id
-// - administrative_unit_id
-// - fiscal_year
-// - source_type
-// - status
-// - due_date_from
-// - due_date_to
-// - issued_from
-// - issued_to
-// - page
-// - per_page
-//
-// Backend performs the actual filtering/searching.
+// Backend performs the actual filtering and searching.
 // =====================================================
 
 type UseInvoicesOptions = {
   params?: InvoiceFilters;
   enabled?: boolean;
+  staleTime?: number;
 };
 
 export const useInvoices = ({
   params,
   enabled = true,
+  staleTime = 1000 * 60 * 5,
 }: UseInvoicesOptions = {}) => {
-  return useQuery<ListResponse<Invoice, InvoiceSummary>>({
-    queryKey: invoiceKeys.list(params),
-    queryFn: () => invoiceService.getInvoices(params),
+
+  return useQuery<
+    ListResponse<Invoice, InvoiceSummary>
+  >({
+
+    queryKey:
+      invoiceKeys.list(params),
+
+    queryFn:
+      () => invoiceService.getInvoices(params),
+
     enabled,
-    staleTime: 1000 * 60 * 5,
-    placeholderData: (previousData) => previousData,
+
+    staleTime,
+
+    placeholderData:
+      (previousData) => previousData,
+
   });
+
 };
 
+// =====================================================
+// GET UNPAID INVOICES
+// =====================================================
+//
+// GET /invoices/unpaid
+//
+// Required:
+// - search (minimum 2 characters)
+//
+// Optional:
+// - page
+// - per_page
+//
+// Returns:
+// - Paginated unpaid invoices
+// - No summary
+//
+// =====================================================
 
+type UseUnpaidInvoicesOptions = {
+  params: UnpaidInvoiceFilters;
+  enabled?: boolean;
+  staleTime?: number;
+};
 
+export const useUnpaidInvoices = ({
+  params,
+  enabled = true,
+  staleTime = 1000 * 60 * 2,
+}: UseUnpaidInvoicesOptions) => {
+
+  const search =
+    params.search.trim();
+
+  const validSearch =
+    search.length >= 2;
+
+  return useQuery<
+    ListResponse<Invoice>
+  >({
+
+    queryKey:
+      invoiceKeys.unpaidList({
+        ...params,
+        search,
+      }),
+
+    queryFn:
+      () => invoiceService.getUnpaidInvoices({
+        ...params,
+        search,
+      }),
+
+    enabled:
+      enabled &&
+      validSearch,
+
+    staleTime,
+
+    placeholderData:
+      (previousData) => previousData,
+
+  });
+
+};
 
 // =====================================================
 // GET INVOICE DETAIL
@@ -143,15 +227,10 @@ export const useInvoice = (
   >({
 
     queryKey:
-      invoiceKeys.detail(
-        id,
-      ),
+      invoiceKeys.detail(id),
 
     queryFn:
-      () =>
-        invoiceService.getInvoiceById(
-          id,
-        ),
+      () => invoiceService.getInvoiceById(id),
 
     enabled:
       enabled &&

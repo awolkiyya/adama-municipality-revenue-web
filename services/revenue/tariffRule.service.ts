@@ -23,17 +23,16 @@ export type TariffRuleQueryParams = {
 
 
 
+
 export type CopyTariffFormulaOptions = {
   variables: boolean;
-  expression: boolean;
-  conditions: boolean;
 };
 
 export type CopyTariffFormulaPayload = {
   source_rule_id: string;
   options: CopyTariffFormulaOptions;
-  overwrite: boolean;
 };
+
 
 export type CopyTariffFormulaResponse = {
   message?: string;

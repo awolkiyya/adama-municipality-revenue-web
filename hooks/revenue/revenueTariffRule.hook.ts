@@ -510,8 +510,9 @@ import { CreateTariffRulePayload, TariffRuleRecord, UpdateTariffRulePayload } fr
   
   };
 
-  /* --------------------------------------
-   COPY TARIFF FORMULA
+
+/* --------------------------------------
+   COPY TARIFF FORMULA VARIABLES
 -------------------------------------- */
 
 export const useCopyTariffFormula = () => {
@@ -523,17 +524,13 @@ export const useCopyTariffFormula = () => {
       sourceRuleId,
       destinationRuleId,
       options,
-      overwrite,
     }: {
       tariffVersionId: string;
       sourceRuleId: string;
       destinationRuleId: string;
       options: {
         variables: boolean;
-        expression: boolean;
-        conditions: boolean;
       };
-      overwrite: boolean;
     }) =>
       tariffRuleService.copyFormula(
         tariffVersionId,
@@ -541,7 +538,6 @@ export const useCopyTariffFormula = () => {
         {
           source_rule_id: sourceRuleId,
           options,
-          overwrite,
         },
       ),
 
@@ -569,7 +565,7 @@ export const useCopyTariffFormula = () => {
       });
 
       toast.success(
-        "Formula configuration copied successfully.",
+        "Formula variables copied successfully.",
       );
     },
 
@@ -577,7 +573,7 @@ export const useCopyTariffFormula = () => {
       toast.error(
         error instanceof Error
           ? error.message
-          : "Failed to copy formula configuration.",
+          : "Failed to copy formula variables.",
       );
     },
   });

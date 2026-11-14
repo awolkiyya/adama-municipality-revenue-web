@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
@@ -14,6 +15,8 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { usePermission } from "@/hooks/usePermission";
+import type { PermissionAction } from "@/types/user";
 import type { NavItem } from "@/types/commen";
 import { NAV_ITEMS } from "@/configs/navConfig";
 
@@ -23,8 +26,13 @@ import { NAV_ITEMS } from "@/configs/navConfig";
 
 type IconComponent = React.ComponentType<{ className?: string }>;
 
-type NavigationEntry = NavItem & {
-  permission?: string;
+type NavigationPermission = {
+  resource: string;
+  action: PermissionAction;
+};
+
+type NavigationEntry = Omit<NavItem, "permission" | "items" | "icon"> & {
+  permission?: NavigationPermission;
   items?: NavigationEntry[];
   icon?: IconComponent;
 };
@@ -36,20 +44,40 @@ type QuickAccessGroupData = {
   items: NavigationEntry[];
 };
 
+type CanAccess = (permission?: NavigationPermission) => boolean;
+
 /* -------------------------------------------------------------------------- */
 /* Permissions                                                                */
 /* -------------------------------------------------------------------------- */
 
 /**
- * Connect this hook to your existing permission check.
- * Return a function that is true only when the signed-in user holds the
- * given permission. Entries without a permission are always allowed.
+ * Uses the application's existing permission engine.
+ *
+ * Backend permission structure:
+ *
+ * [
+ *   {
+ *     resource: "citizens",
+ *     actions: ["view", "create"]
+ *   }
+ * ]
+ *
+ * Navigation permission:
+ *
+ * {
+ *   resource: "citizens",
+ *   action: "view"
+ * }
  */
-function useCanAccess() {
-  // TODO: replace with your real permission hook, for example:
-  // const { has } = usePermissions();
-  // return (permission?: string) => !permission || has(permission);
-  return (permission?: string) => !permission;
+function useCanAccess(): CanAccess {
+  const { can } = usePermission();
+
+  return (permission) => {
+    // Navigation entries without a permission remain accessible.
+    if (!permission) return true;
+
+    return can(permission.resource, permission.action);
+  };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -65,14 +93,16 @@ function getChildren(item: NavigationEntry): NavigationEntry[] {
 }
 
 /**
- * Builds display groups from the nav tree.
- * - Parents with accessible children become a group.
- * - Standalone top-level links are collected into one "General" group.
- * - Links the user cannot open are removed, so empty groups never render.
+ * Builds display groups from the navigation tree.
+ *
+ * - Parents with accessible children become groups.
+ * - Standalone accessible top-level links are collected into General.
+ * - Unauthorized links are removed.
+ * - Empty groups are never rendered.
  */
 function buildGroups(
   entries: NavigationEntry[],
-  canAccess: (permission?: string) => boolean,
+  canAccess: CanAccess,
 ): QuickAccessGroupData[] {
   const isVisible = (item: NavigationEntry) =>
     hasDestination(item) && canAccess(item.permission);
@@ -96,27 +126,41 @@ function buildGroups(
   }
 
   if (standalone.length > 0) {
-    groups.unshift({ key: "general", title: "General", items: standalone });
+    groups.unshift({
+      key: "general",
+      title: "General",
+      items: standalone,
+    });
   }
 
   return groups;
 }
 
-/** Matches on module name, or keeps a whole group when its title matches. */
+/**
+ * Matches on module name, or keeps a whole group when its title matches.
+ */
 function filterGroups(
   groups: QuickAccessGroupData[],
   query: string,
 ): QuickAccessGroupData[] {
   const q = query.trim().toLowerCase();
+
   if (!q) return groups;
 
   return groups
     .map((group) => {
-      if (group.title.toLowerCase().includes(q)) return group;
+      if (group.title.toLowerCase().includes(q)) {
+        return group;
+      }
+
       const items = group.items.filter((item) =>
         item.title.toLowerCase().includes(q),
       );
-      return { ...group, items };
+
+      return {
+        ...group,
+        items,
+      };
     })
     .filter((group) => group.items.length > 0);
 }
@@ -240,13 +284,19 @@ function QuickAccessGroup({
 export default function QuickAccess() {
   const canAccess = useCanAccess();
   const pathname = usePathname() ?? "";
+
   const searchRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
 
+  /**
+   * Rebuild navigation whenever the permission checker changes.
+   *
+   * The permission hook reads the authenticated user's permissions from
+   * Redux, so the navigation updates when the user's permissions change.
+   */
   const allGroups = useMemo(
     () => buildGroups(NAV_ITEMS as NavigationEntry[], canAccess),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
+    [canAccess],
   );
 
   const groups = useMemo(
@@ -254,20 +304,36 @@ export default function QuickAccess() {
     [allGroups, query],
   );
 
-  const totalModules = allGroups.reduce((sum, g) => sum + g.items.length, 0);
-  const visibleModules = groups.reduce((sum, g) => sum + g.items.length, 0);
+  const totalModules = allGroups.reduce(
+    (sum, group) => sum + group.items.length,
+    0,
+  );
+
+  const visibleModules = groups.reduce(
+    (sum, group) => sum + group.items.length,
+    0,
+  );
+
   const isSearching = query.trim().length > 0;
 
-  // Press "/" anywhere on the page to jump to search.
+  /* ------------------------------------------------------------------------ */
+  /* Keyboard shortcut                                                        */
+  /* ------------------------------------------------------------------------ */
+
+  // Press "/" anywhere on the page to focus module search.
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key !== "/" || event.metaKey || event.ctrlKey) return;
+      if (event.key !== "/" || event.metaKey || event.ctrlKey) {
+        return;
+      }
 
       const target = event.target as HTMLElement | null;
+
       const typing =
         target?.tagName === "INPUT" ||
         target?.tagName === "TEXTAREA" ||
         target?.isContentEditable;
+
       if (typing) return;
 
       event.preventDefault();
@@ -275,8 +341,15 @@ export default function QuickAccess() {
     }
 
     window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+    };
   }, []);
+
+  /* ------------------------------------------------------------------------ */
+  /* Render                                                                   */
+  /* ------------------------------------------------------------------------ */
 
   return (
     <section aria-labelledby="quick-access-heading">
@@ -317,7 +390,9 @@ export default function QuickAccess() {
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                   onKeyDown={(event) => {
-                    if (event.key === "Escape") setQuery("");
+                    if (event.key === "Escape") {
+                      setQuery("");
+                    }
                   }}
                   placeholder="Search modules"
                   aria-label="Search modules"
@@ -369,6 +444,7 @@ export default function QuickAccess() {
               <p className="text-sm font-medium">
                 No modules match &ldquo;{query.trim()}&rdquo;
               </p>
+
               <p className="text-xs text-muted-foreground">
                 Check the spelling or try a shorter name.
               </p>

@@ -64,6 +64,7 @@ import {
 import { generateEthCalendar } from "@/utils/generateEthCalendar";
 
 import { EthiopianDatePicker } from "@/components/input/EthiopianDatePicker";
+import SecuritySettings from "@/components/settings/security/SecuritySettings";
 
 /*
 |--------------------------------------------------------------------------
@@ -75,10 +76,10 @@ type SettingsSection =
   | "overview"
   | "payment-due-date"
   | "assessment"
-  | "lizz"
   | "invoice"
   | "payment"
-  | "receipt";
+  | "receipt"
+  | "security";
 
 /*
 |--------------------------------------------------------------------------
@@ -165,6 +166,12 @@ const NAVIGATION: {
     label: "Receipt",
     description: "Receipt configuration",
     icon: Receipt,
+  },
+  {
+    id: "security",
+    label: "Security",
+    description: "Authentication and access protection",
+    icon: ShieldCheck,
   },
 ];
 
@@ -2070,6 +2077,12 @@ export default function RevenueGeneralSettingsPage() {
                   </SettingRow>
                 </CardContent>
               </Card>
+            )}
+
+            {/* SECURITY */}
+
+            {activeSection === "security" && (
+              <SecuritySettings />
             )}
           </section>
         </div>

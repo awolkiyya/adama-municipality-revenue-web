@@ -22,6 +22,7 @@ import type {
 import type {
   RevenueService,
 } from "@/types/revenue/assessment"
+import { formatEthiopianDate } from "@/lib/utils"
 
 /* =========================================================
    PROPS
@@ -981,7 +982,7 @@ export function ReviewRegisterStep({
           label="Balance As Of Date"
           value={
             financial.balanceAsOfDate
-              ? formatDate(
+              ? formatEthiopianDate(
                   financial.balanceAsOfDate,
                 )
               : "—"

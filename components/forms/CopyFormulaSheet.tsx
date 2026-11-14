@@ -23,7 +23,6 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -50,42 +49,6 @@ interface CopyFormulaSheetProps {
   sourceRuleName: string;
   onCopied?: () => void;
 }
-
-type CopyOptionKey = "variables" | "expression" | "conditions";
-
-type CopyOptions = Record<CopyOptionKey, boolean>;
-
-// ============================================================================
-// CONSTANTS
-// ============================================================================
-
-const INITIAL_COPY_OPTIONS: CopyOptions = {
-  variables: true,
-  expression: true,
-  conditions: true,
-};
-
-const OPTION_META: {
-  key: CopyOptionKey;
-  label: string;
-  description: string;
-}[] = [
-  {
-    key: "variables",
-    label: "Formula variables",
-    description: "Variable names, sources, types and default values.",
-  },
-  {
-    key: "expression",
-    label: "Formula expression",
-    description: "The mathematical expression used for calculation.",
-  },
-  {
-    key: "conditions",
-    label: "Formula conditions",
-    description: "Conditions that determine when the formula applies.",
-  },
-];
 
 // ============================================================================
 // HELPERS
@@ -160,11 +123,6 @@ export default function CopyFormulaSheet({
 
   const [destinationRuleId, setDestinationRuleId] = useState("");
   const [search, setSearch] = useState("");
-  const [confirmOverwrite, setConfirmOverwrite] = useState(false);
-
-  const [copyOptions, setCopyOptions] = useState<CopyOptions>({
-    ...INITIAL_COPY_OPTIONS,
-  });
 
   // --------------------------------------------------------------------------
   // REACT QUERY: DESTINATION RULES
@@ -225,12 +183,6 @@ export default function CopyFormulaSheet({
     [rules, destinationRuleId],
   );
 
-  const selectedCount = Object.values(copyOptions).filter(
-    Boolean,
-  ).length;
-
-  const allSelected = selectedCount === OPTION_META.length;
-
   // --------------------------------------------------------------------------
   // RESET
   // --------------------------------------------------------------------------
@@ -238,8 +190,6 @@ export default function CopyFormulaSheet({
   const resetSheet = useCallback(() => {
     setDestinationRuleId("");
     setSearch("");
-    setConfirmOverwrite(false);
-    setCopyOptions({ ...INITIAL_COPY_OPTIONS });
   }, []);
 
   // --------------------------------------------------------------------------
@@ -262,28 +212,6 @@ export default function CopyFormulaSheet({
   );
 
   // --------------------------------------------------------------------------
-  // COPY OPTION HANDLERS
-  // --------------------------------------------------------------------------
-
-  const toggleAll = useCallback((checked: boolean) => {
-    setCopyOptions({
-      variables: checked,
-      expression: checked,
-      conditions: checked,
-    });
-  }, []);
-
-  const toggleOption = useCallback(
-    (key: CopyOptionKey, checked: boolean) => {
-      setCopyOptions((previous) => ({
-        ...previous,
-        [key]: checked,
-      }));
-    },
-    [],
-  );
-
-  // --------------------------------------------------------------------------
   // VALIDATION
   // --------------------------------------------------------------------------
 
@@ -293,12 +221,10 @@ export default function CopyFormulaSheet({
     !rulesError &&
     Boolean(sourceRuleId) &&
     Boolean(selectedDestination) &&
-    selectedCount > 0 &&
-    confirmOverwrite &&
     String(sourceRuleId) !== String(destinationRuleId);
 
   // --------------------------------------------------------------------------
-  // COPY FORMULA
+  // COPY FORMULA VARIABLES
   // --------------------------------------------------------------------------
 
   const handleCopy = useCallback(async () => {
@@ -310,17 +236,14 @@ export default function CopyFormulaSheet({
       return;
     }
 
-    if (selectedCount === 0 || !confirmOverwrite) {
-      return;
-    }
-
     try {
       await copyFormulaMutation.mutateAsync({
         tariffVersionId,
         sourceRuleId,
         destinationRuleId: String(selectedDestination.id),
-        options: copyOptions,
-        overwrite: true,
+        options: {
+          variables: true,
+        },
       });
 
       resetSheet();
@@ -332,11 +255,8 @@ export default function CopyFormulaSheet({
   }, [
     sourceRuleId,
     selectedDestination,
-    selectedCount,
-    confirmOverwrite,
     copyFormulaMutation,
     tariffVersionId,
-    copyOptions,
     resetSheet,
     onOpenChange,
     onCopied,
@@ -367,25 +287,28 @@ export default function CopyFormulaSheet({
             <Copy className="size-5" />
           </div>
 
-          <SheetTitle>Copy formula configuration</SheetTitle>
+          <SheetTitle>Copy formula variables</SheetTitle>
 
           <SheetDescription>
-            Reuse a formula setup by copying its selected
-            configuration into another rule in this tariff version.
+            Copy the formula variables from one tariff rule
+            to another rule within this tariff version.
           </SheetDescription>
         </SheetHeader>
 
         <ScrollArea className="min-h-0 flex-1">
           <div className="space-y-6 p-6">
             {/* COPY DIRECTION */}
-            <section className="space-y-2" aria-label="Copy direction">
+            <section
+              className="space-y-2"
+              aria-label="Copy direction"
+            >
               {/* SOURCE */}
               <div className="flex items-start gap-3 rounded-lg border bg-muted/40 p-3">
                 <Sigma className="mt-0.5 size-4 shrink-0 text-primary" />
 
                 <div className="min-w-0 flex-1 space-y-1">
                   <p className="text-xs text-muted-foreground">
-                    Copy from
+                    Copy variables from
                   </p>
 
                   <p className="break-words text-sm font-medium">
@@ -422,7 +345,7 @@ export default function CopyFormulaSheet({
 
                 <div className="min-w-0 flex-1 space-y-1">
                   <p className="text-xs text-muted-foreground">
-                    Copy to
+                    Copy variables to
                   </p>
 
                   {selectedDestination ? (
@@ -431,7 +354,10 @@ export default function CopyFormulaSheet({
                         {getRuleName(selectedDestination)}
                       </p>
 
-                      <Badge variant="secondary" className="font-normal">
+                      <Badge
+                        variant="secondary"
+                        className="font-normal"
+                      >
                         Formula
                       </Badge>
                     </>
@@ -594,91 +520,56 @@ export default function CopyFormulaSheet({
 
             <Separator />
 
-            {/* COPY OPTIONS */}
+            {/* COPY SCOPE */}
             <section className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h4 className="text-sm font-medium">What to copy</h4>
+              <div>
+                <h4 className="text-sm font-medium">
+                  What will be copied
+                </h4>
 
-                  <p className="text-xs text-muted-foreground">
-                    {selectedCount} of {OPTION_META.length} selected
+                <p className="text-xs text-muted-foreground">
+                  Only formula variables will be copied.
+                </p>
+              </div>
+
+              <div className="flex items-start gap-3 rounded-lg border p-3">
+                <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                  <Sigma className="size-4" />
+                </div>
+
+                <div className="min-w-0 flex-1 space-y-1">
+                  <p className="text-sm font-medium">
+                    Formula variables
+                  </p>
+
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    Variable names, sources, types, and default
+                    values.
                   </p>
                 </div>
 
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  disabled={copying}
-                  onClick={() => toggleAll(!allSelected)}
-                >
-                  {allSelected ? "Clear all" : "Select all"}
-                </Button>
-              </div>
-
-              <div className="divide-y rounded-lg border">
-                {OPTION_META.map(({ key, label, description }) => (
-                  <div key={key} className="flex items-start gap-3 p-3">
-                    <Checkbox
-                      id={`copy-${key}`}
-                      checked={copyOptions[key]}
-                      disabled={copying}
-                      onCheckedChange={(checked) =>
-                        toggleOption(key, checked === true)
-                      }
-                      className="mt-0.5"
-                    />
-
-                    <div className="space-y-0.5">
-                      <Label
-                        htmlFor={`copy-${key}`}
-                        className="cursor-pointer text-sm font-medium"
-                      >
-                        {label}
-                      </Label>
-
-                      <p className="text-xs text-muted-foreground">
-                        {description}
-                      </p>
-                    </div>
-                  </div>
-                ))}
+                <Badge variant="secondary">Included</Badge>
               </div>
             </section>
 
-            {/* OVERWRITE CONFIRMATION */}
-            <section className="space-y-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
+            {/* IMPORTANT INFORMATION */}
+            <section className="space-y-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
               <div className="flex items-start gap-3">
                 <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600" />
 
                 <div className="space-y-1">
                   <p className="text-sm font-medium">
-                    Existing configuration may be replaced
+                    Existing configuration is protected
                   </p>
 
                   <p className="text-xs leading-relaxed text-muted-foreground">
-                    The selected items on the destination rule may be
-                    overwritten. Review your selection before continuing.
+                    The destination rule&apos;s formula expression
+                    and conditions will remain unchanged. If the
+                    destination already contains formula variables,
+                    the operation will be rejected. Existing variables
+                    will not be overwritten or deleted.
                   </p>
                 </div>
-              </div>
-
-              <div className="flex items-center gap-2 pl-7">
-                <Checkbox
-                  id="confirm-overwrite"
-                  checked={confirmOverwrite}
-                  disabled={copying}
-                  onCheckedChange={(checked) =>
-                    setConfirmOverwrite(checked === true)
-                  }
-                />
-
-                <Label
-                  htmlFor="confirm-overwrite"
-                  className="cursor-pointer text-xs"
-                >
-                  I understand and want to continue
-                </Label>
               </div>
             </section>
           </div>
@@ -708,10 +599,7 @@ export default function CopyFormulaSheet({
             ) : (
               <>
                 <Copy className="mr-2 size-4" />
-                Copy{" "}
-                {selectedCount > 0
-                  ? `${selectedCount} item${selectedCount > 1 ? "s" : ""}`
-                  : "configuration"}
+                Copy variables
               </>
             )}
           </Button>

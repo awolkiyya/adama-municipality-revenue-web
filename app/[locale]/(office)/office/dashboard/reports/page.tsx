@@ -49,7 +49,7 @@ const REPORTS: ReportItem[] = [
     title: "revenue_collection_report",
     description: "revenue_collection_report_description",
     url: "/office/dashboard/reports/revenue-collection",
-    permission: APP_PERMISSIONS.COLLECTION_REPORT_VIEW.resource,
+    permission: APP_PERMISSIONS.REPORTS_VIEW.resource,
     category: "revenue",
     icon: BarChart3,
   },
@@ -102,36 +102,33 @@ function ReportsPage() {
     ? user.permissions
     : [];
 
-  const permittedReports = REPORTS.filter((report) =>
+    const permittedReports = REPORTS.filter((report) =>
     userPermissions.some((permission) => {
       if (typeof permission === "string") {
         return permission === report.permission;
       }
-
-      if (
-        permission &&
-        typeof permission === "object" &&
-        "name" in permission
-      ) {
+  
+      if (!permission || typeof permission !== "object") {
+        return false;
+      }
+  
+      // Format: { name: "reports.view" }
+      if ("name" in permission) {
         return permission.name === report.permission;
       }
-
-      if (
-        permission &&
-        typeof permission === "object" &&
-        "resource" in permission &&
-        "action" in permission
-      ) {
+  
+      // API format: { resource: "reports", actions: ["view"] }
+      if ("resource" in permission && "actions" in permission) {
         return (
           permission.resource === report.permission &&
-          permission.action === "view"
+          Array.isArray(permission.actions) &&
+          permission.actions.includes("view")
         );
       }
-
+  
       return false;
     }),
   );
-
   /* ------------------------------------------------------------------------ */
   /* Filters                                                                  */
   /* ------------------------------------------------------------------------ */

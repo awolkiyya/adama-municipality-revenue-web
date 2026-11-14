@@ -695,7 +695,7 @@ export default function SecuritySettings() {
     status: SecurityAuditLog["status"] = "SUCCESS",
   ) {
     const newLog: SecurityAuditLog = {
-      id: `audit-${Date.now()}`,
+      id: `audit-${crypto.randomUUID()}`,
       event,
       description,
       actor_name: "System Administrator",
@@ -705,7 +705,7 @@ export default function SecuritySettings() {
       created_at: new Date().toISOString(),
       status,
     };
-
+  
     setAuditLogs((current) => [newLog, ...current]);
   }
 

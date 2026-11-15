@@ -164,6 +164,7 @@ jobs:
 
           GATEWAY_COMPOSE_FILE="$APP_ROOT/gateway/docker/compose.gateway.yml"
 
+          GATEWAY_COMPOSE_FILE="$APP_ROOT/gateway/docker/compose.gateway.yml"
           ACME_WEBROOT="$APP_ROOT/certificates/www"
           ACME_CHALLENGE_DIR="$ACME_WEBROOT/.well-known/acme-challenge"
 

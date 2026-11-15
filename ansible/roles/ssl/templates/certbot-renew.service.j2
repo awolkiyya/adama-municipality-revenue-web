@@ -1,4 +1,3 @@
-
 [Unit]
 Description=Adama Municipal Revenue - Let's Encrypt Certificate Renewal
 Documentation=https://certbot.eff.org/docs/
@@ -11,10 +10,12 @@ User=root
 Group=root
 UMask=0077
 
+# Renew certificates using the persistent production configuration.
 ExecStart={{ ssl_certbot_binary }} renew --quiet --non-interactive --config-dir={{ ssl_config_dir }} --work-dir={{ ssl_certbot_work_dir }} --logs-dir={{ ssl_certbot_logs_dir }} --deploy-hook {{ ssl_certbot_deploy_hook }}
 
+# Snap Certbot requires access to /root/snap.
 PrivateTmp=true
-ProtectHome=true
+ProtectHome=false
 NoNewPrivileges=true
 
 # Allow Certbot to access persistent certificate and ACME state.

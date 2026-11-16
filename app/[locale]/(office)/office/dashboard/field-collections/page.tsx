@@ -1,3 +1,4 @@
+
 "use client"
 
 import React, { useEffect, useMemo, useState } from "react"
@@ -13,11 +14,14 @@ import {
   Search,
   Wallet,
   X,
+  Loader2,
+  RefreshCw,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,6 +29,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+
 import {
   Table,
   TableBody,
@@ -39,8 +44,6 @@ import {
   useDirectCollections,
 } from "@/hooks/revenue/use-direct-collection"
 
-
-
 import type { DirectCollectionInvoice } from "@/types/revenue/direct-collection"
 
 import type {
@@ -52,7 +55,7 @@ import type {
 
 import { DataTablePagination } from "@/components/table/data-pagination"
 import { formatCurrency, toNumber } from "@/utils/helpers"
-import { cn, formatEthiopianDate } from "@/lib/utils"
+import { cn, formatEthiopianDate, formatEthiopianDateWithTime } from "@/lib/utils"
 import { usePaymentOptions } from "@/hooks/revenue/payment-option.hook"
 
 // =========================================================
@@ -74,25 +77,25 @@ const STATUS_STYLE: Record<
   PENDING: {
     label: "Pending",
     dot: "bg-amber-500",
-    text: "text-amber-700",
+    text: "text-amber-700 dark:text-amber-400",
   },
 
   PARTIALLY_PAID: {
     label: "Partially paid",
     dot: "bg-blue-500",
-    text: "text-blue-700",
+    text: "text-blue-700 dark:text-blue-400",
   },
 
   COLLECTED: {
     label: "Collected",
     dot: "bg-emerald-500",
-    text: "text-emerald-700",
+    text: "text-emerald-700 dark:text-emerald-400",
   },
 
   CANCELLED: {
     label: "Cancelled",
     dot: "bg-red-500",
-    text: "text-red-700",
+    text: "text-red-700 dark:text-red-400",
   },
 }
 
@@ -102,6 +105,12 @@ const API_STATUS: Record<string, string> = {
   COLLECTED: "PAID",
   CANCELLED: "CANCELLED",
 }
+
+const COLLECTION_BASE_PATH =
+  "/office/dashboard/field-collections"
+
+const INVOICE_BASE_PATH =
+  "/office/dashboard/invoices"
 
 // =========================================================
 // MAPPING
@@ -159,7 +168,6 @@ function mapDirectCollection(
       0,
   )
 
-  // Defensive fallback: PAID invoice without paid_amount
   if (
     (invoice.status ?? "").toUpperCase() === "PAID" &&
     paidAmount === 0
@@ -187,10 +195,7 @@ function mapDirectCollection(
     calculatedBalance === 0
       ? 0
       : reportedBalance > 0
-        ? Math.min(
-            reportedBalance,
-            calculatedBalance,
-          )
+        ? Math.min(reportedBalance, calculatedBalance)
         : calculatedBalance
 
   return {
@@ -210,7 +215,7 @@ function mapDirectCollection(
       "",
 
     taxpayerName:
-      collection.taxpayer?.name ??
+      collection.taxpayer.full_name ??
       "Unknown taxpayer",
 
     taxpayerPhone:
@@ -253,9 +258,7 @@ function mapDirectCollection(
       toNumber(item.quantity ?? 1),
 
     amount,
-
     paidAmount,
-
     balance,
 
     dueDate:
@@ -271,6 +274,10 @@ function mapDirectCollection(
   }
 }
 
+// =========================================================
+// ERROR HANDLING
+// =========================================================
+
 function getErrorMessage(error: unknown): string {
   if (
     error instanceof Error &&
@@ -283,24 +290,19 @@ function getErrorMessage(error: unknown): string {
     response?: {
       data?: {
         message?: string
-        errors?: Record<
-          string,
-          string[]
-        >
+        errors?: Record<string, string[]>
       }
     }
   }
 
-  const data =
-    responseError?.response?.data
+  const data = responseError?.response?.data
 
   if (data?.message) {
     return data.message
   }
 
   if (data?.errors) {
-    const first =
-      Object.values(data.errors)[0]?.[0]
+    const first = Object.values(data.errors)[0]?.[0]
 
     if (first) {
       return first
@@ -311,7 +313,7 @@ function getErrorMessage(error: unknown): string {
 }
 
 // =========================================================
-// SMALL UI PIECES
+// SMALL UI COMPONENTS
 // =========================================================
 
 function StatusBadge({
@@ -324,13 +326,15 @@ function StatusBadge({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 text-sm font-medium",
+        "inline-flex w-fit items-center gap-1.5 whitespace-nowrap",
+        "rounded-full px-2.5 py-1 text-xs font-medium",
+        "bg-muted/70",
         style.text,
       )}
     >
       <span
         className={cn(
-          "size-1.5 rounded-full",
+          "size-1.5 shrink-0 rounded-full",
           style.dot,
         )}
       />
@@ -350,18 +354,19 @@ function Stat({
   emphasis?: boolean
 }) {
   return (
-    <div className="flex-1 px-5 py-4">
-      <p className="text-xs text-muted-foreground">
+    <div className="min-w-0 flex-1 px-4 py-4 sm:px-5">
+      <p className="truncate text-xs font-medium text-muted-foreground">
         {label}
       </p>
 
       <p
         className={cn(
-          "mt-1 font-semibold tracking-tight",
+          "mt-1 truncate font-semibold tracking-tight tabular-nums",
           emphasis
-            ? "text-2xl"
-            : "text-xl",
+            ? "text-xl sm:text-2xl"
+            : "text-lg sm:text-xl",
         )}
+        title={typeof value === "string" ? value : undefined}
       >
         {value}
       </p>
@@ -378,21 +383,107 @@ function PaidProgress({
 }) {
   const percent =
     total > 0
-      ? Math.min(
-          (paid / total) * 100,
-          100,
-        )
+      ? Math.min((paid / total) * 100, 100)
       : 0
 
   return (
-    <div className="mt-1.5 h-1 w-28 overflow-hidden rounded-full bg-muted">
-      <div
-        className="h-full rounded-full bg-emerald-500 transition-all"
-        style={{
-          width: `${percent}%`,
-        }}
-      />
+    <div className="mt-1.5 flex w-24 items-center gap-2">
+      <div className="h-1 flex-1 overflow-hidden rounded-full bg-muted">
+        <div
+          className="h-full rounded-full bg-emerald-500 transition-all"
+          style={{
+            width: `${percent}%`,
+          }}
+        />
+      </div>
+
+      <span className="text-[10px] tabular-nums text-muted-foreground">
+        {Math.round(percent)}%
+      </span>
     </div>
+  )
+}
+
+function TableSkeleton() {
+  return (
+    <>
+      {Array.from({ length: 6 }).map((_, index) => (
+        <TableRow key={index}>
+          {Array.from({ length: 7 }).map((__, cellIndex) => (
+            <TableCell key={cellIndex}>
+              <div
+                className={cn(
+                  "h-4 animate-pulse rounded bg-muted",
+                  cellIndex === 6
+                    ? "ml-auto w-20"
+                    : cellIndex === 0
+                      ? "w-6"
+                      : "w-full max-w-32",
+                )}
+              />
+            </TableCell>
+          ))}
+        </TableRow>
+      ))}
+    </>
+  )
+}
+
+function EmptyState({
+  hasFilters,
+  onClear,
+  onCreate,
+}: {
+  hasFilters: boolean
+  onClear: () => void
+  onCreate: () => void
+}) {
+  return (
+    <TableRow className="hover:bg-transparent">
+      <TableCell
+        colSpan={7}
+        className="h-64 text-center"
+      >
+        <div className="mx-auto flex max-w-sm flex-col items-center gap-3">
+          <div className="flex size-12 items-center justify-center rounded-full bg-muted">
+            <Search className="size-5 text-muted-foreground" />
+          </div>
+
+          <div className="space-y-1">
+            <p className="text-sm font-semibold">
+              {hasFilters
+                ? "No collections found"
+                : "No collections yet"}
+            </p>
+
+            <p className="text-xs text-muted-foreground">
+              {hasFilters
+                ? "Try adjusting your search or filters."
+                : "Start your first collection to see it here."}
+            </p>
+          </div>
+
+          {hasFilters ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onClear}
+            >
+              Clear filters
+            </Button>
+          ) : (
+            <Button
+              size="sm"
+              onClick={onCreate}
+              className="gap-2"
+            >
+              <Plus className="size-4" />
+              Start collection
+            </Button>
+          )}
+        </div>
+      </TableCell>
+    </TableRow>
   )
 }
 
@@ -406,29 +497,18 @@ export default function FieldCollectionPage() {
 
   // ---------------- filters ----------------
 
-  const [searchInput, setSearchInput] =
-    useState("")
+  const [searchInput, setSearchInput] = useState("")
+  const [search, setSearch] = useState("")
+  const [statusFilter, setStatusFilter] = useState<string>("ALL")
 
-  const [search, setSearch] =
-    useState("")
-
-  const [statusFilter, setStatusFilter] =
-    useState<string>("ALL")
-
-  const [page, setPage] =
-    useState(1)
-
-  const [perPage, setPerPage] =
-    useState(10)
+  const [page, setPage] = useState(1)
+  const [perPage, setPerPage] = useState(10)
 
   // ---------------- search debounce ----------------
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      setSearch(
-        searchInput.trim(),
-      )
-
+      setSearch(searchInput.trim())
       setPage(1)
     }, 400)
 
@@ -446,23 +526,13 @@ export default function FieldCollectionPage() {
         ? { search }
         : {}),
 
-      ...(API_STATUS[
-        statusFilter
-      ]
+      ...(API_STATUS[statusFilter]
         ? {
-            status:
-              API_STATUS[
-                statusFilter
-              ],
+            status: API_STATUS[statusFilter],
           }
         : {}),
     }),
-    [
-      page,
-      perPage,
-      search,
-      statusFilter,
-    ],
+    [page, perPage, search, statusFilter],
   )
 
   // ---------------- collections ----------------
@@ -473,35 +543,21 @@ export default function FieldCollectionPage() {
     isFetching,
     isError,
     error,
-  } = useDirectCollections(
-    listParams,
-  )
+  } = useDirectCollections(listParams)
 
   // ---------------- payment options ----------------
 
   const {
     data: paymentOptionsResponse,
-    isLoading:
-      isPaymentOptionsLoading,
-    isError:
-      isPaymentOptionsError,
+    isLoading: isPaymentOptionsLoading,
+    isError: isPaymentOptionsError,
   } = usePaymentOptions()
 
-  const paymentOptions =
-    paymentOptionsResponse?.data
+  const paymentOptions = paymentOptionsResponse?.data
 
   const hasPaymentMethod =
-    (
-      paymentOptions
-        ?.payment_methods
-        ?.length ?? 0
-    ) > 0
+    (paymentOptions?.payment_methods?.length ?? 0) > 0
 
-  /*
-   * The Collect action is available only after
-   * payment options have loaded and at least one
-   * payment method is currently enabled.
-   */
   const paymentCollectionAvailable =
     !isPaymentOptionsLoading &&
     !isPaymentOptionsError &&
@@ -511,74 +567,54 @@ export default function FieldCollectionPage() {
 
   const collections = useMemo(
     () =>
-      (response?.data ?? []).map(
-        mapDirectCollection,
-      ),
+      (response?.data ?? []).map(mapDirectCollection),
     [response],
   )
 
-  const pagination =
-    response?.meta
+  const pagination = response?.meta
 
   // ---------------- summary ----------------
 
   const summary = useMemo(
     () => ({
-      pending:
-        collections.filter(
-          (c) =>
-            c.status === "PENDING",
-        ).length,
+      pending: collections.filter(
+        (c) => c.status === "PENDING",
+      ).length,
 
-      partial:
-        collections.filter(
-          (c) =>
-            c.status ===
-            "PARTIALLY_PAID",
-        ).length,
+      partial: collections.filter(
+        (c) => c.status === "PARTIALLY_PAID",
+      ).length,
 
-      collected:
-        collections.filter(
-          (c) =>
-            c.status ===
-            "COLLECTED",
-        ).length,
+      collected: collections.filter(
+        (c) => c.status === "COLLECTED",
+      ).length,
 
-      outstanding:
-        collections.reduce(
-          (sum, c) =>
-            sum + c.balance,
-          0,
-        ),
+      outstanding: collections.reduce(
+        (sum, c) => sum + c.balance,
+        0,
+      ),
     }),
     [collections],
   )
 
   // ---------------- actions ----------------
 
-  const go = (path: string) =>
-    router.push(path)
+  const go = (path: string) => router.push(path)
 
   const enc = encodeURIComponent
 
-  const canPay = (
-    c: CollectionRecord,
-  ) =>
+  const canPay = (c: CollectionRecord) =>
     paymentCollectionAvailable &&
     c.balance > 0 &&
     c.status !== "CANCELLED" &&
     !!c.invoiceId
 
-  const canEdit = (
-    c: CollectionRecord,
-  ) =>
+  const canEdit = (c: CollectionRecord) =>
     c.status === "PENDING" &&
     c.paidAmount <= 0 &&
     c.balance > 0
 
-  const canPrint = (
-    c: CollectionRecord,
-  ) =>
+  const canPrint = (c: CollectionRecord) =>
     !!c.invoiceId &&
     (
       c.status !== "PENDING" ||
@@ -586,79 +622,51 @@ export default function FieldCollectionPage() {
     )
 
   const startCollection = () =>
-    go(
-      "/office/dashboard/field-collections/create",
-    )
+    go(`${COLLECTION_BASE_PATH}/create`)
 
-  const viewDetails = (
-    c: CollectionRecord,
-  ) =>
-    go(
-      `/office/dashboard/field-collections/${enc(
-        c.id,
-      )}`,
-    )
+  const viewDetails = (c: CollectionRecord) =>
+    go(`${COLLECTION_BASE_PATH}/${enc(c.id)}`)
 
-  const edit = (
-    c: CollectionRecord,
-  ) => {
+  const edit = (c: CollectionRecord) => {
     if (canEdit(c)) {
-      go(
-        `/office/dashboard/field-collections/${enc(
-          c.id,
-        )}/edit`,
-      )
+      go(`${COLLECTION_BASE_PATH}/${enc(c.id)}/edit`)
     }
   }
 
-  const collectPayment = (
-    c: CollectionRecord,
-  ) => {
+  const collectPayment = (c: CollectionRecord) => {
     if (canPay(c)) {
       go(
-        `/office/dashboard/payments/create?invoice_id=${enc(
-          c.invoiceId,
-        )}`,
+        `/office/dashboard/payments/create?invoice_id=${enc(c.invoiceId)}`,
       )
     }
   }
 
-  const printInvoice = (
-    c: CollectionRecord,
-  ) => {
+  const printInvoice = (c: CollectionRecord) => {
     if (canPrint(c)) {
-      go(
-        `/office/dashboard/invoices/${enc(
-          c.invoiceId,
-        )}/print`,
-      )
+      go(`${INVOICE_BASE_PATH}/${enc(c.invoiceId)}/print`)
     }
   }
 
-  const downloadInvoice = (
-    c: CollectionRecord,
-  ) => {
+  const downloadInvoice = (c: CollectionRecord) => {
     if (canPrint(c)) {
       window.open(
-        `/office/dashboard/invoices/${enc(
-          c.invoiceId,
-        )}/print?download=1`,
+        `${INVOICE_BASE_PATH}/${enc(c.invoiceId)}/print?download=1`,
         "_blank",
         "noopener,noreferrer",
       )
     }
   }
 
-  const changeStatus = (
-    value: string,
-  ) => {
+  // ---------------- filters ----------------
+
+  const changeStatus = (value: string) => {
     setStatusFilter(value)
     setPage(1)
   }
 
   const hasFilters =
     statusFilter !== "ALL" ||
-    searchInput !== ""
+    searchInput.trim() !== ""
 
   const clearFilters = () => {
     setSearchInput("")
@@ -667,14 +675,22 @@ export default function FieldCollectionPage() {
     setPage(1)
   }
 
+  const retryLoading = () => {
+    queryClient.invalidateQueries({
+      queryKey: directCollectionKeys.all,
+    })
+  }
+
   // ---------------- header ----------------
 
   const header = (
-    <div className="flex flex-wrap items-center justify-between gap-4">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">
-          Direct collection
-        </h1>
+    <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="min-w-0">
+        <div className="flex items-center gap-2">
+          <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
+            Direct collection
+          </h1>
+        </div>
 
         <p className="mt-1 text-sm text-muted-foreground">
           Collect payments and manage invoices in the field.
@@ -683,44 +699,43 @@ export default function FieldCollectionPage() {
 
       <Button
         onClick={startCollection}
-        className="gap-2"
+        className="w-full shrink-0 gap-2 sm:w-auto"
       >
         <Plus className="size-4" />
         Start collection
       </Button>
-    </div>
+    </header>
   )
 
-  // ---------------- error ----------------
+  // ---------------- error state ----------------
 
   if (isError) {
     return (
-      <div className="space-y-6 p-6">
+      <div className="mx-auto w-full max-w-7xl space-y-6 p-4 sm:p-6 lg:p-8">
         {header}
 
         <Card>
-          <CardContent className="flex min-h-64 flex-col items-center justify-center gap-3">
-            <FileText className="size-8 text-muted-foreground" />
+          <CardContent className="flex min-h-72 flex-col items-center justify-center gap-3 p-6">
+            <div className="flex size-12 items-center justify-center rounded-full bg-muted">
+              <FileText className="size-6 text-muted-foreground" />
+            </div>
 
-            <p className="font-medium">
-              Couldn&apos;t load collections
-            </p>
+            <div className="space-y-1 text-center">
+              <p className="font-semibold">
+                Couldn&apos;t load collections
+              </p>
 
-            <p className="max-w-md text-center text-sm text-muted-foreground">
-              {getErrorMessage(error)}
-            </p>
+              <p className="max-w-md text-sm text-muted-foreground">
+                {getErrorMessage(error)}
+              </p>
+            </div>
 
             <Button
               variant="outline"
-              onClick={() =>
-                queryClient.invalidateQueries(
-                  {
-                    queryKey:
-                      directCollectionKeys.all,
-                  },
-                )
-              }
+              onClick={retryLoading}
+              className="gap-2"
             >
+              <RefreshCw className="size-4" />
               Try again
             </Button>
           </CardContent>
@@ -732,18 +747,18 @@ export default function FieldCollectionPage() {
   // ---------------- UI ----------------
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="mx-auto w-full max-w-7xl space-y-6 p-4 sm:p-6 lg:p-8">
       {header}
 
+      {/* ===================================================== */}
       {/* SUMMARY */}
+      {/* ===================================================== */}
 
       <Card className="overflow-hidden">
-        <div className="flex flex-col divide-y sm:flex-row sm:divide-x sm:divide-y-0">
+        <div className="grid grid-cols-2 divide-x divide-y sm:grid-cols-2 sm:divide-y-0 lg:grid-cols-4">
           <Stat
             label="Outstanding (this page)"
-            value={formatCurrency(
-              summary.outstanding,
-            )}
+            value={formatCurrency(summary.outstanding)}
             emphasis
           />
 
@@ -764,304 +779,284 @@ export default function FieldCollectionPage() {
         </div>
       </Card>
 
-      {/* LIST */}
+      {/* ===================================================== */}
+      {/* COLLECTION TABLE */}
+      {/* ===================================================== */}
 
-      <Card className="overflow-hidden">
-        {/* toolbar */}
+      <Card className="gap-0 overflow-hidden py-0">
+        {/* ---------------- toolbar ---------------- */}
 
-        <div className="flex flex-col gap-3 border-b p-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex flex-wrap gap-1 rounded-lg bg-muted p-1">
-            {STATUS_TABS.map(
-              (tab) => (
+        <div className="flex flex-col gap-3 border-b p-4">
+          {/* status filters */}
+
+          <div
+            role="tablist"
+            aria-label="Filter collections by status"
+            className="-mx-1 flex items-center gap-1 overflow-x-auto px-1 pb-1"
+          >
+            {STATUS_TABS.map((tab) => {
+              const active = statusFilter === tab.value
+
+              return (
                 <button
                   key={tab.value}
                   type="button"
-                  onClick={() =>
-                    changeStatus(
-                      tab.value,
-                    )
-                  }
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => changeStatus(tab.value)}
                   className={cn(
-                    "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-
-                    statusFilter ===
-                      tab.value
-                      ? "bg-background text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground",
+                    "shrink-0 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    active
+                      ? "bg-muted text-foreground shadow-sm"
+                      : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
                   )}
                 >
                   {tab.label}
                 </button>
-              ),
-            )}
+              )
+            })}
           </div>
 
-          <div className="flex items-center gap-2">
-            <div className="relative w-full lg:w-80">
-              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          {/* search */}
+
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="relative w-full sm:max-w-sm">
+              <Search
+                className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                aria-hidden="true"
+              />
 
               <Input
                 value={searchInput}
-                onChange={(e) =>
-                  setSearchInput(
-                    e.target.value,
-                  )
-                }
-                placeholder="Search taxpayer, invoice or service"
-                className="pl-9"
+                onChange={(e) => setSearchInput(e.target.value)}
+                placeholder="Search taxpayer, invoice or service..."
+                aria-label="Search collections"
+                className="h-9 pl-9 pr-9"
               />
+
+              {searchInput && (
+                <button
+                  type="button"
+                  onClick={() => setSearchInput("")}
+                  aria-label="Clear search"
+                  className="absolute right-2 top-1/2 flex size-6 -translate-y-1/2 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                >
+                  <X className="size-3.5" />
+                </button>
+              )}
             </div>
 
-            {hasFilters && (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={
-                  clearFilters
-                }
-                aria-label="Clear filters"
-              >
-                <X className="size-4" />
-              </Button>
-            )}
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+                {isFetching && !isLoading ? (
+                  <>
+                    <Loader2 className="size-3.5 shrink-0 animate-spin" />
+                    <span>Updating...</span>
+                  </>
+                ) : (
+                  <span className="truncate">
+                    {pagination?.total ?? collections.length} collections
+                  </span>
+                )}
+              </div>
+
+              {hasFilters && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={clearFilters}
+                  className="h-8 shrink-0 gap-1.5 text-muted-foreground"
+                >
+                  <X className="size-3.5" />
+                  Clear filters
+                </Button>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* table */}
+        {/* ---------------- table ---------------- */}
 
         <div
           className={cn(
-            "overflow-x-auto transition-opacity",
-            isFetching &&
-              !isLoading &&
-              "opacity-60",
+            "relative w-full overflow-x-auto",
+            "transition-opacity duration-200",
+            isFetching && !isLoading && "opacity-60",
           )}
         >
-          <Table>
+          <Table className="min-w-[1070px] table-fixed">
             <TableHeader>
-              <TableRow className="hover:bg-transparent">
-                <TableHead className="w-12">
+              <TableRow className="bg-muted/40 hover:bg-muted/40">
+                <TableHead className="w-[55px] text-center">
                   No.
                 </TableHead>
 
-                <TableHead>
+                <TableHead className="w-[155px]">
                   Invoice
                 </TableHead>
 
-                <TableHead>
+                <TableHead className="w-[210px]">
                   Taxpayer
                 </TableHead>
 
-                <TableHead>
+                <TableHead className="w-[190px]">
                   Service
                 </TableHead>
 
-                <TableHead className="text-right">
+                <TableHead className="w-[150px] text-right">
                   Amount
                 </TableHead>
 
-                <TableHead>
+                <TableHead className="w-[140px]">
                   Status
                 </TableHead>
 
-                <TableHead className="w-[170px]" />
+                <TableHead className="w-[170px] text-right">
+                  Actions
+                </TableHead>
               </TableRow>
             </TableHeader>
 
             <TableBody>
+              {/* Loading */}
+
               {isLoading ? (
-                Array.from({
-                  length: 6,
-                }).map(
-                  (_, i) => (
-                    <TableRow
-                      key={i}
-                    >
-                      <TableCell colSpan={7}>
-                        <div className="h-10 animate-pulse rounded-md bg-muted" />
-                      </TableCell>
-                    </TableRow>
-                  ),
-                )
-              ) : collections.length ===
-                0 ? (
-                <TableRow className="hover:bg-transparent">
-                  <TableCell
-                    colSpan={7}
-                    className="h-56 text-center"
-                  >
-                    <div className="flex flex-col items-center gap-2">
-                      <div className="flex size-10 items-center justify-center rounded-full bg-muted">
-                        <Search className="size-5 text-muted-foreground" />
-                      </div>
+                <TableSkeleton />
+              ) : collections.length === 0 ? (
+                /* Empty state */
 
-                      <p className="text-sm font-medium">
-                        {hasFilters
-                          ? "No collections match your filters"
-                          : "No collections yet"}
-                      </p>
-
-                      {hasFilters ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={
-                            clearFilters
-                          }
-                        >
-                          Clear filters
-                        </Button>
-                      ) : (
-                        <Button
-                          size="sm"
-                          onClick={
-                            startCollection
-                          }
-                        >
-                          Start your first collection
-                        </Button>
-                      )}
-                    </div>
-                  </TableCell>
-                </TableRow>
+                <EmptyState
+                  hasFilters={hasFilters}
+                  onClear={clearFilters}
+                  onCreate={startCollection}
+                />
               ) : (
-                collections.map(
-                  (
-                    c,
-                    index,
-                  ) => (
+                /* Collection records */
+
+                collections.map((c, index) => {
+                  const tariffLabel =
+                    c.tariffName !== "—"
+                      ? c.tariffName
+                      : c.tariffCode
+
+                  return (
                     <TableRow
                       key={c.id}
-                      onClick={() =>
-                        viewDetails(
-                          c,
-                        )
-                      }
-                      className="cursor-pointer"
+                      onClick={() => viewDetails(c)}
+                      className={cn(
+                        "cursor-pointer transition-colors",
+                        "hover:bg-muted/40",
+                      )}
                     >
-                      {/* no. */}
+                      {/* Number */}
 
-                      <TableCell className="text-muted-foreground">
-                        {(page - 1) *
-                          perPage +
-                          index +
-                          1}
+                      <TableCell className="text-center text-xs tabular-nums text-muted-foreground">
+                        {(page - 1) * perPage + index + 1}
                       </TableCell>
 
-                      {/* invoice */}
+                      {/* Invoice */}
 
                       <TableCell>
-                        <p className="font-medium">
-                          {
-                            c.invoiceNumber
-                          }
-                        </p>
+                        <div className="min-w-0 space-y-1">
+                          <p
+                            className="truncate text-sm font-medium"
+                            title={c.invoiceNumber}
+                          >
+                            {c.invoiceNumber}
+                          </p>
 
-                        <p className="text-xs text-muted-foreground">
-                          {c.createdAt
-                            ? formatEthiopianDate(
-                                c.createdAt,
-                              )
-                            : "—"}
-                        </p>
+                          <p className="truncate text-xs text-muted-foreground">
+                            {c.createdAt
+                              ? formatEthiopianDateWithTime(c.createdAt)
+                              : "—"}
+                          </p>
+                        </div>
                       </TableCell>
 
-                      {/* taxpayer */}
+                      {/* Taxpayer */}
 
                       <TableCell>
-                        <p className="font-medium">
-                          {
-                            c.taxpayerName
-                          }
-                        </p>
+                        <div className="min-w-0 space-y-1">
+                          <p
+                            className="truncate text-sm font-medium"
+                            title={c.taxpayerName}
+                          >
+                            {c.taxpayerName}
+                          </p>
 
-                        <p className="text-xs text-muted-foreground">
-                          {
-                            c.taxpayerPhone
-                          }
-                        </p>
+                          <p
+                            className="truncate text-xs text-muted-foreground"
+                            title={c.taxpayerPhone}
+                          >
+                            {c.taxpayerPhone}
+                          </p>
+                        </div>
                       </TableCell>
 
-                      {/* service */}
+                      {/* Service */}
 
                       <TableCell>
-                        <p className="font-medium">
-                          {
-                            c.serviceName
-                          }
-                        </p>
+                        <div className="min-w-0 space-y-1">
+                          <p
+                            className="truncate text-sm font-medium"
+                            title={c.serviceName}
+                          >
+                            {c.serviceName}
+                          </p>
 
-                        <p className="text-xs text-muted-foreground">
-                          {c.tariffName !==
-                          "—"
-                            ? c.tariffName
-                            : c.tariffCode}
-                        </p>
+                          <p
+                            className="truncate text-xs text-muted-foreground"
+                            title={tariffLabel}
+                          >
+                            {tariffLabel}
+                          </p>
+                        </div>
                       </TableCell>
 
-                      {/* amount */}
+                      {/* Amount */}
 
                       <TableCell className="text-right">
-                        <div className="flex flex-col items-end">
-                          <span className="font-medium">
-                            {formatCurrency(
-                              c.amount,
-                            )}
+                        <div className="flex min-w-0 flex-col items-end gap-0.5">
+                          <span className="whitespace-nowrap text-sm font-semibold tabular-nums">
+                            {formatCurrency(c.amount)}
                           </span>
 
-                          {c.balance >
-                          0 ? (
-                            <span className="text-xs text-muted-foreground">
-                              {formatCurrency(
-                                c.balance,
-                              )}{" "}
-                              due
+                          {c.balance > 0 && (
+                            <span
+                              className="whitespace-nowrap text-xs text-muted-foreground tabular-nums"
+                              title={`${formatCurrency(c.balance)} outstanding`}
+                            >
+                              {formatCurrency(c.balance)} due
                             </span>
-                          ) : null}
+                          )}
 
-                          {c.status ===
-                            "PARTIALLY_PAID" && (
+                          {c.status === "PARTIALLY_PAID" && (
                             <PaidProgress
-                              paid={
-                                c.paidAmount
-                              }
-                              total={
-                                c.amount
-                              }
+                              paid={c.paidAmount}
+                              total={c.amount}
                             />
                           )}
                         </div>
                       </TableCell>
 
-                      {/* status */}
+                      {/* Status */}
 
                       <TableCell>
-                        <StatusBadge
-                          status={
-                            c.status
-                          }
-                        />
+                        <StatusBadge status={c.status} />
                       </TableCell>
 
-                      {/* actions */}
+                      {/* Actions */}
 
                       <TableCell
-                        onClick={(e) =>
-                          e.stopPropagation()
-                        }
+                        onClick={(e) => e.stopPropagation()}
                       >
-                        <div className="flex items-center justify-end gap-1">
-                          {canPay(
-                            c,
-                          ) && (
+                        <div className="flex items-center justify-end gap-1.5">
+                          {canPay(c) && (
                             <Button
                               size="sm"
-                              className="gap-1.5"
-                              onClick={() =>
-                                collectPayment(
-                                  c,
-                                )
-                              }
+                              onClick={() => collectPayment(c)}
+                              className="h-8 gap-1.5 px-2.5"
                             >
                               <Wallet className="size-3.5" />
                               Collect
@@ -1069,14 +1064,12 @@ export default function FieldCollectionPage() {
                           )}
 
                           <DropdownMenu>
-                            <DropdownMenuTrigger
-                              asChild
-                            >
+                            <DropdownMenuTrigger asChild>
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="size-8"
-                                aria-label="More actions"
+                                className="size-8 shrink-0"
+                                aria-label={`More actions for invoice ${c.invoiceNumber}`}
                               >
                                 <MoreHorizontal className="size-4" />
                               </Button>
@@ -1087,54 +1080,34 @@ export default function FieldCollectionPage() {
                               className="w-48"
                             >
                               <DropdownMenuItem
-                                onClick={() =>
-                                  viewDetails(
-                                    c,
-                                  )
-                                }
+                                onClick={() => viewDetails(c)}
                               >
                                 <FileText className="mr-2 size-4" />
                                 View details
                               </DropdownMenuItem>
 
-                              {canEdit(
-                                c,
-                              ) && (
+                              {canEdit(c) && (
                                 <DropdownMenuItem
-                                  onClick={() =>
-                                    edit(
-                                      c,
-                                    )
-                                  }
+                                  onClick={() => edit(c)}
                                 >
                                   <Pencil className="mr-2 size-4" />
-                                  Edit
+                                  Edit collection
                                 </DropdownMenuItem>
                               )}
 
-                              {canPrint(
-                                c,
-                              ) && (
+                              {canPrint(c) && (
                                 <>
                                   <DropdownMenuSeparator />
 
                                   <DropdownMenuItem
-                                    onClick={() =>
-                                      printInvoice(
-                                        c,
-                                      )
-                                    }
+                                    onClick={() => printInvoice(c)}
                                   >
                                     <Printer className="mr-2 size-4" />
                                     Print invoice
                                   </DropdownMenuItem>
 
                                   <DropdownMenuItem
-                                    onClick={() =>
-                                      downloadInvoice(
-                                        c,
-                                      )
-                                    }
+                                    onClick={() => downloadInvoice(c)}
                                   >
                                     <Download className="mr-2 size-4" />
                                     Download invoice
@@ -1146,31 +1119,23 @@ export default function FieldCollectionPage() {
                         </div>
                       </TableCell>
                     </TableRow>
-                  ),
-                )
+                  )
+                })
               )}
             </TableBody>
           </Table>
         </div>
 
-        {/* pagination */}
+        {/* ---------------- pagination ---------------- */}
 
-        {(pagination?.total ??
-          0) > 0 && (
-          <div className="border-t p-4">
+        {(pagination?.total ?? 0) > 0 && (
+          <div className="border-t p-3 sm:p-4">
             <DataTablePagination
               page={page}
               pageSize={perPage}
-              total={
-                pagination?.total ??
-                0
-              }
-              onPageChange={
-                setPage
-              }
-              onPageSizeChange={(
-                size: number,
-              ) => {
+              total={pagination?.total ?? 0}
+              onPageChange={setPage}
+              onPageSizeChange={(size: number) => {
                 setPerPage(size)
                 setPage(1)
               }}

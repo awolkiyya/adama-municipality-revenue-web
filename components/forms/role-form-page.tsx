@@ -435,7 +435,8 @@ function PermissionGroupCard({
   )
 }
 
-/** Sidebar summary: type, progress, users and a jump list of groups. */
+
+/** Sidebar summary: type, progress, users and a scrollable jump list. */
 function OverviewCard({
   isSystemRole,
   selectedCount,
@@ -463,6 +464,7 @@ function OverviewCard({
       </CardHeader>
 
       <CardContent className="flex flex-col gap-5 p-4">
+        {/* Role information */}
         <dl className="flex flex-col gap-3 text-sm">
           <div className="flex items-center justify-between gap-3">
             <dt className="flex items-center gap-2 text-muted-foreground">
@@ -483,6 +485,7 @@ function OverviewCard({
           </div>
         </dl>
 
+        {/* Permission progress */}
         <div>
           <div className="mb-1.5 flex items-center justify-between text-sm">
             <span className="flex items-center gap-2 text-muted-foreground">
@@ -509,13 +512,22 @@ function OverviewCard({
           </div>
         </div>
 
+        {/* Scrollable module navigation */}
         {groups.length > 0 && (
-          <div>
-            <p className="mb-1.5 text-xs font-medium text-muted-foreground">
+          <div className="flex min-h-0 flex-col">
+            <p className="mb-2 text-xs font-medium text-muted-foreground">
               Jump to module
             </p>
 
-            <ul className="flex flex-col gap-0.5">
+            <ul
+              className={cn(
+                "flex flex-col gap-0.5",
+                "max-h-[min(45vh,420px)]",
+                "overflow-y-auto overscroll-contain",
+                "pr-1",
+                "scrollbar-thin scrollbar-thumb-muted-foreground/30",
+              )}
+            >
               {groups.map((group) => {
                 const selectedInGroup = group.permissions.filter(
                   (permission) => selectedSet.has(permission.name),
@@ -526,7 +538,7 @@ function OverviewCard({
                     <button
                       type="button"
                       onClick={() => onJumpToGroup(group.key)}
-                      className="flex w-full items-center justify-between gap-3 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      className="flex w-full items-center justify-between gap-3 rounded-md px-2 py-2 text-left text-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       <span className="min-w-0 truncate">
                         {group.label}

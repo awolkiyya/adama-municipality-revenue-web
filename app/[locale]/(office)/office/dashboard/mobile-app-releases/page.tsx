@@ -133,7 +133,11 @@ function errorMessage(error: unknown, fallback: string): string {
     : fallback;
 }
 
-function getAppTypeLabel(appType: MobileAppType | string): string {
+function getAppTypeLabel(appType?: string | null): string {
+  if (!appType) {
+    return "Unknown";
+  }
+
   return (
     MOBILE_APP_TYPES.find((item) => item.value === appType)?.label ??
     appType

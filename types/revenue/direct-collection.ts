@@ -127,7 +127,7 @@ export interface DirectCollectionServiceSummary {
 export interface DirectCollectionTaxpayer {
   id: string
 
-  name: string | null
+  full_name: string | null
 
   phone: string | null
 

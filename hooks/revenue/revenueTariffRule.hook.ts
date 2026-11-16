@@ -509,3 +509,72 @@ import { CreateTariffRulePayload, TariffRuleRecord, UpdateTariffRulePayload } fr
   
   
   };
+
+
+/* --------------------------------------
+   COPY TARIFF FORMULA VARIABLES
+-------------------------------------- */
+
+export const useCopyTariffFormula = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      tariffVersionId,
+      sourceRuleId,
+      destinationRuleId,
+      options,
+    }: {
+      tariffVersionId: string;
+      sourceRuleId: string;
+      destinationRuleId: string;
+      options: {
+        variables: boolean;
+      };
+    }) =>
+      tariffRuleService.copyFormula(
+        tariffVersionId,
+        destinationRuleId,
+        {
+          source_rule_id: sourceRuleId,
+          options,
+        },
+      ),
+
+    onSuccess: (_, variables) => {
+      // Refresh the tariff rules list.
+      queryClient.invalidateQueries({
+        queryKey: ["tariff-rules"],
+      });
+
+      // Refresh source and destination rule details.
+      queryClient.invalidateQueries({
+        queryKey: ["tariff-rule", variables.sourceRuleId],
+      });
+
+      queryClient.invalidateQueries({
+        queryKey: ["tariff-rule", variables.destinationRuleId],
+      });
+
+      // Refresh destination formula variables.
+      queryClient.invalidateQueries({
+        queryKey: [
+          "tariff-formula-variables",
+          variables.destinationRuleId,
+        ],
+      });
+
+      toast.success(
+        "Formula variables copied successfully.",
+      );
+    },
+
+    onError: (error) => {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Failed to copy formula variables.",
+      );
+    },
+  });
+};

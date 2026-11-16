@@ -264,10 +264,16 @@ const OPERATOR_LABELS: Record<Condition["operator"], string> = {
   equals: "is",
   not_equals: "is not",
   contains: "contains",
+
   greater_than: "is greater than",
   greater_than_or_equal: "is greater than or equal to",
   less_than: "is less than",
   less_than_or_equal: "is less than or equal to",
+
+  ordered_greater_than: "option order is greater than",
+  ordered_greater_than_or_equal: "option order is greater than or equal to",
+  ordered_less_than: "option order is less than",
+  ordered_less_than_or_equal: "option order is less than or equal to",
 };
 
 const ROUNDING_LABELS: Record<RoundingRule, string> = {

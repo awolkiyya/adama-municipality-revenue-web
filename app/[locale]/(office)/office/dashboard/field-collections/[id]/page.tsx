@@ -609,7 +609,7 @@ export default function DirectCollectionDetailPage() {
             </p>
 
             <p className="mt-0.5 text-sm text-muted-foreground">
-              {collection.taxpayer?.name ??
+              {collection.taxpayer?.full_name ??
                 "Unknown taxpayer"}
             </p>
           </div>
@@ -808,7 +808,7 @@ export default function DirectCollectionDetailPage() {
                   label="Name"
                   value={
                     collection.taxpayer
-                      ?.name
+                      ?.full_name
                   }
                 />
 

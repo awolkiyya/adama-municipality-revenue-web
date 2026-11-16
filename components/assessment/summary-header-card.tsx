@@ -131,13 +131,13 @@ export function SummaryHeaderCard({
           </div>
 
           <div className="lg:px-4">
-            <Stat
+            {/* <Stat
               icon={Building2}
               label="Administrative Unit"
               value={
                 assessment.administrativeUnit?.name ?? "-"
               }
-            />
+            /> */}
           </div>
 
           <div className="lg:pl-4">

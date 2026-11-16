@@ -270,8 +270,6 @@ export type PublishMobileAppReleasePayload = Record<string, never>;
 export interface WithdrawMobileAppReleasePayload {
   reason?: string;
 }
-<<<<<<< HEAD
-=======
 
 
 export interface LatestReleaseResult {
@@ -296,4 +294,3 @@ export interface LatestReleaseResult {
 //       size_bytes?: number | null;
 //     } | null;
 //   };
->>>>>>> staging

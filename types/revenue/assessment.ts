@@ -586,7 +586,7 @@ export type Assessment = {
     unknown
   > | null;
 
-  administrativeUnit:AdminUnit;
+  administrativeUnitId:string | null;
 
   taxpayer: AssessmentTaxpayer | null;
 

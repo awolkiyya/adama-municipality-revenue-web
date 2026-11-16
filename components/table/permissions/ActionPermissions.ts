@@ -73,8 +73,13 @@ export const ActionPermissions: Partial<
   */
 
   manageFormulaVariables: {
-    resource: "formula_variables",
-    action: "update",
+    resource: "tariff_formula",
+    action: "view",
+  },
+
+  copyFormula: {
+    resource: "tariff_formula",
+    action: "create",
   },
 
   /*

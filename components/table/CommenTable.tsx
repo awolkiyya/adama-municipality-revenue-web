@@ -114,9 +114,11 @@ export interface TableProps<
 
   onToggleStatus?: (row: TData) => void;
 
-  /* TARIFF RULE */
+  /* TARIFF RULE ACTIONS */
 
   onManageFormulaVariables?: (row: TData) => void;
+
+  onCopyFormula?: (row: TData) => void;
 
   /* WORKFLOW ACTIONS */
 
@@ -158,19 +160,30 @@ export function CommenTable<
   pageSize,
   isLoading,
   actions,
+
+  /* CORE */
   onView,
   onEdit,
   onDelete,
   onCreate,
+
+  /* USER / GOVERNANCE */
   onUpdatePassword,
   onUpdateRole,
   onUpdateHierarchy,
   onManageAccess,
   onToggleStatus,
+
+  /* TARIFF RULE */
   onManageFormulaVariables,
+  onCopyFormula,
+
+  /* WORKFLOW */
   onSubmit,
   onReturn,
   onApprove,
+
+  /* INVOICE */
   onIssue,
   onApplyDiscount,
   onApplyPenalty,
@@ -305,6 +318,7 @@ export function CommenTable<
             <RowActions
               actions={visibleActions}
               row={original}
+
               /* CORE */
               onView={() => onView?.(original)}
               onEdit={() => onEdit?.(original)}
@@ -312,10 +326,12 @@ export function CommenTable<
                 onDelete?.(String(original.id))
               }
               onCreate={onCreate}
+
               /* STATUS */
               onToggleStatus={() =>
                 onToggleStatus?.(original)
               }
+
               /* USER / GOVERNANCE */
               onUpdatePassword={() =>
                 onUpdatePassword?.(original)
@@ -329,14 +345,20 @@ export function CommenTable<
               onManageAccess={() =>
                 onManageAccess?.(original)
               }
-              /* FORMULA VARIABLES */
+
+              /* TARIFF RULE */
               onManageFormulaVariables={() =>
                 onManageFormulaVariables?.(original)
               }
+              onCopyFormula={() =>
+                onCopyFormula?.(original)
+              }
+
               /* WORKFLOW */
               onSubmit={() => onSubmit?.(original)}
               onReturn={() => onReturn?.(original)}
               onApprove={() => onApprove?.(original)}
+
               /* INVOICE */
               onIssue={() => onIssue?.(original)}
               onApplyDiscount={() =>
@@ -366,19 +388,32 @@ export function CommenTable<
       page,
       pageSize,
       visibleActions,
+
+      /* CORE */
       onView,
       onEdit,
       onDelete,
       onCreate,
+
+      /* STATUS */
       onToggleStatus,
+
+      /* USER / GOVERNANCE */
       onUpdatePassword,
       onUpdateRole,
       onUpdateHierarchy,
       onManageAccess,
+
+      /* TARIFF RULE */
       onManageFormulaVariables,
+      onCopyFormula,
+
+      /* WORKFLOW */
       onSubmit,
       onReturn,
       onApprove,
+
+      /* INVOICE */
       onIssue,
       onApplyDiscount,
       onApplyPenalty,

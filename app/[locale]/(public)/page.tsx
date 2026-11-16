@@ -6,6 +6,10 @@ import {
   useState,
   type CSSProperties,
   type FormEvent,
+<<<<<<< HEAD
+=======
+  ReactNode,
+>>>>>>> staging
 } from "react";
 import Link from "next/link";
 import Image from "next/image";
@@ -25,6 +29,7 @@ import {
   Menu,
   Printer,
   Receipt,
+  RefreshCw,
   Search,
   ShieldCheck,
   Smartphone,
@@ -48,6 +53,12 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+<<<<<<< HEAD
+=======
+import { api } from "@/lib/api";
+import { useLatestMobileAppRelease } from "@/hooks/use-latest-mobile-app-release";
+import { MobileAppRelease, MobileAppType } from "@/types/mobile-app-release";
+>>>>>>> staging
 
 /* -------------------------------------------------------------------------- */
 /* API configuration                                                         */
@@ -81,6 +92,7 @@ type Item = {
   icon: LucideIcon;
 };
 
+<<<<<<< HEAD
 type MobileAppType = "taxpayer" | "field_collector";
 
 type MobileAppRelease = {
@@ -99,6 +111,9 @@ type MobileAppRelease = {
     size_bytes?: number | null;
   } | null;
 };
+=======
+
+>>>>>>> staging
 
 type PublicReceipt = {
   verified: boolean;
@@ -384,6 +399,7 @@ function getApiErrorMessage(
  * API resources may return either an absolute URL or a relative download path.
  * Relative paths are resolved against NEXT_PUBLIC_API_URL.
  */
+<<<<<<< HEAD
 function resolveDownloadUrl(release: MobileAppRelease): string {
   const path =
     release.download_url ??
@@ -402,21 +418,74 @@ function resolveDownloadUrl(release: MobileAppRelease): string {
 
   return `${API_URL}${path.startsWith("/") ? "" : "/"}${path}`;
 }
+=======
+// function resolveDownloadUrl(release: MobileAppRelease): string {
+//   const path =
+//     release.download_url ??
+//     release.apk_download_url ??
+//     `/api/v1/mobile-app-releases/${release.id}/download`;
+
+//   if (!path) return "";
+
+//   if (/^https?:\/\//i.test(path)) {
+//     return path;
+//   }
+
+//   if (!API_URL) {
+//     return path;
+//   }
+
+//   return `${API_URL}${path.startsWith("/") ? "" : "/"}${path}`;
+// }
+
+>>>>>>> staging
 
 /* -------------------------------------------------------------------------- */
 /* Mobile app release download                                                */
 /* -------------------------------------------------------------------------- */
 
+<<<<<<< HEAD
 function MobileAppReleaseDownload({
   appType,
   appName,
   description,
   platform = "Android",
 }: {
+=======
+function resolveDownloadUrl(release: MobileAppRelease): string {
+  const downloadUrl = (
+    release as MobileAppRelease & {
+      download_url?: string | null;
+    }
+  ).download_url;
+
+  if (!downloadUrl || !API_URL) {
+    return "";
+  }
+
+  try {
+    const configuredApiUrl = new URL(API_URL);
+    const resolvedUrl = new URL(downloadUrl, configuredApiUrl);
+
+    // Always use the configured API host.
+    // This prevents internal development IPs from being exposed to users.
+    resolvedUrl.protocol = configuredApiUrl.protocol;
+    resolvedUrl.host = configuredApiUrl.host;
+
+    return resolvedUrl.toString();
+  } catch {
+    return "";
+  }
+}
+
+
+interface MobileAppReleaseDownloadProps {
+>>>>>>> staging
   appType: MobileAppType;
   appName: string;
   description: string;
   platform?: string;
+<<<<<<< HEAD
 }) {
   const [release, setRelease] = useState<MobileAppRelease | null>(null);
   const [loading, setLoading] = useState(true);
@@ -638,11 +707,271 @@ function MobileAppReleaseDownload({
           Download the official Adama Municipal Revenue Android application.
           Install it on a compatible Android device.
         </p>
+=======
+}
+
+
+/* -------------------------------------------------------------------------- */
+/* Shared styles                                                              */
+/* -------------------------------------------------------------------------- */
+
+const focusRing =
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
+
+// 44px+ tap target, full width on mobile, natural width on larger screens
+const secondaryButton = `inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border bg-background px-4 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-muted active:bg-muted/80 sm:w-auto ${focusRing}`;
+
+/* -------------------------------------------------------------------------- */
+/* Small building blocks                                                      */
+/* -------------------------------------------------------------------------- */
+
+function Stat({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="min-w-0 px-2 py-3 text-center sm:px-4 sm:py-4">
+      <dt className="text-[11px] font-medium text-muted-foreground sm:text-xs">
+        {label}
+      </dt>
+      <dd className="mt-1 truncate text-sm font-semibold text-foreground sm:text-base">
+        {value}
+      </dd>
+    </div>
+  );
+}
+
+function StatusPanel({
+  tone = "neutral",
+  title,
+  message,
+  action,
+}: {
+  tone?: "neutral" | "error";
+  title: string;
+  message: ReactNode;
+  action?: ReactNode;
+}) {
+  const isError = tone === "error";
+
+  return (
+    <div
+      role={isError ? "alert" : "status"}
+      className={`rounded-2xl border p-4 sm:p-5 ${
+        isError
+          ? "border-destructive/30 bg-destructive/5"
+          : "bg-muted/30"
+      }`}
+    >
+      <div className="flex items-start gap-3">
+        <AlertCircle
+          aria-hidden="true"
+          className={`mt-0.5 size-5 shrink-0 ${
+            isError ? "text-destructive" : "text-muted-foreground"
+          }`}
+        />
+        <div className="min-w-0">
+          <p
+            className={`text-sm font-semibold ${
+              isError ? "text-destructive" : "text-foreground"
+            }`}
+          >
+            {title}
+          </p>
+          <p className="mt-1 break-words text-sm leading-6 text-muted-foreground">
+            {message}
+          </p>
+        </div>
+      </div>
+
+      {action && <div className="mt-4">{action}</div>}
+    </div>
+  );
+}
+
+function LoadingSkeleton() {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="space-y-3"
+    >
+      <span className="sr-only">Loading latest release…</span>
+
+      <div className="grid grid-cols-3 divide-x overflow-hidden rounded-2xl border bg-card">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="space-y-2 px-3 py-4">
+            <div className="mx-auto h-2.5 w-10 animate-pulse rounded bg-muted motion-reduce:animate-none" />
+            <div className="mx-auto h-4 w-14 animate-pulse rounded bg-muted motion-reduce:animate-none" />
+          </div>
+        ))}
+      </div>
+
+      <div className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-muted/50 text-sm text-muted-foreground">
+        <Loader2
+          aria-hidden="true"
+          className="size-4 animate-spin motion-reduce:animate-none"
+        />
+        Loading latest release…
+>>>>>>> staging
       </div>
     </div>
   );
 }
 
+<<<<<<< HEAD
+=======
+/* -------------------------------------------------------------------------- */
+/* Main component                                                             */
+/* -------------------------------------------------------------------------- */
+
+export function MobileAppReleaseDownload({
+  appType,
+  appName,
+  description,
+  platform = "Android",
+}: MobileAppReleaseDownloadProps) {
+  const { release, loading, error, notFound, retry } =
+    useLatestMobileAppRelease(appType);
+
+  // Resolve the download URL against the configured API host.
+  const downloadUrl = release ? resolveDownloadUrl(release) : "";
+  const canDownload = Boolean(release?.is_downloadable && downloadUrl);
+
+  const showDetails = !loading && !error && !notFound && Boolean(release);
+
+  return (
+    <section
+      aria-label={`${appName} download`}
+      className="mx-auto w-full max-w-md space-y-4 sm:space-y-5"
+    >
+      {/* App identity */}
+      <header className="flex items-center gap-3 sm:gap-4">
+        <span
+          aria-hidden="true"
+          className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-sm sm:size-14"
+        >
+          <Smartphone className="size-6 sm:size-7" />
+        </span>
+
+        <div className="min-w-0">
+          <h3 className="truncate text-base font-bold leading-tight text-foreground sm:text-lg">
+            {appName}
+          </h3>
+          <p className="mt-0.5 line-clamp-2 text-xs leading-5 text-muted-foreground sm:text-sm">
+            {description}
+          </p>
+        </div>
+      </header>
+
+      {/* Loading */}
+      {loading && <LoadingSkeleton />}
+
+      {/* No published release */}
+      {!loading && notFound && (
+        <StatusPanel
+          title="Coming soon"
+          message={
+            <>
+              No published release is available for {appName} yet. Please
+              check again later.
+            </>
+          }
+          action={
+            <button type="button" onClick={retry} className={secondaryButton}>
+              <RefreshCw aria-hidden="true" className="size-4" />
+              Check again
+            </button>
+          }
+        />
+      )}
+
+      {/* Error */}
+      {!loading && error && (
+        <StatusPanel
+          tone="error"
+          title="Release unavailable"
+          message={error}
+          action={
+            <button type="button" onClick={retry} className={secondaryButton}>
+              <RefreshCw aria-hidden="true" className="size-4" />
+              Try again
+            </button>
+          }
+        />
+      )}
+
+      {/* Release details */}
+      {showDetails && release && (
+        <div className="space-y-4">
+          <dl className="grid grid-cols-3 divide-x overflow-hidden rounded-2xl border bg-card shadow-sm">
+            <Stat label="Version" value={release.version_name} />
+            <Stat
+              label="APK size"
+              value={formatFileSize(release.apk?.size_bytes)}
+            />
+            <Stat label="Platform" value={platform} />
+          </dl>
+
+          {release.is_mandatory && (
+            <div
+              role="note"
+              className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3"
+            >
+              <p className="text-xs leading-5 text-foreground sm:text-sm">
+                <span className="font-semibold">Required update:</span> this
+                version must be installed to keep using the app.
+              </p>
+            </div>
+          )}
+
+          {canDownload ? (
+            <div className="space-y-2">
+              <a
+                href={downloadUrl}
+                download
+                className={`group inline-flex min-h-14 w-full items-center gap-3 rounded-2xl bg-primary px-5 text-base font-semibold text-primary-foreground shadow-md transition-colors hover:bg-primary/90 active:bg-primary/80 ${focusRing}`}
+              >
+                <Download aria-hidden="true" className="size-5 shrink-0" />
+                <span className="min-w-0 flex-1 truncate">
+                  Download for {platform}
+                </span>
+                <ArrowRight
+                  aria-hidden="true"
+                  className="size-5 shrink-0 transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none"
+                />
+              </a>
+
+              {release.apk?.original_name && (
+                <p className="truncate text-center text-xs text-muted-foreground">
+                  {release.apk.original_name}
+                </p>
+              )}
+            </div>
+          ) : (
+            <StatusPanel
+              title="Download unavailable"
+              message="This release can't be downloaded right now. Contact the system administrator if the problem continues."
+            />
+          )}
+        </div>
+      )}
+
+      {/* Security / install note */}
+      <aside className="flex items-start gap-3 rounded-2xl bg-muted/50 p-3.5 sm:p-4">
+        <ShieldCheck
+          aria-hidden="true"
+          className="mt-0.5 size-5 shrink-0 text-primary"
+        />
+        <p className="text-xs leading-5 text-muted-foreground sm:text-sm sm:leading-6">
+          This is the official Adama Municipal Revenue Android app. Install
+          it only from this page, on a compatible Android device. If Android
+          asks, allow installs from your browser.
+        </p>
+      </aside>
+    </section>
+  );
+}
+
+
+>>>>>>> staging
 /* -------------------------------------------------------------------------- */
 /* Small components                                                           */
 /* -------------------------------------------------------------------------- */

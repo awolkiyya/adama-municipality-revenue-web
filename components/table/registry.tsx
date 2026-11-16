@@ -27,6 +27,7 @@ export type TableActionKey =
   | "void"
   | "pay"
   | "print"
+  | "copyFormula"
   | "download";
 
 /*
@@ -640,76 +641,84 @@ export const CommentTableRegistry: Record<
   },
 
 
-  /*
-  |--------------------------------------------------------------------------
-  | TARIFF RULES
-  |--------------------------------------------------------------------------
-  */
+/*
+|--------------------------------------------------------------------------
+| TARIFF RULES
+|--------------------------------------------------------------------------
+*/
 
-  tariffRule: {
-    columns: [
-      "code",
-      "name",
-      "revenueCode",
-      "calculationType",
-      "amount",
-      "status",
-    ],
+tariffRule: {
+  columns: [
+    "code",
+    "name",
+    "revenueCode",
+    "calculationType",
+    "amount",
+    "status",
+  ],
 
-    actions: {
-      view: {
-        enabled: true,
-        permission: {
-          resource: "tariff",
-          action: "view",
-        },
+  actions: {
+    view: {
+      enabled: true,
+      permission: {
+        resource: "tariff",
+        action: "view",
       },
+    },
 
-      edit: {
-        enabled: true,
-        permission: {
-          resource: "tariff",
-          action: "update",
-        },
+    edit: {
+      enabled: true,
+      permission: {
+        resource: "tariff",
+        action: "update",
       },
+    },
 
-      delete: {
-        enabled: true,
-        permission: {
-          resource: "tariff",
-          action: "delete",
-        },
+    delete: {
+      enabled: true,
+      permission: {
+        resource: "tariff",
+        action: "delete",
       },
+    },
 
-      create: {
-        enabled: false,
+    create: {
+      enabled: false,
+    },
+
+    toggleStatus: {
+      enabled: false,
+    },
+
+    updatePassword: {
+      enabled: false,
+    },
+
+    updateRole: {
+      enabled: false,
+    },
+
+    updateHierarchy: {
+      enabled: false,
+    },
+
+    manageFormulaVariables: {
+      enabled: true,
+      permission: {
+        resource: "tariff_formula",
+        action: "view",
       },
+    },
 
-      toggleStatus: {
-        enabled: false,
-      },
-
-      updatePassword: {
-        enabled: false,
-      },
-
-      updateRole: {
-        enabled: false,
-      },
-
-      updateHierarchy: {
-        enabled: false,
-      },
-
-      manageFormulaVariables: {
-        enabled: true,
-        permission: {
-          resource: "tariff_formula",
-          action: "view",
-        },
+    copyFormula: {
+      enabled: true,
+      permission: {
+        resource: "tariff_formula",
+        action: "create",
       },
     },
   },
+},
 
  /*
 |--------------------------------------------------------------------------

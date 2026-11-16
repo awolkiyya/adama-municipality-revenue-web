@@ -13,7 +13,11 @@ export type ConditionOperator =
   | "greater_than"
   | "greater_than_or_equal"
   | "less_than"
-  | "less_than_or_equal";
+  | "less_than_or_equal"
+  | "ordered_greater_than"
+  | "ordered_greater_than_or_equal"
+  | "ordered_less_than"
+  | "ordered_less_than_or_equal";
 
 export interface Condition {
   fieldId: string;
@@ -484,10 +488,11 @@ export const CONDITION_OPERATORS: Record<
   SELECT: [
     { value: "equals", label: "Is" },
     { value: "not_equals", label: "Is Not" },
-    { value: "greater_than", label: "Greater Than" },
-    { value: "greater_than_or_equal", label: "Greater Than or Equal" },
-    { value: "less_than", label: "Less Than" },
-    { value: "less_than_or_equal", label: "Less Than or Equal" },
+  
+    { value: "ordered_greater_than", label: "Greater Than (Option Order)" },
+    { value: "ordered_greater_than_or_equal", label: "Greater Than or Equal (Option Order)" },
+    { value: "ordered_less_than", label: "Less Than (Option Order)" },
+    { value: "ordered_less_than_or_equal", label: "Less Than or Equal (Option Order)" },
   ],
 
   BOOLEAN: [

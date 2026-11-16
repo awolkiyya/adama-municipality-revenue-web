@@ -385,7 +385,7 @@ function BaseFieldDetailsSheet({
 
   // BaseField uses camelCase: inputSource
   const inputSource = normalizeInputSource(
-    field?.inputSource,
+    field?.input_source,
   );
 
   return (
@@ -500,7 +500,7 @@ function BaseFieldDetailsSheet({
 
                       <div className="mt-2">
                         <InputSourceBadge
-                          source={field.inputSource}
+                          source={field.input_source}
                         />
                       </div>
 
@@ -1364,7 +1364,7 @@ function BaseFieldManagerContent() {
 
                         <td className="px-4 py-3">
                           <InputSourceBadge
-                            source={field.inputSource}
+                            source={field.input_source}
                           />
                         </td>
 

@@ -23,6 +23,7 @@
 // backend Decision Provider.
 // =====================================================
 
+import { AdminUnit } from "../admin-unit";
 import { AuthUser } from "../user";
 import { BaseFieldInputSource } from "./revenue-baseField";
 
@@ -585,7 +586,7 @@ export type Assessment = {
     unknown
   > | null;
 
-  administrativeUnitId: string | null;
+  administrativeUnit:AdminUnit;
 
   taxpayer: AssessmentTaxpayer | null;
 

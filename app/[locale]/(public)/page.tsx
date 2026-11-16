@@ -6,10 +6,7 @@ import {
   useState,
   type CSSProperties,
   type FormEvent,
-<<<<<<< HEAD
-=======
   ReactNode,
->>>>>>> staging
 } from "react";
 import Link from "next/link";
 import Image from "next/image";
@@ -53,12 +50,10 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-<<<<<<< HEAD
-=======
 import { api } from "@/lib/api";
 import { useLatestMobileAppRelease } from "@/hooks/use-latest-mobile-app-release";
 import { MobileAppRelease, MobileAppType } from "@/types/mobile-app-release";
->>>>>>> staging
+import Scanner from "@/components/Scanner";
 
 /* -------------------------------------------------------------------------- */
 /* API configuration                                                         */
@@ -92,28 +87,6 @@ type Item = {
   icon: LucideIcon;
 };
 
-<<<<<<< HEAD
-type MobileAppType = "taxpayer" | "field_collector";
-
-type MobileAppRelease = {
-  id: string;
-  app_type: MobileAppType;
-  version_name: string;
-  version_code: number;
-  status?: string;
-  is_downloadable: boolean;
-  download_url?: string | null;
-  apk_download_url?: string | null;
-  apk?: {
-    uuid?: string;
-    original_name?: string | null;
-    extension?: string | null;
-    size_bytes?: number | null;
-  } | null;
-};
-=======
-
->>>>>>> staging
 
 type PublicReceipt = {
   verified: boolean;
@@ -399,26 +372,6 @@ function getApiErrorMessage(
  * API resources may return either an absolute URL or a relative download path.
  * Relative paths are resolved against NEXT_PUBLIC_API_URL.
  */
-<<<<<<< HEAD
-function resolveDownloadUrl(release: MobileAppRelease): string {
-  const path =
-    release.download_url ??
-    release.apk_download_url ??
-    `/api/v1/mobile-app-releases/${release.id}/download`;
-
-  if (!path) return "";
-
-  if (/^https?:\/\//i.test(path)) {
-    return path;
-  }
-
-  if (!API_URL) {
-    return path;
-  }
-
-  return `${API_URL}${path.startsWith("/") ? "" : "/"}${path}`;
-}
-=======
 // function resolveDownloadUrl(release: MobileAppRelease): string {
 //   const path =
 //     release.download_url ??
@@ -438,20 +391,11 @@ function resolveDownloadUrl(release: MobileAppRelease): string {
 //   return `${API_URL}${path.startsWith("/") ? "" : "/"}${path}`;
 // }
 
->>>>>>> staging
 
 /* -------------------------------------------------------------------------- */
 /* Mobile app release download                                                */
 /* -------------------------------------------------------------------------- */
 
-<<<<<<< HEAD
-function MobileAppReleaseDownload({
-  appType,
-  appName,
-  description,
-  platform = "Android",
-}: {
-=======
 function resolveDownloadUrl(release: MobileAppRelease): string {
   const downloadUrl = (
     release as MobileAppRelease & {
@@ -480,234 +424,10 @@ function resolveDownloadUrl(release: MobileAppRelease): string {
 
 
 interface MobileAppReleaseDownloadProps {
->>>>>>> staging
   appType: MobileAppType;
   appName: string;
   description: string;
   platform?: string;
-<<<<<<< HEAD
-}) {
-  const [release, setRelease] = useState<MobileAppRelease | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const controller = new AbortController();
-
-    async function loadLatestRelease() {
-      setLoading(true);
-      setError(null);
-      setRelease(null);
-
-      if (!API_URL) {
-        setError(
-          "The API address is not configured. Please contact the system administrator.",
-        );
-        setLoading(false);
-        return;
-      }
-
-      try {
-        const response = await fetch(
-          `${API_URL}/api/v1/mobile-app-releases/latest?app_type=${encodeURIComponent(
-            appType,
-          )}`,
-          {
-            method: "GET",
-            headers: {
-              Accept: "application/json",
-            },
-            cache: "no-store",
-            signal: controller.signal,
-          },
-        );
-
-        const payload: unknown = await response.json().catch(() => null);
-
-        if (!response.ok) {
-          throw new Error(
-            getApiErrorMessage(
-              payload,
-              response.status === 404
-                ? "No published release is available yet."
-                : "Unable to load the latest app release.",
-            ),
-          );
-        }
-
-        // Supports both { data: release } and a direct release response.
-        const body =
-          typeof payload === "object" &&
-          payload !== null &&
-          "data" in payload
-            ? payload.data
-            : payload;
-
-        if (
-          typeof body !== "object" ||
-          body === null ||
-          !("id" in body) ||
-          !("app_type" in body) ||
-          !("version_name" in body) ||
-          !("is_downloadable" in body)
-        ) {
-          throw new Error(
-            "The release information returned by the server is invalid.",
-          );
-        }
-
-        const latestRelease = body as MobileAppRelease;
-
-        if (latestRelease.app_type !== appType) {
-          throw new Error(
-            "The server returned a release for a different application.",
-          );
-        }
-
-        setRelease(latestRelease);
-      } catch (cause) {
-        if (
-          cause instanceof DOMException &&
-          cause.name === "AbortError"
-        ) {
-          return;
-        }
-
-        setError(
-          cause instanceof Error
-            ? cause.message
-            : "Unable to load the app release.",
-        );
-      } finally {
-        if (!controller.signal.aborted) {
-          setLoading(false);
-        }
-      }
-    }
-
-    void loadLatestRelease();
-
-    return () => {
-      controller.abort();
-    };
-  }, [appType]);
-
-  const downloadUrl = release ? resolveDownloadUrl(release) : "";
-  const canDownload = Boolean(release?.is_downloadable && downloadUrl);
-
-  return (
-    <div className="space-y-4">
-      {/* App identity */}
-      <div className="flex items-center gap-3">
-        <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
-          <Smartphone className="size-5" />
-        </span>
-
-        <div className="min-w-0">
-          <p className="truncate text-sm font-bold text-foreground">
-            {appName}
-          </p>
-          <p className="text-xs text-muted-foreground">{description}</p>
-        </div>
-      </div>
-
-      {/* Loading */}
-      {loading && (
-        <div className="flex min-h-24 items-center justify-center gap-2 rounded-xl border bg-muted/30 text-sm text-muted-foreground">
-          <Loader2 className="size-4 animate-spin" />
-          Loading latest release…
-        </div>
-      )}
-
-      {/* Error */}
-      {!loading && error && (
-        <div className="flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/5 p-3">
-          <AlertCircle className="mt-0.5 size-4 shrink-0 text-destructive" />
-
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-destructive">
-              Release unavailable
-            </p>
-            <p className="mt-0.5 text-sm leading-5 text-muted-foreground">
-              {error}
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* Release details */}
-      {!loading && !error && release && (
-        <>
-          <dl className="grid grid-cols-3 divide-x overflow-hidden rounded-xl border bg-card">
-            <div className="min-w-0 px-2 py-3 text-center sm:px-3">
-              <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                Version
-              </dt>
-
-              <dd className="mt-1 break-words text-sm font-semibold text-foreground">
-                {release.version_name}
-              </dd>
-            </div>
-
-            <div className="min-w-0 px-2 py-3 text-center sm:px-3">
-              <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                APK size
-              </dt>
-
-              <dd className="mt-1 break-words text-sm font-semibold text-foreground">
-                {formatFileSize(release.apk?.size_bytes)}
-              </dd>
-            </div>
-
-            <div className="min-w-0 px-2 py-3 text-center sm:px-3">
-              <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                Platform
-              </dt>
-
-              <dd className="mt-1 break-words text-sm font-semibold text-foreground">
-                {platform}
-              </dd>
-            </div>
-          </dl>
-
-          {/* Download action */}
-          {canDownload ? (
-            <a
-              href={downloadUrl}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3.5 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            >
-              <Download className="size-4" />
-              Download for Android
-              <ArrowRight className="ml-auto size-4" />
-            </a>
-          ) : (
-            <div className="rounded-xl border bg-muted/30 p-3 text-center">
-              <p className="text-sm font-semibold text-foreground">
-                Download unavailable
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                This release is not currently available for download.
-              </p>
-            </div>
-          )}
-
-          {release.apk?.original_name && (
-            <p className="truncate text-center text-xs text-muted-foreground">
-              {release.apk.original_name}
-            </p>
-          )}
-        </>
-      )}
-
-      {/* Security note */}
-      <div className="flex items-start gap-2.5 rounded-xl bg-muted/50 p-3">
-        <ShieldCheck className="mt-0.5 size-4 shrink-0 text-primary" />
-
-        <p className="text-xs leading-5 text-muted-foreground">
-          Download the official Adama Municipal Revenue Android application.
-          Install it on a compatible Android device.
-        </p>
-=======
 }
 
 
@@ -810,14 +530,11 @@ function LoadingSkeleton() {
           className="size-4 animate-spin motion-reduce:animate-none"
         />
         Loading latest release…
->>>>>>> staging
       </div>
     </div>
   );
 }
 
-<<<<<<< HEAD
-=======
 /* -------------------------------------------------------------------------- */
 /* Main component                                                             */
 /* -------------------------------------------------------------------------- */
@@ -971,7 +688,6 @@ export function MobileAppReleaseDownload({
 }
 
 
->>>>>>> staging
 /* -------------------------------------------------------------------------- */
 /* Small components                                                           */
 /* -------------------------------------------------------------------------- */
@@ -1464,7 +1180,7 @@ export default function LandingPage() {
     "inline-flex w-full items-center justify-center gap-2 rounded-xl border bg-card px-6 py-3.5 text-sm font-semibold transition hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:w-auto";
 
   return (
-    <main className="min-h-screen overflow-x-hidden bg-background text-foreground">
+    <main className="dark min-h-screen overflow-x-hidden bg-background text-foreground">
       {/* ------------------------------------------------------------------ */}
       {/* Navbar                                                             */}
       {/* ------------------------------------------------------------------ */}
@@ -1477,12 +1193,25 @@ export default function LandingPage() {
           {/* Brand */}
           <Link
             href="/"
-            className="flex items-center gap-2.5 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            className="flex items-center gap-3 rounded-md transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
-            <BrandMark />
-            <span className="font-serif text-base font-bold">
-              Adama Revenue
-            </span>
+            <Image
+              src="/images/logo.png"
+              alt="Adama City Administration Revenue Office Logo"
+              width={40}
+              height={40}
+              priority
+              className="h-10 w-15 shrink-0 object-contain"
+            />
+
+            <div className="flex flex-col leading-tight">
+              <span className="font-serif text-base font-bold tracking-tight">
+                Adama Revenue
+              </span>
+              <span className="text-[10px] font-medium tracking-wide text-muted-foreground">
+                MUNICIPAL REVENUE OFFICE
+              </span>
+            </div>
           </Link>
 
           {/* Desktop links */}
@@ -1525,7 +1254,7 @@ export default function LandingPage() {
 
             <SheetContent
               side="right"
-              className="flex w-[85%] max-w-sm flex-col gap-0 p-0"
+              className="dark flex w-[85%] max-w-sm flex-col gap-0 p-0"
             >
               <SheetHeader className="border-b p-4 text-left">
                 <SheetTitle className="flex items-center gap-2.5">
@@ -1576,27 +1305,41 @@ export default function LandingPage() {
       {/* ------------------------------------------------------------------ */}
 
       <section className="relative isolate overflow-hidden px-4 pb-32 pt-16 sm:px-6 sm:pb-44 sm:pt-24">
-        {/* Interactive pattern */}
-        <div aria-hidden className="absolute inset-0 -z-30">
-          <MagnetLines
-            lineColor="#d4d4d8"
-            spacing={34}
-            lineWidth={2}
-            lineHeight={18}
-            mode="orbit"
-            shape="line"
-            radius={200}
-            fade={0.65}
-            baseAngle={-10}
-            stretch={0.4}
-            inertia={0.35}
-            bounce={0.3}
-            ripple={0.3}
-            clickPulse
-            intro
-            idle={false}
-          />
-        </div>
+
+
+      <div aria-hidden className="absolute inset-0 -z-30">  <Scanner
+    color1="#5227FF"
+    color2="#FF9FFC"
+    color3="#FFFFFF"
+    speed={0.5}
+    sweepSpeed={0.25}
+    sweepWidth={1.6}
+    trail={0.5}
+    ripple={0.22}
+    bandDensity={11}
+    glow={0.6}
+    scanDirection="vertical"
+    colorSpread={0.7}
+    scanline
+    scanlineIntensity={0.5}
+    mouseInteraction
+    clickEffect="ping"
+    reverse={false}
+    scale={1.5}
+    frequency={2}
+    lineWidth={1.2}
+    brightness={1}
+    vignette={0.3}
+    grain
+    grainIntensity={0.04}
+    opacity={1}
+    mouseMode="repel"
+    mouseRadius={0.5}
+    mouseStrength={0.7}
+    intro
+    lightMode={false}
+/>
+</div>
 
         {/* Spotlight */}
         <div
@@ -1970,35 +1713,49 @@ export default function LandingPage() {
         </section>
       )}
 
-      {/* ------------------------------------------------------------------ */}
-      {/* Footer                                                              */}
-      {/* ------------------------------------------------------------------ */}
+     
+     {/* ------------------------------------------------------------------ */}
+{/* Footer                                                              */}
+{/* ------------------------------------------------------------------ */}
 
-      <footer className="px-4 py-8 sm:px-6">
-        <div className="mx-auto flex max-w-6xl flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-2.5">
-            <BrandMark size="sm" />
+<footer className="border-t bg-background px-4 py-8 sm:px-6">
+  <div className="mx-auto flex max-w-6xl flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+    {/* Brand */}
+    <div className="flex items-center gap-3">
+      <Image
+        src="/images/logo.png"
+        alt="Adama City Revenue"
+        width={36}
+        height={36}
+        className="h-9 w-9 object-contain"
+      />
 
-            <div>
-              <p className="text-sm font-bold">Adama City Revenue</p>
-              <p className="text-xs text-muted-foreground">
-                Municipal revenue management platform
-              </p>
-            </div>
-          </div>
+      <div className="space-y-0.5">
+        <p className="text-sm font-bold tracking-tight">
+          Adama City Revenue
+        </p>
+        <p className="text-xs text-muted-foreground">
+          Municipal revenue management platform
+        </p>
+      </div>
+    </div>
 
-          <div className="flex items-center gap-5 text-xs text-muted-foreground">
-            <Link
-              href="/feedback"
-              className="font-medium transition hover:text-foreground"
-            >
-              Send feedback
-            </Link>
+    {/* Footer links and copyright */}
+    <div className="flex flex-col gap-3 text-xs text-muted-foreground sm:flex-row sm:items-center sm:gap-5">
+      <Link
+        href="/feedback"
+        className="font-medium transition-colors hover:text-foreground"
+      >
+        Send feedback
+      </Link>
 
-            <p>© {new Date().getFullYear()} Adama City Administration</p>
-          </div>
-        </div>
-      </footer>
+      <p>
+        © {new Date().getFullYear()} Adama City Administration. All rights
+        reserved.
+      </p>
+    </div>
+  </div>
+</footer>
     </main>
   );
 }

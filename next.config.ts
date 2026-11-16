@@ -23,7 +23,7 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
 
   // Development only
-  allowedDevOrigins: ["192.168.3.1", "172.25.10.74"],
+  allowedDevOrigins: ["192.168.3.1", "172.25.10.74","192.168.1.208"],
 
   // Request body size for proxy operations
   // Request body size for proxy operations

@@ -1,3 +1,4 @@
+
 import {
   CalendarClock,
   CalendarDays,
@@ -5,6 +6,7 @@ import {
   Paperclip,
   ScrollText,
   UserPlus,
+  Building2,
   type LucideIcon,
 } from "lucide-react";
 
@@ -42,7 +44,10 @@ function Stat({
         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
           {label}
         </p>
-        <p className="mt-0.5 truncate text-base font-semibold">{value}</p>
+
+        <p className="mt-0.5 truncate text-base font-semibold">
+          {value}
+        </p>
       </div>
     </div>
   );
@@ -57,7 +62,9 @@ export function SummaryHeaderCard({
   serviceCount: number;
   fileCount: number;
 }) {
-  const accent = STATUS_ACCENT[assessment.status?.toUpperCase() ?? ""] ?? "border-t-border";
+  const accent =
+    STATUS_ACCENT[assessment.status?.toUpperCase() ?? ""] ??
+    "border-t-border";
 
   return (
     <Card className={`border-t-4 ${accent}`}>
@@ -69,10 +76,14 @@ export function SummaryHeaderCard({
             </div>
 
             <div>
-              <p className="text-sm text-muted-foreground">Assessment Number</p>
+              <p className="text-sm text-muted-foreground">
+                Assessment Number
+              </p>
+
               <h1 className="mt-0.5 text-2xl font-bold tracking-tight">
                 {assessment.assessmentNumber}
               </h1>
+
               <p className="mt-1 text-sm text-muted-foreground">
                 Created {formatEthiopianDate(assessment.createdAt)}
               </p>
@@ -82,13 +93,21 @@ export function SummaryHeaderCard({
           <StatusBadge status={assessment.status} />
         </div>
 
-        <div className="mt-6 grid gap-x-4 gap-y-5 border-t pt-5 sm:grid-cols-2 lg:grid-cols-5 lg:divide-x lg:border-t-0 lg:pt-0">
+        <div className="mt-6 grid gap-x-4 gap-y-5 border-t pt-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 lg:divide-x lg:border-t-0 lg:pt-0">
           <div className="lg:pr-4">
-            <Stat icon={FileStack} label="Services" value={serviceCount} />
+            <Stat
+              icon={FileStack}
+              label="Services"
+              value={serviceCount}
+            />
           </div>
 
           <div className="lg:px-4">
-            <Stat icon={Paperclip} label="Evidence Files" value={fileCount} />
+            <Stat
+              icon={Paperclip}
+              label="Evidence Files"
+              value={fileCount}
+            />
           </div>
 
           <div className="lg:px-4">
@@ -104,7 +123,19 @@ export function SummaryHeaderCard({
               icon={CalendarClock}
               label="Submitted"
               value={
-                assessment.submittedAt ? formatEthiopianDate(assessment.submittedAt) : "-"
+                assessment.submittedAt
+                  ? formatEthiopianDate(assessment.submittedAt)
+                  : "-"
+              }
+            />
+          </div>
+
+          <div className="lg:px-4">
+            <Stat
+              icon={Building2}
+              label="Administrative Unit"
+              value={
+                assessment.administrativeUnit?.name ?? "-"
               }
             />
           </div>
@@ -116,6 +147,7 @@ export function SummaryHeaderCard({
               value={
                 <>
                   {assessment.createdBy?.name ?? "-"}
+
                   {assessment.createdBy?.label && (
                     <span className="block text-xs font-normal text-muted-foreground">
                       {assessment.createdBy.label}

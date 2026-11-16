@@ -114,9 +114,6 @@ export function AssessmentSummary({
           <div
             key={card.key}
             className="
-              rounded-xl
-              border
-              bg-card
               p-5
               shadow-sm
               transition

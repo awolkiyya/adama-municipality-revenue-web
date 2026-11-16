@@ -1,4 +1,3 @@
-// hooks/revenue/assessment.hook.ts
 
 "use client";
 
@@ -38,17 +37,9 @@ import {
 
 export const assessmentKeys = {
 
-  // ---------------------------------------------------
-  // ROOT
-  // ---------------------------------------------------
-
   all: [
     "assessments",
   ],
-
-  // ---------------------------------------------------
-  // LISTS
-  // ---------------------------------------------------
 
   lists: () => [
     ...assessmentKeys.all,
@@ -61,10 +52,6 @@ export const assessmentKeys = {
     ...assessmentKeys.lists(),
     params,
   ],
-
-  // ---------------------------------------------------
-  // DETAILS
-  // ---------------------------------------------------
 
   details: () => [
     ...assessmentKeys.all,
@@ -84,21 +71,6 @@ export const assessmentKeys = {
 // =====================================================
 // GET ASSESSMENTS
 // =====================================================
-//
-// One endpoint:
-//
-// GET /assessments
-//
-// Normal:
-//
-// GET /assessments
-//
-// Pending:
-//
-// GET /assessments?pending=true
-//
-// The backend decides the appropriate dataset.
-// =====================================================
 
 type UseAssessmentsOptions = {
   params?: AssessmentFilters;
@@ -109,6 +81,10 @@ export const useAssessments = ({
   params,
   pending = false,
 }: UseAssessmentsOptions = {}) => {
+
+  // ---------------------------------------------------
+  // BUILD QUERY PARAMETERS
+  // ---------------------------------------------------
 
   const queryParams: AssessmentFilters = {
 
@@ -122,6 +98,25 @@ export const useAssessments = ({
 
   };
 
+
+  // ---------------------------------------------------
+  // REMOVE UNDEFINED VALUES
+  // ---------------------------------------------------
+
+  const cleanQueryParams = Object.fromEntries(
+    Object.entries(queryParams).filter(
+      ([, value]) =>
+        value !== undefined &&
+        value !== null &&
+        value !== "",
+    ),
+  ) as AssessmentFilters;
+
+
+  // ---------------------------------------------------
+  // QUERY
+  // ---------------------------------------------------
+
   return useQuery<
     ListResponse<
       Assessment,
@@ -131,13 +126,13 @@ export const useAssessments = ({
 
     queryKey:
       assessmentKeys.list(
-        queryParams,
+        cleanQueryParams,
       ),
 
     queryFn:
       () =>
         assessmentService.getAssessments(
-          queryParams,
+          cleanQueryParams,
         ),
 
     staleTime:
@@ -194,10 +189,6 @@ export const useAssessment = (
 
 // =====================================================
 // CREATE ASSESSMENT
-// =====================================================
-//
-// Assessment creation uses FormData because
-// assessment services may contain FILE / MULTI_FILE.
 // =====================================================
 
 export const useCreateAssessment = () => {
@@ -336,11 +327,6 @@ export const useUpdateAssessment = () => {
 // =====================================================
 // SUBMIT NEW ASSESSMENT
 // =====================================================
-//
-// Creates a new assessment:
-//
-// status = PENDING_APPROVAL
-// =====================================================
 
 export const useSubmitAssessment = () => {
 
@@ -383,13 +369,6 @@ export const useSubmitAssessment = () => {
 
 // =====================================================
 // SUBMIT EXISTING DRAFT
-// =====================================================
-//
-// DRAFT
-//
-// ->
-//
-// PENDING_APPROVAL
 // =====================================================
 
 export const useSubmitExistingAssessment = () => {
@@ -442,13 +421,6 @@ export const useSubmitExistingAssessment = () => {
 // =====================================================
 // APPROVE ASSESSMENT
 // =====================================================
-//
-// PENDING_APPROVAL
-//
-// ->
-//
-// APPROVED
-// =====================================================
 
 export const useApproveAssessment = () => {
 
@@ -493,14 +465,7 @@ export const useApproveAssessment = () => {
 
 
 // =====================================================
-// REJECT ASSESSMENT
-// =====================================================
-//
-// PENDING_APPROVAL
-//
-// ->
-//
-// REJECTED
+// RETURN ASSESSMENT
 // =====================================================
 
 export const useReturnAssessment = () => {

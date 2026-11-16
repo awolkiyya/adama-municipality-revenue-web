@@ -1,3 +1,4 @@
+
 "use client";
 
 import {
@@ -48,7 +49,6 @@ import {
 
 import {
   getAssessmentConfig,
-  hasAssessmentPermission,
   INITIAL_ASSESSMENT_FILTERS,
 } from "./assessment.config";
 
@@ -59,21 +59,16 @@ import {
 
 export default function AssessmentWorkspace() {
 
-  const router =
-    useRouter();
+  const router = useRouter();
 
 
   // ===================================================
   // USER
   // ===================================================
 
-  const user =
-    useSelector(
-      (
-        state: RootState,
-      ) =>
-        state.auth.user,
-    );
+  const user = useSelector(
+    (state: RootState) => state.auth.user,
+  );
 
 
   // ===================================================
@@ -85,7 +80,6 @@ export default function AssessmentWorkspace() {
     setSearch,
   ] = useState("");
 
-
   const [
     filters,
     setFilters,
@@ -93,12 +87,10 @@ export default function AssessmentWorkspace() {
     INITIAL_ASSESSMENT_FILTERS,
   );
 
-
   const [
     page,
     setPage,
   ] = useState(1);
-
 
   const [
     pageSize,
@@ -110,12 +102,6 @@ export default function AssessmentWorkspace() {
   // PERMISSIONS
   // ===================================================
 
-  /**
-   * Permissions come from the authenticated user.
-   *
-   * The fallback to [] is only for the initial state
-   * before the authenticated user has been loaded.
-   */
   const permissions =
     user?.permissions ?? [];
 
@@ -131,97 +117,85 @@ export default function AssessmentWorkspace() {
 
 
   // ===================================================
-  // PENDING QUEUE
-  // ===================================================
-  //
-  // REVENUE_DECISION_OFFICER works with the
-  // PENDING_APPROVAL queue.
-  //
-  // The queue is handled through the normal
-  // /assessments endpoint using:
-  //
-  // ?pending=true
-  //
-  // No separate /assessments/pendings endpoint
-  // is required.
-  //
-  // ===================================================
-
-  const isPendingQueue =
-    hasAssessmentPermission(
-      permissions,
-      {
-        resource: "assessment",
-        action: "approve",
-      },
-    ) ||
-    hasAssessmentPermission(
-      permissions,
-      {
-        resource: "assessment",
-        action: "reject",
-      },
-    ) ||
-    hasAssessmentPermission(
-      permissions,
-      {
-        resource: "assessment",
-        action: "return",
-      },
-    );
-
-
-  // ===================================================
   // API QUERY
   // ===================================================
+
+  /**
+   * Build API query parameters.
+   *
+   * Status:
+   *   ALL              -> omitted
+   *   DRAFT            -> DRAFT
+   *   PENDING_APPROVAL -> PENDING_APPROVAL
+   *   RETURNED         -> RETURNED
+   *   APPROVED         -> APPROVED
+   *   CANCELLED        -> CANCELLED
+   *
+   * Source:
+   *   ALL              -> omitted
+   *   EXISTING_LIZZ    -> EXISTING_LIZZ
+   *   NEW              -> NEW
+   *
+   * Dates:
+   *   date_from        -> optional
+   *   date_to          -> optional
+   */
 
   const assessmentQuery =
     useMemo<AssessmentQueryFilters>(
       () => {
 
-        const date =
-          filters.date;
+        const date = filters.date;
 
         return {
+
+          // -------------------------------------------
+          // PAGINATION
+          // -------------------------------------------
 
           page,
 
           per_page:
             pageSize,
 
-          search:
-            search.trim() ||
-            undefined,
 
-          /*
-           * Normal assessment lists may filter
-           * by status.
-           *
-           * Pending queue does not send status
-           * because the hook adds:
-           *
-           * pending=true
-           *
-           * which the backend resolves to:
-           *
-           * PENDING_APPROVAL
-           */
+          // -------------------------------------------
+          // SEARCH
+          // -------------------------------------------
+
+          search:
+            search.trim() || undefined,
+
+
+          // -------------------------------------------
+          // STATUS
+          // -------------------------------------------
+
           status:
-            isPendingQueue
+            filters.status === "ALL"
               ? undefined
-              : (
-                  filters.status === "ALL"
-                    ? undefined
-                    : filters.status
-                ),
+              : filters.status,
+
+
+          // -------------------------------------------
+          // SOURCE TYPE
+          // -------------------------------------------
+
+          source_type:
+            filters.source_type === "ALL"
+              ? undefined
+              : filters.source_type,
+
+
+          // -------------------------------------------
+          // DATE RANGE
+          // -------------------------------------------
 
           date_from:
-            date?.from ||
-            undefined,
+            date?.from || undefined,
 
           date_to:
-            date?.to ||
-            undefined,
+            date?.to || undefined,
 
         };
 
@@ -231,7 +205,6 @@ export default function AssessmentWorkspace() {
         pageSize,
         search,
         filters,
-        isPendingQueue,
       ],
     );
 
@@ -256,13 +229,12 @@ export default function AssessmentWorkspace() {
     refetch:
       refetchAssessments,
 
-  } =
-    useAssessments({
+  } = useAssessments({
 
-      params:
-        assessmentQuery,
+    params:
+      assessmentQuery,
 
-    });
+  });
 
 
   // ===================================================
@@ -274,8 +246,7 @@ export default function AssessmentWorkspace() {
       () => {
 
         return (
-          assessmentsResponse?.data ??
-          []
+          assessmentsResponse?.data ?? []
         ) as Assessment[];
 
       },
@@ -305,13 +276,12 @@ export default function AssessmentWorkspace() {
       () => {
 
         return assessments.map(
-          (
-            assessment,
-          ) => {
+          (assessment) => {
 
             return {
 
               ...assessment,
+
 
               // ---------------------------------------
               // ID
@@ -334,18 +304,10 @@ export default function AssessmentWorkspace() {
               // ---------------------------------------
               // SOURCE TYPE
               // ---------------------------------------
-              //
-              // new
-              // existing_lizz
-              //
-              // The backend should always provide this
-              // field. "new" is used as a safe fallback
-              // for older records.
-              //
 
               source_type:
                 assessment.sourceType ??
-                "new",
+                "NEW",
 
 
               // ---------------------------------------
@@ -397,7 +359,6 @@ export default function AssessmentWorkspace() {
   // ===================================================
 
   const summary =
-    !isPendingQueue &&
     assessmentsResponse?.success
       ? assessmentsResponse.meta?.summary
       : undefined;
@@ -407,156 +368,121 @@ export default function AssessmentWorkspace() {
   // ACTIONS
   // ===================================================
 
-  /**
-   * Create a completely new assessment.
-   *
-   * This workflow creates:
-   *
-   * source_type = "new"
-   */
-  const handleNewAssessment =
-    () => {
+  const handleNewAssessment = () => {
 
-      router.push(
-        "/office/dashboard/assessments/create",
-      );
-
-    };
-
-
-  /**
-   * Register a taxpayer.
-   */
-  const handleRegisterTaxpayer =
-    () => {
-
-      router.push(
-        "/office/dashboard/taxpayers/create",
-      );
-
-    };
-
-
-  /**
-   * Register an existing LIZZ agreement.
-   *
-   * This workflow creates:
-   *
-   * source_type = "existing_lizz"
-   *
-   * The existing agreement page should handle:
-   *
-   * - taxpayer selection
-   * - service selection
-   * - original obligation
-   * - previous payments
-   * - opening balance
-   * - remaining payment schedule
-   */
-  const handleRegisterExistingAgreement =
-    () => {
-
-      router.push(
-        "/office/dashboard/assessments/existing/create",
-      );
-
-    };
-
-
-  /**
- * View assessment.
- *
- * Both NEW and EXISTING_LIZZ assessments use
- * the same read-only view page.
- */
-const handleViewAssessment = (
-  row: Assessment,
-) => {
-  if (!row?.id) {
-    return;
-  }
-
-  router.push(
-    `/office/dashboard/assessments/${row.id}/view`,
-  );
-};
-
-
-/**
- * Edit assessment.
- *
- * NEW:
- *   /assessments/{id}
- *
- * EXISTING_LIZZ:
- *   /assessments/existing/{id}/edit
- */
-const handleEditAssessment = (
-  row: Assessment,
-) => {
-  if (!row?.id) {
-    return;
-  }
-
-  if (row.sourceType === "EXISTING_LIZZ") {
     router.push(
-      `/office/dashboard/assessments/existing/${row.id}/edit`,
+      "/office/dashboard/assessments/create",
     );
 
-    return;
-  }
-
-  router.push(
-    `/office/dashboard/assessments/${row.id}`,
-  );
-};
+  };
 
 
-  /**
-   * Delete assessment.
-   *
-   * Actual delete mutation can be connected later.
-   */
-  const handleDeleteAssessment =
-    (
-      id: string,
-    ) => {
+  const handleRegisterTaxpayer = () => {
 
-      console.log(
-        "delete assessment",
-        id,
+    router.push(
+      "/office/dashboard/taxpayers/create",
+    );
+
+  };
+
+
+  const handleRegisterExistingAgreement = () => {
+
+    router.push(
+      "/office/dashboard/assessments/existing/create",
+    );
+
+  };
+
+
+  // ===================================================
+  // VIEW ASSESSMENT
+  // ===================================================
+
+  const handleViewAssessment = (
+    row: Assessment,
+  ) => {
+
+    if (!row?.id) {
+      return;
+    }
+
+    router.push(
+      `/office/dashboard/assessments/${row.id}/view`,
+    );
+
+  };
+
+
+  // ===================================================
+  // EDIT ASSESSMENT
+  // ===================================================
+
+  const handleEditAssessment = (
+    row: Assessment,
+  ) => {
+
+    if (!row?.id) {
+      return;
+    }
+
+    if (row.sourceType === "EXISTING_LIZZ") {
+
+      router.push(
+        `/office/dashboard/assessments/existing/${row.id}/edit`,
       );
 
-    };
+      return;
+    }
+
+    router.push(
+      `/office/dashboard/assessments/${row.id}`,
+    );
+
+  };
+
+
+  // ===================================================
+  // DELETE ASSESSMENT
+  // ===================================================
+
+  const handleDeleteAssessment = (
+    id: string,
+  ) => {
+
+    console.log(
+      "delete assessment",
+      id,
+    );
+
+  };
 
 
   // ===================================================
   // RESET
   // ===================================================
 
-  const resetFilters =
-    () => {
+  const resetFilters = () => {
 
-      setFilters(
-        INITIAL_ASSESSMENT_FILTERS,
-      );
+    setFilters(
+      INITIAL_ASSESSMENT_FILTERS,
+    );
 
-      setSearch("");
+    setSearch("");
 
-      setPage(1);
+    setPage(1);
 
-    };
+  };
 
 
   // ===================================================
-  // LOADING / INVALID ROLE
+  // LOADING / INVALID PERMISSIONS
   // ===================================================
 
-  if (
-    !config
-  ) {
+  if (!config) {
 
     return (
+
       <div
         className="
           flex
@@ -586,6 +512,7 @@ const handleEditAssessment = (
         </p>
 
       </div>
+
     );
 
   }
@@ -612,36 +539,21 @@ const handleEditAssessment = (
 
       <AssessmentHeader
         config={config}
-
         onCreate={handleNewAssessment}
-
         onRegisterTaxpayer={handleRegisterTaxpayer}
-
         onRegisterExistingAgreement={handleRegisterExistingAgreement}
-        onManageScheduledPayments={function (): void {
-          throw new Error("Function not implemented.");
-        } }      />
+      />
 
 
       {/* =================================================
           SUMMARY
           ================================================= */}
 
-      {isPendingQueue && (
-        <AssessmentSummary
-          total={
-            total
-          }
-
-          summary={
-            summary
-          }
-
-          config={
-            config
-          }
-        />
-      )}
+      <AssessmentSummary
+        total={total}
+        summary={summary}
+        config={config}
+      />
 
 
       {/* =================================================
@@ -649,55 +561,27 @@ const handleEditAssessment = (
           ================================================= */}
 
       <AssessmentToolbar
-        config={
-          config
-        }
+        config={config}
+        search={search}
+        setSearch={(value) => {
 
-        search={
-          search
-        }
+          setSearch(value);
 
-        setSearch={(
-          value,
-        ) => {
-
-          setSearch(
-            value,
-          );
-
-          setPage(
-            1,
-          );
+          setPage(1);
 
         }}
+        filters={filters}
+        setFilters={(value) => {
 
-        filters={
-          filters
-        }
+          setFilters(value);
 
-        setFilters={(
-          value,
-        ) => {
-
-          setFilters(
-            value,
-          );
-
-          setPage(
-            1,
-          );
+          setPage(1);
 
         }}
-
-        reset={
-          resetFilters
-        }
-
+        reset={resetFilters}
         onPageReset={() => {
 
-          setPage(
-            1,
-          );
+          setPage(1);
 
         }}
       />
@@ -708,77 +592,30 @@ const handleEditAssessment = (
           ================================================= */}
 
       <AssessmentTable
-
-        config={
-          config
-        }
-
-        permissions={
-          permissions
-        }
-
-        data={
-          tableData
-        }
-
-        page={
-          page
-        }
-
-        pageSize={
-          pageSize
-        }
-
-        total={
-          total
-        }
-
+        config={config}
+        permissions={permissions}
+        data={tableData}
+        page={page}
+        pageSize={pageSize}
+        total={total}
         isLoading={
           assessmentsLoading ||
           assessmentsFetching
         }
+        error={assessmentsError}
+        onView={handleViewAssessment}
+        onEdit={handleEditAssessment}
+        onDelete={handleDeleteAssessment}
+        onRetry={refetchAssessments}
+        onPageChange={setPage}
+        onPageSizeChange={(size) => {
 
-        error={
-          assessmentsError
-        }
+          setPageSize(size);
 
-        onView={
-          handleViewAssessment
-        }
-
-        onEdit={
-          handleEditAssessment
-        }
-
-        onDelete={
-          handleDeleteAssessment
-        }
-
-        onRetry={
-          refetchAssessments
-        }
-
-        onPageChange={
-          setPage
-        }
-
-        onPageSizeChange={(
-          size,
-        ) => {
-
-          setPageSize(
-            size,
-          );
-
-          setPage(
-            1,
-          );
+          setPage(1);
 
         }}
-
-        onApprove={(
-          row,
-        ) => {
+        onApprove={(row) => {
 
           console.log(
             "approve assessment",
@@ -786,10 +623,7 @@ const handleEditAssessment = (
           );
 
         }}
-
-        onReject={(
-          row,
-        ) => {
+        onReject={(row) => {
 
           console.log(
             "reject assessment",
@@ -797,10 +631,7 @@ const handleEditAssessment = (
           );
 
         }}
-
-        onReturn={(
-          row,
-        ) => {
+        onReturn={(row) => {
 
           console.log(
             "return assessment",
@@ -811,5 +642,7 @@ const handleEditAssessment = (
       />
 
     </div>
+
   );
+
 }

@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useCallback } from "react";
@@ -55,15 +56,10 @@ type FiltersProps<
   /**
    * Called whenever a filter changes.
    */
-  onChange: (
-    value: T,
-  ) => void;
+  onChange: (value: T) => void;
 
   /**
    * Optional reset handler.
-   *
-   * If not provided, the Reset button
-   * will not be rendered.
    */
   onReset?: () => void;
 
@@ -86,41 +82,18 @@ type FiltersProps<
   /**
    * Controls where Reset participates
    * in the layout.
-   *
-   * start:
-   * Reset appears before filters.
-   *
-   * end:
-   * Reset appears after filters.
-   *
-   * bottom:
-   * Reset gets its own row.
-   *
-   * Default: "end"
    */
   resetPosition?: ResetPosition;
 
   /**
    * Additional classes applied to
    * the main layout container.
-   *
-   * Examples:
-   *
-   * className="md:grid-cols-2 lg:grid-cols-4"
-   *
-   * className="gap-3"
    */
   className?: string;
 
   /**
    * Additional classes applied to
    * every filter field.
-   *
-   * Particularly useful for row layout.
-   *
-   * Example:
-   *
-   * fieldClassName="min-w-[200px]"
    */
   fieldClassName?: string;
 
@@ -174,9 +147,10 @@ function parseDate(
   );
 
   if (
-    Number.isNaN(
-      date.getTime(),
-    )
+    Number.isNaN(date.getTime()) ||
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
   ) {
     return undefined;
   }
@@ -186,9 +160,7 @@ function parseDate(
 
 /**
  * Convert a local JavaScript Date
- * into:
- *
- * YYYY-MM-DD
+ * into YYYY-MM-DD.
  */
 function formatDate(
   date?: Date,
@@ -219,21 +191,13 @@ export function Filters<
   T extends Record<string, unknown>,
 >({
   schema,
-
   value = {} as T,
-
   onChange,
-
   onReset,
-
   layout = "grid",
-
   resetPosition = "end",
-
   className,
-
   fieldClassName,
-
   resetClassName,
 }: FiltersProps<T>) {
 
@@ -243,36 +207,21 @@ export function Filters<
 
   const layoutClassName = cn(
     {
-      // -----------------------------------------------
       // GRID
-      // -----------------------------------------------
+      grid: layout === "grid",
 
-      grid:
-        layout === "grid",
-
-      // -----------------------------------------------
       // ROW
-      // -----------------------------------------------
-
       "flex flex-row flex-wrap items-end":
         layout === "row",
 
-      // -----------------------------------------------
       // COLUMN
-      // -----------------------------------------------
-
       "flex flex-col":
         layout === "column",
     },
 
     "w-full min-w-0 gap-5",
 
-    // -----------------------------------------------
-    // DEFAULT GRID
-    // -----------------------------------------------
-
-    layout === "grid" &&
-      "grid-cols-1",
+    layout === "grid" && "grid-cols-1",
 
     className,
   );
@@ -281,173 +230,124 @@ export function Filters<
   // FIELD LAYOUT
   // ===================================================
 
-  /**
-   * Controls the width of each individual filter.
-   *
-   * GRID:
-   *   Full width inside its grid cell.
-   *
-   * COLUMN:
-   *   Full width.
-   *
-   * ROW:
-   *   Flexible width with a minimum size.
-   */
-  const fieldLayoutClassName =
-    cn(
-      "min-w-0 space-y-2 flex flex-row gap-2 justify-center item-center",
+  const fieldLayoutClassName = cn(
+    "min-w-0 space-y-2",
 
-      // GRID
-      layout === "grid" &&
-        "w-full",
+    // GRID
+    layout === "grid" && "w-full",
 
-      // COLUMN
-      layout === "column" &&
-        "w-full",
+    // COLUMN
+    layout === "column" && "w-full",
 
-      // ROW
-      layout === "row" &&
-        "min-w-[220px] flex-1",
+    // ROW
+    layout === "row" && "min-w-[220px] flex-1",
 
-      fieldClassName,
-    );
+    fieldClassName,
+  );
 
   // ===================================================
   // RESET LAYOUT
   // ===================================================
 
-  const resetLayoutClassName =
-    cn(
-      "min-w-0",
+  const resetLayoutClassName = cn(
+    "min-w-0",
 
-      // -----------------------------------------------
-      // ROW
-      // -----------------------------------------------
+    // ROW
+    layout === "row" && "shrink-0",
 
-      layout === "row" &&
-        "shrink-0",
+    // COLUMN
+    layout === "column" && "w-full",
 
-      // -----------------------------------------------
-      // COLUMN
-      // -----------------------------------------------
+    // GRID
+    layout === "grid" && "w-full",
 
-      layout === "column" &&
-        "w-full",
-
-      // -----------------------------------------------
-      // GRID
-      // -----------------------------------------------
-
+    // BOTTOM
+    resetPosition === "bottom" &&
       layout === "grid" &&
-        "w-full",
+      "col-span-full",
 
-      // -----------------------------------------------
-      // BOTTOM
-      // -----------------------------------------------
+    resetPosition === "bottom" &&
+      layout === "row" &&
+      "basis-full",
 
-      resetPosition ===
-        "bottom" &&
-        layout === "grid" &&
-        "col-span-full",
-
-      resetPosition ===
-        "bottom" &&
-        layout === "row" &&
-        "basis-full",
-
-      resetClassName,
-    );
+    resetClassName,
+  );
 
   // ===================================================
   // VALUE RESOLVER
   // ===================================================
 
-  const resolveValue =
-    useCallback(
-      (
-        field: FilterField,
-      ) => {
+  const resolveValue = useCallback(
+    (field: FilterField) => {
 
-        // -----------------------------------------------
-        // DATE RANGE
-        // -----------------------------------------------
+      // -----------------------------------------------
+      // DATE RANGE
+      // -----------------------------------------------
 
-        if (
-          field.type ===
-          "dateRange"
-        ) {
-          const current =
-            value[field.key] as
-              | DateRangeValue
-              | null
-              | undefined;
+      if (field.type === "dateRange") {
+        const current =
+          value[field.key] as
+            | DateRangeValue
+            | null
+            | undefined;
 
-          const fallback =
-            (
-              field.defaultValue as
-                | DateRangeValue
-                | null
-                | undefined
-            ) ?? null;
+        const fallback =
+          (field.defaultValue as
+            | DateRangeValue
+            | null
+            | undefined) ?? null;
 
-          return {
-            from:
-              current?.from ??
-              fallback?.from ??
-              "",
+        return {
+          from:
+            current?.from ??
+            fallback?.from ??
+            "",
 
-            to:
-              current?.to ??
-              fallback?.to ??
-              "",
-          };
-        }
+          to:
+            current?.to ??
+            fallback?.to ??
+            "",
+        };
+      }
 
-        // -----------------------------------------------
-        // CONTROLLED VALUE
-        // -----------------------------------------------
+      // -----------------------------------------------
+      // CONTROLLED VALUE
+      // -----------------------------------------------
 
-        if (
-          value[field.key] !==
-            undefined &&
-          value[field.key] !== ""
-        ) {
-          return value[field.key];
-        }
+      if (
+        value[field.key] !== undefined &&
+        value[field.key] !== ""
+      ) {
+        return value[field.key];
+      }
 
-        // -----------------------------------------------
-        // DEFAULT VALUE
-        // -----------------------------------------------
+      // -----------------------------------------------
+      // DEFAULT VALUE
+      // -----------------------------------------------
 
-        if (
-          field.defaultValue !==
-          undefined
-        ) {
-          return field.defaultValue;
-        }
+      if (field.defaultValue !== undefined) {
+        return field.defaultValue;
+      }
 
-        // -----------------------------------------------
-        // FIRST SELECT OPTION
-        // -----------------------------------------------
+      // -----------------------------------------------
+      // FIRST SELECT OPTION
+      // -----------------------------------------------
 
-        if (
-          field.type ===
-            "select" &&
-          field.options?.length
-        ) {
-          return field
-            .options[0]
-            .value;
-        }
+      if (
+        field.type === "select" &&
+        field.options?.length
+      ) {
+        return field.options[0].value;
+      }
 
-        // -----------------------------------------------
-        // EMPTY
-        // -----------------------------------------------
+      // -----------------------------------------------
+      // EMPTY
+      // -----------------------------------------------
 
-        return "";
-      },
-      [value],
-    );
+      return "";
+    },
+    [value],
+  );
 
   // ===================================================
   // UPDATE FIELD
@@ -467,63 +367,43 @@ export function Filters<
   // LABEL
   // ===================================================
 
-  const labelClassName = `
-    flex
-    items-center
-    gap-1.5
-    text-sm
-    font-medium
-    text-foreground
-  `;
+  const labelClassName = cn(
+    "flex items-center gap-1.5",
+    "text-sm font-medium text-foreground",
+  );
 
   // ===================================================
   // RESET COMPONENT
   // ===================================================
 
-  const renderReset =
-    () => {
+  const renderReset = () => {
+    if (!onReset) {
+      return null;
+    }
 
-      if (!onReset) {
-        return null;
-      }
-
-      return (
-        <div
-          className={
-            resetLayoutClassName
-          }
+    return (
+      <div className={resetLayoutClassName}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={onReset}
+          className="
+            h-10
+            gap-2
+            px-3
+            text-sm
+            text-muted-foreground
+            hover:text-foreground
+          "
         >
+          <RotateCcw className="size-3.5" />
 
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={
-              onReset
-            }
-            className="
-              h-9
-              gap-2
-              px-2
-              text-sm
-              text-muted-foreground
-              hover:text-foreground
-            "
-          >
-
-            <RotateCcw
-              className="
-                size-3.5
-              "
-            />
-
-            Reset
-
-          </Button>
-
-        </div>
-      );
-    };
+          Reset
+        </Button>
+      </div>
+    );
+  };
 
   // ===================================================
   // RENDER FIELD
@@ -532,42 +412,24 @@ export function Filters<
   const renderField = (
     field: FilterField,
   ) => {
+    const val = resolveValue(field);
 
-    const val =
-      resolveValue(
-        field,
-      );
-
-    const Icon =
-      field.icon;
+    const Icon = field.icon;
 
     // ===============================================
     // SELECT
     // ===============================================
 
-    if (
-      field.type ===
-      "select"
-    ) {
+    if (field.type === "select") {
       return (
         <div
-          key={
-            field.key
-          }
-          className={
-            fieldLayoutClassName
-          }
+          key={field.key}
+          className={fieldLayoutClassName}
         >
-
           <Label
-            htmlFor={
-              field.key
-            }
-            className={
-              labelClassName
-            }
+            htmlFor={field.key}
+            className={labelClassName}
           >
-
             {Icon && (
               <Icon
                 className="
@@ -579,67 +441,37 @@ export function Filters<
             )}
 
             {field.label}
-
           </Label>
 
           <Select
-            value={String(
-              val ?? "",
-            )}
-            onValueChange={(
-              selectedValue,
-            ) => {
+            value={String(val ?? "")}
+            onValueChange={(selectedValue) => {
               updateField(
                 field.key,
                 selectedValue,
               );
             }}
           >
-
             <SelectTrigger
-              id={
-                field.key
-              }
-              className="
-                h-10
-                w-full
-                py-5
-              "
+              id={field.key}
+              className="h-10 w-full"
             >
-
               <SelectValue
-                placeholder={
-                  field.label
-                }
+                placeholder={field.label}
               />
-
             </SelectTrigger>
 
             <SelectContent>
-
-              {field.options?.map(
-                (
-                  option,
-                ) => (
-                  <SelectItem
-                    key={
-                      option.value
-                    }
-                    value={
-                      option.value
-                    }
-                  >
-                    {
-                      option.label
-                    }
-                  </SelectItem>
-                ),
-              )}
-
+              {field.options?.map((option) => (
+                <SelectItem
+                  key={option.value}
+                  value={option.value}
+                >
+                  {option.label}
+                </SelectItem>
+              ))}
             </SelectContent>
-
           </Select>
-
         </div>
       );
     }
@@ -648,29 +480,16 @@ export function Filters<
     // TEXT
     // ===============================================
 
-    if (
-      field.type ===
-      "text"
-    ) {
+    if (field.type === "text") {
       return (
         <div
-          key={
-            field.key
-          }
-          className={
-            fieldLayoutClassName
-          }
+          key={field.key}
+          className={fieldLayoutClassName}
         >
-
           <Label
-            htmlFor={
-              field.key
-            }
-            className={
-              labelClassName
-            }
+            htmlFor={field.key}
+            className={labelClassName}
           >
-
             {Icon && (
               <Icon
                 className="
@@ -682,34 +501,20 @@ export function Filters<
             )}
 
             {field.label}
-
           </Label>
 
           <Input
-            id={
-              field.key
-            }
-            placeholder={
-              field.label
-            }
-            value={String(
-              val ?? "",
-            )}
-            onChange={(
-              event,
-            ) => {
+            id={field.key}
+            placeholder={field.label}
+            value={String(val ?? "")}
+            onChange={(event) => {
               updateField(
                 field.key,
-                event.target
-                  .value,
+                event.target.value,
               );
             }}
-            className="
-              h-10
-              w-full
-            "
+            className="h-10 w-full"
           />
-
         </div>
       );
     }
@@ -718,64 +523,41 @@ export function Filters<
     // DATE RANGE
     // ===============================================
 
-    if (
-      field.type ===
-      "dateRange"
-    ) {
+    if (field.type === "dateRange") {
       const range =
         val as
           | DateRangeValue
           | null
           | undefined;
 
-      const updateRange =
-        (
-          patch: Partial<
-            DateRangeValue
-          >,
-        ) => {
-
-          const current =
-            range ?? {
-              from: "",
-              to: "",
-            };
-
-          const next:
-            DateRangeValue =
-            {
-              ...current,
-              ...patch,
-            };
-
-          const isEmpty =
-            !next.from &&
-            !next.to;
-
-          updateField(
-            field.key,
-            isEmpty
-              ? null
-              : next,
-          );
+      const updateRange = (
+        patch: Partial<DateRangeValue>,
+      ) => {
+        const current = range ?? {
+          from: "",
+          to: "",
         };
+
+        const next: DateRangeValue = {
+          ...current,
+          ...patch,
+        };
+
+        const isEmpty =
+          !next.from && !next.to;
+
+        updateField(
+          field.key,
+          isEmpty ? null : next,
+        );
+      };
 
       return (
         <div
-          key={
-            field.key
-          }
-          className={
-            fieldLayoutClassName
-          }
+          key={field.key}
+          className={fieldLayoutClassName}
         >
-
-          <Label
-            className={
-              labelClassName
-            }
-          >
-
+          <Label className={labelClassName}>
             {Icon && (
               <Icon
                 className="
@@ -787,76 +569,55 @@ export function Filters<
             )}
 
             {field.label}
-
           </Label>
+
+          {/* =======================================
+              RESPONSIVE DATE PICKERS
+
+              Automatically displays:
+              - Two columns when space is available.
+              - One column when space is limited.
+
+              Uses actual container width.
+          ======================================= */}
 
           <div
             className="
               grid
               w-full
               min-w-0
-              grid-cols-1
+              grid-cols-[repeat(auto-fit,minmax(min(100%,220px),1fr))]
               gap-3
-              sm:grid-cols-2
             "
           >
-
             {/* FROM */}
 
-            <div
-              className="
-                min-w-0
-              "
-            >
-
+            <div className="w-full min-w-0">
               <EthiopianDatePicker
-                value={parseDate(
-                  range?.from,
-                )}
+                value={parseDate(range?.from)}
                 placeholder="From date"
-                onChange={(
-                  date,
-                ) => {
+                onChange={(date) => {
                   updateRange({
-                    from:
-                      formatDate(
-                        date,
-                      ),
+                    from: formatDate(date),
                   });
                 }}
               />
-
             </div>
 
             {/* TO */}
 
-            <div
-              className="
-                min-w-0
-              "
-            >
-
+            <div className="w-full min-w-0">
               <EthiopianDatePicker
-                value={parseDate(
-                  range?.to,
-                )}
+                value={parseDate(range?.to)}
                 placeholder="To date"
-                onChange={(
-                  date,
-                ) => {
+                onChange={(date) => {
                   updateRange({
-                    to:
-                      formatDate(
-                        date,
-                      ),
+                    to: formatDate(date),
                   });
                 }}
               />
-
             </div>
-
           </div>
-
         </div>
       );
     }
@@ -873,39 +634,22 @@ export function Filters<
   // ===================================================
 
   return (
-    <div
-      className="
-        w-full
-        min-w-0
-      "
-    >
-
-      <div
-        className={
-          layoutClassName
-        }
-      >
+    <div className="w-full min-w-0">
+      <div className={layoutClassName}>
 
         {/* ===========================================
             RESET - START
         =========================================== */}
 
         {onReset &&
-          resetPosition ===
-            "start" &&
-          renderReset()}
+          resetPosition === "start"}
 
         {/* ===========================================
             FILTERS
         =========================================== */}
 
-        {schema.map(
-          (
-            field,
-          ) =>
-            renderField(
-              field,
-            ),
+        {schema.map((field) =>
+          renderField(field)
         )}
 
         {/* ===========================================
@@ -913,21 +657,18 @@ export function Filters<
         =========================================== */}
 
         {onReset &&
-          resetPosition ===
-            "end" &&
-          renderReset()}
+          resetPosition === "end" 
+          }
 
         {/* ===========================================
             RESET - BOTTOM
         =========================================== */}
 
         {onReset &&
-          resetPosition ===
-            "bottom" &&
-          renderReset()}
+          resetPosition === "bottom"
+          }
 
       </div>
-
     </div>
   );
 }

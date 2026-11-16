@@ -649,7 +649,7 @@ function InvoicesPage() {
       <Banner
         badge={
           <IconBadge
-            className="gap-2 rounded-full bg-black/20 p-3 text-[10px] text-white"
+            className="gap-2 rounded-full  p-3 text-[10px]"
             icon={
               <FileText className="h-4 w-4" />
             }
@@ -667,8 +667,7 @@ function InvoicesPage() {
             position="bottom-right"
           />
         }
-        overlayClassName="bg-gradient-to-r from-primary/95 via-primary/80 to-primary/50"
-        className="text-white"
+        overlayClassName="bg-transparent"
         actions={
           <div className="flex justify-end">
             <ExportDropdown />
@@ -680,7 +679,7 @@ function InvoicesPage() {
           SUMMARY
       ================================================= */}
 
-      <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+      <div className="overflow-hidden  border">
         <div className="flex flex-col divide-y sm:flex-row sm:divide-x sm:divide-y-0">
 
           <Stat
@@ -744,7 +743,7 @@ function InvoicesPage() {
           LIST
       ================================================= */}
 
-      <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+      <div className="overflow-hidden  border">
 
         {/* =================================================
             STATUS TABS
@@ -1157,47 +1156,6 @@ function InvoicesPage() {
 
         </div>
 
-        {/* =================================================
-            ERROR
-        ================================================= */}
-
-        {isError &&
-          !isLoading && (
-            <div className="flex items-center justify-center border-t p-6 text-sm text-destructive">
-              Couldn&apos;t load invoices.
-              Check your connection and
-              try again.
-            </div>
-          )}
-
-        {/* =================================================
-            EMPTY
-        ================================================= */}
-
-        {!isError &&
-          !isLoading &&
-          !isFetching &&
-          tableData.length === 0 && (
-            <div className="flex flex-col items-center gap-2 border-t p-10 text-center">
-
-              <p className="text-sm font-medium">
-                {hasActiveFilters
-                  ? "No invoices match your filters"
-                  : "No invoices yet"}
-              </p>
-
-              {hasActiveFilters && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={clearAll}
-                >
-                  Clear filters
-                </Button>
-              )}
-
-            </div>
-          )}
 
         {/* =================================================
             PAGINATION

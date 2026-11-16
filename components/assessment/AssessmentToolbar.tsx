@@ -1,44 +1,30 @@
+
+"use client";
+
 // =====================================================
 // ASSESSMENT TOOLBAR
 // =====================================================
 
-"use client";
+import { useEffect, useState } from "react";
 
 import {
   CalendarDays,
   CircleDot,
-  Filter as FilterIcon,
-  Search,
+  Layers,
 } from "lucide-react";
 
-import {
-  Input,
-} from "@/components/ui/input";
+import Can from "../access/Can";
+
+import { Filters } from "@/components/commen/Filters";
+import { ExportDropdown } from "@/components/commen/ExportDropdown";
 
 import {
-  Button,
-} from "@/components/ui/button";
-
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
-
-import {
-  Filters,
-} from "@/components/commen/Filters";
-
-import {
-  Toolbar,
-} from "@/components/commen/Toolbar";
-
-import {
-  ExportDropdown,
-} from "@/components/commen/ExportDropdown";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 import type {
   DateRangeValue,
@@ -50,213 +36,106 @@ import type {
   AssessmentStatus,
 } from "./assessment.config";
 
+import AppFilterBar from "../app-filter-bar";
 
 // =====================================================
 // TYPES
 // =====================================================
 
+export type AssessmentSourceType =
+  | "ALL"
+  | "EXISTING_LIZZ"
+  | "NEW";
+
 export type AssessmentFilters = {
   status: AssessmentStatus;
-
-  date:
-    DateRangeValue |
-    null;
+  source_type: AssessmentSourceType;
+  date: DateRangeValue | null;
 };
-
 
 // =====================================================
 // PROPS
 // =====================================================
 
 type AssessmentToolbarProps = {
-
-  config:
-    AssessmentConfig;
-
-  search:
-    string;
-
-  setSearch:
-    (
-      value: string,
-    ) => void;
-
-  filters:
-    AssessmentFilters;
-
-  setFilters:
-    (
-      value: AssessmentFilters,
-    ) => void;
-
-  reset:
-    () => void;
-
-  onPageReset:
-    () => void;
+  config: AssessmentConfig;
+  search: string;
+  setSearch: (value: string) => void;
+  filters: AssessmentFilters;
+  setFilters: (value: AssessmentFilters) => void;
+  reset: () => void;
+  onPageReset: () => void;
 };
 
-
 // =====================================================
-// SEARCH INPUT
-// =====================================================
-
-function SearchInput({
-  ...props
-}: React.ComponentProps<typeof Input>) {
-
-  return (
-
-    <div
-      className="
-        relative
-        w-full
-        min-w-0
-      "
-    >
-
-      <Search
-        className="
-          pointer-events-none
-          absolute
-          left-3
-          top-1/2
-          z-0
-          size-4
-          -translate-y-1/2
-          text-muted-foreground
-        "
-      />
-
-      <Input
-        className="
-          h-10
-          w-full
-          min-w-0
-          pl-9
-          pr-3
-        "
-        {...props}
-      />
-
-    </div>
-
-  );
-}
-
-
-// =====================================================
-// STATUS FILTER
+// STATUS OPTIONS
 // =====================================================
 
-function buildStatusFilter(
-  statuses:
-    AssessmentStatus[],
-): FilterField {
+const STATUS_LABELS: Record<AssessmentStatus, string> = {
+  ALL: "All",
+  DRAFT: "Draft",
+  PENDING_APPROVAL: "Pending Approval",
+  APPROVED: "Approved",
+  RETURNED: "Returned",
+  CANCELLED: "Cancelled",
+};
 
-  const labels: Record<AssessmentStatus, string> = {
-    ALL: "All",
-    DRAFT: "Draft",
-    PENDING_APPROVAL: "Pending Approval",
-    APPROVED: "Approved",
-    RETURNED: "Returned",
-    CANCELLED: "Cancelled",
-  };
+// =====================================================
+// SOURCE TYPE OPTIONS
+// =====================================================
 
-  return {
-
-    key:
-      "status",
-
-    label:
-      "Status",
-
-    type:
-      "select",
-
-    defaultValue:
-      "ALL",
-
-    icon:
-      CircleDot,
-
-    /*
-     * These optional layout properties are
-     * consumed by the shared Filters component.
-     */
-    width:
-      "180px",
-
-    minWidth:
-      "180px",
-
-    maxWidth:
-      "180px",
-
-    options:
-      statuses.map(
-        (
-          status,
-        ) => ({
-
-          label:
-            labels[
-              status
-            ],
-
-          value:
-            status,
-
-        }),
-      ),
-
-  } as FilterField;
-
-}
-
+const SOURCE_TYPE_LABELS: Record<
+  Exclude<AssessmentSourceType, "ALL">,
+  string
+> = {
+  EXISTING_LIZZ: "Existing Lizz",
+  NEW: "New",
+};
 
 // =====================================================
 // DATE FILTER
 // =====================================================
 
 function buildDateFilter(): FilterField {
-
   return {
-
-    key:
-      "date",
-
-    label:
-      "Assessment Date",
-
-    type:
-      "dateRange",
-
-    defaultValue:
-      null,
-
-    icon:
-      CalendarDays,
-
-    /*
-     * Keep the date filter controlled.
-     *
-     * This prevents it from consuming all
-     * available toolbar width.
-     */
-    width:
-      "440px",
-
-    minWidth:
-      "380px",
-
-    maxWidth:
-      "500px",
-
+    key: "date",
+    label: "Assessment Date",
+    type: "dateRange",
+    defaultValue: null,
+    icon: CalendarDays,
+    width: "100%",
+    minWidth: "100%",
+    maxWidth: "100%",
   } as FilterField;
-
 }
 
+// =====================================================
+// DEFAULT FILTERS
+// =====================================================
+
+function getDefaultFilters(): AssessmentFilters {
+  return {
+    status: "ALL",
+    source_type: "ALL",
+    date: null,
+  };
+}
+
+// =====================================================
+// FILTER COMPARISON
+// =====================================================
+
+function hasSameFilters(
+  first: AssessmentFilters,
+  second: AssessmentFilters,
+): boolean {
+  return (
+    first.status === second.status &&
+    first.source_type === second.source_type &&
+    JSON.stringify(first.date) ===
+      JSON.stringify(second.date)
+  );
+}
 
 // =====================================================
 // COMPONENT
@@ -264,350 +143,251 @@ function buildDateFilter(): FilterField {
 
 export function AssessmentToolbar({
   config,
-
   search,
-
   setSearch,
-
   filters,
-
   setFilters,
-
   reset,
-
   onPageReset,
-
 }: AssessmentToolbarProps) {
-
-
   // ===================================================
-  // PENDING QUEUE
-  // ===================================================
-  //
-  // Decision officers only work with:
-  //
-  // PENDING_APPROVAL
-  //
-  // Therefore Status is not a user filter here.
-  //
-  // The backend receives:
-  //
-  // pending=true
-  //
-  // and applies:
-  //
-  // status=PENDING_APPROVAL
-  //
+  // DRAFT FILTERS
   // ===================================================
 
-  const isPendingQueue =
-    config.title ===
-    "REVENUE_DECISION_OFFICER";
+  const [draftFilters, setDraftFilters] =
+    useState<AssessmentFilters>(filters);
 
+  // ===================================================
+  // SYNCHRONIZE DRAFT FILTERS
+  // ===================================================
+
+  useEffect(() => {
+    setDraftFilters(filters);
+  }, [filters]);
 
   // ===================================================
   // FILTER SCHEMA
   // ===================================================
 
-  const filtersSchema:
-    FilterField[] = [];
-
-
-  // ===================================================
-  // STATUS
-  // ===================================================
-
-  if (!isPendingQueue) {
-
-    filtersSchema.push(
-      buildStatusFilter(
-        config.allowedStatuses,
-      ),
-    );
-
-  }
-
-
-  // ===================================================
-  // DATE
-  // ===================================================
-
-  filtersSchema.push(
+  const dateFilterSchema: FilterField[] = [
     buildDateFilter(),
+  ];
+
+  // ===================================================
+  // FILTER STATE
+  // ===================================================
+
+  const hasPendingChanges =
+    !hasSameFilters(draftFilters, filters);
+
+  // ===================================================
+  // APPLIED FILTERS
+  // ===================================================
+
+  const hasAppliedFilters =
+    filters.status !== "ALL" ||
+    filters.source_type !== "ALL" ||
+    filters.date !== null;
+
+  // ===================================================
+  // ACTIVE FILTER COUNT
+  // ===================================================
+  //
+  // Always display at least 1 badge.
+  //
+  // No selection:       1
+  // One selected:       1
+  // Two selected:       2
+  // Three selected:     3
+  //
+  // ===================================================
+
+  const activeFilterCount = Math.max(
+    1,
+    (filters.status !== "ALL" ? 1 : 0) +
+      (filters.source_type !== "ALL" ? 1 : 0) +
+      (filters.date !== null ? 1 : 0),
   );
 
+  // ===================================================
+  // APPLY FILTERS
+  // ===================================================
+
+  const applyFilters = () => {
+    setFilters(draftFilters);
+    onPageReset();
+  };
 
   // ===================================================
-  // SEARCH PLACEHOLDER
+  // CLEAR FILTERS
   // ===================================================
 
-  const searchPlaceholder =
-    isPendingQueue
+  const clearFilters = () => {
+    const defaultFilters = getDefaultFilters();
 
-      ? "Search by reference, taxpayer or national ID..."
+    setDraftFilters(defaultFilters);
+    setFilters(defaultFilters);
 
-      : "Search by reference, taxpayer name or national ID...";
-
+    reset();
+    onPageReset();
+  };
 
   // ===================================================
   // RENDER
   // ===================================================
 
   return (
+    <div className="w-full min-w-0 border-b bg-muted/30 py-3 sm:px-4 sm:py-4 lg:px-5 lg:py-4">
+      {/* =================================================
+          SEARCH AND FILTERS
+          ================================================= */}
 
-    <div
-      className="
-        w-full
-        min-w-0
-        border-b
-        bg-muted/30
+      <AppFilterBar
+        search={search}
+        onSearchChange={(value) => {
+          setSearch(value);
+          onPageReset();
+        }}
+        searchPlaceholder="Search by taxpayer name, assessment number, citizen ID or national ID..."
+        searchLabel="Search assessments"
+        title="Search and filter"
+        description="Find assessments and narrow the results using the available filters."
+        activeFilterCount={activeFilterCount}
+        hasFilters={true}
+        onApply={applyFilters}
+        onClear={clearFilters}
+      >
+        {/* =================================================
+            STATUS FILTER
+            ================================================= */}
 
-        px-3
-        py-3
-
-        sm:px-4
-        sm:py-4
-
-        lg:px-5
-        lg:py-4
-      "
-    >
-
-      <Toolbar
-
-        // =================================================
-        // SEARCH
-        // =================================================
-
-        search={
-
-          <div
-            className="
-              w-full
-              min-w-0
-
-              sm:w-full
-
-              lg:w-[360px]
-              lg:min-w-[280px]
-              lg:max-w-[420px]
-              lg:shrink-0
-            "
+        <div className="space-y-2">
+          <label
+            className="flex items-center gap-2 text-sm font-medium"
+            htmlFor="assessment-status"
           >
+            <CircleDot className="size-4 text-muted-foreground" />
+            Assessment status
+          </label>
 
-            <SearchInput
-
-              placeholder={
-                searchPlaceholder
-              }
-
-              value={
-                search
-              }
-
-              onChange={
-                (
-                  event,
-                ) => {
-
-                  setSearch(
-                    event.target.value,
-                  );
-
-                  onPageReset();
-
-                }
-              }
-
-            />
-
-          </div>
-
-        }
-
-
-        // =================================================
-        // RIGHT SIDE
-        // =================================================
-
-        right={
-
-          <div
-            className="
-              flex
-              w-full
-              min-w-0
-              flex-col
-              gap-3
-
-              sm:w-full
-              sm:flex-row
-              sm:flex-wrap
-              sm:items-end
-
-              lg:w-auto
-              lg:min-w-0
-              lg:flex-1
-              lg:flex-nowrap
-              lg:items-end
-              lg:justify-end
-              lg:gap-3
-            "
+          <Select
+            value={draftFilters.status || "ALL"}
+            onValueChange={(value) => {
+              setDraftFilters((current) => ({
+                ...current,
+                status: value as AssessmentStatus,
+              }));
+            }}
           >
-
-            {/* =================================================
-                FILTERS (IN SHEET)
-                ================================================= */}
-
-            <div
-              className="
-                flex
-                w-full
-                shrink-0
-                items-center
-
-                sm:w-auto
-                sm:self-end
-
-                lg:w-auto
-                lg:shrink-0
-              "
+            <SelectTrigger
+              id="assessment-status"
+              className="w-full"
             >
+              <SelectValue placeholder="All statuses" />
+            </SelectTrigger>
 
-              <Sheet>
+            <SelectContent>
+              <SelectItem value="ALL">
+                All statuses
+              </SelectItem>
 
-                <SheetTrigger asChild>
-
-                  <Button
-                    variant="outline"
-                    className="
-                      h-10
-                      gap-2
-                    "
+              {config.allowedStatuses
+                .filter((status) => status !== "ALL")
+                .map((status) => (
+                  <SelectItem
+                    key={status}
+                    value={status}
                   >
+                    {STATUS_LABELS[status]}
+                  </SelectItem>
+                ))}
+            </SelectContent>
+          </Select>
+        </div>
 
-                    <FilterIcon
-                      className="
-                        size-4
-                      "
-                    />
+        {/* =================================================
+            ASSESSMENT SOURCE TYPE FILTER
+            ================================================= */}
 
-                    Filters
+        <div className="space-y-2">
+          <label
+            className="flex items-center gap-2 text-sm font-medium"
+            htmlFor="assessment-source-type"
+          >
+            <Layers className="size-4 text-muted-foreground" />
+            Assessment source
+          </label>
 
-                  </Button>
+          <Select
+            value={draftFilters.source_type || "ALL"}
+            onValueChange={(value) => {
+              setDraftFilters((current) => ({
+                ...current,
+                source_type: value as AssessmentSourceType,
+              }));
+            }}
+          >
+            <SelectTrigger
+              id="assessment-source-type"
+              className="w-full"
+            >
+              <SelectValue placeholder="All sources" />
+            </SelectTrigger>
 
-                </SheetTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">
+                All sources
+              </SelectItem>
 
-                <SheetContent
-                  side="right"
-                  className="
-                    flex
-                    w-full
-                    flex-col
-                    gap-0
+              <SelectItem value="EXISTING_LIZZ">
+                {SOURCE_TYPE_LABELS.EXISTING_LIZZ}
+              </SelectItem>
 
-                    sm:max-w-md
-                  "
-                >
+              <SelectItem value="NEW">
+                {SOURCE_TYPE_LABELS.NEW}
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
 
-                  <SheetHeader>
+        {/* =================================================
+            ASSESSMENT DATE FILTER
+            ================================================= */}
 
-                    <SheetTitle>
-                      Filters
-                    </SheetTitle>
+        <div className="space-y-2">
+          <Filters<AssessmentFilters>
+            schema={dateFilterSchema}
+            value={draftFilters}
+            onChange={(value) => {
+              setDraftFilters((current) => ({
+                ...current,
+                date: value.date,
+              }));
+            }}
+            onReset={() => {
+              setDraftFilters((current) => ({
+                ...current,
+                date: null,
+              }));
+            }}
+            layout="column"
+            resetPosition="end"
+          />
+        </div>
 
-                    <SheetDescription>
-                      Refine the list using the filters below.
-                    </SheetDescription>
+        {/* =================================================
+            EXPORT
+            ================================================= */}
 
-                  </SheetHeader>
-
-                  <div
-                    className="
-                      flex-1
-                      overflow-y-auto
-                      px-4
-                      py-4
-                    "
-                  >
-
-                    <Filters<AssessmentFilters>
-
-                      schema={
-                        filtersSchema
-                      }
-
-                      value={
-                        filters
-                      }
-
-                      onChange={
-                        (
-                          value,
-                        ) => {
-
-                          setFilters(
-                            value,
-                          );
-
-                          onPageReset();
-
-                        }
-                      }
-
-                      onReset={
-                        reset
-                      }
-
-                      layout="column"
-                      resetPosition="end"
-
-                    />
-
-                  </div>
-
-                </SheetContent>
-
-              </Sheet>
-
-            </div>
-
-
-            {/* =================================================
-                EXPORT
-                ================================================= */}
-
-            {/* {config.canExport && (
-
-              <div
-                className="
-                  flex
-                  w-full
-                  shrink-0
-                  items-center
-
-                  sm:w-auto
-                  sm:self-end
-
-                  lg:w-auto
-                  lg:shrink-0
-                "
-              >
-
-                <ExportDropdown />
-
-              </div>
-
-            )} */}
-
+        <Can
+          resource="assessment"
+          action="export"
+        >
+          <div className="border-t pt-3">
+            <ExportDropdown />
           </div>
-
-        }
-
-      />
-
+        </Can>
+      </AppFilterBar>
     </div>
-
   );
-
 }

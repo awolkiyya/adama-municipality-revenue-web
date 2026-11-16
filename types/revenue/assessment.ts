@@ -530,7 +530,12 @@ export type AssessmentTaxpayer = {
 // ASSESSMENT
 // =====================================================
 //
-// This matches the actual API response.
+// Matches the actual Laravel AssessmentResource.
+//
+// IMPORTANT:
+// - administrativeUnit belongs to the assessment.
+// - createdBy.administrativeUnit belongs to the creator.
+// - These are independent relationships.
 // =====================================================
 
 export type Assessment = {
@@ -544,12 +549,6 @@ export type Assessment = {
 
   /**
    * Assessment origin.
-   *
-   * NEW:
-   * Created through the normal assessment workflow.
-   *
-   * EXISTING_LIZZ:
-   * Historical LIZZ agreement registered into the system.
    */
   sourceType: AssessmentSourceType;
 
@@ -581,12 +580,22 @@ export type Assessment = {
 
   rejectedAt: string | null;
 
-  decisionMetadata: Record<
-    string,
-    unknown
-  > | null;
+  decisionMetadata: Record<string, unknown> | null;
 
-  administrativeUnitId:string | null;
+  /**
+   * Assessment's assigned administrative unit ID.
+   *
+   * Source:
+   * assessments.administrative_unit_id
+   */
+  administrativeUnitId: string | null;
+
+  /**
+   * Assessment's assigned administrative unit.
+   *
+   * Independent of createdBy.administrativeUnit.
+   */
+  administrativeUnit: AdminUnit | null;
 
   taxpayer: AssessmentTaxpayer | null;
 
@@ -694,6 +703,9 @@ export type UpdateAssessmentPayload = {
 export type AssessmentFormData = FormData;
 
 
+
+
+
 // =====================================================
 // ASSESSMENT FILTERS
 // =====================================================
@@ -704,6 +716,8 @@ export type AssessmentFilters = {
   citizenId?: string;
 
   status?: AssessmentStatus | "ALL";
+
+  source_type?: AssessmentSourceType;
 
   serviceId?: string;
 
@@ -727,6 +741,7 @@ export type AssessmentFilters = {
     | "asc"
     | "desc";
 };
+
 
 
 // =====================================================

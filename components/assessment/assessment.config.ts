@@ -1,3 +1,4 @@
+
 // =====================================================
 // ASSESSMENT CONFIGURATION
 // =====================================================
@@ -17,7 +18,7 @@ import type {
   UserPermission,
 } from "@/types/user";
 
-import { AssessmentFilters } from "./AssessmentToolbar";
+import type { AssessmentFilters } from "./AssessmentToolbar";
 
 // =====================================================
 // PERMISSION
@@ -88,7 +89,6 @@ const ASSESSMENT_HEADER_ACTIONS: AssessmentHeaderAction[] = [
       action: "create",
     },
   },
-
   {
     key: "register-existing-agreement",
     label: "Register Existing Agreement",
@@ -99,7 +99,6 @@ const ASSESSMENT_HEADER_ACTIONS: AssessmentHeaderAction[] = [
       action: "create",
     },
   },
-
   {
     key: "create-assessment",
     label: "New Assessment",
@@ -120,7 +119,7 @@ export const ASSESSMENT_CONFIG: AssessmentConfig = {
   title: "Revenue Assessments",
 
   description:
-    "Create, manage, and submit revenue assessments. Tariff resolution and assessment calculation are handled by the backend Decision Provider.",
+    "Create, manage, and submit revenue assessments.",
 
   badge: "Revenue Assessment",
 
@@ -154,7 +153,7 @@ export const ASSESSMENT_DECISION_CONFIG: AssessmentConfig = {
   title: "Assessment Decisions",
 
   description:
-    "Review submitted revenue assessments, verify the assessment details, and make the appropriate revenue decision.",
+    "Review submitted assessments and make revenue decisions.",
 
   badge: "Revenue Decision",
 
@@ -252,69 +251,25 @@ export function resolveAssessmentCapabilities(
   };
 
   return {
-    /*
-    |--------------------------------------------------------------------------
-    | VIEW
-    |--------------------------------------------------------------------------
-    |
-    | `view` controls UI access to the assessment record.
-    | `read` is kept separate for data/read permissions.
-    |
-    */
-    canView:
-      has("assessment", "view"),
+    canView: has("assessment", "view"),
 
-    /*
-    |--------------------------------------------------------------------------
-    | CREATE
-    |--------------------------------------------------------------------------
-    */
-    canCreate:
-      has("assessment", "create"),
+    canCreate: has("assessment", "create"),
 
-    /*
-    |--------------------------------------------------------------------------
-    | UPDATE
-    |--------------------------------------------------------------------------
-    */
-    canEdit:
-      has("assessment", "update"),
+    canEdit: has("assessment", "update"),
 
-    /*
-    |--------------------------------------------------------------------------
-    | DELETE
-    |--------------------------------------------------------------------------
-    */
-    canDelete:
-      has("assessment", "delete"),
+    canDelete: has("assessment", "delete"),
 
-    /*
-    |--------------------------------------------------------------------------
-    | WORKFLOW
-    |--------------------------------------------------------------------------
-    */
-    canSubmit:
-      has("assessment", "submit"),
+    canSubmit: has("assessment", "submit"),
 
-    canVerify:
-      has("assessment", "verify"),
+    canVerify: has("assessment", "verify"),
 
-    canApprove:
-      has("assessment", "approve"),
+    canApprove: has("assessment", "approve"),
 
-    canReject:
-      has("assessment", "reject"),
+    canReject: has("assessment", "reject"),
 
-    canReturn:
-      has("assessment", "return"),
+    canReturn: has("assessment", "return"),
 
-    /*
-    |--------------------------------------------------------------------------
-    | EXPORT
-    |--------------------------------------------------------------------------
-    */
-    canExport:
-      has("assessment", "export"),
+    canExport: has("assessment", "export"),
   };
 }
 
@@ -326,40 +281,26 @@ export function getAssessmentConfig(
   permissions: UserPermission[] = [],
 ): AssessmentConfig {
   const canMakeDecision =
-    hasAssessmentPermission(
-      permissions,
-      {
-        resource: "assessment",
-        action: "approve",
-      },
-    ) ||
-    hasAssessmentPermission(
-      permissions,
-      {
-        resource: "assessment",
-        action: "reject",
-      },
-    ) ||
-    hasAssessmentPermission(
-      permissions,
-      {
-        resource: "assessment",
-        action: "return",
-      },
-    ) ||
-    hasAssessmentPermission(
-      permissions,
-      {
-        resource: "assessment",
-        action: "verify",
-      },
-    );
+    hasAssessmentPermission(permissions, {
+      resource: "assessment",
+      action: "approve",
+    }) ||
+    hasAssessmentPermission(permissions, {
+      resource: "assessment",
+      action: "reject",
+    }) ||
+    hasAssessmentPermission(permissions, {
+      resource: "assessment",
+      action: "return",
+    }) ||
+    hasAssessmentPermission(permissions, {
+      resource: "assessment",
+      action: "verify",
+    });
 
-  if (canMakeDecision) {
-    return ASSESSMENT_DECISION_CONFIG;
-  }
-
-  return ASSESSMENT_CONFIG;
+  return canMakeDecision
+    ? ASSESSMENT_DECISION_CONFIG
+    : ASSESSMENT_CONFIG;
 }
 
 // =====================================================
@@ -368,6 +309,6 @@ export function getAssessmentConfig(
 
 export const INITIAL_ASSESSMENT_FILTERS: AssessmentFilters = {
   status: "ALL",
-
+  source_type: "ALL",
   date: null,
 };

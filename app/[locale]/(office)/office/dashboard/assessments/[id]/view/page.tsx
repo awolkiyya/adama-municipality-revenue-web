@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useMemo, useState } from "react";
@@ -29,7 +30,7 @@ import {
 
 import { FloatingParticles } from "@/components/design/FloatingParticles";
 
-import {
+import type {
   Assessment,
   AssessmentService,
 } from "@/types/revenue/assessment";
@@ -50,8 +51,8 @@ import { AssessmentActionBar } from "@/components/assessment/action-bar";
 import { ApproveDialog } from "@/components/assessment/approve-dialog";
 import { ReturnDialog } from "@/components/assessment/return-dialog";
 
-import { RootState } from "@/lib/store/store";
-import {
+import type { RootState } from "@/lib/store/store";
+import type {
   PermissionAction,
   UserPermission,
 } from "@/types/user";
@@ -61,63 +62,45 @@ import {
 | Assessment View Page
 |--------------------------------------------------------------------------
 |
-| Assessment-level navigation:
+| Amendment eligibility:
 |
-| Overview
-|   ├── Summary
-|   ├── Taxpayer
-|   ├── Audit
-|   └── Notes
+|   - Assessment status must be APPROVED.
+|   - User must have lease_amendment.create permission.
+|   - Assessment must not be SUPERSEDED.
+|   - Assessment must contain at least one scheduled service.
 |
-| Services
-|   ├── One-time services
-|   └── Scheduled services
-|          └── View Payment Schedule
+| The current assessment is passed to the amendment creation page
+| as previous_assessment_id.
 |
-| Decision
-|   └── Decision history / notes
-|
-|--------------------------------------------------------------------------
-|
-| Amendment
-|--------------------------------------------------------------------------
-|
-| A lease amendment is started from an eligible assessment.
-|
-| Create Amendment is available when:
-|
-|   - assessment is APPROVED
-|   - assessment is not SUPERSEDED
-|   - assessment contains at least one scheduled service
-|   - user has lease_amendment.create permission
-|
-| The amendment references the current assessment as:
-|
-|   previous_assessment_id
-|
-| The replacement assessment is NOT created by this page.
-|
-| It remains an independent assessment and may later be linked
-| to the amendment through:
-|
-|   new_assessment_id
-|
-|--------------------------------------------------------------------------
-|
-| Financial responsibility
-|--------------------------------------------------------------------------
-|
-| This page does NOT:
-|
-| - calculate tariffs
-| - calculate assessment amounts
-| - calculate invoice totals
-| - calculate payment schedules
-|
-| All financial calculations remain backend-authoritative.
+| Financial calculations remain backend-authoritative.
 |
 |--------------------------------------------------------------------------
 */
+
+type AssessmentLifecycle = Assessment & {
+  lifecycleStatus?: string | null;
+  lifecycle_status?: string | null;
+};
+
+type AssessmentServicePayment = AssessmentService & {
+  paymentType?: string | null;
+  payment_type?: string | null;
+
+  paymentScheduleRule?: {
+    isEnabled?: boolean | null;
+    is_enabled?: boolean | null;
+  } | null;
+
+  payment_schedule_rule?: {
+    isEnabled?: boolean | null;
+    is_enabled?: boolean | null;
+  } | null;
+};
+
+type AssessmentTab =
+  | "overview"
+  | "services"
+  | "decision";
 
 export default function AssessmentViewPage() {
   /*
@@ -127,8 +110,7 @@ export default function AssessmentViewPage() {
   */
 
   const user = useSelector(
-    (state: RootState) =>
-      state.auth.user,
+    (state: RootState) => state.auth.user,
   );
 
   /*
@@ -137,8 +119,7 @@ export default function AssessmentViewPage() {
   |--------------------------------------------------------------------------
   */
 
-  const permissions =
-    user?.permissions ?? [];
+  const permissions = user?.permissions ?? [];
 
   const hasPermission = (
     resource: string,
@@ -151,27 +132,24 @@ export default function AssessmentViewPage() {
     );
   };
 
-  const canApproveAssessment =
-    hasPermission(
-      "assessment",
-      "approve",
-    );
+  const canApproveAssessment = hasPermission(
+    "assessment",
+    "approve",
+  );
 
-  const canReturnAssessment =
-    hasPermission(
-      "assessment",
-      "return",
-    );
+  const canReturnAssessment = hasPermission(
+    "assessment",
+    "return",
+  );
 
-  const canCreateLeaseAmendment =
-    !hasPermission(
-      "lease_amendment",
-      "create",
-    );
+  // Correct permission check: do not negate this result.
+  const canCreateLeaseAmendment = hasPermission(
+    "lease_amendment",
+    "create",
+  );
 
   const canTakeAssessmentDecision =
-    canApproveAssessment ||
-    canReturnAssessment;
+    canApproveAssessment || canReturnAssessment;
 
   /*
   |--------------------------------------------------------------------------
@@ -181,14 +159,11 @@ export default function AssessmentViewPage() {
 
   const router = useRouter();
 
-  const params =
-    useParams<{ id: string }>();
+  const params = useParams<{ id: string }>();
 
-  const assessmentId =
-    params?.id;
+  const assessmentId = params?.id;
 
-  const queryClient =
-    useQueryClient();
+  const queryClient = useQueryClient();
 
   /*
   |--------------------------------------------------------------------------
@@ -196,12 +171,8 @@ export default function AssessmentViewPage() {
   |--------------------------------------------------------------------------
   */
 
-  const [
-    activeTab,
-    setActiveTab,
-  ] = useState<
-    "overview" | "services" | "decision"
-  >("overview");
+  const [activeTab, setActiveTab] =
+    useState<AssessmentTab>("overview");
 
   /*
   |--------------------------------------------------------------------------
@@ -209,20 +180,14 @@ export default function AssessmentViewPage() {
   |--------------------------------------------------------------------------
   */
 
-  const [
-    approveDialogOpen,
-    setApproveDialogOpen,
-  ] = useState(false);
+  const [approveDialogOpen, setApproveDialogOpen] =
+    useState(false);
 
-  const [
-    returnDialogOpen,
-    setReturnDialogOpen,
-  ] = useState(false);
+  const [returnDialogOpen, setReturnDialogOpen] =
+    useState(false);
 
-  const [
-    returnReason,
-    setReturnReason,
-  ] = useState("");
+  const [returnReason, setReturnReason] =
+    useState("");
 
   /*
   |--------------------------------------------------------------------------
@@ -236,14 +201,11 @@ export default function AssessmentViewPage() {
     isFetching,
     isError,
     refetch,
-  } = useAssessment(
-    assessmentId ?? "",
-  );
+  } = useAssessment(assessmentId ?? "");
 
-  const assessment =
-    assessmentResponse?.data as
-      | Assessment
-      | undefined;
+  const assessment = assessmentResponse?.data as
+    | Assessment
+    | undefined;
 
   /*
   |--------------------------------------------------------------------------
@@ -268,46 +230,29 @@ export default function AssessmentViewPage() {
   */
 
   const isPendingApproval =
-    assessment?.status ===
-    "PENDING_APPROVAL";
+    assessment?.status === "PENDING_APPROVAL";
 
   const isApproved =
-    assessment?.status ===
-    "APPROVED";
+    assessment?.status === "APPROVED";
 
   const isReturned =
-    assessment?.status ===
-    "RETURNED";
+    assessment?.status === "RETURNED";
 
   /*
   |--------------------------------------------------------------------------
-  | SUPERSEDED STATE
+  | LIFECYCLE STATE
   |--------------------------------------------------------------------------
-  |
-  | The backend should expose the assessment lifecycle state.
-  |
-  | We support both camelCase and snake_case here so the page
-  | remains compatible with either API serialization style.
-  |
   */
 
   const assessmentWithLifecycle =
-    assessment as
-      | (Assessment & {
-          lifecycleStatus?: string | null;
-          lifecycle_status?: string | null;
-        })
-      | undefined;
+    assessment as AssessmentLifecycle | undefined;
 
   const assessmentLifecycleStatus =
-    assessmentWithLifecycle
-      ?.lifecycleStatus ??
-    assessmentWithLifecycle
-      ?.lifecycle_status;
+    assessmentWithLifecycle?.lifecycleStatus ??
+    assessmentWithLifecycle?.lifecycle_status;
 
   const isSuperseded =
-    assessmentLifecycleStatus?.toUpperCase() ===
-    "SUPERSEDED";
+    assessmentLifecycleStatus?.toUpperCase() === "SUPERSEDED";
 
   /*
   |--------------------------------------------------------------------------
@@ -315,11 +260,9 @@ export default function AssessmentViewPage() {
   |--------------------------------------------------------------------------
   */
 
-  const services =
-    assessment?.services ?? [];
+  const services = assessment?.services ?? [];
 
-  const serviceCount =
-    services.length;
+  const serviceCount = services.length;
 
   /*
   |--------------------------------------------------------------------------
@@ -327,24 +270,18 @@ export default function AssessmentViewPage() {
   |--------------------------------------------------------------------------
   */
 
-  const fileCount =
-    useMemo(() => {
-      return services.reduce(
-        (total, service) =>
-          total +
-          (service.values ?? []).reduce(
-            (
-              valueTotal,
-              value,
-            ) =>
-              valueTotal +
-              (value.files?.length ??
-                0),
-            0,
-          ),
-        0,
-      );
-    }, [services]);
+  const fileCount = useMemo(() => {
+    return services.reduce(
+      (total, service) =>
+        total +
+        (service.values ?? []).reduce(
+          (valueTotal, value) =>
+            valueTotal + (value.files?.length ?? 0),
+          0,
+        ),
+      0,
+    );
+  }, [services]);
 
   /*
   |--------------------------------------------------------------------------
@@ -353,8 +290,7 @@ export default function AssessmentViewPage() {
   */
 
   const isExistingLizz =
-    assessment?.sourceType ===
-    "EXISTING_LIZZ";
+    assessment?.sourceType === "EXISTING_LIZZ";
 
   /*
   |--------------------------------------------------------------------------
@@ -362,130 +298,84 @@ export default function AssessmentViewPage() {
   |--------------------------------------------------------------------------
   */
 
-  const servicesWithErrors =
-    useMemo(
-      () =>
-        services.filter(
-          (service) =>
-            Boolean(
-              service.calculationError,
-            ),
-        ),
-      [services],
-    );
+  const servicesWithErrors = useMemo(
+    () =>
+      services.filter((service) =>
+        Boolean(service.calculationError),
+      ),
+    [services],
+  );
 
   const hasCalculationErrors =
-    !isExistingLizz &&
-    servicesWithErrors.length > 0;
+    !isExistingLizz && servicesWithErrors.length > 0;
 
   /*
   |--------------------------------------------------------------------------
-  | SERVICE PAYMENT TYPE
+  | SCHEDULED SERVICE COUNT
   |--------------------------------------------------------------------------
-  |
-  | Payment type should ideally come from the backend.
-  |
-  | The service card handles detailed display.
-  | Here we only use this information for page-level
-  | statistics and amendment eligibility.
-  |
   */
 
-  const scheduledServiceCount =
-    useMemo(() => {
-      return services.filter(
-        (service) => {
-          const candidate =
-            service as AssessmentService & {
-              paymentType?: string | null;
-              payment_type?: string | null;
+  const scheduledServiceCount = useMemo(() => {
+    return services.filter((service) => {
+      const candidate =
+        service as AssessmentServicePayment;
 
-              paymentScheduleRule?: {
-                isEnabled?: boolean | null;
-                is_enabled?: boolean | null;
-              } | null;
+      const paymentType =
+        candidate.paymentType ??
+        candidate.payment_type;
 
-              payment_schedule_rule?: {
-                isEnabled?: boolean | null;
-                is_enabled?: boolean | null;
-              } | null;
-            };
+      if (typeof paymentType === "string") {
+        return paymentType.toUpperCase() === "SCHEDULED";
+      }
 
-          const paymentType =
-            candidate.paymentType ??
-            candidate.payment_type;
+      const rule =
+        candidate.paymentScheduleRule ??
+        candidate.payment_schedule_rule;
 
-          if (
-            typeof paymentType ===
-            "string"
-          ) {
-            return (
-              paymentType.toUpperCase() ===
-              "SCHEDULED"
-            );
-          }
+      if (rule) {
+        return Boolean(
+          rule.isEnabled ?? rule.is_enabled,
+        );
+      }
 
-          const rule =
-            candidate.paymentScheduleRule ??
-            candidate.payment_schedule_rule;
+      /*
+       * Existing LIZZ with a remaining balance
+       * is considered scheduled.
+       */
+      if (
+        isExistingLizz &&
+        service.remainingAmount !== null &&
+        service.remainingAmount !== undefined
+      ) {
+        return Number(service.remainingAmount) > 0;
+      }
 
-          if (rule) {
-            return Boolean(
-              rule.isEnabled ??
-                rule.is_enabled,
-            );
-          }
-
-          /*
-           * Existing LIZZ with remaining
-           * balance is scheduled.
-           */
-          if (
-            isExistingLizz &&
-            service.remainingAmount !==
-              null &&
-            service.remainingAmount !==
-              undefined
-          ) {
-            return (
-              Number(
-                service.remainingAmount,
-              ) > 0
-            );
-          }
-
-          return false;
-        },
-      ).length;
-    }, [
-      services,
-      isExistingLizz,
-    ]);
+      return false;
+    }).length;
+  }, [services, isExistingLizz]);
 
   /*
   |--------------------------------------------------------------------------
   | AMENDMENT ELIGIBILITY
   |--------------------------------------------------------------------------
   |
-  | Create Amendment is intentionally an assessment-level action.
+  | All conditions are mandatory:
   |
-  | It is available only when:
-  |
-  |   1. User has permission
-  |   2. Assessment is approved
-  |   3. Assessment is not superseded
-  |   4. Assessment contains at least one scheduled service
+  | 1. Assessment exists.
+  | 2. User has lease_amendment.create.
+  | 3. Assessment status is APPROVED.
+  | 4. Assessment is not SUPERSEDED.
+  | 5. At least one scheduled service exists.
   |
   */
 
-  const canCreateAmendment =
-    Boolean(
-      assessment &&
-        canCreateLeaseAmendment &&
-        isApproved &&
-        !isSuperseded &&
-        scheduledServiceCount > 0,
-    );
+  const canCreateAmendment = Boolean(
+    assessment &&
+      canCreateLeaseAmendment &&
+      assessment.status === "APPROVED" &&
+      !isSuperseded &&
+      scheduledServiceCount > 0,
+  );
 
   /*
   |--------------------------------------------------------------------------
@@ -493,65 +383,48 @@ export default function AssessmentViewPage() {
   |--------------------------------------------------------------------------
   */
 
-  const handleCreateAmendment =
-    () => {
-      if (
-        !canCreateLeaseAmendment
-      ) {
-        toast.error(
-          "You do not have permission to create lease amendments.",
-        );
-
-        return;
-      }
-
-      if (!assessment) {
-        toast.error(
-          "Assessment information is unavailable.",
-        );
-
-        return;
-      }
-
-      if (!isApproved) {
-        toast.error(
-          "Only approved assessments can be amended.",
-        );
-
-        return;
-      }
-
-      if (isSuperseded) {
-        toast.error(
-          "A superseded assessment cannot be amended.",
-        );
-
-        return;
-      }
-
-      if (
-        scheduledServiceCount <= 0
-      ) {
-        toast.error(
-          "This assessment does not contain a scheduled service and cannot be amended.",
-        );
-
-        return;
-      }
-
-      /*
-       * Pass the assessment ID to the amendment
-       * creation page.
-       *
-       * The amendment page will use this assessment
-       * as previous_assessment_id.
-       */
-      router.push(
-        `/office/dashboard/lease-amendments/create?assessment_id=${encodeURIComponent(
-          assessment.id,
-        )}`,
+  const handleCreateAmendment = () => {
+    if (!canCreateLeaseAmendment) {
+      toast.error(
+        "You do not have permission to create lease amendments.",
       );
-    };
+      return;
+    }
+
+    if (!assessment) {
+      toast.error(
+        "Assessment information is unavailable.",
+      );
+      return;
+    }
+
+    if (assessment.status !== "APPROVED") {
+      toast.error(
+        "Only approved assessments can be amended.",
+      );
+      return;
+    }
+
+    if (isSuperseded) {
+      toast.error(
+        "A superseded assessment cannot be amended.",
+      );
+      return;
+    }
+
+    if (scheduledServiceCount <= 0) {
+      toast.error(
+        "This assessment does not contain a scheduled service and cannot be amended.",
+      );
+      return;
+    }
+
+    router.push(
+      `/office/dashboard/lease-amendments/create?assessment_id=${encodeURIComponent(
+        assessment.id,
+      )}`,
+    );
+  };
 
   /*
   |--------------------------------------------------------------------------
@@ -559,16 +432,14 @@ export default function AssessmentViewPage() {
   |--------------------------------------------------------------------------
   */
 
-  const refreshAfterDecision =
-    async () => {
-      await Promise.all([
-        refetch(),
-
-        queryClient.invalidateQueries({
-          queryKey: ["assessments"],
-        }),
-      ]);
-    };
+  const refreshAfterDecision = async () => {
+    await Promise.all([
+      refetch(),
+      queryClient.invalidateQueries({
+        queryKey: ["assessments"],
+      }),
+    ]);
+  };
 
   /*
   |--------------------------------------------------------------------------
@@ -576,28 +447,24 @@ export default function AssessmentViewPage() {
   |--------------------------------------------------------------------------
   */
 
-  const handleOpenApprove =
-    () => {
-      if (
-        !canApproveAssessment
-      ) {
-        toast.error(
-          "You do not have permission to approve assessments.",
-        );
+  const handleOpenApprove = () => {
+    if (!canApproveAssessment) {
+      toast.error(
+        "You do not have permission to approve assessments.",
+      );
+      return;
+    }
 
-        return;
-      }
+    if (
+      !assessment ||
+      !isPendingApproval ||
+      hasCalculationErrors
+    ) {
+      return;
+    }
 
-      if (
-        !assessment ||
-        !isPendingApproval ||
-        hasCalculationErrors
-      ) {
-        return;
-      }
-
-      setApproveDialogOpen(true);
-    };
+    setApproveDialogOpen(true);
+  };
 
   /*
   |--------------------------------------------------------------------------
@@ -605,55 +472,45 @@ export default function AssessmentViewPage() {
   |--------------------------------------------------------------------------
   */
 
-  const handleConfirmApprove =
-    async () => {
-      if (
-        !canApproveAssessment
-      ) {
-        toast.error(
-          "You do not have permission to approve assessments.",
-        );
+  const handleConfirmApprove = async () => {
+    if (!canApproveAssessment) {
+      toast.error(
+        "You do not have permission to approve assessments.",
+      );
+      return;
+    }
 
-        return;
-      }
+    if (
+      !assessment ||
+      !isPendingApproval ||
+      hasCalculationErrors
+    ) {
+      return;
+    }
 
-      if (
-        !assessment ||
-        !isPendingApproval ||
-        hasCalculationErrors
-      ) {
-        return;
-      }
+    try {
+      await approveAssessment(assessment.id);
 
-      try {
-        await approveAssessment(
-          assessment.id,
-        );
+      setApproveDialogOpen(false);
 
-        setApproveDialogOpen(
-          false,
-        );
+      toast.success(
+        "Assessment approved successfully.",
+      );
 
-        toast.success(
-          "Assessment approved successfully.",
-        );
+      await refreshAfterDecision();
 
-        await refreshAfterDecision();
+      setActiveTab("overview");
+    } catch (error) {
+      console.error(
+        "Failed to approve assessment:",
+        error,
+      );
 
-        setActiveTab(
-          "overview",
-        );
-      } catch (error) {
-        console.error(
-          "Failed to approve assessment:",
-          error,
-        );
-
-        toast.error(
-          "Could not approve this assessment. Please try again.",
-        );
-      }
-    };
+      toast.error(
+        "Could not approve this assessment. Please try again.",
+      );
+    }
+  };
 
   /*
   |--------------------------------------------------------------------------
@@ -661,29 +518,21 @@ export default function AssessmentViewPage() {
   |--------------------------------------------------------------------------
   */
 
-  const handleOpenReturn =
-    () => {
-      if (
-        !canReturnAssessment
-      ) {
-        toast.error(
-          "You do not have permission to return assessments.",
-        );
+  const handleOpenReturn = () => {
+    if (!canReturnAssessment) {
+      toast.error(
+        "You do not have permission to return assessments.",
+      );
+      return;
+    }
 
-        return;
-      }
+    if (!assessment || !isPendingApproval) {
+      return;
+    }
 
-      if (
-        !assessment ||
-        !isPendingApproval
-      ) {
-        return;
-      }
-
-      setReturnReason("");
-
-      setReturnDialogOpen(true);
-    };
+    setReturnReason("");
+    setReturnDialogOpen(true);
+  };
 
   /*
   |--------------------------------------------------------------------------
@@ -691,84 +540,51 @@ export default function AssessmentViewPage() {
   |--------------------------------------------------------------------------
   */
 
-  const handleReturn =
-    async () => {
-      if (
-        !canReturnAssessment
-      ) {
-        toast.error(
-          "You do not have permission to return assessments.",
-        );
-
-        return;
-      }
-
-      if (
-        !assessment ||
-        !isPendingApproval
-      ) {
-        return;
-      }
-
-      const reason =
-        returnReason.trim();
-
-      if (!reason) {
-        return;
-      }
-
-      try {
-        await returnAssessment({
-          id: assessment.id,
-          reason,
-        });
-
-        setReturnDialogOpen(
-          false,
-        );
-
-        setReturnReason("");
-
-        toast.success(
-          "Assessment returned for correction.",
-        );
-
-        await refreshAfterDecision();
-
-        setActiveTab(
-          "overview",
-        );
-      } catch (error) {
-        console.error(
-          "Failed to return assessment:",
-          error,
-        );
-
-        toast.error(
-          "Could not return this assessment. Please try again.",
-        );
-      }
-    };
-
-  /*
-  |--------------------------------------------------------------------------
-  | VIEW INVOICE
-  |--------------------------------------------------------------------------
-  */
-
-  const handleViewInvoice =
-    () => {
-      if (
-        !assessment ||
-        !isApproved
-      ) {
-        return;
-      }
-
-      router.push(
-        `/office/dashboard/revenue/assessments/${assessment.id}/invoice`,
+  const handleReturn = async () => {
+    if (!canReturnAssessment) {
+      toast.error(
+        "You do not have permission to return assessments.",
       );
-    };
+      return;
+    }
+
+    if (!assessment || !isPendingApproval) {
+      return;
+    }
+
+    const reason = returnReason.trim();
+
+    if (!reason) {
+      return;
+    }
+
+    try {
+      await returnAssessment({
+        id: assessment.id,
+        reason,
+      });
+
+      setReturnDialogOpen(false);
+      setReturnReason("");
+
+      toast.success(
+        "Assessment returned for correction.",
+      );
+
+      await refreshAfterDecision();
+
+      setActiveTab("overview");
+    } catch (error) {
+      console.error(
+        "Failed to return assessment:",
+        error,
+      );
+
+      toast.error(
+        "Could not return this assessment. Please try again.",
+      );
+    }
+  };
 
   /*
   |--------------------------------------------------------------------------
@@ -776,18 +592,17 @@ export default function AssessmentViewPage() {
   |--------------------------------------------------------------------------
   */
 
-  const handleManageScheduledPayments =
-    (
-      service: AssessmentService,
-    ) => {
-      if (!assessment) {
-        return;
-      }
+  const handleManageScheduledPayments = (
+    service: AssessmentService,
+  ) => {
+    if (!assessment) {
+      return;
+    }
 
-      router.push(
-        `/office/dashboard/assessments/${assessment.id}/services/${service.id}/schedule`,
-      );
-    };
+    router.push(
+      `/office/dashboard/assessments/${assessment.id}/services/${service.id}/schedule`,
+    );
+  };
 
   /*
   |--------------------------------------------------------------------------
@@ -808,9 +623,7 @@ export default function AssessmentViewPage() {
           <Button
             variant="outline"
             className="mt-4"
-            onClick={() =>
-              router.back()
-            }
+            onClick={() => router.back()}
           >
             Go Back
           </Button>
@@ -843,10 +656,7 @@ export default function AssessmentViewPage() {
   |--------------------------------------------------------------------------
   */
 
-  if (
-    isError ||
-    !assessment
-  ) {
+  if (isError || !assessment) {
     return (
       <div className="flex min-h-80 items-center justify-center p-6">
         <Card className="w-full max-w-md">
@@ -865,18 +675,12 @@ export default function AssessmentViewPage() {
             <div className="mt-5 flex justify-center gap-2">
               <Button
                 variant="outline"
-                onClick={() =>
-                  router.back()
-                }
+                onClick={() => router.back()}
               >
                 Go Back
               </Button>
 
-              <Button
-                onClick={() =>
-                  refetch()
-                }
-              >
+              <Button onClick={() => refetch()}>
                 Retry
               </Button>
             </div>
@@ -893,7 +697,7 @@ export default function AssessmentViewPage() {
   */
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5 pb-8">
+    <div className="mx-auto max-w-5xl space-y-5 pb-8">
       {/* ================================================================
           HEADER
           ================================================================ */}
@@ -901,14 +705,13 @@ export default function AssessmentViewPage() {
       <Banner
         badge={
           <IconBadge
-            className="gap-2 rounded-full bg-black/20 p-3 text-[10px] text-white"
-            icon={
-              <FileText className="h-4 w-4" />
-            }
+            className="gap-2 rounded-full p-3 text-[10px]"
+            icon={<FileText className="h-4 w-4" />}
           >
             Revenue Assessment
           </IconBadge>
         }
+        overlayClassName="bg-transparent"
         description={`Review assessment ${assessment.assessmentNumber} and manage its revenue workflow.`}
         background={
           <FloatingParticles
@@ -919,40 +722,25 @@ export default function AssessmentViewPage() {
             position="bottom-right"
           />
         }
-        overlayClassName="bg-gradient-to-r from-primary/95 via-primary/80 to-primary/50"
-        className="text-white"
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            {/* ========================================================
-                BACK
-                ======================================================== */}
-
             <Button
               variant="secondary"
-              onClick={() =>
-                router.back()
-              }
+              onClick={() => router.back()}
               className="gap-2"
             >
               <ArrowLeft className="h-4 w-4" />
-
               Back to Assessments
             </Button>
 
-            {/* ========================================================
-                CREATE AMENDMENT
-                ======================================================== */}
-
+            {/* Create Amendment: approved assessments only */}
             {canCreateAmendment && (
               <Button
                 variant="secondary"
-                onClick={
-                  handleCreateAmendment
-                }
+                onClick={handleCreateAmendment}
                 className="gap-2"
               >
                 <FileText className="h-4 w-4" />
-
                 Create Amendment
               </Button>
             )}
@@ -967,7 +755,6 @@ export default function AssessmentViewPage() {
       {isFetching && (
         <div className="flex items-center justify-end gap-2 text-xs text-muted-foreground">
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
-
           Refreshing assessment...
         </div>
       )}
@@ -979,12 +766,7 @@ export default function AssessmentViewPage() {
       <Tabs
         value={activeTab}
         onValueChange={(value) =>
-          setActiveTab(
-            value as
-              | "overview"
-              | "services"
-              | "decision",
-          )
+          setActiveTab(value as AssessmentTab)
         }
         className="space-y-5"
       >
@@ -1030,35 +812,17 @@ export default function AssessmentViewPage() {
           className="space-y-5"
         >
           <SummaryHeaderCard
-            assessment={
-              assessment
-            }
-            serviceCount={
-              serviceCount
-            }
-            fileCount={
-              fileCount
-            }
+            assessment={assessment}
+            serviceCount={serviceCount}
+            fileCount={fileCount}
           />
 
-          <TaxpayerCard
-            assessment={
-              assessment
-            }
-          />
+          <TaxpayerCard assessment={assessment} />
 
-          <AuditCard
-            assessment={
-              assessment
-            }
-          />
+          <AuditCard assessment={assessment} />
 
           {assessment.notes && (
-            <NotesCard
-              notes={
-                assessment.notes
-              }
-            />
+            <NotesCard notes={assessment.notes} />
           )}
         </TabsContent>
 
@@ -1085,23 +849,15 @@ export default function AssessmentViewPage() {
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <span>
                 {serviceCount} service
-                {serviceCount === 1
-                  ? ""
-                  : "s"}
+                {serviceCount === 1 ? "" : "s"}
               </span>
 
-              {scheduledServiceCount >
-                0 && (
+              {scheduledServiceCount > 0 && (
                 <>
-                  <span>
-                    •
-                  </span>
+                  <span>•</span>
 
                   <span>
-                    {
-                      scheduledServiceCount
-                    }{" "}
-                    scheduled
+                    {scheduledServiceCount} scheduled
                   </span>
                 </>
               )}
@@ -1110,26 +866,16 @@ export default function AssessmentViewPage() {
 
           {services.length > 0 ? (
             <div className="space-y-3">
-              {services.map(
-                (
-                  service,
-                ) => (
-                  <AssessmentServiceCard
-                    key={
-                      service.id
-                    }
-                    service={
-                      service
-                    }
-                    isExistingLizz={
-                      isExistingLizz
-                    }
-                    onManageScheduledPayments={
-                      handleManageScheduledPayments
-                    }
-                  />
-                ),
-              )}
+              {services.map((service) => (
+                <AssessmentServiceCard
+                  key={service.id}
+                  service={service}
+                  isExistingLizz={isExistingLizz}
+                  onManageScheduledPayments={
+                    handleManageScheduledPayments
+                  }
+                />
+              ))}
             </div>
           ) : (
             <Card>
@@ -1158,11 +904,7 @@ export default function AssessmentViewPage() {
           className="space-y-5"
         >
           {assessment.decisionNotes ? (
-            <DecisionCard
-              assessment={
-                assessment
-              }
-            />
+            <DecisionCard assessment={assessment} />
           ) : (
             <Card>
               <CardContent className="p-6">
@@ -1226,46 +968,18 @@ export default function AssessmentViewPage() {
 
       {canTakeAssessmentDecision && (
         <AssessmentActionBar
-          services={
-            assessment.services ??
-            []
-          }
-          isExistingLizz={
-            isExistingLizz
-          }
-          isPendingApproval={
-            isPendingApproval
-          }
-          isApproved={
-            isApproved
-          }
-          isReturned={
-            isReturned
-          }
-          hasCalculationErrors={
-            hasCalculationErrors
-          }
-          approving={
-            approving
-          }
-          returning={
-            returning
-          }
-          canApprove={
-            canApproveAssessment
-          }
-          canReturn={
-            canReturnAssessment
-          }
-          onOpenApprove={
-            handleOpenApprove
-          }
-          onOpenReturn={
-            handleOpenReturn
-          }
-          // onViewInvoice={
-          //   handleViewInvoice
-          // }
+          services={assessment.services ?? []}
+          isExistingLizz={isExistingLizz}
+          isPendingApproval={isPendingApproval}
+          isApproved={isApproved}
+          isReturned={isReturned}
+          hasCalculationErrors={hasCalculationErrors}
+          approving={approving}
+          returning={returning}
+          canApprove={canApproveAssessment}
+          canReturn={canReturnAssessment}
+          onOpenApprove={handleOpenApprove}
+          onOpenReturn={handleOpenReturn}
         />
       )}
 
@@ -1275,28 +989,13 @@ export default function AssessmentViewPage() {
 
       {canApproveAssessment && (
         <ApproveDialog
-          open={
-            approveDialogOpen
-          }
-          onOpenChange={
-            setApproveDialogOpen
-          }
-          assessment={
-            assessment
-          }
-          services={
-            assessment.services ??
-            []
-          }
-          approving={
-            approving
-          }
-          hasCalculationErrors={
-            hasCalculationErrors
-          }
-          onConfirm={
-            handleConfirmApprove
-          }
+          open={approveDialogOpen}
+          onOpenChange={setApproveDialogOpen}
+          assessment={assessment}
+          services={assessment.services ?? []}
+          approving={approving}
+          hasCalculationErrors={hasCalculationErrors}
+          onConfirm={handleConfirmApprove}
         />
       )}
 
@@ -1306,24 +1005,12 @@ export default function AssessmentViewPage() {
 
       {canReturnAssessment && (
         <ReturnDialog
-          open={
-            returnDialogOpen
-          }
-          onOpenChange={
-            setReturnDialogOpen
-          }
-          reason={
-            returnReason
-          }
-          onReasonChange={
-            setReturnReason
-          }
-          returning={
-            returning
-          }
-          onReturn={
-            handleReturn
-          }
+          open={returnDialogOpen}
+          onOpenChange={setReturnDialogOpen}
+          reason={returnReason}
+          onReasonChange={setReturnReason}
+          returning={returning}
+          onReturn={handleReturn}
         />
       )}
     </div>

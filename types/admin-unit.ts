@@ -1,8 +1,21 @@
+
 export interface AdminUnitParent {
   id: string;
   name: string;
   code: string;
   level: "CITY" | "SUBCITY" | "WEREDA";
+}
+
+export interface AdminUnitContextItem {
+  id: string;
+  name: string;
+  code: string;
+}
+
+export interface AdminUnitContext {
+  city: AdminUnitContextItem | null;
+  subcity: AdminUnitContextItem | null;
+  wereda: AdminUnitContextItem | null;
 }
 
 export interface AdminUnit {
@@ -20,6 +33,10 @@ export interface AdminUnit {
 
   // Included when the API eager-loads child units.
   children?: AdminUnit[];
+
+  // Full administrative hierarchy returned by the assessment API.
+  // Each level is null when it is not available.
+  context?: AdminUnitContext | null;
 
   audit: {
     created_by: string | null;

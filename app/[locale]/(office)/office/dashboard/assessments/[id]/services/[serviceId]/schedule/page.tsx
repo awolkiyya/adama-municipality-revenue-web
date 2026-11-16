@@ -8,6 +8,7 @@ import {
   CalendarClock,
   ChevronLeft,
   ChevronRight,
+  FileText,
   Loader2,
   ReceiptText,
   RefreshCw,
@@ -52,6 +53,9 @@ import type {
   PaymentSchedule,
   PaymentScheduleStatus,
 } from "@/types/payment-schedule/payment-schedule";
+import { useSelector } from "react-redux";
+import { RootState } from "@/lib/store/store";
+import { PermissionAction, UserPermission } from "@/types/user";
 
 // ============================================================================
 // TYPES
@@ -1340,6 +1344,33 @@ export default function PaymentScheduleManagementPage() {
     assessmentId && assessmentServiceId,
   );
 
+
+  // ------------------------------------------------------------------------
+  // USER PERMISSIONS
+  // ------------------------------------------------------------------------
+
+  const user = useSelector(
+    (state: RootState) => state.auth.user,
+  );
+
+  const permissions = user?.permissions ?? [];
+
+  const hasPermission = (
+    resource: string,
+    action: PermissionAction,
+  ): boolean => {
+    return permissions.some(
+      (permission: UserPermission) =>
+        permission.resource === resource &&
+        permission.actions.includes(action),
+    );
+  };
+
+  const canCreateLeaseAmendment = hasPermission(
+    "lease_amendments",
+    "create",
+  );
+
   const {
     data: scheduleData,
     isLoading,
@@ -1543,6 +1574,30 @@ export default function PaymentScheduleManagementPage() {
   ]);
 
   // ------------------------------------------------------------------------
+  // LEASE AMENDMENT ACTION
+  // ------------------------------------------------------------------------
+
+  const handleCreateAmendment = useCallback(() => {
+    if (!canCreateLeaseAmendment) {
+      return;
+    }
+
+    if (!assessmentId) {
+      return;
+    }
+
+    router.push(
+      `/office/dashboard/lease-amendments/create?assessment_id=${encodeURIComponent(
+        assessmentId,
+      )}`,
+    );
+  }, [
+    canCreateLeaseAmendment,
+    assessmentId,
+    router,
+  ]);
+
+  // ------------------------------------------------------------------------
   // Guard states
   // ------------------------------------------------------------------------
 
@@ -1673,18 +1728,30 @@ export default function PaymentScheduleManagementPage() {
           </p>
         </div>
 
-        <Button
-          variant="outline"
-          disabled={isFetching}
-          onClick={() => void refetch()}
-        >
-          <RefreshCw
-            className={`mr-2 size-4 ${
-              isFetching ? "animate-spin" : ""
-            }`}
-          />
-          Refresh
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+  {canCreateLeaseAmendment && (
+    <Button
+      variant="default"
+      onClick={handleCreateAmendment}
+    >
+      <FileText className="mr-2 size-4" />
+      Create Amendment
+    </Button>
+  )}
+
+  <Button
+    variant="outline"
+    disabled={isFetching}
+    onClick={() => void refetch()}
+  >
+    <RefreshCw
+      className={`mr-2 size-4 ${
+        isFetching ? "animate-spin" : ""
+      }`}
+    />
+    Refresh
+  </Button>
+</div>
       </header>
 
       {/* SUMMARY */}

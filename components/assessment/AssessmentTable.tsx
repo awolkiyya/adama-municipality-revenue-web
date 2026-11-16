@@ -1,4 +1,7 @@
+
 "use client";
+
+import { RefreshCw, ClipboardList } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { CommenTable } from "@/components/table/CommenTable";
@@ -14,12 +17,6 @@ import { DataTablePagination } from "../table/data-pagination";
 // ROW TYPE
 // =====================================================
 
-/**
- * Assessment table row.
- *
- * Extend this type with your assessment resource fields
- * if you want stronger typing for individual columns.
- */
 export type AssessmentTableRow = {
   id: string;
   [key: string]: unknown;
@@ -78,52 +75,38 @@ export function AssessmentTable<TRow extends AssessmentTableRow>({
   onPageSizeChange,
 }: AssessmentTableProps<TRow>) {
   // ===================================================
-  // ASSESSMENT CAPABILITIES
+  // PERMISSION CAPABILITIES
   // ===================================================
 
   const capabilities = resolveAssessmentCapabilities(permissions);
 
-  // ===================================================
-  // TABLE ACTION PERMISSIONS
-  // ===================================================
-
-  const actions = resolveActions(
+  const registryActions = resolveActions(
     CommentTableRegistry.assessment,
     permissions,
   );
 
   // ===================================================
-  // FINAL ACTION VISIBILITY
+  // ACTION VISIBILITY
   // ===================================================
-
-  /**
-   * An action is available only when:
-   *
-   * 1. The assessment capability allows it.
-   * 2. The table registry allows it.
-   * 3. A corresponding handler is provided.
-   *
-   * resolveActions() evaluates the registry permissions.
-   */
 
   const canView =
     capabilities.canView &&
-    actions.view &&
+    registryActions.view &&
     Boolean(onView);
 
   const canEdit =
     capabilities.canEdit &&
-    actions.edit &&
+    registryActions.edit &&
     Boolean(onEdit);
 
   const canDelete =
     capabilities.canDelete &&
-    actions.delete &&
+    registryActions.delete &&
     Boolean(onDelete);
 
   const canApprove =
     capabilities.canApprove &&
-    actions.approve &&
+    registryActions.approve &&
     Boolean(onApprove);
 
   const canReject =
@@ -132,71 +115,116 @@ export function AssessmentTable<TRow extends AssessmentTableRow>({
 
   const canReturn =
     capabilities.canReturn &&
-    actions.return &&
+    registryActions.return &&
     Boolean(onReturn);
+
+  const actions = {
+    ...registryActions,
+    view: canView,
+    edit: canEdit,
+    delete: canDelete,
+    approve: canApprove,
+    reject: canReject,
+    return: canReturn,
+  };
 
   // ===================================================
   // RENDER
   // ===================================================
 
   return (
-    <div className="rounded-xl border bg-card shadow-sm">
-      {/* TABLE HEADER */}
+    <section
+      aria-label="Assessment records"
+      className="min-w-0 overflow-hidden rounded-sm border border-border/70 "
+    >
+      {/* =================================================
+          TABLE HEADER
+      ================================================= */}
 
-      <div className="flex flex-col gap-1 border-b p-5 sm:p-6">
-        <h2 className="text-lg font-semibold tracking-tight">
-          {config.title}
-        </h2>
+      <div className="flex flex-col gap-3 border-b border-border/70 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+        <div className="flex min-w-0 items-start gap-3">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <ClipboardList className="size-5" />
+          </div>
 
-        <p className="text-sm text-muted-foreground">
-          {config.tableDescription}
-        </p>
+          <div className="min-w-0 space-y-1">
+            <h2 className="truncate text-base font-semibold tracking-tight sm:text-lg">
+              {config.title}
+            </h2>
+
+            <p className="text-sm leading-relaxed text-muted-foreground">
+              {config.tableDescription}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex shrink-0 items-center gap-2 self-start sm:self-center">
+          <span className="inline-flex items-center rounded-full border border-border bg-muted/40 px-3 py-1 text-xs font-medium text-muted-foreground">
+            {total.toLocaleString()}{" "}
+            {total === 1 ? "record" : "records"}
+          </span>
+        </div>
       </div>
 
-      {/* TABLE */}
+      {/* =================================================
+          TABLE CONTENT
+      ================================================= */}
 
-      <CommenTable
-        type={"assessment" as CommentType}
-        data={data}
-        page={page}
-        pageSize={pageSize}
-        isLoading={isLoading}
-        onView={canView ? onView : undefined}
-        onEdit={canEdit ? onEdit : undefined}
-        onDelete={canDelete ? onDelete : undefined}
-        onApprove={canApprove ? onApprove : undefined}
-        onReturn={canReturn ? onReturn : undefined}
-        actions={{
-          ...actions,
-          view: canView,
-          edit: canEdit,
-          delete: canDelete,
-          approve: canApprove,
-          return: canReturn,
-        }}
-      />
+      <div className="min-w-0">
+        <CommenTable
+          type={"assessment" as CommentType}
+          data={data}
+          page={page}
+          pageSize={pageSize}
+          isLoading={isLoading}
+          onView={canView ? onView : undefined}
+          onEdit={canEdit ? onEdit : undefined}
+          // onDelete={canDelete ? onDelete : undefined}
+          // onApprove={canApprove ? onApprove : undefined}
+          // onReject={canReject ? onReject : undefined}
+          // onReturn={canReturn ? onReturn : undefined}
+          actions={actions}
+        />
+      </div>
 
-      {/* ERROR STATE */}
+      {/* =================================================
+          ERROR STATE
+      ================================================= */}
 
       {error && (
-        <div className="flex items-center justify-between border-t bg-destructive/5 px-5 py-4">
-          <p className="text-sm text-destructive">
-            Failed to load assessments.
-          </p>
+        <div
+          role="alert"
+          className="flex flex-col gap-3 border-t border-destructive/20 bg-destructive/5 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6"
+        >
+          <div className="space-y-1">
+            <p className="text-sm font-medium text-destructive">
+              Unable to load assessments
+            </p>
+
+            <p className="text-xs text-muted-foreground">
+              Something went wrong while retrieving assessment records.
+              Please try again.
+            </p>
+          </div>
 
           <Button
+            type="button"
             variant="outline"
             size="sm"
             onClick={onRetry}
+            className="w-full shrink-0 gap-2 sm:w-auto"
           >
-            Retry
+            <RefreshCw className="size-3.5" />
+            Try again
           </Button>
         </div>
       )}
 
-      {/* PAGINATION */}
+      {/* =================================================
+          PAGINATION
+      ================================================= */}
 
-      <div className="border-t p-4 sm:p-5">
+      <div className="border-t border-border/70 px-3 py-3 sm:px-5 sm:py-4">
         <DataTablePagination
           page={page}
           pageSize={pageSize}
@@ -205,6 +233,6 @@ export function AssessmentTable<TRow extends AssessmentTableRow>({
           onPageSizeChange={onPageSizeChange}
         />
       </div>
-    </div>
+    </section>
   );
 }

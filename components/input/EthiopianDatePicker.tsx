@@ -84,6 +84,15 @@ const JDN_EPOCH_ETH = 1723856;
 const JDN_UNIX_EPOCH = 2440588;
 const MS_PER_DAY = 86_400_000;
 
+/**
+ * ethToJdn counts from year 1 with a one-year (365 day) shift compared to
+ * the epoch used by `toEthiopian`. Both functions must agree, otherwise
+ * the grid shows year N but a click resolves to year N - 1.
+ */
+const ETH_TO_JDN_SHIFT = 365;
+
+const mod = (n: number, m: number) => ((n % m) + m) % m;
+
 const gregorianToJdn = (d: Date) =>
   Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / MS_PER_DAY +
   JDN_UNIX_EPOCH;
@@ -94,7 +103,13 @@ const jdnToGregorian = (jdn: number) => {
 };
 
 const ethToJdn = (y: number, m: number, d: number) =>
-  JDN_EPOCH_ETH + 365 * (y - 1) + Math.floor(y / 4) + 30 * m + d - 31;
+  JDN_EPOCH_ETH +
+  ETH_TO_JDN_SHIFT +
+  365 * (y - 1) +
+  Math.floor(y / 4) +
+  30 * m +
+  d -
+  31;
 
 const daysInEthMonth = (year: number, month: number) =>
   month < 13 ? 30 : year % 4 === 3 ? 6 : 5;
@@ -104,7 +119,7 @@ export const defaultCalendar: CalendarAdapter = {
 
   toEthiopian(date) {
     const jdn = gregorianToJdn(date);
-    const r = (jdn - JDN_EPOCH_ETH) % 1461;
+    const r = mod(jdn - JDN_EPOCH_ETH, 1461);
     const n = (r % 365) + 365 * Math.floor(r / 1460);
 
     return {

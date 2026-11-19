@@ -19,14 +19,28 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 
-import {
-  Bell,
-  BellRing,
-} from "lucide-react";
 
 import { RootState } from "@/lib/store/store";
 import { usePermission } from "@/hooks/usePermission";
 import { NAV_ITEMS } from "@/configs/navConfig";
+import {
+  Bell,
+  BellRing,
+  CheckCheck,
+  ExternalLink,
+  Loader2,
+} from "lucide-react";
+
+import Link from "next/link";
+"@/components/ui/popover";
+
+import {
+  useNotifications,
+  useUnreadNotificationCount,
+  useMarkNotificationAsRead,
+} from "@/hooks/use-notifications";
+
+import type { AppNotification } from "@/types/notification";
 
 /* =====================================================
    OFFICE PORTAL LAYOUT
@@ -205,18 +219,48 @@ function OfficeContent({
   );
 }
 
+
+
+
+
 /* =====================================================
    NOTIFICATION BELL
 ===================================================== */
 
 export function NotificationBell() {
-  const unreadCount = 0;
+  const {
+    data: unreadCount = 0,
+    isLoading: isCountLoading,
+  } = useUnreadNotificationCount();
+
+  const {
+    data,
+    isLoading,
+    isError,
+  } = useNotifications({
+    filter: "all",
+    per_page: 5,
+    page: 1,
+  });
+
+  const markAsRead = useMarkNotificationAsRead();
+
+  const notifications = data?.data ?? [];
+
+  const handleNotificationClick = (
+    notification: AppNotification,
+  ) => {
+    if (!notification.is_read) {
+      markAsRead.mutate(notification.id);
+    }
+  };
 
   return (
     <Popover>
-
       <PopoverTrigger asChild>
         <button
+          type="button"
+          aria-label={`Notifications${unreadCount > 0 ? `, ${unreadCount} unread` : ""}`}
           className="
             relative rounded-lg p-2.5
             transition-colors
@@ -235,7 +279,13 @@ export function NotificationBell() {
                 text-primary-foreground
               "
             >
-              {unreadCount}
+              {unreadCount > 99 ? "99+" : unreadCount}
+            </span>
+          )}
+
+          {isCountLoading && (
+            <span className="sr-only">
+              Loading unread notification count
             </span>
           )}
         </button>
@@ -245,56 +295,140 @@ export function NotificationBell() {
         align="end"
         className="w-[420px] overflow-hidden p-0"
       >
-
-        {/* =================================================
-            HEADER
-        ================================================= */}
-
+        {/* HEADER */}
         <div className="border-b px-5 py-4">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="rounded-lg bg-primary/10 p-2">
+                <BellRing className="h-4 w-4 text-primary" />
+              </div>
 
-            <div className="rounded-lg bg-primary/10 p-2">
-              <BellRing className="h-4 w-4 text-primary" />
+              <div>
+                <h3 className="font-semibold">
+                  Notifications
+                </h3>
+
+                <p className="text-xs text-muted-foreground">
+                  Stay updated with your latest activities.
+                </p>
+              </div>
             </div>
 
-            <div>
-              <h3 className="font-semibold">
-                Notifications
-              </h3>
+            {unreadCount > 0 && (
+              <span className="rounded-full bg-primary/10 px-2 py-1 text-xs font-medium text-primary">
+                {unreadCount} unread
+              </span>
+            )}
+          </div>
+        </div>
 
-              <p className="text-xs text-muted-foreground">
-                Stay updated with plans, KPIs, reports,
-                and document generation activities.
+        {/* NOTIFICATION LIST */}
+        <div className="max-h-[420px] overflow-y-auto">
+          {isLoading ? (
+            <div className="flex items-center justify-center gap-2 px-6 py-10 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading notifications...
+            </div>
+          ) : isError ? (
+            <div className="px-6 py-10 text-center">
+              <p className="text-sm text-destructive">
+                Failed to load notifications.
               </p>
             </div>
+          ) : notifications.length === 0 ? (
+            <div className="flex flex-col items-center px-6 py-10 text-center">
+              <div className="rounded-2xl bg-muted p-4">
+                <Bell className="h-10 w-10 text-muted-foreground" />
+              </div>
 
-          </div>
+              <h4 className="mt-4 font-semibold">
+                No notifications yet
+              </h4>
+
+              <p className="mt-2 max-w-[300px] text-sm text-muted-foreground">
+                You&apos;re all caught up. New activity will appear here automatically.
+              </p>
+            </div>
+          ) : (
+            notifications.map((notification) => (
+              <div
+                key={notification.id}
+                className={`
+                  border-b last:border-0
+                  transition-colors hover:bg-muted/50
+                  ${!notification.is_read ? "bg-primary/[0.03]" : ""}
+                `}
+              >
+                <div className="flex items-start gap-3 px-5 py-4">
+                  <div className="mt-1 h-2 w-2 shrink-0 rounded-full">
+                    {!notification.is_read && (
+                      <span className="block h-2 w-2 rounded-full bg-primary" />
+                    )}
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-2">
+                      <h4 className="text-sm font-medium">
+                        {notification.title}
+                      </h4>
+
+                      <span className="shrink-0 text-[11px] text-muted-foreground">
+                        {notification.created_at
+                          ? new Date(notification.created_at).toLocaleString()
+                          : ""}
+                      </span>
+                    </div>
+
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {notification.message}
+                    </p>
+
+                    <div className="mt-3 flex items-center gap-3">
+                      {notification.action_url && (
+                        <Link
+                          href={notification.action_url}
+                          onClick={() => handleNotificationClick(notification)}
+                          className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                        >
+                          View details
+                          <ExternalLink className="h-3 w-3" />
+                        </Link>
+                      )}
+
+                      {!notification.is_read && (
+                        <button
+                          type="button"
+                          onClick={() => markAsRead.mutate(notification.id)}
+                          disabled={markAsRead.isPending}
+                          className="text-xs font-medium text-muted-foreground hover:text-foreground disabled:opacity-50"
+                        >
+                          Mark as read
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
         </div>
 
-        {/* =================================================
-            EMPTY STATE
-        ================================================= */}
+        {/* FOOTER */}
+        {notifications.length > 0 && (
+          <div className="flex items-center justify-between border-t px-5 py-3">
+            <span className="text-xs text-muted-foreground">
+              Showing {notifications.length} notifications
+            </span>
 
-        <div className="flex flex-col items-center px-6 py-10 text-center">
-
-          <div className="rounded-2xl bg-muted p-4">
-            <Bell className="h-10 w-10 text-muted-foreground" />
+            <Link
+              href="/office/dashboard/notifications"
+              className="text-xs font-medium text-primary hover:underline"
+            >
+              View all notifications
+            </Link>
           </div>
-
-          <h4 className="mt-4 font-semibold">
-            No notifications yet
-          </h4>
-
-          <p className="mt-2 max-w-[300px] text-sm text-muted-foreground">
-            Youre all caught up. New activity from your
-            planning, KPI, reporting, and document workflows
-            will appear here automatically.
-          </p>
-
-        </div>
-
+        )}
       </PopoverContent>
-
     </Popover>
   );
 }

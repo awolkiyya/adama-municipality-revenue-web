@@ -1,541 +1,205 @@
-
 "use client";
 
 import { useMemo, useState, type ReactNode } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import {
-  Activity,
-  AlertTriangle,
-  Banknote,
-  Building2,
-  CalendarDays,
-  Check,
-  CheckCircle2,
-  CircleDollarSign,
-  CreditCard,
-  ExternalLink,
-  FileBarChart,
-  FileSpreadsheet,
-  Filter,
-  Inbox,
-  Landmark,
-  Layers,
-  RefreshCw,
-  RotateCcw,
-  Smartphone,
-  TrendingUp,
-  Wallet,
-  X,
+  AlertTriangle, Banknote, Building2, CalendarDays, Check, ExternalLink,
+  FileBarChart, FileSpreadsheet, Filter, Inbox, Landmark, RefreshCw,
+  RotateCcw, Smartphone, X,
 } from "lucide-react";
 import {
-  Area,
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  ComposedChart,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
+  Area, Bar, BarChart, CartesianGrid, Cell, ComposedChart, Pie, PieChart,
+  ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 
 import { Button } from "@/components/ui/button";
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
+  Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle,
 } from "@/components/ui/sheet";
-
 import { EthiopianDatePicker } from "@/components/input/EthiopianDatePicker";
 import { gregorianToEth } from "@/utils/ethiopianCalendar";
 import { formatEthiopianDate } from "@/lib/utils";
-
 import { useRevenueCollectionReport } from "@/hooks/report/use-revenue-collection-report";
 import { useRevenueCategories } from "@/hooks/revenue/revenueCategory.hook";
 import { useRevenueServices } from "@/hooks/revenue/revenueService.hook";
-
 import type {
-  RevenueCollectionReportFilters,
-  RevenuePaymentMethod,
-  RevenuePaymentProvider,
-  RevenuePaymentSource,
-  RevenuePaymentStatus,
+  RevenueCollectionReportFilters, RevenuePaymentMethod, RevenuePaymentProvider,
+  RevenuePaymentSource, RevenuePaymentStatus,
 } from "@/types/report/revenue-report";
 
-/* -------------------------------------------------------------------------- */
-/*  Types & constants                                                         */
-/* -------------------------------------------------------------------------- */
+/* ------------------------------ Types & config ----------------------------- */
 
 type ReportFilters = {
-  startDate: string;
-  endDate: string;
-  method: string;
-  provider: string;
-  source: string;
-  status: string;
-  domain: string;
-  revenueCategoryId: string;
-  serviceId: string;
-  administrativeUnitId: string;
+  startDate: string; endDate: string; method: string; provider: string;
+  source: string; status: string; domain: string; revenueCategoryId: string;
+  serviceId: string; administrativeUnitId: string;
 };
-
 type Option = { id: string; name: string };
 type Choice = { value: string; label: string };
-type NumericValue = number | string | null | undefined;
+type Num = number | string | null | undefined;
 
-const COLOR = {
-  collected: "var(--success, var(--chart-1))",
-  pending: "var(--warning, var(--chart-4))",
-  processing: "var(--info, var(--chart-2))",
-  failed: "var(--destructive)",
+const C = {
+  recognized: "var(--chart-2)",
+  cash: "var(--chart-1)",
+  held: "var(--chart-4)",
+  discrepancy: "var(--destructive)",
+  processing: "var(--info, var(--chart-3))",
   reversed: "var(--chart-5)",
   neutral: "var(--muted-foreground)",
 };
-
-const tint = (color: string, percent = 12) =>
-  `color-mix(in oklab, ${color} ${percent}%, transparent)`;
-
-const AXIS_TICK = {
-  fontSize: 12,
-  fill: "var(--muted-foreground)",
-};
-
-const PAYMENT_METHODS: {
-  value: RevenuePaymentMethod;
-  label: string;
-  color: string;
-}[] = [
-  { value: "CASH", label: "Cash", color: "var(--chart-4)" },
-  {
-    value: "BANK_TRANSFER",
-    label: "Bank transfer",
-    color: "var(--chart-2)",
-  },
-  { value: "ONLINE", label: "Online", color: "var(--chart-3)" },
-];
-
-const PAYMENT_PROVIDERS: {
-  value: RevenuePaymentProvider;
-  label: string;
-}[] = [
-  { value: "CASH", label: "Cash" },
-  { value: "BANK", label: "Bank" },
-  { value: "CHAPA", label: "Chapa" },
-  { value: "TELEBIRR", label: "Telebirr" },
-];
-
-const PAYMENT_SOURCES: {
-  value: RevenuePaymentSource;
-  label: string;
-}[] = [
-  { value: "ONLINE", label: "Online" },
-  { value: "AGENT_ASSISTED", label: "Agent assisted" },
-  { value: "OFFICE_RECORDED", label: "Office recorded" },
-  { value: "FIELD_COLLECTION", label: "Field collection" },
-  { value: "SYSTEM", label: "System" },
-];
-
-const PAYMENT_STATUSES: {
-  value: RevenuePaymentStatus;
-  label: string;
-}[] = [
-  { value: "COMPLETED", label: "Completed" },
-  { value: "PENDING", label: "Pending" },
-  { value: "PROCESSING", label: "Processing" },
-  { value: "FAILED", label: "Failed" },
-  { value: "REVERSED", label: "Reversed" },
-  { value: "CANCELLED", label: "Cancelled" },
-  { value: "EXPIRED", label: "Expired" },
-];
-
-const REVENUE_DOMAINS = [
-  { value: "TAX", label: "Tax" },
-  { value: "RENT", label: "Rent" },
-  { value: "INVESTMENT", label: "Investment" },
-  { value: "SERVICE", label: "Service" },
-  { value: "SALE", label: "Sale" },
-  { value: "CAPITAL", label: "Capital" },
-] as const;
-
-const DOMAIN_COLORS: Record<string, string> = {
-  TAX: "var(--chart-2)",
-  RENT: "var(--chart-1)",
-  INVESTMENT: "var(--chart-5)",
-  SERVICE: "var(--chart-4)",
-  SALE: "var(--chart-3)",
-  CAPITAL: "var(--muted-foreground)",
-};
-
-const TOOLTIP_STYLE = {
-  borderRadius: 8,
-  border: "1px solid var(--border)",
+const tint = (c: string, p = 12) => `color-mix(in oklab, ${c} ${p}%, transparent)`;
+const AXIS = { fontSize: 12, fill: "var(--muted-foreground)" };
+const TOOLTIP = {
+  borderRadius: 8, border: "1px solid var(--border)", fontSize: 12,
   background: "var(--popover, var(--background))",
   color: "var(--popover-foreground, var(--foreground))",
-  fontSize: 12,
 };
 
-/* -------------------------------------------------------------------------- */
-/*  Helpers                                                                   */
-/* -------------------------------------------------------------------------- */
+const METHODS = [
+  { value: "CASH", label: "Cash", color: "var(--chart-4)" },
+  { value: "BANK_TRANSFER", label: "Bank transfer", color: "var(--chart-2)" },
+  { value: "ONLINE", label: "Online", color: "var(--chart-3)" },
+] as const;
+const PROVIDERS: Choice[] = [
+  { value: "CASH", label: "Cash" }, { value: "BANK", label: "Bank" },
+  { value: "CHAPA", label: "Chapa" }, { value: "TELEBIRR", label: "Telebirr" },
+];
+const SOURCES: Choice[] = [
+  { value: "ONLINE", label: "Online" }, { value: "AGENT_ASSISTED", label: "Agent assisted" },
+  { value: "OFFICE_RECORDED", label: "Office recorded" },
+  { value: "FIELD_COLLECTION", label: "Field collection" }, { value: "SYSTEM", label: "System" },
+];
+const STATUSES: Choice[] = [
+  { value: "COMPLETED", label: "Completed" }, { value: "PENDING", label: "Pending" },
+  { value: "PROCESSING", label: "Processing" }, { value: "FAILED", label: "Failed" },
+  { value: "REVERSED", label: "Reversed" }, { value: "CANCELLED", label: "Cancelled" },
+  { value: "EXPIRED", label: "Expired" },
+];
+const DOMAINS: Choice[] = [
+  { value: "TAX", label: "Tax" }, { value: "RENT", label: "Rent" },
+  { value: "INVESTMENT", label: "Investment" }, { value: "SERVICE", label: "Service" },
+  { value: "SALE", label: "Sale" }, { value: "CAPITAL", label: "Capital" },
+];
+const DOMAIN_COLORS: Record<string, string> = {
+  TAX: "var(--chart-2)", RENT: "var(--chart-1)", INVESTMENT: "var(--chart-5)",
+  SERVICE: "var(--chart-4)", SALE: "var(--chart-3)", CAPITAL: "var(--muted-foreground)",
+};
 
-function toIso(date: Date): string {
-  return [
-    date.getFullYear(),
-    String(date.getMonth() + 1).padStart(2, "0"),
-    String(date.getDate()).padStart(2, "0"),
-  ].join("-");
-}
+/* --------------------------------- Helpers --------------------------------- */
 
-function isoToDate(iso: string): Date | undefined {
+const toIso = (d: Date) =>
+  [d.getFullYear(), String(d.getMonth() + 1).padStart(2, "0"), String(d.getDate()).padStart(2, "0")].join("-");
+
+const isoToDate = (iso: string) => {
   if (!iso) return undefined;
+  const d = new Date(`${iso}T00:00:00`);
+  return Number.isNaN(d.getTime()) ? undefined : d;
+};
 
-  const date = new Date(`${iso}T00:00:00`);
+const getDefaultFilters = (): ReportFilters => ({
+  startDate: `${new Date().getFullYear()}-01-01`, endDate: toIso(new Date()),
+  method: "all", provider: "all", source: "all", status: "all", domain: "all",
+  revenueCategoryId: "all", serviceId: "all", administrativeUnitId: "all",
+});
 
-  return Number.isNaN(date.getTime()) ? undefined : date;
-}
-
-function getDefaultFilters(): ReportFilters {
-  return {
-    startDate: `${new Date().getFullYear()}-01-01`,
-    endDate: toIso(new Date()),
-    method: "all",
-    provider: "all",
-    source: "all",
-    status: "all",
-    domain: "all",
-    revenueCategoryId: "all",
-    serviceId: "all",
-    administrativeUnitId: "all",
-  };
-}
-
-const PERIOD_PRESETS: {
-  key: string;
-  label: string;
-  range: () => [string, string];
-}[] = [
-  {
-    key: "month",
-    label: "This month",
-    range: () => {
-      const now = new Date();
-
-      return [
-        toIso(new Date(now.getFullYear(), now.getMonth(), 1)),
-        toIso(now),
-      ];
-    },
-  },
-  {
-    key: "30d",
-    label: "Last 30 days",
-    range: () => {
-      const now = new Date();
-      const start = new Date(now);
-
-      start.setDate(start.getDate() - 29);
-
-      return [toIso(start), toIso(now)];
-    },
-  },
-  {
-    key: "quarter",
-    label: "This quarter",
-    range: () => {
-      const now = new Date();
-      const quarter = Math.floor(now.getMonth() / 3) * 3;
-
-      return [
-        toIso(new Date(now.getFullYear(), quarter, 1)),
-        toIso(now),
-      ];
-    },
-  },
-  {
-    key: "ytd",
-    label: "Year to date",
-    range: () => {
-      const now = new Date();
-
-      return [
-        toIso(new Date(now.getFullYear(), 0, 1)),
-        toIso(now),
-      ];
-    },
-  },
+const PRESETS: { key: string; label: string; range: () => [string, string] }[] = [
+  { key: "month", label: "This month", range: () => { const n = new Date(); return [toIso(new Date(n.getFullYear(), n.getMonth(), 1)), toIso(n)]; } },
+  { key: "30d", label: "30 days", range: () => { const n = new Date(); const s = new Date(n); s.setDate(s.getDate() - 29); return [toIso(s), toIso(n)]; } },
+  { key: "quarter", label: "Quarter", range: () => { const n = new Date(); return [toIso(new Date(n.getFullYear(), Math.floor(n.getMonth() / 3) * 3, 1)), toIso(n)]; } },
+  { key: "ytd", label: "Year to date", range: () => { const n = new Date(); return [toIso(new Date(n.getFullYear(), 0, 1)), toIso(n)]; } },
 ];
 
-function toNumber(value: NumericValue): number {
-  const parsed = Number(value ?? 0);
+const num = (v: Num) => { const p = Number(v ?? 0); return Number.isFinite(p) ? p : 0; };
+const money = (v: Num, loc: string) =>
+  new Intl.NumberFormat(loc, { style: "currency", currency: "ETB", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num(v));
+const int = (v: Num, loc: string) => new Intl.NumberFormat(loc, { maximumFractionDigits: 0 }).format(num(v));
+const compact = (v: Num) => {
+  const a = num(v);
+  if (Math.abs(a) >= 1e9) return `${(a / 1e9).toFixed(1)}B`;
+  if (Math.abs(a) >= 1e6) return `${(a / 1e6).toFixed(1)}M`;
+  if (Math.abs(a) >= 1e3) return `${(a / 1e3).toFixed(0)}K`;
+  return a.toLocaleString();
+};
+const pct = (v: number, d = 1) => (Number.isFinite(v) ? `${v.toFixed(d).replace(/\.0$/, "")}%` : "0%");
+const share = (part: number, total: number) => (total > 0 ? (part / total) * 100 : 0);
+const label = (v: string) => { const t = v.toLowerCase().replace(/_/g, " "); return t.charAt(0).toUpperCase() + t.slice(1); };
+const ethDate = (iso: string) => { const d = isoToDate(iso); return d ? formatEthiopianDate(d.toDateString()) : "Any date"; };
 
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function formatCurrency(value: NumericValue, locale: string): string {
-  return new Intl.NumberFormat(locale, {
-    style: "currency",
-    currency: "ETB",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(toNumber(value));
-}
-
-function formatNumber(value: NumericValue, locale: string): string {
-  return new Intl.NumberFormat(locale, {
-    maximumFractionDigits: 0,
-  }).format(toNumber(value));
-}
-
-function formatCompact(value: NumericValue): string {
-  const amount = toNumber(value);
-
-  if (Math.abs(amount) >= 1_000_000_000) {
-    return `${(amount / 1_000_000_000).toFixed(1)}B`;
-  }
-
-  if (Math.abs(amount) >= 1_000_000) {
-    return `${(amount / 1_000_000).toFixed(1)}M`;
-  }
-
-  if (Math.abs(amount) >= 1_000) {
-    return `${(amount / 1_000).toFixed(0)}K`;
-  }
-
-  return amount.toLocaleString();
-}
-
-function formatPercent(value: number, digits = 1): string {
-  if (!Number.isFinite(value)) return "0%";
-
-  return `${value.toFixed(digits).replace(/\.0$/, "")}%`;
-}
-
-function formatEthDate(iso: string): string {
-  const date = isoToDate(iso);
-
-  return date
-    ? formatEthiopianDate(date.toDateString())
-    : "Any date";
-}
-
-function formatDate(iso: string, locale: string): string {
-  if (!iso) return "Any date";
-
-  return new Intl.DateTimeFormat(locale, {
-    dateStyle: "medium",
-  }).format(new Date(`${iso}T00:00:00`));
-}
-
-function formatPeriod(period: string, locale: string): string {
-  if (/^\d{4}-\d{2}-\d{2}$/.test(period)) {
-    return new Intl.DateTimeFormat(locale, {
-      month: "short",
-      day: "numeric",
-    }).format(new Date(`${period}T00:00:00`));
-  }
-
+function formatPeriod(period: string, loc: string) {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(period))
+    return new Intl.DateTimeFormat(loc, { month: "short", day: "numeric" }).format(new Date(`${period}T00:00:00`));
   if (/^\d{4}-\d{2}$/.test(period)) {
-    const [year, month] = period.split("-").map(Number);
-
-    return new Intl.DateTimeFormat(locale, {
-      year: "numeric",
-      month: "short",
-    }).format(new Date(year, month - 1, 1));
+    const [y, m] = period.split("-").map(Number);
+    return new Intl.DateTimeFormat(loc, { year: "numeric", month: "short" }).format(new Date(y, m - 1, 1));
   }
-
   return period;
 }
 
-function formatLabel(value: string): string {
-  const text = value.toLowerCase().replace(/_/g, " ");
-
-  return text.charAt(0).toUpperCase() + text.slice(1);
-}
-
-function percentOf(part: number, total: number): number {
-  return total > 0 ? (part / total) * 100 : 0;
-}
-
-function escapeCsv(value: string | number | null | undefined): string {
-  return `"${String(value ?? "").replace(/"/g, '""')}"`;
-}
-
-function downloadCsv(
-  filename: string,
-  rows: (string | number | null | undefined)[][],
-): void {
-  const content = rows
-    .map((row) => row.map(escapeCsv).join(","))
-    .join("\r\n");
-
-  const blob = new Blob(["\uFEFF", content], {
-    type: "text/csv;charset=utf-8;",
-  });
-
+const csvCell = (v: string | number | null | undefined) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+function downloadCsv(name: string, rows: (string | number | null | undefined)[][]) {
+  const blob = new Blob(["\uFEFF", rows.map((r) => r.map(csvCell).join(",")).join("\r\n")], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-
-  link.href = url;
-  link.download = filename;
-
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-
+  const a = document.createElement("a");
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-/* -------------------------------------------------------------------------- */
-/*  Small building blocks                                                     */
-/* -------------------------------------------------------------------------- */
+/* ------------------------------ Building blocks ---------------------------- */
 
-function Panel({
-  title,
-  description,
-  action,
-  children,
-  className = "",
-}: {
-  title: string;
-  description?: string;
-  action?: ReactNode;
-  children: ReactNode;
-  className?: string;
+function Panel({ title, description, action, children, className = "" }: {
+  title: string; description?: string; action?: ReactNode; children: ReactNode; className?: string;
 }) {
   return (
-    <section
-      className={`min-w-0 rounded-xl border bg-card text-card-foreground print:break-inside-avoid ${className}`}
-    >
-      <header className="flex items-start justify-between gap-4 border-b px-5 py-4">
+    <section className={`min-w-0 rounded-xl border bg-card print:break-inside-avoid ${className}`}>
+      <header className="flex items-start justify-between gap-4 px-5 pt-5">
         <div className="min-w-0">
-          <h2 className="text-base font-semibold leading-tight">
-            {title}
-          </h2>
-
-          {description && (
-            <p className="mt-1 text-sm text-muted-foreground">
-              {description}
-            </p>
-          )}
+          <h2 className="text-sm font-semibold">{title}</h2>
+          {description && <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>}
         </div>
-
-        {action && (
-          <div className="shrink-0 print:hidden">
-            {action}
-          </div>
-        )}
+        {action && <div className="shrink-0 print:hidden">{action}</div>}
       </header>
-
       <div className="p-5">{children}</div>
     </section>
   );
 }
 
-function EmptyState({
-  message,
-  height = 220,
-}: {
-  message: string;
-  height?: number;
-}) {
-  return (
-    <div
-      className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed px-4 text-center text-sm text-muted-foreground"
-      style={{ height }}
-    >
-      <Inbox className="size-5 opacity-60" />
-      {message}
-    </div>
-  );
-}
+const Empty = ({ message, height = 220 }: { message: string; height?: number }) => (
+  <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed px-4 text-center text-sm text-muted-foreground" style={{ height }}>
+    <Inbox className="size-5 opacity-60" /> {message}
+  </div>
+);
 
-function Segmented({
-  options,
-  value,
-  onChange,
-  label,
-}: {
-  options: Choice[];
-  value: string;
-  onChange: (value: string) => void;
-  label: string;
+function Segmented({ options, value, onChange, name }: {
+  options: Choice[]; value: string; onChange: (v: string) => void; name: string;
 }) {
   return (
-    <div
-      role="group"
-      aria-label={label}
-      className="inline-flex rounded-lg border bg-muted/40 p-0.5"
-    >
-      {options.map((option) => (
-        <button
-          key={option.value}
-          type="button"
-          aria-pressed={value === option.value}
-          onClick={() => onChange(option.value)}
+    <div role="group" aria-label={name} className="inline-flex rounded-lg border bg-muted/40 p-0.5">
+      {options.map((o) => (
+        <button key={o.value} type="button" aria-pressed={value === o.value} onClick={() => onChange(o.value)}
           className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-            value === option.value
-              ? "bg-background text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          {option.label}
+            value === o.value ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
+          {o.label}
         </button>
       ))}
     </div>
   );
 }
 
-function PillGroup({
-  label,
-  value,
-  onChange,
-  options,
-  allLabel = "All",
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  options: Choice[];
-  allLabel?: string;
+function PillGroup({ name, value, onChange, options, allLabel = "All" }: {
+  name: string; value: string; onChange: (v: string) => void; options: Choice[]; allLabel?: string;
 }) {
-  const items: Choice[] = [
-    { value: "all", label: allLabel },
-    ...options,
-  ];
-
   return (
     <div className="space-y-2">
-      <p className="text-sm font-medium">{label}</p>
-
-      <div
-        className="flex flex-wrap gap-2"
-        role="radiogroup"
-        aria-label={label}
-      >
-        {items.map((item) => {
-          const active = value === item.value;
-
+      <p className="text-sm font-medium">{name}</p>
+      <div className="flex flex-wrap gap-2" role="radiogroup" aria-label={name}>
+        {[{ value: "all", label: allLabel }, ...options].map((o) => {
+          const on = value === o.value;
           return (
-            <button
-              key={item.value}
-              type="button"
-              role="radio"
-              aria-checked={active}
-              onClick={() => onChange(item.value)}
+            <button key={o.value} type="button" role="radio" aria-checked={on} onClick={() => onChange(o.value)}
               className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-                active
-                  ? "border-primary bg-primary text-primary-foreground"
-                  : "bg-background text-muted-foreground hover:border-foreground/30 hover:text-foreground"
-              }`}
-            >
-              {active && <Check className="size-3" />}
-              {item.label}
+                on ? "border-primary bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:text-foreground"}`}>
+              {on && <Check className="size-3" />}{o.label}
             </button>
           );
         })}
@@ -544,986 +208,358 @@ function PillGroup({
   );
 }
 
-function SelectField({
-  id,
-  label,
-  value,
-  onChange,
-  options,
-  placeholder,
-  disabled = false,
-}: {
-  id: string;
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  options: Choice[];
-  placeholder: string;
-  disabled?: boolean;
+function SelectField({ id, name, value, onChange, options, placeholder, disabled }: {
+  id: string; name: string; value: string; onChange: (v: string) => void;
+  options: Choice[]; placeholder: string; disabled?: boolean;
 }) {
   return (
     <div className="min-w-0 space-y-2">
-      <label className="text-sm font-medium" htmlFor={id}>
-        {label}
-      </label>
-
-      <select
-        id={id}
-        className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-        value={value}
-        disabled={disabled}
-        onChange={(event) => onChange(event.target.value)}
-      >
+      <label className="text-sm font-medium" htmlFor={id}>{name}</label>
+      <select id={id} value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)}
+        className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50">
         <option value="all">{placeholder}</option>
-
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
+        {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
     </div>
   );
 }
 
-function FilterGroup({
-  title,
-  icon,
-  children,
-}: {
-  title: string;
-  icon: ReactNode;
-  children: ReactNode;
+/** Horizontal stacked bar with legend. Segments with zero value are hidden. */
+function StackedBar({ segments, total, loc, name }: {
+  segments: { key: string; label: string; amount: number; count?: number; color: string; hint?: string }[];
+  total: number; loc: string; name: string;
 }) {
   return (
-    <section className="space-y-4">
-      <div className="flex items-center gap-2.5">
-        <div className="flex size-8 items-center justify-center rounded-lg bg-muted">
-          {icon}
-        </div>
-
-        <h3 className="text-sm font-semibold">{title}</h3>
+    <div>
+      <div className="flex h-3 w-full gap-0.5 overflow-hidden rounded-full bg-muted" role="img"
+        aria-label={`${name}: ${segments.map((s) => `${s.label} ${pct(share(s.amount, total))}`).join(", ")}`}>
+        {segments.map((s) => {
+          const w = share(s.amount, total);
+          return w > 0 ? <div key={s.key} title={`${s.label}: ${money(s.amount, loc)}`} style={{ width: `${w}%`, background: s.color }} /> : null;
+        })}
       </div>
-
-      <div className="space-y-4">{children}</div>
-    </section>
-  );
-}
-
-function DashboardSkeleton() {
-  return (
-    <div
-      className="space-y-6"
-      aria-busy="true"
-      aria-label="Loading report"
-    >
-      <div className="h-64 animate-pulse rounded-xl border bg-muted/40" />
-
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {[1, 2, 3, 4].map((item) => (
-          <div
-            key={item}
-            className="h-24 animate-pulse rounded-xl border bg-muted/40"
-          />
+      <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4">
+        {segments.map((s) => (
+          <div key={s.key} className="min-w-0">
+            <dt className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span className="size-2.5 shrink-0 rounded-sm" style={{ background: s.color }} />{s.label}
+            </dt>
+            <dd className="mt-0.5 truncate text-sm font-semibold tabular-nums">{compact(s.amount)} ETB</dd>
+            <dd className="text-xs text-muted-foreground tabular-nums">
+              {s.count !== undefined ? `${int(s.count, loc)} payments` : s.hint}
+            </dd>
+          </div>
         ))}
-      </div>
-
-      <div className="grid gap-6 xl:grid-cols-3">
-        <div className="h-80 animate-pulse rounded-xl border bg-muted/40 xl:col-span-2" />
-        <div className="h-80 animate-pulse rounded-xl border bg-muted/40" />
-      </div>
+      </dl>
     </div>
   );
 }
 
-/* -------------------------------------------------------------------------- */
-/*  Page                                                                      */
-/* -------------------------------------------------------------------------- */
+function DataTable({ head, rows }: { head: { text: string; right?: boolean; w?: string }[]; rows: ReactNode[][] }) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[420px] text-sm">
+        <thead>
+          <tr className="border-b text-xs text-muted-foreground">
+            {head.map((h) => (
+              <th key={h.text} scope="col" className={`pb-2 font-medium ${h.right ? "text-right" : "text-left"} ${h.w ?? ""}`}>{h.text}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => (
+            <tr key={i} className="border-b last:border-0">
+              {r.map((cell, j) => (
+                <td key={j} className={`py-2.5 tabular-nums ${head[j]?.right ? "text-right" : ""} ${j === r.length - 1 || !head[j]?.right ? "" : "text-muted-foreground"}`}>{cell}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+const Skeleton = () => (
+  <div className="space-y-6" aria-busy="true" aria-label="Loading report">
+    <div className="h-72 animate-pulse rounded-xl border bg-muted/40" />
+    <div className="grid gap-6 xl:grid-cols-3">
+      <div className="h-80 animate-pulse rounded-xl border bg-muted/40 xl:col-span-2" />
+      <div className="h-80 animate-pulse rounded-xl border bg-muted/40" />
+    </div>
+  </div>
+);
+
+/* ----------------------------------- Page ---------------------------------- */
 
 export default function RevenueCollectionPage() {
   const t = useTranslations("revenueCollectionReport");
-  const locale = useLocale();
+  const loc = useLocale();
 
   const [filters, setFilters] = useState<ReportFilters>(getDefaultFilters);
-  const [draftFilters, setDraftFilters] =
-    useState<ReportFilters>(getDefaultFilters);
-
-  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [draft, setDraft] = useState<ReportFilters>(getDefaultFilters);
+  const [open, setOpen] = useState(false);
   const [trendView, setTrendView] = useState<"daily" | "cumulative">("daily");
   const [showAllUnits, setShowAllUnits] = useState(false);
+  const defaults = useMemo(() => getDefaultFilters(), []);
 
-  const defaultFilters = useMemo(() => getDefaultFilters(), []);
+  const { data: catRes, isPending: catPending } = useRevenueCategories();
+  const { data: svcRes, isPending: svcPending } = useRevenueServices();
 
-  const { data: categoriesResponse, isPending: categoriesPending } =
-    useRevenueCategories();
-
-  const { data: servicesResponse, isPending: servicesPending } =
-    useRevenueServices();
-
-  const categories: Option[] = useMemo(() => {
-    const items = categoriesResponse?.data ?? [];
-
-    return items
-      .map((item) => ({
-        id: String(item.id),
-        name: String(item.name ?? ""),
-      }))
-      .filter((item) => item.id && item.name)
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [categoriesResponse]);
-
-  const services: Option[] = useMemo(() => {
-    const items = servicesResponse?.data ?? [];
-
-    return items
-      .map((item) => ({
-        id: String(item.id),
-        name: String(item.name ?? ""),
-      }))
-      .filter((item) => item.id && item.name)
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [servicesResponse]);
+  const toOptions = (items?: { id: unknown; name?: unknown }[] | null): Option[] =>
+    (items ?? []).map((i) => ({ id: String(i.id), name: String(i.name ?? "") }))
+      .filter((i) => i.id && i.name).sort((a, b) => a.name.localeCompare(b.name));
+  const categories = useMemo(() => toOptions(catRes?.data), [catRes]);
+  const services = useMemo(() => toOptions(svcRes?.data), [svcRes]);
 
   const apiFilters = useMemo<RevenueCollectionReportFilters>(() => {
-    const params: RevenueCollectionReportFilters = {};
-
-    if (filters.startDate) params.start_date = filters.startDate;
-    if (filters.endDate) params.end_date = filters.endDate;
-
-    if (filters.method !== "all") {
-      params.payment_method = filters.method as RevenuePaymentMethod;
-    }
-
-    if (filters.provider !== "all") {
-      params.payment_provider = filters.provider as RevenuePaymentProvider;
-    }
-
-    if (filters.source !== "all") {
-      params.payment_source = filters.source as RevenuePaymentSource;
-    }
-
-    if (filters.status !== "all") {
-      params.status = filters.status as RevenuePaymentStatus;
-    }
-
-    if (filters.domain !== "all") {
-      params.revenue_domain =
-        filters.domain as RevenueCollectionReportFilters["revenue_domain"];
-    }
-
-    if (filters.revenueCategoryId !== "all") {
-      params.revenue_category_id = filters.revenueCategoryId;
-    }
-
-    if (filters.serviceId !== "all") {
-      params.service_id = filters.serviceId;
-    }
-
-    if (filters.administrativeUnitId !== "all") {
-      params.administrative_unit_id = filters.administrativeUnitId;
-    }
-
-    return params;
+    const p: RevenueCollectionReportFilters = {};
+    if (filters.startDate) p.start_date = filters.startDate;
+    if (filters.endDate) p.end_date = filters.endDate;
+    if (filters.method !== "all") p.payment_method = filters.method as RevenuePaymentMethod;
+    if (filters.provider !== "all") p.payment_provider = filters.provider as RevenuePaymentProvider;
+    if (filters.source !== "all") p.payment_source = filters.source as RevenuePaymentSource;
+    if (filters.status !== "all") p.status = filters.status as RevenuePaymentStatus;
+    if (filters.domain !== "all") p.revenue_domain = filters.domain as RevenueCollectionReportFilters["revenue_domain"];
+    if (filters.revenueCategoryId !== "all") p.revenue_category_id = filters.revenueCategoryId;
+    if (filters.serviceId !== "all") p.service_id = filters.serviceId;
+    if (filters.administrativeUnitId !== "all") p.administrative_unit_id = filters.administrativeUnitId;
+    return p;
   }, [filters]);
 
-  const {
-    data: report,
-    isPending,
-    isFetching,
-    isError,
-    error,
-    refetch,
-  } = useRevenueCollectionReport(apiFilters);
+  const { data: report, isPending, isFetching, isError, error, refetch } = useRevenueCollectionReport(apiFilters);
+  const s = report?.summary;
 
-  const summary = report?.summary;
+  const daily = useMemo(() => report?.daily_collections ?? [], [report?.daily_collections]);
+  const methods = useMemo(() => report?.payment_methods ?? [], [report?.payment_methods]);
+  const sources = useMemo(() => report?.payment_sources ?? [], [report?.payment_sources]);
+  const domains = useMemo(() => report?.revenue_domains ?? [], [report?.revenue_domains]);
+  const units = useMemo(() => report?.administrative_units ?? [], [report?.administrative_units]);
 
-  /*
-   * Memoize response arrays.
-   *
-   * The empty-array fallback must also be stable between renders.
-   * Otherwise useMemo dependencies change on every render when the
-   * API response is undefined.
-   */
+  /* ---- filter state ---- */
+  const countActive = (v: ReportFilters) =>
+    (Object.keys(v) as (keyof ReportFilters)[]).filter((k) => v[k] !== defaults[k]).length;
+  const activeCount = countActive(filters);
+  const draftCount = countActive(draft);
+  const dirty = JSON.stringify(filters) !== JSON.stringify(draft);
+  const rangeInvalid = Boolean(draft.startDate && draft.endDate && draft.startDate > draft.endDate);
 
-  const dailyCollections = useMemo(
-    () => report?.daily_collections ?? [],
-    [report?.daily_collections],
-  );
+  const unitOptions = useMemo(() => {
+    const o = [...units];
+    if (filters.administrativeUnitId !== "all" && !o.some((u) => u.administrative_unit_id === filters.administrativeUnitId))
+      o.push({ administrative_unit_id: filters.administrativeUnitId, administrative_unit_name: "Selected administrative unit", completed_amount: 0, completed_count: 0 });
+    return o;
+  }, [units, filters.administrativeUnitId]);
 
-  const paymentMethods = useMemo(
-    () => report?.payment_methods ?? [],
-    [report?.payment_methods],
-  );
+  const activePreset = PRESETS.find((p) => { const [a, b] = p.range(); return a === filters.startDate && b === filters.endDate; });
 
-  const paymentSources = useMemo(
-    () => report?.payment_sources ?? [],
-    [report?.payment_sources],
-  );
-
-  const revenueDomains = useMemo(
-    () => report?.revenue_domains ?? [],
-    [report?.revenue_domains],
-  );
-
-  const administrativeUnits = useMemo(
-    () => report?.administrative_units ?? [],
-    [report?.administrative_units],
-  );
-
-  const totalCollected = toNumber(summary?.total_collected);
-  const totalTransactions = toNumber(summary?.total_transactions);
-  const completedCount = toNumber(summary?.completed_count);
-  const averagePayment = toNumber(summary?.average_payment);
-
-  /* ----------------------------- filter state ----------------------------- */
-
-  const countActiveFilters = (values: ReportFilters) =>
-    [
-      values.method !== "all",
-      values.provider !== "all",
-      values.source !== "all",
-      values.status !== "all",
-      values.domain !== "all",
-      values.revenueCategoryId !== "all",
-      values.serviceId !== "all",
-      values.administrativeUnitId !== "all",
-      values.startDate !== defaultFilters.startDate,
-      values.endDate !== defaultFilters.endDate,
-    ].filter(Boolean).length;
-
-  const activeFilterCount = countActiveFilters(filters);
-  const draftFilterCount = countActiveFilters(draftFilters);
-
-  const hasUnappliedChanges =
-    JSON.stringify(filters) !== JSON.stringify(draftFilters);
-
-  const dateRangeInvalid =
-    Boolean(draftFilters.startDate) &&
-    Boolean(draftFilters.endDate) &&
-    draftFilters.startDate > draftFilters.endDate;
-
-  const administrativeUnitOptions = useMemo(() => {
-    const options = [...administrativeUnits];
-
-    if (
-      filters.administrativeUnitId !== "all" &&
-      !options.some(
-        (item) =>
-          item.administrative_unit_id === filters.administrativeUnitId,
-      )
-    ) {
-      options.push({
-        administrative_unit_id: filters.administrativeUnitId,
-        administrative_unit_name: "Selected administrative unit",
-        completed_amount: 0,
-        completed_count: 0,
-      });
-    }
-
-    return options;
-  }, [administrativeUnits, filters.administrativeUnitId]);
-
-  const labelFrom = (list: Choice[], value: string) =>
-    list.find((item) => item.value === value)?.label ?? formatLabel(value);
-
-  const activePreset = PERIOD_PRESETS.find((preset) => {
-    const [start, end] = preset.range();
-
-    return start === filters.startDate && end === filters.endDate;
-  });
-
-  const filterChips = useMemo(() => {
-    const chips: { key: keyof ReportFilters; label: string }[] = [];
-
-    const idName = (list: Option[], id: string) =>
-      list.find((item) => item.id === id)?.name ?? "Selected";
-
-    if (filters.domain !== "all") {
-      chips.push({
-        key: "domain",
-        label: `Domain: ${labelFrom(
-          REVENUE_DOMAINS.map((domain) => ({ ...domain })),
-          filters.domain,
-        )}`,
-      });
-    }
-
-    if (filters.revenueCategoryId !== "all") {
-      chips.push({
-        key: "revenueCategoryId",
-        label: `Category: ${idName(categories, filters.revenueCategoryId)}`,
-      });
-    }
-
-    if (filters.serviceId !== "all") {
-      chips.push({
-        key: "serviceId",
-        label: `Service: ${idName(services, filters.serviceId)}`,
-      });
-    }
-
-    if (filters.method !== "all") {
-      chips.push({
-        key: "method",
-        label: `Method: ${labelFrom(PAYMENT_METHODS, filters.method)}`,
-      });
-    }
-
-    if (filters.provider !== "all") {
-      chips.push({
-        key: "provider",
-        label: `Provider: ${labelFrom(PAYMENT_PROVIDERS, filters.provider)}`,
-      });
-    }
-
-    if (filters.source !== "all") {
-      chips.push({
-        key: "source",
-        label: `Source: ${labelFrom(PAYMENT_SOURCES, filters.source)}`,
-      });
-    }
-
-    if (filters.status !== "all") {
-      chips.push({
-        key: "status",
-        label: `Status: ${labelFrom(PAYMENT_STATUSES, filters.status)}`,
-      });
-    }
-
+  const chips = useMemo(() => {
+    const pick = (list: Choice[], v: string) => list.find((i) => i.value === v)?.label ?? label(v);
+    const byId = (list: Option[], id: string) => list.find((i) => i.id === id)?.name ?? "Selected";
+    const out: { key: keyof ReportFilters; text: string }[] = [];
+    if (filters.domain !== "all") out.push({ key: "domain", text: `Domain: ${pick(DOMAINS, filters.domain)}` });
+    if (filters.revenueCategoryId !== "all") out.push({ key: "revenueCategoryId", text: `Category: ${byId(categories, filters.revenueCategoryId)}` });
+    if (filters.serviceId !== "all") out.push({ key: "serviceId", text: `Service: ${byId(services, filters.serviceId)}` });
+    if (filters.method !== "all") out.push({ key: "method", text: `Method: ${pick(METHODS as unknown as Choice[], filters.method)}` });
+    if (filters.provider !== "all") out.push({ key: "provider", text: `Provider: ${pick(PROVIDERS, filters.provider)}` });
+    if (filters.source !== "all") out.push({ key: "source", text: `Source: ${pick(SOURCES, filters.source)}` });
+    if (filters.status !== "all") out.push({ key: "status", text: `Status: ${pick(STATUSES, filters.status)}` });
     if (filters.administrativeUnitId !== "all") {
-      const unit = administrativeUnitOptions.find(
-        (item) =>
-          item.administrative_unit_id === filters.administrativeUnitId,
-      );
-
-      chips.push({
-        key: "administrativeUnitId",
-        label: `Unit: ${unit?.administrative_unit_name ?? "Selected"}`,
-      });
+      const u = unitOptions.find((i) => i.administrative_unit_id === filters.administrativeUnitId);
+      out.push({ key: "administrativeUnitId", text: `Unit: ${u?.administrative_unit_name ?? "Selected"}` });
     }
+    return out;
+  }, [filters, categories, services, unitOptions]);
 
-    return chips;
-  }, [filters, categories, services, administrativeUnitOptions]);
+  const setD = <K extends keyof ReportFilters>(k: K, v: ReportFilters[K]) => setDraft((c) => ({ ...c, [k]: v }));
+  const ethYear = useMemo(() => gregorianToEth(new Date()).year, []);
+  const startValue = useMemo(() => isoToDate(draft.startDate), [draft.startDate]);
+  const endValue = useMemo(() => isoToDate(draft.endDate), [draft.endDate]);
 
-  const updateDraftFilter = <K extends keyof ReportFilters>(
-    key: K,
-    value: ReportFilters[K],
-  ) => {
-    setDraftFilters((current) => ({
-      ...current,
-      [key]: value,
-    }));
-  };
+  const onSheet = (o: boolean) => { if (o) setDraft({ ...filters }); setOpen(o); };
+  const apply = () => { if (!rangeInvalid) { setFilters({ ...draft }); setOpen(false); } };
+  const resetApplied = () => { const d = getDefaultFilters(); setFilters(d); setDraft(d); setOpen(false); };
 
-  const startDateValue = useMemo(
-    () => isoToDate(draftFilters.startDate),
-    [draftFilters.startDate],
-  );
+  /* ---- derived figures ---- */
+  const recognized = num(s?.total_collected);
+  const recognizedCount = num(s?.collected_count ?? s?.completed_count);
+  const nonCash = num(s?.non_cash_collected);
+  const reconCash = num(s?.reconciled_cash);
+  const unreconCash = num(s?.unreconciled_cash);
+  const discCash = num(s?.discrepancy_cash);
+  const completedValue = nonCash + reconCash + unreconCash + discCash;
+  const heldValue = unreconCash + discCash;
+  const totalTx = num(s?.total_transactions);
 
-  const endDateValue = useMemo(
-    () => isoToDate(draftFilters.endDate),
-    [draftFilters.endDate],
-  );
+  const pipeline = [
+    { key: "pending", label: "Pending", amount: num(s?.pending_amount), count: num(s?.pending_count), color: C.held },
+    { key: "processing", label: "Processing", amount: num(s?.processing_amount), count: num(s?.processing_count), color: C.processing },
+    { key: "failed", label: "Failed", amount: num(s?.failed_amount), count: num(s?.failed_count), color: C.discrepancy },
+    { key: "reversed", label: "Reversed", amount: num(s?.reversed_amount), count: num(s?.reversed_count), color: C.reversed },
+  ];
 
-  const ethiopianYear = useMemo(
-    () => gregorianToEth(new Date()).year,
-    [],
-  );
+  const trend = useMemo(() => daily.reduce<{ period: string; label: string; collected: number; cumulative: number; count: number }[]>(
+    (r, i) => {
+      const c = num(i.completed_amount);
+      r.push({ period: i.period, label: formatPeriod(i.period, loc), collected: c, cumulative: (r.at(-1)?.cumulative ?? 0) + c, count: num(i.completed_count) });
+      return r;
+    }, []), [daily, loc]);
 
-  const handleDateSelect =
-    (key: "startDate" | "endDate") => (date: Date) =>
-      updateDraftFilter(key, toIso(date));
+  const methodData = useMemo(() => methods.map((i) => {
+    const m = METHODS.find((o) => o.value === i.label);
+    return { name: m?.label ?? label(i.label), value: num(i.completed_amount), count: num(i.completed_count), color: m?.color ?? C.neutral };
+  }).filter((i) => i.value > 0), [methods]);
+  const methodTotal = methodData.reduce((a, i) => a + i.value, 0);
+  const onlineAmount = methodData.find((i) => i.name === "Online")?.value ?? 0;
+  const digitalShare = share(onlineAmount, methodTotal);
+  const cashAmount = methodData.find((i) => i.name === "Cash")?.value ?? 0;
+  const bankAmount = methodData.find((i) => i.name === "Bank transfer")?.value ?? 0;
+  const followUpAmount = num(s?.pending_amount) + num(s?.failed_amount);
+  const followUpCount = num(s?.pending_count) + num(s?.failed_count);
 
-  const openFilters = () => {
-    setDraftFilters({ ...filters });
-    setFiltersOpen(true);
-  };
+  const domainData = useMemo(() => domains.map((i) => ({
+    domain: i.revenue_domain, name: label(i.revenue_domain), value: num(i.completed_amount),
+    count: num(i.completed_count), color: DOMAIN_COLORS[i.revenue_domain] ?? C.neutral,
+  })).filter((i) => i.value > 0).sort((a, b) => b.value - a.value), [domains]);
 
-  const handleSheetOpenChange = (open: boolean) => {
-    if (open) {
-      setDraftFilters({ ...filters });
-    }
+  const rankedUnits = useMemo(() => units.slice().sort((a, b) => num(b.completed_amount) - num(a.completed_amount)), [units]);
+  const unitsTotal = rankedUnits.reduce((a, i) => a + num(i.completed_amount), 0);
+  const maxUnit = Math.max(1, ...rankedUnits.map((i) => num(i.completed_amount)));
+  const visibleUnits = showAllUnits ? rankedUnits : rankedUnits.slice(0, 8);
 
-    setFiltersOpen(open);
-  };
+  /* ---- attention queue: things a finance officer must act on ---- */
+  const attention = [
+    { key: "unrec", title: "Cash awaiting reconciliation", amount: unreconCash, count: num(s?.unreconciled_cash_count), color: C.held, status: "COMPLETED", method: "CASH" },
+    { key: "disc", title: "Cash with discrepancies", amount: discCash, count: num(s?.discrepancy_cash_count), color: C.discrepancy, status: "COMPLETED", method: "CASH" },
+    { key: "pend", title: "Pending payments", amount: num(s?.pending_amount), count: num(s?.pending_count), color: C.held, status: "PENDING" },
+    { key: "fail", title: "Failed payments", amount: num(s?.failed_amount), count: num(s?.failed_count), color: C.discrepancy, status: "FAILED" },
+  ].filter((a) => a.count > 0 || a.amount > 0);
 
-  const applyFilters = () => {
-    if (dateRangeInvalid) return;
-
-    setFilters({ ...draftFilters });
-    setFiltersOpen(false);
-  };
-
-  const clearAppliedFilters = () => {
-    const defaults = getDefaultFilters();
-
-    setFilters(defaults);
-    setDraftFilters(defaults);
-    setFiltersOpen(false);
-  };
-
-  const removeChip = (key: keyof ReportFilters) =>
-    setFilters((current) => ({
-      ...current,
-      [key]: "all",
-    }));
-
-  const applyPreset = (preset: (typeof PERIOD_PRESETS)[number]) => {
-    const [startDate, endDate] = preset.range();
-
-    setFilters((current) => ({
-      ...current,
-      startDate,
-      endDate,
-    }));
-  };
-
-  /* ---------------------------- derived datasets -------------------------- */
-
-  const outcome = useMemo(() => {
-    const rows = [
-      {
-        key: "completed",
-        label: "Completed",
-        amount: toNumber(summary?.total_collected),
-        count: toNumber(summary?.completed_count),
-        color: COLOR.collected,
-      },
-      {
-        key: "pending",
-        label: "Pending",
-        amount: toNumber(summary?.pending_amount),
-        count: toNumber(summary?.pending_count),
-        color: COLOR.pending,
-      },
-      {
-        key: "processing",
-        label: "Processing",
-        amount: toNumber(summary?.processing_amount),
-        count: toNumber(summary?.processing_count),
-        color: COLOR.processing,
-      },
-      {
-        key: "failed",
-        label: "Failed",
-        amount: toNumber(summary?.failed_amount),
-        count: toNumber(summary?.failed_count),
-        color: COLOR.failed,
-      },
-      {
-        key: "reversed",
-        label: "Reversed",
-        amount: toNumber(summary?.reversed_amount),
-        count: toNumber(summary?.reversed_count),
-        color: COLOR.reversed,
-      },
-    ];
-
-    const total = rows.reduce(
-      (sum, row) => sum + row.amount,
-      0,
-    );
-
-    return { rows, total };
-  }, [summary]);
-
-  /*
-   * Immutable cumulative calculation.
-   *
-   * No external variable is reassigned while rendering.
-   * Each result row derives its cumulative value from the preceding row.
-   */
-
-  const collectionTrend = useMemo(
-    () =>
-      dailyCollections.reduce<
-        {
-          period: string;
-          label: string;
-          collected: number;
-          cumulative: number;
-          count: number;
-        }[]
-      >((result, item) => {
-        const collected = toNumber(item.completed_amount);
-        const previousTotal = result.at(-1)?.cumulative ?? 0;
-
-        result.push({
-          period: item.period,
-          label: formatPeriod(item.period, locale),
-          collected,
-          cumulative: previousTotal + collected,
-          count: toNumber(item.completed_count),
-        });
-
-        return result;
-      }, []),
-    [dailyCollections, locale],
-  );
-
-  const methodChartData = useMemo(
-    () =>
-      paymentMethods
-        .map((item) => {
-          const method = PAYMENT_METHODS.find(
-            (option) => option.value === item.label,
-          );
-
-          return {
-            name: method?.label ?? formatLabel(item.label),
-            value: toNumber(item.completed_amount),
-            count: toNumber(item.completed_count),
-            color: method?.color ?? COLOR.neutral,
-          };
-        })
-        .filter((item) => item.value > 0),
-    [paymentMethods],
-  );
-
-  const domainChartData = useMemo(
-    () =>
-      revenueDomains
-        .map((item) => ({
-          domain: item.revenue_domain,
-          name: formatLabel(item.revenue_domain),
-          value: toNumber(item.completed_amount),
-          count: toNumber(item.completed_count),
-          color: DOMAIN_COLORS[item.revenue_domain] ?? COLOR.neutral,
-        }))
-        .filter((item) => item.value > 0)
-        .sort((a, b) => b.value - a.value),
-    [revenueDomains],
-  );
-
-  const rankedUnits = useMemo(
-    () =>
-      administrativeUnits
-        .slice()
-        .sort(
-          (a, b) =>
-            toNumber(b.completed_amount) -
-            toNumber(a.completed_amount),
-        ),
-    [administrativeUnits],
-  );
-
-  const unitsTotal = rankedUnits.reduce(
-    (sum, item) => sum + toNumber(item.completed_amount),
-    0,
-  );
-
-  const maxUnit = Math.max(
-    1,
-    ...rankedUnits.map((item) => toNumber(item.completed_amount)),
-  );
-
-  const visibleUnits = showAllUnits
-    ? rankedUnits
-    : rankedUnits.slice(0, 8);
-
-  const methodTotal = methodChartData.reduce(
-    (sum, item) => sum + item.value,
-    0,
-  );
-
-  const amountFor = (name: string) =>
-    methodChartData.find((item) => item.name === name)?.value ?? 0;
-
-  const cashAmount = amountFor("Cash");
-  const bankAmount = amountFor("Bank transfer");
-  const onlineAmount = amountFor("Online");
-
-  const completionRateByCount = percentOf(
-    completedCount,
-    totalTransactions,
-  );
-
-  const completionRateByValue = percentOf(
-    outcome.rows[0].amount,
-    outcome.total,
-  );
-
-  const digitalShare = percentOf(onlineAmount, methodTotal);
-
-  /*
-   * Findings are inexpensive derived values.
-   *
-   * Keeping this as a normal render-time calculation avoids the React
-   * Compiler dependency error previously caused by methodTotal.
-   */
-
-  const findings: {
-    icon: ReactNode;
-    title: string;
-    text: string;
-  }[] = [];
-
-  const topDomain = domainChartData[0];
-
-  if (topDomain) {
-    const domainTotal = domainChartData.reduce(
-      (sum, item) => sum + item.value,
-      0,
-    );
-
-    findings.push({
-      icon: <Layers className="size-4" />,
-      title: "Leading revenue domain",
-      text: `${topDomain.name} contributed ${formatCurrency(
-        topDomain.value,
-        locale,
-      )}, ${formatPercent(
-        percentOf(topDomain.value, domainTotal),
-      )} of domain-attributed collections.`,
-    });
-  }
-
-  const topMethod = [...methodChartData].sort(
-    (a, b) => b.value - a.value,
-  )[0];
-
-  if (topMethod) {
-    findings.push({
-      icon: <CreditCard className="size-4" />,
-      title: "Main payment channel",
-      text: `${topMethod.name} accounts for ${formatPercent(
-        percentOf(topMethod.value, methodTotal),
-      )} of collected value across ${formatNumber(
-        topMethod.count,
-        locale,
-      )} payments.`,
-    });
-  }
-
+  /* ---- headline sentence (plain-language summary) ---- */
+  const topDomain = domainData[0];
   const topUnit = rankedUnits[0];
+  const topMethod = [...methodData].sort((a, b) => b.value - a.value)[0];
+  const peak = [...trend].sort((a, b) => b.collected - a.collected)[0];
+  const insights = [
+    topDomain && `${topDomain.name} leads with ${pct(share(topDomain.value, domainData.reduce((a, i) => a + i.value, 0)))} of domain collections.`,
+    topMethod && `${topMethod.name} is the main channel at ${pct(share(topMethod.value, methodTotal))} of value.`,
+    topUnit && num(topUnit.completed_amount) > 0 && `${topUnit.administrative_unit_name} is the top unit with ${pct(share(num(topUnit.completed_amount), unitsTotal))}.`,
+    peak && peak.collected > 0 && `Strongest period: ${peak.label} (${compact(peak.collected)} ETB).`,
+  ].filter(Boolean) as string[];
 
-  if (topUnit && toNumber(topUnit.completed_amount) > 0) {
-    findings.push({
-      icon: <Building2 className="size-4" />,
-      title: "Top administrative unit",
-      text: `${topUnit.administrative_unit_name} collected ${formatCurrency(
-        topUnit.completed_amount,
-        locale,
-      )}, ${formatPercent(
-        percentOf(
-          toNumber(topUnit.completed_amount),
-          unitsTotal,
-        ),
-      )} of the unit total.`,
-    });
-  }
-
-  const peak = [...collectionTrend].sort(
-    (a, b) => b.collected - a.collected,
-  )[0];
-
-  if (peak && peak.collected > 0) {
-    findings.push({
-      icon: <TrendingUp className="size-4" />,
-      title: "Peak collection period",
-      text: `${peak.label} was the strongest period with ${formatCurrency(
-        peak.collected,
-        locale,
-      )} from ${formatNumber(
-        peak.count,
-        locale,
-      )} payments.`,
-    });
-  }
-
-  /* -------------------------------- actions ------------------------------- */
+  /* ---- actions ---- */
+  const reportHref = (over: Record<string, string> = {}) => {
+    const p = new URLSearchParams();
+    const map: [string, string][] = [
+      ["start_date", filters.startDate], ["end_date", filters.endDate],
+      ["payment_method", filters.method], ["payment_provider", filters.provider],
+      ["payment_source", filters.source], ["status", filters.status],
+      ["revenue_domain", filters.domain], ["revenue_category_id", filters.revenueCategoryId],
+      ["service_id", filters.serviceId], ["administrative_unit_id", filters.administrativeUnitId],
+    ];
+    map.forEach(([k, v]) => { if (v && v !== "all") p.set(k, v); });
+    Object.entries(over).forEach(([k, v]) => p.set(k, v));
+    const q = p.toString();
+    return `/${loc}/office/dashboard/payment-reports${q ? `?${q}` : ""}`;
+  };
 
   const exportReport = () => {
     if (!report) return;
-
-    const selectedCategory =
-      categories.find(
-        (item) => item.id === filters.revenueCategoryId,
-      )?.name ?? "All";
-
-    const selectedService =
-      services.find(
-        (item) => item.id === filters.serviceId,
-      )?.name ?? "All";
-
-    const selectedUnit =
-      administrativeUnits.find(
-        (item) =>
-          item.administrative_unit_id === filters.administrativeUnitId,
-      )?.administrative_unit_name ?? "All";
-
-    const all = (value: string) =>
-      value === "all" ? "All" : value;
-
+    const sel = (list: Option[], id: string) => list.find((i) => i.id === id)?.name ?? "All";
+    const all = (v: string) => (v === "all" ? "All" : v);
+    const block = (title: string, head: string[], rows: (string | number | null | undefined)[][]) => [[], [title], head, ...rows];
     const rows: (string | number | null | undefined)[][] = [
-      ["Revenue Collection Report"],
-      ["Generated at", new Date().toISOString()],
-      ["Start date", filters.startDate || "All"],
-      ["End date", filters.endDate || "All"],
-      ["Administrative unit", selectedUnit],
-      ["Revenue domain", all(filters.domain)],
-      ["Revenue category", selectedCategory],
-      ["Service", selectedService],
-      ["Payment method", all(filters.method)],
-      ["Payment provider", all(filters.provider)],
-      ["Payment source", all(filters.source)],
-      ["Payment status", all(filters.status)],
-      [],
-      ["Summary"],
-      ["Metric", "Value"],
-      ["Total collected (ETB)", summary?.total_collected ?? 0],
-      ["Total transactions", summary?.total_transactions ?? 0],
-      ["Completed payments", summary?.completed_count ?? 0],
-      ["Average payment (ETB)", summary?.average_payment ?? 0],
-      ["Pending amount (ETB)", summary?.pending_amount ?? 0],
-      ["Pending count", summary?.pending_count ?? 0],
-      ["Processing amount (ETB)", summary?.processing_amount ?? 0],
-      ["Processing count", summary?.processing_count ?? 0],
-      ["Failed amount (ETB)", summary?.failed_amount ?? 0],
-      ["Failed count", summary?.failed_count ?? 0],
-      ["Reversed amount (ETB)", summary?.reversed_amount ?? 0],
-      ["Reversed count", summary?.reversed_count ?? 0],
-      ["Cancelled count", summary?.cancelled_count ?? 0],
-      ["Expired count", summary?.expired_count ?? 0],
-      [],
-      ["Collection Trend"],
-      ["Period", "Completed Amount (ETB)", "Completed Count"],
-      ...dailyCollections.map((item) => [
-        item.period,
-        item.completed_amount,
-        item.completed_count,
+      ["Revenue Collection Report"], ["Generated at", new Date().toISOString()],
+      ["Start date", filters.startDate || "All"], ["End date", filters.endDate || "All"],
+      ["Administrative unit", units.find((u) => u.administrative_unit_id === filters.administrativeUnitId)?.administrative_unit_name ?? "All"],
+      ["Revenue domain", all(filters.domain)], ["Revenue category", sel(categories, filters.revenueCategoryId)],
+      ["Service", sel(services, filters.serviceId)], ["Payment method", all(filters.method)],
+      ["Payment provider", all(filters.provider)], ["Payment source", all(filters.source)], ["Payment status", all(filters.status)],
+      ...block("Summary", ["Metric", "Value"], [
+        ["Recognized collections (ETB)", s?.total_collected ?? 0], ["Recognized payments", s?.collected_count ?? 0],
+        ["Total transactions", s?.total_transactions ?? 0], ["Completed payments", s?.completed_count ?? 0],
+        ["Average payment (ETB)", s?.average_payment ?? 0],
+        ["Non-cash collected (ETB)", s?.non_cash_collected ?? 0], ["Reconciled cash (ETB)", s?.reconciled_cash ?? 0],
+        ["Unreconciled cash (ETB)", s?.unreconciled_cash ?? 0], ["Unreconciled cash count", s?.unreconciled_cash_count ?? 0],
+        ["Discrepancy cash (ETB)", s?.discrepancy_cash ?? 0], ["Discrepancy cash count", s?.discrepancy_cash_count ?? 0],
+        ["Pending (ETB)", s?.pending_amount ?? 0], ["Pending count", s?.pending_count ?? 0],
+        ["Processing (ETB)", s?.processing_amount ?? 0], ["Processing count", s?.processing_count ?? 0],
+        ["Failed (ETB)", s?.failed_amount ?? 0], ["Failed count", s?.failed_count ?? 0],
+        ["Reversed (ETB)", s?.reversed_amount ?? 0], ["Reversed count", s?.reversed_count ?? 0],
+        ["Cancelled count", s?.cancelled_count ?? 0], ["Expired count", s?.expired_count ?? 0],
       ]),
-      [],
-      ["Collection by Payment Method"],
-      ["Method", "Completed Amount (ETB)", "Completed Count"],
-      ...paymentMethods.map((item) => [
-        item.label,
-        item.completed_amount,
-        item.completed_count,
-      ]),
-      [],
-      ["Collection by Payment Source"],
-      ["Source", "Completed Amount (ETB)", "Completed Count"],
-      ...paymentSources.map((item) => [
-        item.label,
-        item.completed_amount,
-        item.completed_count,
-      ]),
-      [],
-      ["Collection by Revenue Domain"],
-      ["Domain", "Completed Amount (ETB)", "Completed Count"],
-      ...revenueDomains.map((item) => [
-        item.revenue_domain,
-        item.completed_amount,
-        item.completed_count,
-      ]),
-      [],
-      ["Administrative Unit Collections"],
-      ["Administrative Unit", "Completed Amount (ETB)", "Completed Count"],
-      ...administrativeUnits.map((item) => [
-        item.administrative_unit_name,
-        item.completed_amount,
-        item.completed_count,
-      ]),
+      ...block("Collection Trend", ["Period", "Amount (ETB)", "Count"], daily.map((i) => [i.period, i.completed_amount, i.completed_count])),
+      ...block("By Payment Method", ["Method", "Amount (ETB)", "Count"], methods.map((i) => [i.label, i.completed_amount, i.completed_count])),
+      ...block("By Payment Source", ["Source", "Amount (ETB)", "Count"], sources.map((i) => [i.label, i.completed_amount, i.completed_count])),
+      ...block("By Revenue Domain", ["Domain", "Amount (ETB)", "Count"], domains.map((i) => [i.revenue_domain, i.completed_amount, i.completed_count])),
+      ...block("By Administrative Unit", ["Unit", "Amount (ETB)", "Count"], units.map((i) => [i.administrative_unit_name, i.completed_amount, i.completed_count])),
     ];
-
-    downloadCsv(
-      `revenue-collection-report-${filters.startDate || "all"}-to-${filters.endDate || "all"}.csv`,
-      rows,
-    );
+    downloadCsv(`revenue-collection-report-${filters.startDate || "all"}-to-${filters.endDate || "all"}.csv`, rows);
   };
 
-  const paymentReportHref = () => {
-    const params = new URLSearchParams();
-
-    if (filters.startDate) {
-      params.set("start_date", filters.startDate);
-    }
-
-    if (filters.endDate) {
-      params.set("end_date", filters.endDate);
-    }
-
-    if (filters.method !== "all") {
-      params.set("payment_method", filters.method);
-    }
-
-    if (filters.provider !== "all") {
-      params.set("payment_provider", filters.provider);
-    }
-
-    if (filters.source !== "all") {
-      params.set("payment_source", filters.source);
-    }
-
-    if (filters.status !== "all") {
-      params.set("status", filters.status);
-    }
-
-    if (filters.domain !== "all") {
-      params.set("revenue_domain", filters.domain);
-    }
-
-    if (filters.revenueCategoryId !== "all") {
-      params.set("revenue_category_id", filters.revenueCategoryId);
-    }
-
-    if (filters.serviceId !== "all") {
-      params.set("service_id", filters.serviceId);
-    }
-
-    if (filters.administrativeUnitId !== "all") {
-      params.set("administrative_unit_id", filters.administrativeUnitId);
-    }
-
-    const query = params.toString();
-
-    return `/${locale}/office/dashboard/payment-reports${
-      query ? `?${query}` : ""
-    }`;
-  };
-
-  /* --------------------------------- render ------------------------------- */
+  /* ---------------------------------- Render --------------------------------- */
 
   return (
     <main className="min-h-screen bg-muted/30 text-foreground print:bg-white">
-      {/* ------------------------------ Report header ----------------------- */}
-
-      <header className="border-b bg-background">
-        <div className="mx-auto max-w-[1600px] px-4 py-5 sm:px-6 lg:px-8">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-            <div className="flex min-w-0 items-start gap-4">
-              <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground print:hidden">
-                <FileBarChart className="size-6" />
+      {/* Sticky command bar: identity, period, filters, actions */}
+      <header className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur print:static">
+        <div className="mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8">
+          <div className="flex flex-wrap items-center justify-between gap-3 py-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground print:hidden">
+                <FileBarChart className="size-5" />
               </div>
-
               <div className="min-w-0">
-                <p className="text-sm font-medium text-muted-foreground">
-                  Adama City Administration · Revenue Authority
-                </p>
-
-                <h1 className="mt-0.5 text-2xl font-bold tracking-tight sm:text-3xl">
-                  {t("title")}
-                </h1>
-
-                <p className="mt-1.5 max-w-3xl text-sm text-muted-foreground">
-                  {t("description")}
-                </p>
+                <p className="truncate text-xs text-muted-foreground">Adama City Administration · Revenue Authority</p>
+                <h1 className="truncate text-lg font-bold tracking-tight sm:text-xl">{t("title")}</h1>
               </div>
             </div>
-
-            <div className="flex flex-wrap items-center gap-2 print:hidden">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => refetch()}
-                disabled={isFetching}
-              >
-                <RefreshCw
-                  className={`mr-2 size-4 ${
-                    isFetching ? "animate-spin" : ""
-                  }`}
-                />
-                Refresh
+            <div className="flex items-center gap-2 print:hidden">
+              <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching} aria-label="Refresh report">
+                <RefreshCw className={`size-4 sm:mr-2 ${isFetching ? "animate-spin" : ""}`} />
+                <span className="hidden sm:inline">Refresh</span>
               </Button>
-
-              <Button
-                size="sm"
-                onClick={exportReport}
-                disabled={!report}
-              >
-                <FileSpreadsheet className="mr-2 size-4" />
-                {t("export_csv")}
+              <Button size="sm" onClick={exportReport} disabled={!report}>
+                <FileSpreadsheet className="mr-2 size-4" />{t("export_csv")}
               </Button>
             </div>
           </div>
 
-          {/* Period + filter toolbar */}
-
-          <div className="mt-5 flex flex-col gap-3 border-t pt-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t py-2.5">
             <div className="flex flex-wrap items-center gap-3">
-              <div className="inline-flex items-center gap-2 text-sm font-medium">
+              <span className="inline-flex items-center gap-2 text-sm font-medium tabular-nums"
+                title={`${filters.startDate || "Any"} – ${filters.endDate || "Any"}`}>
                 <CalendarDays className="size-4 text-muted-foreground" />
-
-                <span
-                  className="tabular-nums"
-                  title={`${formatDate(
-                    filters.startDate,
-                    locale,
-                  )} – ${formatDate(filters.endDate, locale)}`}
-                >
-                  {formatEthDate(filters.startDate)} –{" "}
-                  {formatEthDate(filters.endDate)}
-                </span>
-              </div>
-
+                {ethDate(filters.startDate)} – {ethDate(filters.endDate)}
+              </span>
               <div className="print:hidden">
-                <Segmented
-                  label="Reporting period"
-                  value={activePreset?.key ?? ""}
-                  onChange={(key) => {
-                    const preset = PERIOD_PRESETS.find(
-                      (item) => item.key === key,
-                    );
-
-                    if (preset) applyPreset(preset);
-                  }}
-                  options={PERIOD_PRESETS.map((preset) => ({
-                    value: preset.key,
-                    label: preset.label,
-                  }))}
-                />
+                <Segmented name="Reporting period" value={activePreset?.key ?? ""}
+                  onChange={(k) => { const p = PRESETS.find((i) => i.key === k); if (p) { const [startDate, endDate] = p.range(); setFilters((c) => ({ ...c, startDate, endDate })); } }}
+                  options={PRESETS.map((p) => ({ value: p.key, label: p.label }))} />
               </div>
             </div>
-
             <div className="flex items-center gap-2 print:hidden">
-              {activeFilterCount > 0 && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={clearAppliedFilters}
-                  className="text-muted-foreground"
-                >
-                  <X className="mr-1.5 size-4" />
-                  Reset
+              {activeCount > 0 && (
+                <Button variant="ghost" size="sm" onClick={resetApplied} className="text-muted-foreground">
+                  <X className="mr-1.5 size-4" />Reset
                 </Button>
               )}
-
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={openFilters}
-              >
-                <Filter className="mr-2 size-4" />
-                Filters
-
-                {activeFilterCount > 0 && (
-                  <span className="ml-2 flex size-5 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground">
-                    {activeFilterCount}
-                  </span>
+              <Button variant="outline" size="sm" onClick={() => { setDraft({ ...filters }); setOpen(true); }}>
+                <Filter className="mr-2 size-4" />Filters
+                {activeCount > 0 && (
+                  <span className="ml-2 flex size-5 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground">{activeCount}</span>
                 )}
               </Button>
             </div>
           </div>
 
-          {filterChips.length > 0 && (
-            <div
-              className="mt-3 flex flex-wrap items-center gap-2"
-              aria-label="Applied filters"
-            >
-              {filterChips.map((chip) => (
-                <span
-                  key={chip.key}
-                  className="inline-flex items-center gap-1 rounded-full border bg-muted/50 py-1 pl-3 pr-1.5 text-xs font-medium"
-                >
-                  {chip.label}
-
-                  <button
-                    type="button"
-                    onClick={() => removeChip(chip.key)}
-                    aria-label={`Remove filter ${chip.label}`}
-                    className="rounded-full p-0.5 text-muted-foreground hover:bg-foreground/10 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring print:hidden"
-                  >
+          {chips.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 pb-3" aria-label="Applied filters">
+              {chips.map((c) => (
+                <span key={c.key} className="inline-flex items-center gap-1 rounded-full border bg-muted/50 py-1 pl-3 pr-1.5 text-xs font-medium">
+                  {c.text}
+                  <button type="button" aria-label={`Remove filter ${c.text}`} onClick={() => setFilters((f) => ({ ...f, [c.key]: "all" }))}
+                    className="rounded-full p-0.5 text-muted-foreground hover:bg-foreground/10 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring print:hidden">
                     <X className="size-3" />
                   </button>
                 </span>
@@ -1533,834 +569,297 @@ export default function RevenueCollectionPage() {
         </div>
       </header>
 
-      {/* ------------------------------ Filter sheet ------------------------ */}
-
-      <Sheet
-        open={filtersOpen}
-        onOpenChange={handleSheetOpenChange}
-      >
-        <SheetContent
-          side="right"
-          className="flex w-full flex-col gap-0 p-0 sm:max-w-xl"
-        >
+      {/* Filter sheet */}
+      <Sheet open={open} onOpenChange={onSheet}>
+        <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-xl">
           <SheetHeader className="border-b px-5 py-5 text-left sm:px-6">
-            <div className="pr-8">
-              <SheetTitle className="text-lg">
-                Report filters
-              </SheetTitle>
-
-              <SheetDescription className="mt-1">
-                Choose what the report covers. Nothing changes until you apply.
-              </SheetDescription>
-            </div>
-
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <span className="rounded-full border px-2.5 py-1 text-xs font-medium">
-                {draftFilterCount} filters selected
-              </span>
-
-              {hasUnappliedChanges && (
-                <span
-                  className="rounded-full px-2.5 py-1 text-xs font-medium"
-                  style={{
-                    backgroundColor: tint(COLOR.pending, 15),
-                    color: COLOR.pending,
-                  }}
-                >
-                  Not applied yet
-                </span>
-              )}
+            <SheetTitle className="pr-8 text-lg">Report filters</SheetTitle>
+            <SheetDescription>Nothing changes until you apply.</SheetDescription>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <span className="rounded-full border px-2.5 py-1 text-xs font-medium">{draftCount} selected</span>
+              {dirty && <span className="rounded-full px-2.5 py-1 text-xs font-medium" style={{ background: tint(C.held, 15), color: C.held }}>Not applied yet</span>}
             </div>
           </SheetHeader>
 
           <div className="flex-1 space-y-8 overflow-y-auto px-5 py-6 sm:px-6">
-            <FilterGroup
-              title="Reporting period"
-              icon={<CalendarDays className="size-4" />}
-            >
+            <section className="space-y-4">
+              <h3 className="text-sm font-semibold">Period</h3>
               <div className="flex flex-wrap gap-2">
-                {PERIOD_PRESETS.map((preset) => {
-                  const [start, end] = preset.range();
-
-                  const active =
-                    draftFilters.startDate === start &&
-                    draftFilters.endDate === end;
-
+                {PRESETS.map((p) => {
+                  const [a, b] = p.range();
+                  const on = draft.startDate === a && draft.endDate === b;
                   return (
-                    <button
-                      key={preset.key}
-                      type="button"
-                      aria-pressed={active}
-                      onClick={() =>
-                        setDraftFilters((current) => ({
-                          ...current,
-                          startDate: start,
-                          endDate: end,
-                        }))
-                      }
-                      className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-                        active
-                          ? "border-primary bg-primary text-primary-foreground"
-                          : "bg-background text-muted-foreground hover:text-foreground"
-                      }`}
-                    >
-                      {preset.label}
+                    <button key={p.key} type="button" aria-pressed={on} onClick={() => setDraft((c) => ({ ...c, startDate: a, endDate: b }))}
+                      className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${on ? "border-primary bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:text-foreground"}`}>
+                      {p.label}
                     </button>
                   );
                 })}
               </div>
-
               <div className="grid gap-4 sm:grid-cols-2">
-                <div className="min-w-0 space-y-2">
-                  <p className="text-sm font-medium">
-                    {t("start_date")}
-                  </p>
-
-                  <EthiopianDatePicker
-                    value={startDateValue}
-                    onChange={handleDateSelect("startDate")}
-                    placeholder="Start date"
-                    minYear={ethiopianYear - 10}
-                    maxYear={ethiopianYear}
-                    error={dateRangeInvalid ? " " : undefined}
-                  />
-                </div>
-
-                <div className="min-w-0 space-y-2">
-                  <p className="text-sm font-medium">
-                    {t("end_date")}
-                  </p>
-
-                  <EthiopianDatePicker
-                    value={endDateValue}
-                    onChange={handleDateSelect("endDate")}
-                    placeholder="End date"
-                    minYear={ethiopianYear - 10}
-                    maxYear={ethiopianYear}
-                    error={dateRangeInvalid ? " " : undefined}
-                  />
-                </div>
+                {([["startDate", t("start_date"), startValue, "Start date"], ["endDate", t("end_date"), endValue, "End date"]] as const).map(([k, l, v, ph]) => (
+                  <div key={k} className="min-w-0 space-y-2">
+                    <p className="text-sm font-medium">{l}</p>
+                    <EthiopianDatePicker value={v} onChange={(d: Date) => setD(k, toIso(d))} placeholder={ph}
+                      minYear={ethYear - 10} maxYear={ethYear} error={rangeInvalid ? " " : undefined} />
+                  </div>
+                ))}
               </div>
+              {rangeInvalid && <p className="text-xs text-destructive" role="alert">The start date must be on or before the end date.</p>}
+            </section>
 
-              {dateRangeInvalid && (
-                <p className="text-xs text-destructive" role="alert">
-                  The start date must be on or before the end date.
-                </p>
-              )}
-            </FilterGroup>
+            <section className="space-y-4 border-t pt-6">
+              <h3 className="text-sm font-semibold">Revenue</h3>
+              <PillGroup name="Domain" value={draft.domain} onChange={(v) => setD("domain", v)} options={DOMAINS} />
+              <SelectField id="cat" name="Category" value={draft.revenueCategoryId} onChange={(v) => setD("revenueCategoryId", v)}
+                placeholder={catPending ? "Loading categories…" : "All categories"} disabled={catPending}
+                options={categories.map((i) => ({ value: i.id, label: i.name }))} />
+              <SelectField id="svc" name="Service" value={draft.serviceId} onChange={(v) => setD("serviceId", v)}
+                placeholder={svcPending ? "Loading services…" : "All services"} disabled={svcPending}
+                options={services.map((i) => ({ value: i.id, label: i.name }))} />
+            </section>
 
-            <div className="border-t" />
+            <section className="space-y-4 border-t pt-6">
+              <h3 className="text-sm font-semibold">Payment</h3>
+              <PillGroup name={t("payment_method")} value={draft.method} onChange={(v) => setD("method", v)}
+                options={METHODS.map((m) => ({ value: m.value, label: m.label }))} allLabel={t("all_methods")} />
+              <PillGroup name="Provider" value={draft.provider} onChange={(v) => setD("provider", v)} options={PROVIDERS} />
+              <PillGroup name="Source" value={draft.source} onChange={(v) => setD("source", v)} options={SOURCES} />
+              <PillGroup name={t("status")} value={draft.status} onChange={(v) => setD("status", v)} options={STATUSES} allLabel={t("all_statuses")} />
+            </section>
 
-            <FilterGroup
-              title="Revenue classification"
-              icon={<Building2 className="size-4" />}
-            >
-              <PillGroup
-                label="Revenue domain"
-                value={draftFilters.domain}
-                onChange={(value) =>
-                  updateDraftFilter("domain", value)
-                }
-                options={REVENUE_DOMAINS.map((domain) => ({
-                  value: domain.value,
-                  label: domain.label,
-                }))}
-              />
-
-              <SelectField
-                id="revenue-category"
-                label="Revenue category"
-                value={draftFilters.revenueCategoryId}
-                onChange={(value) =>
-                  updateDraftFilter("revenueCategoryId", value)
-                }
-                placeholder={
-                  categoriesPending
-                    ? "Loading categories…"
-                    : "All categories"
-                }
-                disabled={categoriesPending}
-                options={categories.map((item) => ({
-                  value: item.id,
-                  label: item.name,
-                }))}
-              />
-
-              <SelectField
-                id="revenue-service"
-                label="Service"
-                value={draftFilters.serviceId}
-                onChange={(value) =>
-                  updateDraftFilter("serviceId", value)
-                }
-                placeholder={
-                  servicesPending
-                    ? "Loading services…"
-                    : "All services"
-                }
-                disabled={servicesPending}
-                options={services.map((item) => ({
-                  value: item.id,
-                  label: item.name,
-                }))}
-              />
-            </FilterGroup>
-
-            <div className="border-t" />
-
-            <FilterGroup
-              title="Payment details"
-              icon={<CreditCard className="size-4" />}
-            >
-              <PillGroup
-                label={t("payment_method")}
-                value={draftFilters.method}
-                onChange={(value) =>
-                  updateDraftFilter("method", value)
-                }
-                options={PAYMENT_METHODS.map((item) => ({
-                  value: item.value,
-                  label: item.label,
-                }))}
-                allLabel={t("all_methods")}
-              />
-
-              <PillGroup
-                label="Payment provider"
-                value={draftFilters.provider}
-                onChange={(value) =>
-                  updateDraftFilter("provider", value)
-                }
-                options={PAYMENT_PROVIDERS}
-              />
-
-              <PillGroup
-                label="Payment source"
-                value={draftFilters.source}
-                onChange={(value) =>
-                  updateDraftFilter("source", value)
-                }
-                options={PAYMENT_SOURCES}
-              />
-
-              <PillGroup
-                label={t("status")}
-                value={draftFilters.status}
-                onChange={(value) =>
-                  updateDraftFilter("status", value)
-                }
-                options={PAYMENT_STATUSES}
-                allLabel={t("all_statuses")}
-              />
-            </FilterGroup>
-
-            <div className="border-t" />
-
-            <FilterGroup
-              title="Administrative scope"
-              icon={<Landmark className="size-4" />}
-            >
-              <SelectField
-                id="administrative-unit"
-                label="Administrative unit"
-                value={draftFilters.administrativeUnitId}
-                onChange={(value) =>
-                  updateDraftFilter("administrativeUnitId", value)
-                }
-                placeholder="All administrative units"
-                options={administrativeUnitOptions
-                  .filter((item) =>
-                    Boolean(item.administrative_unit_id),
-                  )
-                  .map((item) => ({
-                    value: item.administrative_unit_id!,
-                    label: item.administrative_unit_name,
-                  }))}
-              />
-            </FilterGroup>
+            <section className="space-y-4 border-t pt-6">
+              <h3 className="text-sm font-semibold">Administrative scope</h3>
+              <SelectField id="unit" name="Administrative unit" value={draft.administrativeUnitId}
+                onChange={(v) => setD("administrativeUnitId", v)} placeholder="All administrative units"
+                options={unitOptions.filter((u) => u.administrative_unit_id).map((u) => ({ value: u.administrative_unit_id!, label: u.administrative_unit_name }))} />
+            </section>
           </div>
 
           <SheetFooter className="border-t bg-background px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() =>
-                setDraftFilters(getDefaultFilters())
-              }
-              className="sm:mr-auto"
-            >
-              <RotateCcw className="mr-2 size-4" />
-              Reset all
+            <Button type="button" variant="outline" className="sm:mr-auto" onClick={() => setDraft(getDefaultFilters())}>
+              <RotateCcw className="mr-2 size-4" />Reset all
             </Button>
-
             <div className="flex flex-col-reverse gap-2 sm:flex-row">
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => setFiltersOpen(false)}
-              >
-                Cancel
-              </Button>
-
-              <Button
-                type="button"
-                onClick={applyFilters}
-                disabled={dateRangeInvalid}
-              >
-                <Check className="mr-2 size-4" />
-                Apply filters
-              </Button>
+              <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+              <Button type="button" onClick={apply} disabled={rangeInvalid}><Check className="mr-2 size-4" />Apply filters</Button>
             </div>
           </SheetFooter>
         </SheetContent>
       </Sheet>
 
-      {/* ------------------------------- Content ---------------------------- */}
-
+      {/* Content */}
       <div className="mx-auto max-w-[1600px] space-y-6 px-4 py-6 sm:px-6 lg:px-8">
         {isError && (
-          <div
-            role="alert"
-            className="flex flex-col gap-3 rounded-xl border border-destructive/40 bg-card p-5 sm:flex-row sm:items-center sm:justify-between"
-          >
+          <div role="alert" className="flex flex-col gap-3 rounded-xl border border-destructive/40 bg-card p-5 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-3">
               <AlertTriangle className="mt-0.5 size-5 shrink-0 text-destructive" />
-
               <div>
-                <p className="font-semibold text-destructive">
-                  The report could not be loaded
-                </p>
-
+                <p className="font-semibold text-destructive">The report could not be loaded</p>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  {error instanceof Error
-                    ? error.message
-                    : "An unexpected error occurred. Check your connection and try again."}
+                  {error instanceof Error ? error.message : "Check your connection and try again."}
                 </p>
               </div>
             </div>
-
-            <Button
-              variant="outline"
-              onClick={() => refetch()}
-            >
-              Try again
-            </Button>
+            <Button variant="outline" onClick={() => refetch()}>Try again</Button>
           </div>
         )}
 
-        {isPending && <DashboardSkeleton />}
+        {isPending && <Skeleton />}
 
         {report && (
           <>
-            {isFetching && (
-              <p
-                className="text-xs text-muted-foreground"
-                aria-live="polite"
-              >
-                Updating report…
-              </p>
-            )}
+            {isFetching && <p className="text-xs text-muted-foreground" aria-live="polite">Updating report…</p>}
 
-            {totalTransactions === 0 && (
-              <div
-                className="flex flex-col gap-3 rounded-xl border p-4 sm:flex-row sm:items-center sm:justify-between print:hidden"
-                style={{
-                  borderColor: tint(COLOR.pending, 45),
-                  backgroundColor: tint(COLOR.pending, 8),
-                }}
-              >
-                <p className="text-sm">
-                  No payments match the current filters. Widen the period or reset the filters to see collections.
-                </p>
-
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={clearAppliedFilters}
-                >
-                  Reset filters
-                </Button>
+            {totalTx === 0 && (
+              <div className="flex flex-col gap-3 rounded-xl border p-4 sm:flex-row sm:items-center sm:justify-between print:hidden"
+                style={{ borderColor: tint(C.held, 45), background: tint(C.held, 8) }}>
+                <p className="text-sm">No payments match these filters. Widen the period or reset the filters.</p>
+                <Button variant="outline" size="sm" onClick={resetApplied}>Reset filters</Button>
               </div>
             )}
 
-            {/* Headline: total collected + settlement outcome */}
-
-            <section className="grid overflow-hidden rounded-xl border bg-card lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] print:break-inside-avoid">
-              <div className="p-6 sm:p-8">
-                <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                  <CircleDollarSign className="size-4 text-primary" />
-                  {t("total_collected")}
+            {/* 1. The answer: recognized revenue, and how it was reached */}
+            <section className="grid overflow-hidden rounded-xl border bg-card xl:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)] print:break-inside-avoid">
+              <div className="space-y-8 p-6 sm:p-8">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">{t("total_collected")}</p>
+                  <p className="mt-2 break-words text-4xl font-bold tabular-nums tracking-tight sm:text-5xl">{money(recognized, loc)}</p>
+                  <p className="mt-2 max-w-xl text-sm text-muted-foreground">
+                    {int(recognizedCount, loc)} payments counted as revenue: all completed non-cash payments plus cash that has been reconciled.
+                  </p>
                 </div>
 
-                <p className="mt-3 break-words text-4xl font-bold tabular-nums tracking-tight sm:text-5xl">
-                  {formatCurrency(totalCollected, locale)}
-                </p>
-
-                <p className="mt-2 text-sm text-muted-foreground">
-                  From {formatNumber(completedCount, locale)} completed payments
-                  {activePreset
-                    ? ` · ${activePreset.label.toLowerCase()}`
-                    : ""}
-                  . Pending and failed amounts are not counted as revenue.
-                </p>
-
-                {/* Settlement outcome bar */}
-
-                <div className="mt-8">
-                  <div className="flex items-baseline justify-between gap-3">
-                    <h2 className="text-sm font-semibold">
-                      Where payment value ended up
-                    </h2>
-
+                <div>
+                  <div className="mb-3 flex items-baseline justify-between gap-3">
+                    <h2 className="text-sm font-semibold">Completed payments: counted vs held</h2>
                     <p className="text-sm text-muted-foreground">
-                      <span className="font-semibold text-foreground tabular-nums">
-                        {formatPercent(completionRateByValue)}
-                      </span>{" "}
-                      completed by value
+                      <span className="font-semibold tabular-nums text-foreground">{pct(share(recognized, completedValue))}</span> counted
                     </p>
                   </div>
+                  <StackedBar loc={loc} name="Completed payments by reconciliation" total={completedValue}
+                    segments={[
+                      { key: "nc", label: "Non-cash", amount: nonCash, count: num(s?.non_cash_collected_count), color: C.recognized },
+                      { key: "rc", label: "Reconciled cash", amount: reconCash, count: num(s?.reconciled_cash_count), color: C.cash },
+                      { key: "uc", label: "Awaiting reconciliation", amount: unreconCash, count: num(s?.unreconciled_cash_count), color: C.held },
+                      { key: "dc", label: "Discrepancy", amount: discCash, count: num(s?.discrepancy_cash_count), color: C.discrepancy },
+                    ]} />
+                  {heldValue > 0 && (
+                    <p className="mt-4 text-xs text-muted-foreground">
+                      {money(heldValue, loc)} of completed cash is not yet counted as revenue.
+                    </p>
+                  )}
+                </div>
 
-                  <div
-                    className="mt-3 flex h-3 w-full overflow-hidden rounded-full bg-muted"
-                    role="img"
-                    aria-label={`Payment value by outcome: ${outcome.rows
-                      .map(
-                        (row) =>
-                          `${row.label} ${formatPercent(
-                            percentOf(row.amount, outcome.total),
-                          )}`,
-                      )
-                      .join(", ")}`}
-                  >
-                    {outcome.rows.map((row) => {
-                      const width = percentOf(
-                        row.amount,
-                        outcome.total,
-                      );
-
-                      if (width <= 0) return null;
-
-                      return (
-                        <div
-                          key={row.key}
-                          style={{
-                            width: `${width}%`,
-                            backgroundColor: row.color,
-                          }}
-                          className="h-full border-r border-background last:border-r-0"
-                          title={`${row.label}: ${formatCurrency(
-                            row.amount,
-                            locale,
-                          )}`}
-                        />
-                      );
-                    })}
-                  </div>
-
-                  <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3 xl:grid-cols-5">
-                    {outcome.rows.map((row) => (
-                      <div key={row.key} className="min-w-0">
-                        <dt className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <span
-                            className="size-2.5 shrink-0 rounded-sm"
-                            style={{ backgroundColor: row.color }}
-                          />
-                          {row.label}
-                        </dt>
-
-                        <dd className="mt-1 truncate text-sm font-semibold tabular-nums">
-                          {formatCompact(row.amount)} ETB
-                        </dd>
-
-                        <dd className="text-xs text-muted-foreground tabular-nums">
-                          {formatNumber(row.count, locale)} payments
-                        </dd>
-                      </div>
-                    ))}
-                  </dl>
+                <div>
+                  <h2 className="mb-3 text-sm font-semibold">Payments not completed</h2>
+                  <StackedBar loc={loc} name="Payments not completed" total={pipeline.reduce((a, i) => a + i.amount, 0)} segments={pipeline} />
                 </div>
               </div>
 
-              <dl className="divide-y border-t bg-muted/20 lg:border-l lg:border-t-0">
-                {[
-                  {
-                    icon: <Activity className="size-4" />,
-                    label: "Matching payments",
-                    value: formatNumber(totalTransactions, locale),
-                    note: "All statuses in this view",
-                  },
-                  {
-                    icon: <CheckCircle2 className="size-4" />,
-                    label: t("completed_transactions"),
-                    value: formatNumber(completedCount, locale),
-                    note: `${formatPercent(
-                      completionRateByCount,
-                    )} of matching payments`,
-                  },
-                  {
-                    icon: <Wallet className="size-4" />,
-                    label: t("average_collection"),
-                    value: formatCurrency(averagePayment, locale),
-                    note: "Per completed payment",
-                  },
-                  {
-                    icon: <Smartphone className="size-4" />,
-                    label: "Digital share",
-                    value: formatPercent(digitalShare),
-                    note: "Online payments, by value",
-                  },
-                ].map((item) => (
-                  <div
-                    key={item.label}
-                    className="flex items-start gap-3 px-6 py-4"
-                  >
-                    <div className="mt-0.5 text-muted-foreground">
-                      {item.icon}
+              {/* 2. Side rail: supporting numbers + attention queue */}
+              <aside className="border-t bg-muted/20 xl:border-l xl:border-t-0">
+                <dl className="grid grid-cols-3 divide-x border-b">
+                  {[
+                    { l: "Payments", v: int(totalTx, loc), n: "all statuses" },
+                    { l: "Average", v: compact(s?.average_payment), n: "ETB, counted" },
+                    { l: "Digital", v: pct(digitalShare, 0), n: "online by value" },
+                  ].map((k) => (
+                    <div key={k.l} className="px-4 py-4">
+                      <dt className="text-xs text-muted-foreground">{k.l}</dt>
+                      <dd className="mt-1 text-xl font-semibold tabular-nums">{k.v}</dd>
+                      <dd className="text-xs text-muted-foreground">{k.n}</dd>
                     </div>
+                  ))}
+                </dl>
 
-                    <div className="min-w-0">
-                      <dt className="text-sm text-muted-foreground">
-                        {item.label}
-                      </dt>
-
-                      <dd className="mt-0.5 break-words text-xl font-semibold tabular-nums">
-                        {item.value}
-                      </dd>
-
-                      <dd className="text-xs text-muted-foreground">
-                        {item.note}
-                      </dd>
-                    </div>
-                  </div>
-                ))}
-              </dl>
+                <div className="p-5">
+                  <h2 className="text-sm font-semibold">Needs attention</h2>
+                  {attention.length === 0 ? (
+                    <p className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
+                      <Check className="size-4" style={{ color: C.recognized }} /> Everything in this view is settled.
+                    </p>
+                  ) : (
+                    <ul className="mt-3 divide-y">
+                      {attention.map((a) => (
+                        <li key={a.key}>
+                          <a href={reportHref({ status: a.status, ...(a.method ? { payment_method: a.method } : {}) })}
+                            className="group flex items-center justify-between gap-3 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                            <span className="flex min-w-0 items-center gap-3">
+                              <span className="h-8 w-1 shrink-0 rounded-full" style={{ background: a.color }} />
+                              <span className="min-w-0">
+                                <span className="block truncate text-sm font-medium group-hover:underline">{a.title}</span>
+                                <span className="text-xs text-muted-foreground tabular-nums">{int(a.count, loc)} payments</span>
+                              </span>
+                            </span>
+                            <span className="text-sm font-semibold tabular-nums">{compact(a.amount)} ETB</span>
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </aside>
             </section>
 
-            {/* Channel strip */}
-
-            <section
-              aria-label="Collection by channel"
-              className="grid divide-y overflow-hidden rounded-xl border bg-card sm:grid-cols-2 sm:divide-y-0 lg:grid-cols-4 lg:divide-x print:break-inside-avoid"
-            >
+            {/* Channel strip: where money came in, and what is still open */}
+            <section aria-label="Collection by channel"
+              className="grid divide-y overflow-hidden rounded-xl border bg-card sm:grid-cols-2 sm:divide-y-0 lg:grid-cols-4 lg:divide-x print:break-inside-avoid">
               {[
-                {
-                  icon: <Banknote className="size-5" />,
-                  label: "Cash",
-                  amount: cashAmount,
-                  color: "var(--chart-4)",
-                },
-                {
-                  icon: <Landmark className="size-5" />,
-                  label: "Bank transfer",
-                  amount: bankAmount,
-                  color: "var(--chart-2)",
-                },
-                {
-                  icon: <Smartphone className="size-5" />,
-                  label: "Online",
-                  amount: onlineAmount,
-                  color: "var(--chart-3)",
-                },
-              ].map((item) => (
-                <div
-                  key={item.label}
-                  className="flex items-center gap-4 p-5"
-                >
-                  <div
-                    className="flex size-10 shrink-0 items-center justify-center rounded-lg"
-                    style={{
-                      backgroundColor: tint(item.color, 14),
-                      color: item.color,
-                    }}
-                  >
-                    {item.icon}
-                  </div>
-
+                { icon: <Banknote className="size-5" />, label: "Cash", amount: cashAmount, color: "var(--chart-4)",
+                  note: heldValue > 0 ? `${compact(heldValue)} ETB not yet reconciled` : "Fully reconciled" },
+                { icon: <Landmark className="size-5" />, label: "Bank transfer", amount: bankAmount, color: "var(--chart-2)" },
+                { icon: <Smartphone className="size-5" />, label: "Online", amount: onlineAmount, color: "var(--chart-3)" },
+              ].map((c) => (
+                <div key={c.label} className="flex items-center gap-4 p-5">
+                  <div className="flex size-10 shrink-0 items-center justify-center rounded-lg"
+                    style={{ background: tint(c.color, 14), color: c.color }}>{c.icon}</div>
                   <div className="min-w-0">
-                    <p className="text-sm text-muted-foreground">
-                      {item.label}
-                    </p>
-
-                    <p className="break-words text-lg font-semibold tabular-nums">
-                      {formatCurrency(item.amount, locale)}
-                    </p>
-
+                    <p className="text-sm text-muted-foreground">{c.label}</p>
+                    <p className="break-words text-lg font-semibold tabular-nums">{money(c.amount, loc)}</p>
                     <p className="text-xs text-muted-foreground tabular-nums">
-                      {formatPercent(
-                        percentOf(item.amount, methodTotal),
-                      )}{" "}
-                      of collected
+                      {pct(share(c.amount, methodTotal))} of completed{c.note ? ` · ${c.note}` : ""}
                     </p>
                   </div>
                 </div>
               ))}
-
               <div className="flex items-center gap-4 p-5">
                 <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-destructive/10 text-destructive">
                   <AlertTriangle className="size-5" />
                 </div>
-
                 <div className="min-w-0">
-                  <p className="text-sm text-muted-foreground">
-                    Needs follow-up
-                  </p>
-
-                  <p className="break-words text-lg font-semibold tabular-nums">
-                    {formatCurrency(
-                      toNumber(summary?.pending_amount) +
-                        toNumber(summary?.failed_amount),
-                      locale,
-                    )}
-                  </p>
-
-                  <p className="text-xs text-muted-foreground tabular-nums">
-                    {formatNumber(
-                      toNumber(summary?.pending_count) +
-                        toNumber(summary?.failed_count),
-                      locale,
-                    )}{" "}
-                    pending or failed
-                  </p>
+                  <p className="text-sm text-muted-foreground">Needs follow-up</p>
+                  <p className="break-words text-lg font-semibold tabular-nums">{money(followUpAmount, loc)}</p>
+                  <p className="text-xs text-muted-foreground tabular-nums">{int(followUpCount, loc)} pending or failed</p>
                 </div>
               </div>
             </section>
 
-            {/* Key findings */}
-
-            {findings.length > 0 && (
-              <section
-                aria-label="Key findings"
-                className="grid divide-y overflow-hidden rounded-xl border bg-card md:grid-cols-2 md:divide-y-0 xl:grid-cols-4 xl:divide-x print:break-inside-avoid"
-              >
-                {findings.map((item) => (
-                  <div key={item.title} className="p-5">
-                    <div className="flex items-center gap-2 text-sm font-semibold">
-                      <span className="text-primary">
-                        {item.icon}
-                      </span>
-
-                      {item.title}
-                    </div>
-
-                    <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                      {item.text}
-                    </p>
-                  </div>
-                ))}
-              </section>
+            {/* 3. Plain-language insights */}
+            {insights.length > 0 && (
+              <ul className="grid gap-px overflow-hidden rounded-xl border bg-border sm:grid-cols-2 xl:grid-cols-4 print:break-inside-avoid" aria-label="Key findings">
+                {insights.map((i) => <li key={i} className="bg-card p-4 text-sm leading-relaxed">{i}</li>)}
+              </ul>
             )}
 
-            {/* Trend + method */}
-
+            {/* 4. Trend + channel */}
             <div className="grid gap-6 xl:grid-cols-3">
-              <Panel
-                className="xl:col-span-2"
-                title={t("collection_trend")}
-                description="Completed collections per period. Periods group by day or month depending on the date range."
-                action={
-                  <Segmented
-                    label="Trend view"
-                    value={trendView}
-                    onChange={(value) =>
-                      setTrendView(value as "daily" | "cumulative")
-                    }
-                    options={[
-                      { value: "daily", label: "Per period" },
-                      { value: "cumulative", label: "Running total" },
-                    ]}
-                  />
-                }
-              >
-                {collectionTrend.length === 0 ? (
-                  <EmptyState
-                    message={t("no_chart_data")}
-                    height={300}
-                  />
-                ) : (
+              <Panel className="xl:col-span-2" title={t("collection_trend")}
+                description="Completed collections per day or month, depending on the range."
+                action={<Segmented name="Trend view" value={trendView} onChange={(v) => setTrendView(v as "daily" | "cumulative")}
+                  options={[{ value: "daily", label: "Per period" }, { value: "cumulative", label: "Running total" }]} />}>
+                {trend.length === 0 ? <Empty message={t("no_chart_data")} height={300} /> : (
                   <div className="h-[320px] w-full">
                     <ResponsiveContainer width="100%" height="100%">
-                      <ComposedChart
-                        data={collectionTrend}
-                        margin={{
-                          top: 10,
-                          right: 8,
-                          left: 8,
-                          bottom: 0,
-                        }}
-                      >
+                      <ComposedChart data={trend} margin={{ top: 10, right: 8, left: 8, bottom: 0 }}>
                         <defs>
-                          <linearGradient
-                            id="runningFill"
-                            x1="0"
-                            y1="0"
-                            x2="0"
-                            y2="1"
-                          >
-                            <stop
-                              offset="0%"
-                              style={{
-                                stopColor: COLOR.collected,
-                                stopOpacity: 0.28,
-                              }}
-                            />
-
-                            <stop
-                              offset="100%"
-                              style={{
-                                stopColor: COLOR.collected,
-                                stopOpacity: 0.02,
-                              }}
-                            />
+                          <linearGradient id="runFill" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" style={{ stopColor: C.recognized, stopOpacity: 0.28 }} />
+                            <stop offset="100%" style={{ stopColor: C.recognized, stopOpacity: 0.02 }} />
                           </linearGradient>
                         </defs>
-
-                        <CartesianGrid
-                          strokeDasharray="3 3"
-                          vertical={false}
-                          className="stroke-border"
-                        />
-
-                        <XAxis
-                          dataKey="label"
-                          tickLine={false}
-                          axisLine={false}
-                          tick={AXIS_TICK}
-                          minTickGap={24}
-                        />
-
-                        <YAxis
-                          tickFormatter={formatCompact}
-                          tickLine={false}
-                          axisLine={false}
-                          width={55}
-                          tick={AXIS_TICK}
-                        />
-
-                        <Tooltip
-                          formatter={(value) =>
-                            formatCurrency(
-                              Number(value ?? 0),
-                              locale,
-                            )
-                          }
-                          labelFormatter={(_, payload) =>
-                            payload?.[0]?.payload?.period ?? ""
-                          }
-                          contentStyle={TOOLTIP_STYLE}
-                        />
-
-                        {trendView === "daily" ? (
-                          <Bar
-                            dataKey="collected"
-                            name="Collected"
-                            fill={COLOR.collected}
-                            radius={[4, 4, 0, 0]}
-                            maxBarSize={40}
-                          />
-                        ) : (
-                          <Area
-                            type="monotone"
-                            dataKey="cumulative"
-                            name="Running total"
-                            stroke={COLOR.collected}
-                            strokeWidth={2}
-                            fill="url(#runningFill)"
-                          />
-                        )}
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-border" />
+                        <XAxis dataKey="label" tickLine={false} axisLine={false} tick={AXIS} minTickGap={24} />
+                        <YAxis tickFormatter={compact} tickLine={false} axisLine={false} width={55} tick={AXIS} />
+                        <Tooltip formatter={(v) => money(Number(v ?? 0), loc)} labelFormatter={(_, p) => p?.[0]?.payload?.period ?? ""} contentStyle={TOOLTIP} />
+                        {trendView === "daily"
+                          ? <Bar dataKey="collected" name="Collected" fill={C.recognized} radius={[4, 4, 0, 0]} maxBarSize={40} />
+                          : <Area type="monotone" dataKey="cumulative" name="Running total" stroke={C.recognized} strokeWidth={2} fill="url(#runFill)" />}
                       </ComposedChart>
                     </ResponsiveContainer>
                   </div>
                 )}
               </Panel>
 
-              <Panel
-                title={t("collection_by_method")}
-                description="Completed revenue by payment method."
-              >
-                {methodChartData.length === 0 ? (
-                  <EmptyState
-                    message={t("no_chart_data")}
-                    height={300}
-                  />
-                ) : (
+              <Panel title={t("collection_by_method")} description="Completed value by payment method.">
+                {methodData.length === 0 ? <Empty message={t("no_chart_data")} height={300} /> : (
                   <>
-                    <div className="relative h-[210px]">
+                    <div className="relative h-[200px]">
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
-                          <Pie
-                            data={methodChartData}
-                            dataKey="value"
-                            nameKey="name"
-                            innerRadius={62}
-                            outerRadius={90}
-                            paddingAngle={2}
-                            stroke="none"
-                          >
-                            {methodChartData.map((item) => (
-                              <Cell
-                                key={item.name}
-                                fill={item.color}
-                              />
-                            ))}
+                          <Pie data={methodData} dataKey="value" nameKey="name" innerRadius={60} outerRadius={88} paddingAngle={2} stroke="none">
+                            {methodData.map((i) => <Cell key={i.name} fill={i.color} />)}
                           </Pie>
-
-                          <Tooltip
-                            formatter={(value) =>
-                              formatCurrency(
-                                Number(value ?? 0),
-                                locale,
-                              )
-                            }
-                            contentStyle={TOOLTIP_STYLE}
-                          />
+                          <Tooltip formatter={(v) => money(Number(v ?? 0), loc)} contentStyle={TOOLTIP} />
                         </PieChart>
                       </ResponsiveContainer>
-
                       <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-                        <span className="text-xs text-muted-foreground">
-                          Collected
-                        </span>
-
-                        <span className="text-lg font-bold tabular-nums">
-                          {formatCompact(methodTotal)}
-                        </span>
+                        <span className="text-xs text-muted-foreground">Completed</span>
+                        <span className="text-lg font-bold tabular-nums">{compact(methodTotal)}</span>
                       </div>
                     </div>
-
                     <ul className="mt-4 divide-y">
-                      {methodChartData.map((item) => (
-                        <li
-                          key={item.name}
-                          className="flex items-center justify-between gap-3 py-2.5 text-sm"
-                        >
-                          <div className="flex min-w-0 items-center gap-2">
-                            <span
-                              className="size-2.5 shrink-0 rounded-sm"
-                              style={{
-                                backgroundColor: item.color,
-                              }}
-                            />
-
-                            <span className="truncate">
-                              {item.name}
-                            </span>
-
-                            <span className="text-xs text-muted-foreground tabular-nums">
-                              {formatPercent(
-                                percentOf(item.value, methodTotal),
-                              )}
-                            </span>
-                          </div>
-
-                          <div className="text-right">
-                            <p className="font-semibold tabular-nums">
-                              {formatCurrency(item.value, locale)}
-                            </p>
-
-                            <p className="text-xs text-muted-foreground tabular-nums">
-                              {formatNumber(item.count, locale)} completed
-                            </p>
-                          </div>
+                      {methodData.map((i) => (
+                        <li key={i.name} className="flex items-center justify-between gap-3 py-2.5 text-sm">
+                          <span className="flex min-w-0 items-center gap-2">
+                            <span className="size-2.5 shrink-0 rounded-sm" style={{ background: i.color }} />
+                            <span className="truncate">{i.name}</span>
+                            <span className="text-xs text-muted-foreground tabular-nums">{pct(share(i.value, methodTotal))}</span>
+                          </span>
+                          <span className="text-right">
+                            <span className="block font-semibold tabular-nums">{money(i.value, loc)}</span>
+                            <span className="text-xs text-muted-foreground tabular-nums">{int(i.count, loc)} payments</span>
+                          </span>
                         </li>
                       ))}
                     </ul>
@@ -2369,436 +868,106 @@ export default function RevenueCollectionPage() {
               </Panel>
             </div>
 
-            {/* Domain + administrative units */}
-
+            {/* 5. Where it came from */}
             <div className="grid gap-6 xl:grid-cols-2">
-              <Panel
-                title="Collection by revenue domain"
-                description="Completed collections grouped by revenue domain."
-              >
-                {domainChartData.length === 0 ? (
-                  <EmptyState
-                    message={t("no_chart_data")}
-                    height={280}
-                  />
-                ) : (
-                  <div
-                    style={{
-                      height: Math.max(
-                        220,
-                        domainChartData.length * 48,
-                      ),
-                    }}
-                  >
+              <Panel title="Collection by revenue domain" description="Completed collections grouped by domain.">
+                {domainData.length === 0 ? <Empty message={t("no_chart_data")} height={260} /> : (
+                  <div style={{ height: Math.max(220, domainData.length * 48) }}>
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart
-                        data={domainChartData}
-                        layout="vertical"
-                        margin={{
-                          top: 4,
-                          right: 16,
-                          left: 8,
-                          bottom: 4,
-                        }}
-                      >
-                        <CartesianGrid
-                          strokeDasharray="3 3"
-                          horizontal={false}
-                          className="stroke-border"
-                        />
-
-                        <XAxis
-                          type="number"
-                          tickFormatter={formatCompact}
-                          tickLine={false}
-                          axisLine={false}
-                          tick={AXIS_TICK}
-                        />
-
-                        <YAxis
-                          type="category"
-                          dataKey="name"
-                          tickLine={false}
-                          axisLine={false}
-                          width={90}
-                          tick={AXIS_TICK}
-                        />
-
-                        <Tooltip
-                          formatter={(value) =>
-                            formatCurrency(
-                              Number(value ?? 0),
-                              locale,
-                            )
-                          }
-                          contentStyle={TOOLTIP_STYLE}
-                        />
-
-                        <Bar
-                          dataKey="value"
-                          name="Collected"
-                          radius={[0, 4, 4, 0]}
-                          maxBarSize={28}
-                        >
-                          {domainChartData.map((item) => (
-                            <Cell
-                              key={item.domain}
-                              fill={item.color}
-                            />
-                          ))}
+                      <BarChart data={domainData} layout="vertical" margin={{ top: 4, right: 16, left: 8, bottom: 4 }}>
+                        <CartesianGrid strokeDasharray="3 3" horizontal={false} className="stroke-border" />
+                        <XAxis type="number" tickFormatter={compact} tickLine={false} axisLine={false} tick={AXIS} />
+                        <YAxis type="category" dataKey="name" tickLine={false} axisLine={false} width={90} tick={AXIS} />
+                        <Tooltip formatter={(v) => money(Number(v ?? 0), loc)} contentStyle={TOOLTIP} />
+                        <Bar dataKey="value" name="Collected" radius={[0, 4, 4, 0]} maxBarSize={28}>
+                          {domainData.map((i) => <Cell key={i.domain} fill={i.color} />)}
                         </Bar>
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
                 )}
-
                 <p className="mt-4 text-xs leading-relaxed text-muted-foreground">
-                  Invoices that span several revenue domains may be left out of this breakdown when the payment cannot be safely split between domains.
+                  Invoices spanning several domains may be left out when a payment cannot be split safely.
                 </p>
               </Panel>
 
-              <Panel
-                title="Administrative unit collections"
-                description="Actual completed collections, ranked. No targets or estimates are shown."
-                action={
-                  rankedUnits.length > 8 ? (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() =>
-                        setShowAllUnits((value) => !value)
-                      }
-                    >
-                      {showAllUnits
-                        ? "Show top 8"
-                        : `Show all ${rankedUnits.length}`}
-                    </Button>
-                  ) : undefined
-                }
-              >
-                {rankedUnits.length === 0 ? (
-                  <EmptyState
-                    message="No administrative-unit data for these filters."
-                    height={280}
-                  />
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full min-w-[480px] text-sm">
-                      <thead>
-                        <tr className="border-b text-left text-xs text-muted-foreground">
-                          <th
-                            scope="col"
-                            className="w-8 pb-2 font-medium"
-                          >
-                            #
-                          </th>
-
-                          <th
-                            scope="col"
-                            className="pb-2 font-medium"
-                          >
-                            Administrative unit
-                          </th>
-
-                          <th
-                            scope="col"
-                            className="pb-2 text-right font-medium"
-                          >
-                            Payments
-                          </th>
-
-                          <th
-                            scope="col"
-                            className="pb-2 text-right font-medium"
-                          >
-                            Collected
-                          </th>
-
-                          <th
-                            scope="col"
-                            className="w-16 pb-2 text-right font-medium"
-                          >
-                            Share
-                          </th>
-                        </tr>
-                      </thead>
-
-                      <tbody>
-                        {visibleUnits.map((item, index) => {
-                          const collected = toNumber(
-                            item.completed_amount,
-                          );
-
-                          const width = (collected / maxUnit) * 100;
-
-                          return (
-                            <tr
-                              key={
-                                item.administrative_unit_id ??
-                                item.administrative_unit_name
-                              }
-                              className="border-b last:border-0"
-                            >
-                              <td className="py-3 text-xs text-muted-foreground tabular-nums">
-                                {index + 1}
-                              </td>
-
-                              <td className="py-3 pr-4">
-                                <p className="truncate font-medium">
-                                  {item.administrative_unit_name}
-                                </p>
-
-                                <div
-                                  className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-muted"
-                                  role="progressbar"
-                                  aria-label={`${item.administrative_unit_name} relative to top unit`}
-                                  aria-valuemin={0}
-                                  aria-valuemax={100}
-                                  aria-valuenow={Math.round(width)}
-                                >
-                                  <div
-                                    className="h-full rounded-full"
-                                    style={{
-                                      width: `${Math.min(
-                                        100,
-                                        Math.max(0, width),
-                                      )}%`,
-                                      backgroundColor: COLOR.collected,
-                                    }}
-                                  />
-                                </div>
-                              </td>
-
-                              <td className="py-3 text-right tabular-nums text-muted-foreground">
-                                {formatNumber(
-                                  item.completed_count,
-                                  locale,
-                                )}
-                              </td>
-
-                              <td className="py-3 text-right font-semibold tabular-nums">
-                                {formatCurrency(collected, locale)}
-                              </td>
-
-                              <td className="py-3 text-right tabular-nums text-muted-foreground">
-                                {formatPercent(
-                                  percentOf(collected, unitsTotal),
-                                )}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
+              <Panel title="Administrative unit collections" description="Actual completed collections, ranked. No targets or estimates."
+                action={rankedUnits.length > 8 ? (
+                  <Button variant="ghost" size="sm" onClick={() => setShowAllUnits((v) => !v)}>
+                    {showAllUnits ? "Show top 8" : `Show all ${rankedUnits.length}`}
+                  </Button>
+                ) : undefined}>
+                {rankedUnits.length === 0 ? <Empty message="No administrative-unit data for these filters." height={260} /> : (
+                  <DataTable
+                    head={[{ text: "#", w: "w-8" }, { text: "Unit" }, { text: "Payments", right: true }, { text: "Collected", right: true }, { text: "Share", right: true, w: "w-16" }]}
+                    rows={visibleUnits.map((u, idx) => {
+                      const v = num(u.completed_amount);
+                      return [
+                        <span key="i" className="text-xs text-muted-foreground">{idx + 1}</span>,
+                        <div key="n" className="pr-4">
+                          <p className="truncate font-medium">{u.administrative_unit_name}</p>
+                          <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-muted" role="progressbar"
+                            aria-label={`${u.administrative_unit_name} relative to top unit`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round((v / maxUnit) * 100)}>
+                            <div className="h-full rounded-full" style={{ width: `${Math.min(100, Math.max(0, (v / maxUnit) * 100))}%`, background: C.recognized }} />
+                          </div>
+                        </div>,
+                        int(u.completed_count, loc),
+                        <span key="c" className="font-semibold text-foreground">{money(v, loc)}</span>,
+                        pct(share(v, unitsTotal)),
+                      ];
+                    })} />
                 )}
               </Panel>
             </div>
-
-            {/* Source + status reconciliation */}
 
             <div className="grid gap-6 xl:grid-cols-2">
-              <Panel
-                title="Collection by payment source"
-                description="How completed payments entered the system."
-              >
-                {paymentSources.length === 0 ? (
-                  <EmptyState
-                    message="No payment-source data for these filters."
-                    height={200}
-                  />
-                ) : (
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b text-left text-xs text-muted-foreground">
-                        <th
-                          scope="col"
-                          className="pb-2 font-medium"
-                        >
-                          Source
-                        </th>
-
-                        <th
-                          scope="col"
-                          className="pb-2 text-right font-medium"
-                        >
-                          Payments
-                        </th>
-
-                        <th
-                          scope="col"
-                          className="pb-2 text-right font-medium"
-                        >
-                          Collected
-                        </th>
-
-                        <th
-                          scope="col"
-                          className="w-16 pb-2 text-right font-medium"
-                        >
-                          Share
-                        </th>
-                      </tr>
-                    </thead>
-
-                    <tbody>
-                      {paymentSources.map((item) => (
-                        <tr
-                          key={item.label}
-                          className="border-b last:border-0"
-                        >
-                          <td className="py-3 font-medium">
-                            {formatLabel(item.label)}
-                          </td>
-
-                          <td className="py-3 text-right tabular-nums text-muted-foreground">
-                            {formatNumber(
-                              item.completed_count,
-                              locale,
-                            )}
-                          </td>
-
-                          <td className="py-3 text-right font-semibold tabular-nums">
-                            {formatCurrency(
-                              item.completed_amount,
-                              locale,
-                            )}
-                          </td>
-
-                          <td className="py-3 text-right tabular-nums text-muted-foreground">
-                            {formatPercent(
-                              percentOf(
-                                toNumber(item.completed_amount),
-                                totalCollected,
-                              ),
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+              <Panel title="Collection by payment source" description="How completed payments entered the system.">
+                {sources.length === 0 ? <Empty message="No payment-source data for these filters." height={200} /> : (
+                  <DataTable
+                    head={[{ text: "Source" }, { text: "Payments", right: true }, { text: "Collected", right: true }, { text: "Share", right: true, w: "w-16" }]}
+                    rows={sources.map((i) => [
+                      <span key="l" className="font-medium">{label(i.label)}</span>,
+                      int(i.completed_count, loc),
+                      <span key="c" className="font-semibold text-foreground">{money(i.completed_amount, loc)}</span>,
+                      pct(share(num(i.completed_amount), completedValue)),
+                    ])} />
                 )}
               </Panel>
 
-              <Panel
-                title="Payment status reconciliation"
-                description="Non-completed amounts are kept apart from collected revenue."
-              >
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b text-left text-xs text-muted-foreground">
-                      <th
-                        scope="col"
-                        className="pb-2 font-medium"
-                      >
-                        Status
-                      </th>
-
-                      <th
-                        scope="col"
-                        className="pb-2 text-right font-medium"
-                      >
-                        Payments
-                      </th>
-
-                      <th
-                        scope="col"
-                        className="pb-2 text-right font-medium"
-                      >
-                        Amount
-                      </th>
-                    </tr>
-                  </thead>
-
-                  <tbody>
-                    {outcome.rows.map((row) => (
-                      <tr
-                        key={row.key}
-                        className="border-b last:border-0"
-                      >
-                        <td className="py-3">
-                          <span className="inline-flex items-center gap-2 font-medium">
-                            <span
-                              className="size-2.5 rounded-sm"
-                              style={{
-                                backgroundColor: row.color,
-                              }}
-                            />
-                            {row.label}
-                          </span>
-                        </td>
-
-                        <td className="py-3 text-right tabular-nums text-muted-foreground">
-                          {formatNumber(row.count, locale)}
-                        </td>
-
-                        <td className="py-3 text-right font-semibold tabular-nums">
-                          {formatCurrency(row.amount, locale)}
-                        </td>
-                      </tr>
-                    ))}
-
-                    <tr className="border-b">
-                      <td className="py-3 font-medium text-muted-foreground">
-                        Cancelled
-                      </td>
-
-                      <td className="py-3 text-right tabular-nums text-muted-foreground">
-                        {formatNumber(
-                          summary?.cancelled_count,
-                          locale,
-                        )}
-                      </td>
-
-                      <td className="py-3 text-right text-muted-foreground">
-                        —
-                      </td>
-                    </tr>
-
-                    <tr>
-                      <td className="py-3 font-medium text-muted-foreground">
-                        Expired
-                      </td>
-
-                      <td className="py-3 text-right tabular-nums text-muted-foreground">
-                        {formatNumber(
-                          summary?.expired_count,
-                          locale,
-                        )}
-                      </td>
-
-                      <td className="py-3 text-right text-muted-foreground">
-                        —
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
+              <Panel title="Payment status reconciliation" description="Everything not counted as revenue, kept apart from collections.">
+                <DataTable
+                  head={[{ text: "Status" }, { text: "Payments", right: true }, { text: "Amount", right: true }]}
+                  rows={[
+                    [<Dot key="a" color={C.recognized} text="Counted as revenue" />, int(recognizedCount, loc), <b key="v">{money(recognized, loc)}</b>],
+                    [<Dot key="b" color={C.held} text="Cash awaiting reconciliation" />, int(s?.unreconciled_cash_count, loc), <b key="v">{money(unreconCash, loc)}</b>],
+                    [<Dot key="c" color={C.discrepancy} text="Cash with discrepancy" />, int(s?.discrepancy_cash_count, loc), <b key="v">{money(discCash, loc)}</b>],
+                    ...pipeline.map((p) => [<Dot key={p.key} color={p.color} text={p.label} />, int(p.count, loc), <b key="v">{money(p.amount, loc)}</b>]),
+                    [<span key="x" className="text-muted-foreground">Cancelled</span>, int(s?.cancelled_count, loc), "—"],
+                    [<span key="y" className="text-muted-foreground">Expired</span>, int(s?.expired_count, loc), "—"],
+                  ]} />
               </Panel>
             </div>
-
-            {/* Footer */}
 
             <footer className="flex flex-col gap-3 border-t pt-4 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
               <p className="max-w-2xl leading-relaxed">
-                Summary figures from the revenue system. Individual payment transactions are not listed here.
-                Generated{" "}
-                {new Intl.DateTimeFormat(locale, {
-                  dateStyle: "medium",
-                  timeStyle: "short",
-                }).format(new Date())}.
+                Summary figures from the revenue system; individual transactions are not listed here. Generated{" "}
+                {new Intl.DateTimeFormat(loc, { dateStyle: "medium", timeStyle: "short" }).format(new Date())}.
               </p>
-
-              <a
-                href={paymentReportHref()}
-                className="inline-flex items-center gap-1.5 font-medium text-primary underline-offset-4 hover:underline print:hidden"
-              >
-                Open payment report
-                <ExternalLink className="size-3.5" />
+              <a href={reportHref()} className="inline-flex items-center gap-1.5 font-medium text-primary underline-offset-4 hover:underline print:hidden">
+                Open payment report <ExternalLink className="size-3.5" />
               </a>
             </footer>
           </>
         )}
       </div>
     </main>
+  );
+}
+
+function Dot({ color, text }: { color: string; text: string }) {
+  return (
+    <span className="inline-flex items-center gap-2 font-medium">
+      <span className="size-2.5 rounded-sm" style={{ background: color }} />{text}
+    </span>
   );
 }

@@ -1,3 +1,4 @@
+
 "use client";
 
 import {
@@ -9,6 +10,8 @@ import {
   CheckCircle2,
   FileText,
   Info,
+  Loader2,
+  RefreshCw,
   XCircle,
   type LucideIcon,
 } from "lucide-react";
@@ -17,123 +20,57 @@ import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 
-/* ---------------------------------------------------------------
-   API TYPES (assumed shape, adjust to your notification resource)
---------------------------------------------------------------- */
+import {
+  useNotifications,
+  useUnreadNotificationCount,
+  useMarkNotificationAsRead,
+  useMarkAllNotificationsAsRead,
+} from "@/hooks/use-notifications";
 
-export type NotificationType =
-  | "INVOICE_ISSUED"
-  | "PAYMENT_DUE_SOON"
-  | "PAYMENT_OVERDUE"
-  | "PENALTY_APPLIED"
-  | "PAYMENT_SUCCESS"
-  | "PAYMENT_FAILED"
-  | "SYSTEM";
+import type { AppNotification } from "@/types/notification";
 
-export interface TaxpayerNotification {
-  id: string | number;
-  type: NotificationType;
-  title: string;
-  message: string;
-  created_at: string; // ISO datetime
-  read_at: string | null; // null = unread
-  action_url: string | null;
-}
-
-/* ---------------------------------------------------------------
-   MOCK DATA
-   Dates are relative to "now" (rounded to the hour) so the groups
-   Today / Yesterday / This week always look right.
-   Remove this block and pass real data via the `notifications` prop.
---------------------------------------------------------------- */
-
-const ago = (hours: number) =>
-  new Date(Math.floor((Date.now() - hours * 3_600_000) / 3_600_000) * 3_600_000).toISOString();
-
-const MOCK_NOTIFICATIONS: TaxpayerNotification[] = [
-  {
-    id: "n-1",
-    type: "PAYMENT_FAILED",
-    title: "Payment for INV-2026-00125 failed",
-    message: "Your wallet balance was too low to complete the payment of ETB 4,500.00. Top up and try again.",
-    created_at: ago(5),
-    read_at: null,
-    action_url: "/citizen/dashboard/invoices/inv-001/pay",
-  },
-  {
-    id: "n-2",
-    type: "PAYMENT_OVERDUE",
-    title: "Commercial Permit is overdue",
-    message: "Invoice INV-2026-00087 (ETB 2,200.00) was due on Sep 20. Pay now to avoid further penalties.",
-    created_at: ago(28),
-    read_at: null,
-    action_url: "/citizen/dashboard/invoices/inv-005/pay",
-  },
-  {
-    id: "n-3",
-    type: "PAYMENT_DUE_SOON",
-    title: "Property Tax is due on Oct 15",
-    message: "Invoice INV-2026-00125 for ETB 4,500.00 is coming up. Paying early avoids late penalties.",
-    created_at: ago(30),
-    read_at: null,
-    action_url: "/citizen/dashboard/invoices/inv-001/pay",
-  },
-  {
-    id: "n-4",
-    type: "PAYMENT_SUCCESS",
-    title: "Payment received",
-    message: "We received ETB 1,500.00 for INV-2026-00131 through CBE Birr. Your balance is now ETB 1,500.00.",
-    created_at: ago(24 * 5 + 2),
-    read_at: ago(24 * 5),
-    action_url: "/citizen/dashboard/payments",
-  },
-  {
-    id: "n-5",
-    type: "INVOICE_ISSUED",
-    title: "New invoice: Property Service Fee",
-    message: "Invoice INV-2026-00131 for ETB 3,000.00 has been issued. It is due on Oct 25.",
-    created_at: ago(24 * 8),
-    read_at: ago(24 * 8 - 3),
-    action_url: "/citizen/dashboard/invoices",
-  },
-  {
-    id: "n-6",
-    type: "PENALTY_APPLIED",
-    title: "Late penalty added",
-    message: "A penalty of ETB 150.00 and interest of ETB 50.00 were added to INV-2026-00087.",
-    created_at: ago(24 * 9),
-    read_at: ago(24 * 9 - 1),
-    action_url: "/citizen/dashboard/invoices",
-  },
-  {
-    id: "n-7",
-    type: "PAYMENT_SUCCESS",
-    title: "Payment confirmed",
-    message: "Your bank transfer of ETB 5,000.00 for INV-2026-00110 was confirmed. Thank you.",
-    created_at: ago(24 * 21),
-    read_at: ago(24 * 21 - 2),
-    action_url: "/citizen/dashboard/payments",
-  },
-  {
-    id: "n-8",
-    type: "SYSTEM",
-    title: "Scheduled maintenance finished",
-    message: "The portal was briefly unavailable. All services are working normally again.",
-    created_at: ago(24 * 30),
-    read_at: ago(24 * 30 - 5),
-    action_url: null,
-  },
-];
-
-/* ---------------------------------------------------------------
-   TYPE METADATA
---------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+/* Types                                                                      */
+/* -------------------------------------------------------------------------- */
 
 type Tone = "danger" | "warning" | "success" | "info" | "neutral";
-type Category = "invoices" | "payments" | "system";
+
+type Category =
+  | "invoices"
+  | "payments"
+  | "assessments"
+  | "leases"
+  | "system";
+
+type FilterKey =
+  | "all"
+  | "unread"
+  | "invoices"
+  | "payments"
+  | "other";
+
+type GroupKey =
+  | "attention"
+  | "today"
+  | "yesterday"
+  | "week"
+  | "earlier";
+
+interface NotificationMeta {
+  icon: LucideIcon;
+  tone: Tone;
+  category: Category;
+  action: string;
+  urgent: boolean;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Constants                                                                  */
+/* -------------------------------------------------------------------------- */
+
+const DAY_MS = 86_400_000;
 
 const TONE_CLASS: Record<Tone, string> = {
   danger: "bg-destructive/10 text-destructive",
@@ -143,33 +80,101 @@ const TONE_CLASS: Record<Tone, string> = {
   neutral: "bg-muted text-muted-foreground",
 };
 
-const META: Record<
-  NotificationType,
-  { icon: LucideIcon; tone: Tone; category: Category; action: string | null; urgent: boolean }
-> = {
-  INVOICE_ISSUED: { icon: FileText, tone: "info", category: "invoices", action: "View invoice", urgent: false },
-  PAYMENT_DUE_SOON: { icon: CalendarClock, tone: "warning", category: "invoices", action: "Pay now", urgent: true },
-  PAYMENT_OVERDUE: { icon: AlertCircle, tone: "danger", category: "invoices", action: "Pay now", urgent: true },
-  PENALTY_APPLIED: { icon: AlertTriangle, tone: "warning", category: "invoices", action: "View invoice", urgent: false },
-  PAYMENT_SUCCESS: { icon: CheckCircle2, tone: "success", category: "payments", action: "View payment", urgent: false },
-  PAYMENT_FAILED: { icon: XCircle, tone: "danger", category: "payments", action: "Try again", urgent: true },
-  SYSTEM: { icon: Info, tone: "neutral", category: "system", action: null, urgent: false },
+/**
+ * Notification types must match the Laravel NotificationType enum.
+ */
+const NOTIFICATION_META: Record<string, NotificationMeta> = {
+  "payment.received": {
+    icon: CheckCircle2,
+    tone: "success",
+    category: "payments",
+    action: "View payment",
+    urgent: false,
+  },
+
+  "invoice.generated": {
+    icon: FileText,
+    tone: "info",
+    category: "invoices",
+    action: "View invoice",
+    urgent: false,
+  },
+
+  "assessment.approved": {
+    icon: CheckCircle2,
+    tone: "success",
+    category: "assessments",
+    action: "View assessment",
+    urgent: false,
+  },
+
+  "lease.expiring": {
+    icon: CalendarClock,
+    tone: "warning",
+    category: "leases",
+    action: "View lease",
+    urgent: true,
+  },
+
+  "payment.failed": {
+    icon: XCircle,
+    tone: "danger",
+    category: "payments",
+    action: "View payment",
+    urgent: true,
+  },
+
+  "payment.overdue": {
+    icon: AlertCircle,
+    tone: "danger",
+    category: "invoices",
+    action: "View invoice",
+    urgent: true,
+  },
+
+  "payment.due_soon": {
+    icon: CalendarClock,
+    tone: "warning",
+    category: "invoices",
+    action: "View invoice",
+    urgent: true,
+  },
+
+  "invoice.overdue": {
+    icon: AlertTriangle,
+    tone: "danger",
+    category: "invoices",
+    action: "View invoice",
+    urgent: true,
+  },
+
+  "system.announcement": {
+    icon: Info,
+    tone: "neutral",
+    category: "system",
+    action: "View details",
+    urgent: false,
+  },
 };
 
-/* ---------------------------------------------------------------
-   FILTERS + GROUPS
---------------------------------------------------------------- */
+const DEFAULT_META: NotificationMeta = {
+  icon: Info,
+  tone: "neutral",
+  category: "system",
+  action: "View details",
+  urgent: false,
+};
 
-type FilterKey = "all" | "unread" | "invoices" | "payments";
-
-const FILTERS: { key: FilterKey; label: string; match: (n: TaxpayerNotification) => boolean }[] = [
-  { key: "all", label: "All", match: () => true },
-  { key: "unread", label: "Unread", match: (n) => !n.read_at },
-  { key: "invoices", label: "Invoices", match: (n) => META[n.type].category === "invoices" },
-  { key: "payments", label: "Payments", match: (n) => META[n.type].category === "payments" },
+const FILTERS: {
+  key: FilterKey;
+  label: string;
+}[] = [
+  { key: "all", label: "All" },
+  { key: "unread", label: "Unread" },
+  { key: "invoices", label: "Invoices" },
+  { key: "payments", label: "Payments" },
+  { key: "other", label: "Other" },
 ];
-
-type GroupKey = "attention" | "today" | "yesterday" | "week" | "earlier";
 
 const GROUP_LABEL: Record<GroupKey, string> = {
   attention: "Needs your attention",
@@ -179,160 +184,568 @@ const GROUP_LABEL: Record<GroupKey, string> = {
   earlier: "Earlier",
 };
 
-/* Delivery preferences */
-type PrefKey = "reminders" | "confirmations" | "invoices";
+/* -------------------------------------------------------------------------- */
+/* Notification Metadata                                                      */
+/* -------------------------------------------------------------------------- */
 
-const PREF_ROWS: { key: PrefKey; label: string; hint: string }[] = [
-  { key: "reminders", label: "Payment reminders", hint: "Before a due date and when an invoice is overdue" },
-  { key: "confirmations", label: "Payment confirmations", hint: "Receipts and failed payment alerts" },
-  { key: "invoices", label: "New invoices", hint: "When a new invoice is issued to you" },
-];
+function getNotificationMeta(
+  notification: AppNotification
+): NotificationMeta {
+  const knownMeta = NOTIFICATION_META[notification.type];
 
-type Prefs = Record<PrefKey, { sms: boolean; email: boolean }>;
+  if (knownMeta) {
+    return knownMeta;
+  }
 
-const MOCK_PREFS: Prefs = {
-  reminders: { sms: true, email: true },
-  confirmations: { sms: true, email: false },
-  invoices: { sms: false, email: true },
-};
+  switch (notification.module) {
+    case "payment":
+      return {
+        icon: CheckCircle2,
+        tone: "success",
+        category: "payments",
+        action: "View payment",
+        urgent: false,
+      };
 
-/* ---------------------------------------------------------------
-   PAGE
---------------------------------------------------------------- */
+    case "invoice":
+      return {
+        icon: FileText,
+        tone: "info",
+        category: "invoices",
+        action: "View invoice",
+        urgent: false,
+      };
 
-export function TaxpayerNotifications({
-  notifications = MOCK_NOTIFICATIONS,
-}: {
-  notifications?: TaxpayerNotification[];
-}) {
-  const [items, setItems] = useState(notifications);
-  const [filter, setFilter] = useState<FilterKey>("all");
-  const [prefs, setPrefs] = useState<Prefs>(MOCK_PREFS);
+    case "assessment":
+      return {
+        icon: CheckCircle2,
+        tone: "success",
+        category: "assessments",
+        action: "View assessment",
+        urgent: false,
+      };
 
-  // With a real API: call PATCH /taxpayer/notifications/{id}/read (and
-  // .../read-all), then refresh the unread count shown in the top bar.
-  const markRead = (id: TaxpayerNotification["id"]) =>
-    setItems((prev) =>
-      prev.map((n) =>
-        n.id === id && !n.read_at
-          ? { ...n, read_at: new Date().toISOString() }
-          : n
-      )
-    );
+    case "lease":
+      return {
+        icon: CalendarClock,
+        tone: "warning",
+        category: "leases",
+        action: "View lease",
+        urgent: true,
+      };
 
-  const markAllRead = () =>
-    setItems((prev) =>
-      prev.map((n) => (n.read_at ? n : { ...n, read_at: new Date().toISOString() }))
-    );
+    default:
+      return DEFAULT_META;
+  }
+}
 
-  const counts = useMemo(
-    () =>
-      Object.fromEntries(
-        FILTERS.map((f) => [f.key, items.filter(f.match).length])
-      ) as Record<FilterKey, number>,
-    [items]
+/* -------------------------------------------------------------------------- */
+/* Helpers                                                                    */
+/* -------------------------------------------------------------------------- */
+
+function isUnread(notification: AppNotification): boolean {
+  return !notification.is_read;
+}
+
+function isUrgent(notification: AppNotification): boolean {
+  return (
+    notification.priority === "high" ||
+    notification.priority === "urgent"
+  );
+}
+
+function matchesFilter(
+  notification: AppNotification,
+  filter: FilterKey
+): boolean {
+  const category = getNotificationMeta(notification).category;
+
+  switch (filter) {
+    case "all":
+      return true;
+
+    case "unread":
+      return isUnread(notification);
+
+    case "invoices":
+      return category === "invoices";
+
+    case "payments":
+      return category === "payments";
+
+    case "other":
+      return (
+        category === "assessments" ||
+        category === "leases" ||
+        category === "system"
+      );
+
+    default:
+      return true;
+  }
+}
+
+function getTimestamp(value: string | null): number {
+  if (!value) return 0;
+
+  const timestamp = new Date(value).getTime();
+
+  return Number.isNaN(timestamp) ? 0 : timestamp;
+}
+
+function startOfToday(): Date {
+  const date = new Date();
+
+  date.setHours(0, 0, 0, 0);
+
+  return date;
+}
+
+function getBucket(
+  value: string | null,
+  today: Date
+): GroupKey {
+  if (!value) return "earlier";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "earlier";
+  }
+
+  date.setHours(0, 0, 0, 0);
+
+  const days = Math.floor(
+    (today.getTime() - date.getTime()) / DAY_MS
   );
 
+  if (days <= 0) return "today";
+  if (days === 1) return "yesterday";
+  if (days < 7) return "week";
+
+  return "earlier";
+}
+
+function timeAgo(value: string | null): string {
+  if (!value) return "Unknown date";
+
+  const timestamp = getTimestamp(value);
+
+  if (!timestamp) return "Unknown date";
+
+  const diff = Math.max(0, Date.now() - timestamp);
+
+  const minutes = Math.floor(diff / 60_000);
+
+  if (minutes < 1) return "Just now";
+
+  if (minutes < 60) {
+    return `${minutes} min ago`;
+  }
+
+  const hours = Math.floor(minutes / 60);
+
+  if (hours < 24) {
+    return `${hours} ${hours === 1 ? "hour" : "hours"} ago`;
+  }
+
+  const days = Math.floor(hours / 24);
+
+  if (days < 7) {
+    return `${days} ${days === 1 ? "day" : "days"} ago`;
+  }
+
+  return new Intl.DateTimeFormat("en", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(new Date(timestamp));
+}
+
+/**
+ * Notification action URLs must be internal application paths.
+ */
+function getSafeActionUrl(
+  actionUrl: string | null
+): string | null {
+  if (!actionUrl) return null;
+
+  if (
+    !actionUrl.startsWith("/") ||
+    actionUrl.startsWith("//") ||
+    actionUrl.includes("\\")
+  ) {
+    return null;
+  }
+
+  return actionUrl;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Page                                                                       */
+/* -------------------------------------------------------------------------- */
+
+export function TaxpayerNotifications() {
+  const [filter, setFilter] = useState<FilterKey>("all");
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  /* ---------------------------------------------------------------------- */
+  /* API Queries                                                            */
+  /* ---------------------------------------------------------------------- */
+
+  const {
+    data: notificationsResponse,
+    isLoading,
+    isError,
+    error,
+    refetch,
+    isRefetching,
+  } = useNotifications({
+    filter: "all",
+    per_page: 100,
+    page: 1,
+  });
+
+  const {
+    data: unreadCount = 0,
+    isLoading: isUnreadCountLoading,
+  } = useUnreadNotificationCount();
+
+  /* ---------------------------------------------------------------------- */
+  /* API Mutations                                                          */
+  /* ---------------------------------------------------------------------- */
+
+  const markReadMutation = useMarkNotificationAsRead();
+
+  const markAllReadMutation = useMarkAllNotificationsAsRead();
+
+  /* ---------------------------------------------------------------------- */
+  /* Notification Data                                                      */
+  /* ---------------------------------------------------------------------- */
+
+  const notifications = useMemo(
+    () => notificationsResponse?.data ?? [],
+    [notificationsResponse]
+  );
+
+  /* ---------------------------------------------------------------------- */
+  /* Actions                                                                */
+  /* ---------------------------------------------------------------------- */
+
+  const markRead = async (id: string): Promise<void> => {
+    setActionError(null);
+
+    try {
+      await markReadMutation.mutateAsync(id);
+    } catch {
+      setActionError(
+        "Unable to mark this notification as read. Please try again."
+      );
+    }
+  };
+
+  const markAllRead = async (): Promise<void> => {
+    if (unreadCount === 0) return;
+
+    setActionError(null);
+
+    try {
+      await markAllReadMutation.mutateAsync();
+    } catch {
+      setActionError(
+        "Unable to mark all notifications as read. Please try again."
+      );
+    }
+  };
+
+  /* ---------------------------------------------------------------------- */
+  /* Counts                                                                 */
+  /* ---------------------------------------------------------------------- */
+
+  const counts = useMemo(() => {
+    return {
+      all: notifications.length,
+
+      unread: notifications.filter(isUnread).length,
+
+      invoices: notifications.filter(
+        (notification) =>
+          getNotificationMeta(notification).category === "invoices"
+      ).length,
+
+      payments: notifications.filter(
+        (notification) =>
+          getNotificationMeta(notification).category === "payments"
+      ).length,
+
+      other: notifications.filter((notification) => {
+        const category = getNotificationMeta(notification).category;
+
+        return (
+          category === "assessments" ||
+          category === "leases" ||
+          category === "system"
+        );
+      }).length,
+    };
+  }, [notifications]);
+
+  /* ---------------------------------------------------------------------- */
+  /* Filtering                                                              */
+  /* ---------------------------------------------------------------------- */
+
+  const filteredNotifications = useMemo(() => {
+    return notifications
+      .filter((notification) =>
+        matchesFilter(notification, filter)
+      )
+      .sort(
+        (a, b) =>
+          getTimestamp(b.created_at) -
+          getTimestamp(a.created_at)
+      );
+  }, [notifications, filter]);
+
+  /* ---------------------------------------------------------------------- */
+  /* Grouping                                                               */
+  /* ---------------------------------------------------------------------- */
+
   const groups = useMemo(() => {
-    const active = FILTERS.find((f) => f.key === filter)!;
-    const sorted = items
-      .filter(active.match)
-      .sort((a, b) => time(b.created_at) - time(a.created_at));
+    const sorted = [...filteredNotifications];
 
-    // Unread items that need action float to the top.
-    const isPriority = (n: TaxpayerNotification) =>
-      !n.read_at && META[n.type].urgent;
+    const isPriority = (notification: AppNotification) =>
+      isUnread(notification) && isUrgent(notification);
 
-    const out: { key: GroupKey; items: TaxpayerNotification[] }[] = [];
+    const output: {
+      key: GroupKey;
+      items: AppNotification[];
+    }[] = [];
+
     const attention = sorted.filter(isPriority);
-    if (attention.length) out.push({ key: "attention", items: attention });
+
+    if (attention.length > 0) {
+      output.push({
+        key: "attention",
+        items: attention,
+      });
+    }
 
     const today = startOfToday();
-    for (const n of sorted.filter((n) => !isPriority(n))) {
-      const key = bucket(n.created_at, today);
-      let group = out.find((g) => g.key === key);
-      if (!group) {
-        group = { key, items: [] };
-        out.push(group);
-      }
-      group.items.push(n);
-    }
-    return out;
-  }, [items, filter]);
 
-  const unread = counts.unread;
+    for (const notification of sorted.filter(
+      (item) => !isPriority(item)
+    )) {
+      const key = getBucket(notification.created_at, today);
+
+      let group = output.find((item) => item.key === key);
+
+      if (!group) {
+        group = {
+          key,
+          items: [],
+        };
+
+        output.push(group);
+      }
+
+      group.items.push(notification);
+    }
+
+    return output;
+  }, [filteredNotifications]);
+
+  /* ---------------------------------------------------------------------- */
+  /* Loading State                                                          */
+  /* ---------------------------------------------------------------------- */
+
+  if (isLoading) {
+    return (
+      <div className="mx-auto flex min-h-[400px] w-full max-w-3xl items-center justify-center p-6">
+        <div className="flex flex-col items-center gap-3 text-center">
+          <Loader2 className="size-7 animate-spin text-muted-foreground" />
+
+          <p className="text-sm text-muted-foreground">
+            Loading notifications...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  /* ---------------------------------------------------------------------- */
+  /* Error State                                                            */
+  /* ---------------------------------------------------------------------- */
+
+  if (isError) {
+    return (
+      <div className="mx-auto w-full max-w-3xl p-4 sm:p-6 lg:p-8">
+        <Card className="flex flex-col items-center px-6 py-12 text-center">
+          <div className="flex size-11 items-center justify-center rounded-lg bg-destructive/10">
+            <AlertCircle className="size-5 text-destructive" />
+          </div>
+
+          <h2 className="mt-4 text-base font-semibold">
+            Unable to load notifications
+          </h2>
+
+          <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+            {error instanceof Error
+              ? error.message
+              : "Something went wrong while retrieving your notifications."}
+          </p>
+
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="mt-5"
+            onClick={() => refetch()}
+            disabled={isRefetching}
+          >
+            {isRefetching ? (
+              <Loader2 className="mr-2 size-4 animate-spin" />
+            ) : (
+              <RefreshCw className="mr-2 size-4" />
+            )}
+
+            Try again
+          </Button>
+        </Card>
+      </div>
+    );
+  }
+
+  /* ---------------------------------------------------------------------- */
+  /* Render                                                                 */
+  /* ---------------------------------------------------------------------- */
 
   return (
     <div className="min-w-0">
       <div className="mx-auto w-full max-w-3xl space-y-6 p-4 sm:p-6 lg:p-8">
+
+        {/* Header */}
         <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div className="space-y-1">
             <h1 className="text-2xl font-semibold tracking-tight">
               Notifications
             </h1>
+
             <p className="text-sm text-muted-foreground">
-              {unread > 0
-                ? `You have ${unread} unread ${unread === 1 ? "notification" : "notifications"}.`
-                : "You're all caught up."}
+              {isUnreadCountLoading
+                ? "Checking unread notifications..."
+                : unreadCount > 0
+                  ? `You have ${unreadCount} unread ${
+                      unreadCount === 1
+                        ? "notification"
+                        : "notifications"
+                    }.`
+                  : "You're all caught up."}
             </p>
           </div>
 
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={unread === 0}
-            onClick={markAllRead}
-            className="w-full shrink-0 sm:w-auto"
-          >
-            <CheckCheck className="mr-2 size-4" />
-            Mark all as read
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => refetch()}
+              disabled={isRefetching}
+              aria-label="Refresh notifications"
+            >
+              <RefreshCw
+                className={cn(
+                  "size-4",
+                  isRefetching && "animate-spin"
+                )}
+              />
+            </Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={
+                unreadCount === 0 ||
+                markAllReadMutation.isPending
+              }
+              onClick={markAllRead}
+              className="w-full shrink-0 sm:w-auto"
+            >
+              {markAllReadMutation.isPending ? (
+                <Loader2 className="mr-2 size-4 animate-spin" />
+              ) : (
+                <CheckCheck className="mr-2 size-4" />
+              )}
+
+              Mark all as read
+            </Button>
+          </div>
         </header>
 
+        {/* Mutation Error */}
+        {actionError && (
+          <div
+            role="alert"
+            className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive"
+          >
+            <AlertCircle className="size-4 shrink-0" />
+            {actionError}
+          </div>
+        )}
+
         {/* Filters */}
-        <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter notifications">
-          {FILTERS.map((f) => (
+        <div
+          className="flex flex-wrap gap-1.5"
+          role="group"
+          aria-label="Filter notifications"
+        >
+          {FILTERS.map((item) => (
             <button
-              key={f.key}
+              key={item.key}
               type="button"
-              aria-pressed={filter === f.key}
-              onClick={() => setFilter(f.key)}
+              aria-pressed={filter === item.key}
+              onClick={() => setFilter(item.key)}
               className={cn(
                 "rounded-full border px-3 py-1.5 text-sm transition-colors",
-                filter === f.key
+                filter === item.key
                   ? "border-primary bg-primary text-primary-foreground"
                   : "text-muted-foreground hover:bg-muted"
               )}
             >
-              {f.label}
+              {item.label}
+
               <span className="ml-1.5 tabular-nums opacity-70">
-                {counts[f.key]}
+                {counts[item.key]}
               </span>
             </button>
           ))}
         </div>
 
-        {/* List */}
+        {/* Notification List */}
         <Card className="overflow-hidden">
           {groups.length === 0 ? (
             <div className="flex flex-col items-center px-6 py-14 text-center">
               <div className="flex size-10 items-center justify-center rounded-lg bg-muted">
                 <Bell className="size-5 text-muted-foreground" />
               </div>
+
               <p className="mt-3 text-sm font-medium">
-                {items.length === 0
+                {notifications.length === 0
                   ? "No notifications yet"
                   : filter === "unread"
                     ? "You're all caught up"
                     : "Nothing here"}
               </p>
+
               <p className="mt-1 max-w-xs text-xs text-muted-foreground">
-                {items.length === 0
-                  ? "Invoice, due date and payment updates will appear here."
+                {notifications.length === 0
+                  ? "Invoice, assessment, lease and payment updates will appear here."
                   : "There are no notifications in this view."}
               </p>
-              {filter !== "all" && items.length > 0 && (
+
+              {filter !== "all" && notifications.length > 0 && (
                 <Button
+                  type="button"
                   variant="outline"
                   size="sm"
                   className="mt-4"
@@ -343,21 +756,30 @@ export function TaxpayerNotifications({
               )}
             </div>
           ) : (
-            groups.map((g) => (
-              <section key={g.key}>
+            groups.map((group) => (
+              <section key={group.key}>
                 <h2
                   className={cn(
                     "border-b bg-muted/30 px-4 py-2 text-xs font-medium",
-                    g.key === "attention"
+                    group.key === "attention"
                       ? "text-destructive"
                       : "text-muted-foreground"
                   )}
                 >
-                  {GROUP_LABEL[g.key]}
+                  {GROUP_LABEL[group.key]}
                 </h2>
+
                 <ul className="divide-y border-b last:border-b-0">
-                  {g.items.map((n) => (
-                    <NotificationRow key={n.id} notification={n} onRead={markRead} />
+                  {group.items.map((notification) => (
+                    <NotificationRow
+                      key={notification.id}
+                      notification={notification}
+                      onRead={markRead}
+                      isMarkingRead={
+                        markReadMutation.isPending &&
+                        markReadMutation.variables === notification.id
+                      }
+                    />
                   ))}
                 </ul>
               </section>
@@ -365,82 +787,49 @@ export function TaxpayerNotifications({
           )}
         </Card>
 
-        {/* Delivery preferences */}
-        <section>
-          <h2 className="mb-2 px-1 text-sm font-medium text-muted-foreground">
-            Delivery preferences
-          </h2>
-          <Card>
-            <p className="border-b px-5 py-3 text-xs text-muted-foreground">
-              Notifications always appear here. Choose where else we should
-              reach you. Changes are saved automatically.
-            </p>
-
-            <div className="grid grid-cols-[1fr_auto_auto] items-center gap-x-6 px-5 py-2 text-xs text-muted-foreground">
-              <span />
-              <span className="w-10 text-center">SMS</span>
-              <span className="w-10 text-center">Email</span>
-            </div>
-
-            <ul className="divide-y border-t">
-              {PREF_ROWS.map((row) => (
-                <li
-                  key={row.key}
-                  className="grid grid-cols-[1fr_auto_auto] items-center gap-x-6 px-5 py-3.5"
-                >
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium">{row.label}</p>
-                    <p className="text-xs text-muted-foreground">{row.hint}</p>
-                  </div>
-
-                  {(["sms", "email"] as const).map((channel) => (
-                    <div key={channel} className="flex w-10 justify-center">
-                      <Switch
-                        checked={prefs[row.key][channel]}
-                        onCheckedChange={(checked) =>
-                          // With a real API: PATCH /taxpayer/notification-preferences
-                          setPrefs((prev) => ({
-                            ...prev,
-                            [row.key]: { ...prev[row.key], [channel]: checked },
-                          }))
-                        }
-                        aria-label={`${row.label} by ${channel === "sms" ? "SMS" : "email"}`}
-                      />
-                    </div>
-                  ))}
-                </li>
-              ))}
-            </ul>
-          </Card>
-        </section>
+        {/* Pagination Information */}
+        {notificationsResponse?.meta && (
+          <p className="text-center text-xs text-muted-foreground">
+            Showing {notifications.length} of{" "}
+            {notificationsResponse.meta.total} notifications
+          </p>
+        )}
       </div>
     </div>
   );
 }
 
-// Route entry: app/[locale]/citizen/dashboard/notifications/page.tsx
-export default function NotificationsPage() {
-  return <TaxpayerNotifications />;
-}
-
-/* ---------------------------------------------------------------
-   PARTS
---------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+/* Notification Row                                                          */
+/* -------------------------------------------------------------------------- */
 
 function NotificationRow({
-  notification: n,
+  notification,
   onRead,
+  isMarkingRead,
 }: {
-  notification: TaxpayerNotification;
-  onRead: (id: TaxpayerNotification["id"]) => void;
+  notification: AppNotification;
+  onRead: (id: string) => void | Promise<void>;
+  isMarkingRead: boolean;
 }) {
-  const meta = META[n.type];
+  const meta = getNotificationMeta(notification);
+
   const Icon = meta.icon;
-  const unread = !n.read_at;
-  const priority = unread && meta.urgent;
+
+  const unread = isUnread(notification);
+
+  const priority = unread && isUrgent(notification);
+
+  const actionUrl = getSafeActionUrl(notification.action_url);
 
   return (
-    <li className={cn("flex gap-3 p-4", unread && "bg-primary/[0.03]")}>
+    <li
+      className={cn(
+        "flex gap-3 p-4 transition-colors",
+        unread && "bg-primary/[0.03]"
+      )}
+    >
+      {/* Icon */}
       <div
         className={cn(
           "flex size-9 shrink-0 items-center justify-center rounded-lg",
@@ -450,6 +839,7 @@ function NotificationRow({
         <Icon className="size-4" aria-hidden="true" />
       </div>
 
+      {/* Content */}
       <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-3">
           <p
@@ -458,45 +848,68 @@ function NotificationRow({
               unread ? "font-semibold" : "font-medium"
             )}
           >
-            {unread && <span className="sr-only">Unread: </span>}
-            {n.title}
+            {unread && (
+              <span className="sr-only">Unread: </span>
+            )}
+
+            {notification.title}
           </p>
-          <span className="shrink-0 text-xs text-muted-foreground">
-            {timeAgo(n.created_at)}
-          </span>
+
+          <time
+            dateTime={notification.created_at ?? undefined}
+            className="shrink-0 text-xs text-muted-foreground"
+          >
+            {timeAgo(notification.created_at)}
+          </time>
         </div>
 
-        <p className="mt-0.5 text-sm text-muted-foreground">{n.message}</p>
+        <p className="mt-0.5 whitespace-pre-line text-sm text-muted-foreground">
+          {notification.message}
+        </p>
 
-        {(n.action_url && meta.action) || unread ? (
+        {/* Actions */}
+        {(actionUrl || unread) && (
           <div className="mt-2.5 flex flex-wrap items-center gap-3">
-            {n.action_url && meta.action && (
+            {actionUrl && (
               <Button
                 asChild
+                type="button"
                 size="sm"
                 variant={priority ? "default" : "outline"}
-                onClick={() => onRead(n.id)}
+                onClick={() => {
+                  if (unread) {
+                    void onRead(notification.id);
+                  }
+                }}
               >
-                <Link href={n.action_url}>{meta.action}</Link>
+                <Link href={actionUrl}>
+                  {meta.action}
+                </Link>
               </Button>
             )}
 
             {unread && (
               <button
                 type="button"
-                onClick={() => onRead(n.id)}
-                className="text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+                disabled={isMarkingRead}
+                onClick={() => void onRead(notification.id)}
+                className="inline-flex items-center gap-1 text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline disabled:cursor-not-allowed disabled:opacity-50"
               >
+                {isMarkingRead && (
+                  <Loader2 className="size-3 animate-spin" />
+                )}
+
                 Mark as read
               </button>
             )}
           </div>
-        ) : null}
+        )}
       </div>
 
+      {/* Unread Indicator */}
       {unread && (
         <span
-          aria-hidden="true"
+          aria-label="Unread"
           className="mt-2 size-2 shrink-0 rounded-full bg-primary"
         />
       )}
@@ -504,42 +917,13 @@ function NotificationRow({
   );
 }
 
-/* ---------------------------------------------------------------
-   HELPERS
---------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+/* Next.js Page                                                               */
+/* -------------------------------------------------------------------------- */
 
-const DAY_MS = 86_400_000;
+// Route:
+// app/[locale]/citizen/dashboard/notifications/page.tsx
 
-function time(value: string): number {
-  return new Date(value).getTime();
-}
-
-function startOfToday(): Date {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
-function bucket(value: string, today: Date): GroupKey {
-  const d = new Date(value);
-  d.setHours(0, 0, 0, 0);
-  const days = Math.round((today.getTime() - d.getTime()) / DAY_MS);
-  if (days <= 0) return "today";
-  if (days === 1) return "yesterday";
-  if (days < 7) return "week";
-  return "earlier";
-}
-
-function timeAgo(value: string): string {
-  const diff = Date.now() - time(value);
-  const minutes = Math.floor(diff / 60_000);
-  if (minutes < 1) return "Just now";
-  if (minutes < 60) return `${minutes} min ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} ${hours === 1 ? "hour" : "hours"} ago`;
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  }).format(new Date(value));
+export default function NotificationsPage() {
+  return <TaxpayerNotifications />;
 }

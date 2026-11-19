@@ -40,6 +40,19 @@ export type RevenuePaymentStatus =
   | "REVERSED";
 
 /**
+ * Cash reconciliation statuses.
+ *
+ * Keep these values synchronized with the Laravel backend enum.
+ */
+export type CashReconciliationStatus =
+  | "DRAFT"
+  | "PENDING_REVIEW"
+  | "RECONCILED"
+  | "DISCREPANCY"
+  | "RETURNED"
+  | "CANCELLED";
+
+/**
  * Revenue domains supported by the API.
  */
 export type RevenueDomain =
@@ -86,32 +99,109 @@ export interface RevenueCollectionReportFilters {
 
 /**
  * Overall financial and transaction summary.
+ *
+ * total_collected represents officially recognized collections:
+ * - Completed non-cash payments.
+ * - Completed cash payments belonging to reconciled collections.
+ *
+ * Cash with outstanding reconciliation or discrepancies is reported
+ * separately and is not included in total_collected.
  */
 export interface RevenueCollectionSummary {
+  /**
+   * Officially recognized collection amount.
+   */
   total_collected: ReportNumericValue;
+
+  /**
+   * Number of officially recognized transactions.
+   */
+  collected_count: number;
+
+  /**
+   * Number of all payment transactions in the report.
+   */
   total_transactions: number;
+
+  /**
+   * Completed payment count.
+   */
   completed_count: number;
 
+  /**
+   * Completed non-cash payment amount.
+   */
+  non_cash_collected: ReportNumericValue;
+
+  /**
+   * Completed non-cash payment count.
+   */
+  non_cash_collected_count: number;
+
+  /**
+   * Completed cash payments belonging to reconciled collections.
+   */
+  reconciled_cash: ReportNumericValue;
+  reconciled_cash_count: number;
+
+  /**
+   * Completed cash payments not yet reconciled.
+   */
+  unreconciled_cash: ReportNumericValue;
+  unreconciled_cash_count: number;
+
+  /**
+   * Completed cash payments belonging to collections
+   * with reconciliation discrepancies.
+   */
+  discrepancy_cash: ReportNumericValue;
+  discrepancy_cash_count: number;
+
+  /**
+   * Pending payments.
+   */
   pending_amount: ReportNumericValue;
   pending_count: number;
 
+  /**
+   * Processing payments.
+   */
   processing_amount: ReportNumericValue;
   processing_count: number;
 
+  /**
+   * Failed payments.
+   */
   failed_amount: ReportNumericValue;
   failed_count: number;
 
+  /**
+   * Reversed payments.
+   */
   reversed_amount: ReportNumericValue;
   reversed_count: number;
 
+  /**
+   * Cancelled payments.
+   */
   cancelled_count: number;
+
+  /**
+   * Expired payments.
+   */
   expired_count: number;
 
+  /**
+   * Average officially recognized payment.
+   */
   average_payment: ReportNumericValue;
 }
 
 /**
  * Collection trend grouped by day or month.
+ *
+ * Amounts and counts should follow the backend's official
+ * collection eligibility rules.
  */
 export interface DailyCollectionItem {
   period: string;
@@ -151,8 +241,6 @@ export interface AdministrativeUnitCollectionItem {
 
 /**
  * Revenue category option for report filter dropdowns.
- *
- * Adjust optional fields to match your actual category API resource.
  */
 export interface RevenueCategoryOption {
   id: string;
@@ -161,8 +249,6 @@ export interface RevenueCategoryOption {
 
 /**
  * Service option for report filter dropdowns.
- *
- * Adjust optional fields to match your actual service API resource.
  */
 export interface RevenueServiceOption {
   id: string;
@@ -175,25 +261,20 @@ export interface RevenueServiceOption {
  */
 export interface RevenueCollectionReport {
   summary: RevenueCollectionSummary;
+
   daily_collections: DailyCollectionItem[];
+
   payment_methods: RevenueCollectionGroupItem[];
+
   payment_sources: RevenueCollectionGroupItem[];
+
   revenue_domains: RevenueDomainCollectionItem[];
+
   administrative_units: AdministrativeUnitCollectionItem[];
 }
 
 /**
  * Standard Laravel API response envelope.
- *
- * Expected structure:
- * {
- *   message: "...",
- *   data: {
- *     summary: {...},
- *     daily_collections: [...],
- *     ...
- *   }
- * }
  */
 export interface RevenueCollectionReportApiResponse {
   message?: string;

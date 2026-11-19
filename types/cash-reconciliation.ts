@@ -358,3 +358,28 @@ export interface ExpectedCashPagination {
 //     summary: ExpectedCashTotals;
 //   };
 // }
+
+
+export interface NotifyCollectorPayload {
+  collector_id: string;
+  date_from?: string | null;
+  date_to?: string | null;
+}
+
+export interface NotifyCollectorResponse {
+  success: boolean;
+  message: string;
+  data: {
+    collector_id: string;
+    collector_name: string;
+    date_from: string | null;
+    date_to: string | null;
+    payments_count: number;
+    expected_total: string;
+    reconciliations_count: number;
+    reconciled_total: string;
+    outstanding_total: string;
+    notification_type: string;
+  };
+  errors: null;
+}

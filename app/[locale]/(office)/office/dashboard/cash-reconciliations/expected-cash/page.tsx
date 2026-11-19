@@ -27,7 +27,11 @@ import {
 } from "lucide-react";
 
 import { usePermission } from "@/hooks/usePermission";
-import { useExpectedCashByCollector } from "@/hooks/use-cash-reconciliations";
+
+import {
+  useExpectedCashByCollector,
+  useNotifyCashCollector,
+} from "@/hooks/use-cash-reconciliations";
 
 import type {
   ExpectedByCollectorFilters,
@@ -266,6 +270,15 @@ export default function ExpectedCashByCollectorPage() {
     useState<SortDirection>("desc");
 
   // ---------------------------------------------------------
+  // NOTIFICATION MUTATION
+  // ---------------------------------------------------------
+
+  const notifyMutation = useNotifyCashCollector();
+
+  const [notifyingCollectorId, setNotifyingCollectorId] =
+    useState<string | null>(null);
+
+  // ---------------------------------------------------------
   // API FILTERS
   // ---------------------------------------------------------
 
@@ -435,29 +448,50 @@ export default function ExpectedCashByCollectorPage() {
   }
 
   /**
-   * Notification action placeholder.
+   * Send an immediate database notification to a collector
+   * who has outstanding collected cash.
    *
-   * This currently does not send a notification.
-   * Connect this handler to the notification API later.
+   * Every successful request creates a new notification.
+   * Duplicate reminders are intentionally allowed.
    */
-  function handleNotify(row: CollectorRow): void {
+  async function handleNotify(row: CollectorRow): Promise<void> {
     if (row.outstanding <= 0) {
       toast.info("This cash handler has no outstanding cash.");
       return;
     }
 
-    if (!row.email) {
-      toast.error(
-        `${row.name} does not have an email address.`,
-      );
+    if (notifyMutation.isPending) {
       return;
     }
 
-    toast.info("Notification action is not connected yet.", {
-      description: `${row.name} has ${formatMoney(
-        row.outstanding,
-      )} outstanding cash.`,
-    });
+    setNotifyingCollectorId(row.id);
+
+    try {
+      const result = await notifyMutation.mutateAsync({
+        collector_id: row.id,
+        date_from: dateFrom || null,
+        date_to: dateTo || null,
+      });
+
+      toast.success(result.message, {
+        description: `${row.name} has been notified about ${formatMoney(
+          row.outstanding,
+        )} outstanding cash.`,
+      });
+    } catch (error) {
+      console.error(
+        "Failed to send cash reconciliation notification:",
+        error,
+      );
+
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Failed to send notification. Please try again.",
+      );
+    } finally {
+      setNotifyingCollectorId(null);
+    }
   }
 
   function goBack(): void {
@@ -863,6 +897,9 @@ export default function ExpectedCashByCollectorPage() {
                     const hasOutstanding =
                       row.outstanding > 0;
 
+                    const isNotifying =
+                      notifyingCollectorId === row.id;
+
                     return (
                       <TableRow key={row.id}>
                         {/* CASH HANDLER */}
@@ -955,16 +992,26 @@ export default function ExpectedCashByCollectorPage() {
                             type="button"
                             size="sm"
                             variant="outline"
-                            disabled={!hasOutstanding}
-                            onClick={() => handleNotify(row)}
+                            disabled={
+                              !hasOutstanding ||
+                              notifyMutation.isPending
+                            }
+                            onClick={() => void handleNotify(row)}
                             title={
                               hasOutstanding
                                 ? `Notify ${row.name} about outstanding cash`
                                 : "No outstanding cash to notify about"
                             }
                           >
-                            <Bell className="mr-2 size-4" />
-                            Notify
+                            {isNotifying ? (
+                              <Loader2 className="mr-2 size-4 animate-spin" />
+                            ) : (
+                              <Bell className="mr-2 size-4" />
+                            )}
+
+                            {isNotifying
+                              ? "Sending..."
+                              : "Notify"}
                           </Button>
                         </TableCell>
                       </TableRow>

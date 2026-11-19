@@ -121,7 +121,7 @@ export function NavUser({ user }: { user: AuthUser }) {
               <DropdownMenuItem
                 disabled={logoutMutation.isPending}
                 onClick={() =>
-                  router.push("/dashboard/settings")
+                  router.push("/office/dashboard/profiles")
                 }
               >
                 <Settings className="mr-2 h-4 w-4" />
@@ -130,6 +130,7 @@ export function NavUser({ user }: { user: AuthUser }) {
 
               <DropdownMenuItem
                 disabled={logoutMutation.isPending}
+                onClick={()=>router.push("/office/dashboard/notifications")}
               >
                 <Bell className="mr-2 h-4 w-4" />
                 {t("notifications")}

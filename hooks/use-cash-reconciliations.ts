@@ -16,6 +16,7 @@ import type {
   SubmitCashReconciliationPayload,
   ReviewCashReconciliationPayload,
   ExpectedByCollectorFilters,
+  NotifyCollectorPayload,
 } from "@/types/cash-reconciliation";
 
 // ============================================================
@@ -367,6 +368,35 @@ export function useCancelCashReconciliation() {
         queryClient,
         updated.id,
       );
+    },
+  });
+}
+
+// ============================================================
+// NOTIFY COLLECTOR
+// ============================================================
+
+/**
+ * Send an immediate database notification to a cash collector
+ * who has outstanding collected cash.
+ *
+ * Every successful request creates a new notification.
+ * Duplicate reminders are intentionally allowed.
+ *
+ * After success, refresh the expected-cash report.
+ */
+export function useNotifyCashCollector() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (payload: NotifyCollectorPayload) =>
+      cashReconciliationService.notifyCollector(payload),
+
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey:
+          cashReconciliationQueryKeys.expectedByCollectors(),
+      });
     },
   });
 }

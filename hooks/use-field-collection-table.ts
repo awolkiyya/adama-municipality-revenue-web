@@ -1,153 +1,153 @@
-"use client"
+// "use client"
 
-import {
-  useMemo,
-  useState,
-} from "react"
+// import {
+//   useMemo,
+//   useState,
+// } from "react"
 
-import {
-  useDirectCollections,
-} from "@/hooks/revenue/use-direct-collection"
-import { mapDirectCollection, resolveApiStatus } from "@/utils/helpers"
+// import {
+//   useDirectCollections,
+// } from "@/hooks/revenue/use-direct-collection"
+// import { mapDirectCollection, resolveApiStatus } from "@/utils/helpers"
 
 
 
-export function useFieldCollectionTable() {
-  const [search, setSearch] =
-    useState("")
+// export function useFieldCollectionTable() {
+//   const [search, setSearch] =
+//     useState("")
 
-  const [statusFilter, setStatusFilter] =
-    useState("ALL")
+//   const [statusFilter, setStatusFilter] =
+//     useState("ALL")
 
-  const [page, setPage] =
-    useState(1)
+//   const [page, setPage] =
+//     useState(1)
 
-  const perPage = 20
+//   const perPage = 20
 
-  const listParams = useMemo(() => {
-    const apiStatus =
-      resolveApiStatus(
-        statusFilter,
-      )
+//   const listParams = useMemo(() => {
+//     const apiStatus =
+//       resolveApiStatus(
+//         statusFilter,
+//       )
 
-    return {
-      page,
+//     return {
+//       page,
 
-      per_page:
-        perPage,
+//       per_page:
+//         perPage,
 
-      ...(search.trim()
-        ? {
-            search:
-              search.trim(),
-          }
-        : {}),
+//       ...(search.trim()
+//         ? {
+//             search:
+//               search.trim(),
+//           }
+//         : {}),
 
-      ...(apiStatus
-        ? {
-            status:
-              apiStatus,
-          }
-        : {}),
-    }
-  }, [
-    page,
-    search,
-    statusFilter,
-  ])
+//       ...(apiStatus
+//         ? {
+//             status:
+//               apiStatus,
+//           }
+//         : {}),
+//     }
+//   }, [
+//     page,
+//     search,
+//     statusFilter,
+//   ])
 
-  const query =
-    useDirectCollections(
-      listParams,
-    )
+//   const query =
+//     useDirectCollections(
+//       listParams,
+//     )
 
-  const collections =
-    useMemo(
-      () =>
-        (
-          query.data?.data ??
-          []
-        ).map(
-          mapDirectCollection,
-        ),
-      [query.data],
-    )
+//   const collections =
+//     useMemo(
+//       () =>
+//         (
+//           query.data?.data ??
+//           []
+//         ).map(
+//           mapDirectCollection,
+//         ),
+//       [query.data],
+//     )
 
-  const pagination =
-    query.data?.meta
+//   const pagination =
+//     query.data?.meta
 
-  function handleSearch(
-    value: string,
-  ) {
-    setSearch(value)
-    setPage(1)
-  }
+//   function handleSearch(
+//     value: string,
+//   ) {
+//     setSearch(value)
+//     setPage(1)
+//   }
 
-  function handleStatus(
-    value: string,
-  ) {
-    setStatusFilter(value)
-    setPage(1)
-  }
+//   function handleStatus(
+//     value: string,
+//   ) {
+//     setStatusFilter(value)
+//     setPage(1)
+//   }
 
-  function previousPage() {
-    setPage(
-      current =>
-        Math.max(
-          1,
-          current - 1,
-        ),
-    )
-  }
+//   function previousPage() {
+//     setPage(
+//       current =>
+//         Math.max(
+//           1,
+//           current - 1,
+//         ),
+//     )
+//   }
 
-  function nextPage() {
-    setPage(
-      current =>
-        Math.min(
-          pagination?.last_page ??
-            current,
-          current + 1,
-        ),
-    )
-  }
+//   function nextPage() {
+//     setPage(
+//       current =>
+//         Math.min(
+//           pagination?.last_page ??
+//             current,
+//           current + 1,
+//         ),
+//     )
+//   }
 
-  function goToPage(
-    targetPage: number,
-  ) {
-    const lastPage =
-      pagination?.last_page ?? 1
+//   function goToPage(
+//     targetPage: number,
+//   ) {
+//     const lastPage =
+//       pagination?.last_page ?? 1
 
-    setPage(
-      Math.min(
-        Math.max(
-          targetPage,
-          1,
-        ),
-        lastPage,
-      ),
-    )
-  }
+//     setPage(
+//       Math.min(
+//         Math.max(
+//           targetPage,
+//           1,
+//         ),
+//         lastPage,
+//       ),
+//     )
+//   }
 
-  return {
-    ...query,
+//   return {
+//     ...query,
 
-    collections,
+//     collections,
 
-    pagination,
+//     pagination,
 
-    search,
-    statusFilter,
-    page,
-    perPage,
+//     search,
+//     statusFilter,
+//     page,
+//     perPage,
 
-    setSearch:
-      handleSearch,
+//     setSearch:
+//       handleSearch,
 
-    setStatusFilter:
-      handleStatus,
+//     setStatusFilter:
+//       handleStatus,
 
-    previousPage,
-    nextPage,
-    goToPage,
-  }
-}
+//     previousPage,
+//     nextPage,
+//     goToPage,
+//   }
+// }

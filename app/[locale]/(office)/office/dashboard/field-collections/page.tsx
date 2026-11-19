@@ -622,7 +622,7 @@ export default function FieldCollectionPage() {
     )
 
   const startCollection = () =>
-    go(`${COLLECTION_BASE_PATH}/create`)
+    go("/en/office/dashboard/cash-reconciliations")
 
   const viewDetails = (c: CollectionRecord) =>
     go(`${COLLECTION_BASE_PATH}/${enc(c.id)}`)
@@ -702,7 +702,7 @@ export default function FieldCollectionPage() {
         className="w-full shrink-0 gap-2 sm:w-auto"
       >
         <Plus className="size-4" />
-        Start collection
+        Start Cash Reconcilation
       </Button>
     </header>
   )

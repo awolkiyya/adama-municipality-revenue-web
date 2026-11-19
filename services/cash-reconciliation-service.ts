@@ -14,6 +14,8 @@ import type {
   ExpectedByCollectorFilters,
   ExpectedCashCollector,
   ExpectedCashTotals,
+  NotifyCollectorPayload,
+  NotifyCollectorResponse,
 } from "@/types/cash-reconciliation";
 
 const BASE_URL = "/cash-reconciliations";
@@ -321,5 +323,26 @@ export const cashReconciliationService = {
 
     return response.data;
   },
+
+    /**
+   * Send an immediate database notification to a collector
+   * who has outstanding collected cash.
+   *
+   * POST /cash-reconciliations/notify-collector
+   *
+   * Every request creates a new notification.
+   * Duplicate reminders are intentionally allowed.
+   */
+    async notifyCollector(
+      payload: NotifyCollectorPayload,
+    ): Promise<NotifyCollectorResponse> {
+      const response =
+        await api.post<NotifyCollectorResponse>(
+          `${BASE_URL}/notify-collector`,
+          payload,
+        );
+  
+      return response.data;
+    },
 
 };

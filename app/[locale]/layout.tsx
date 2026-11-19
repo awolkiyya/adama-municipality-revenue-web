@@ -1,4 +1,6 @@
+
 // app/[locale]/layout.tsx
+
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "../globals.css";
@@ -19,32 +21,75 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-
-
 export const metadata: Metadata = {
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_APP_URL || "https://revenue.adamacity.gov.et"
+  ),
+
   title: {
-    default: "CSPR | Adama City Smart Planning & Reporting",
-    template: "%s | CSPR Adama City",
+    default: "Adama Municipal Revenue Management System",
+    template: "%s | Adama Municipal Revenue",
   },
+
+  applicationName: "Adama Municipal Revenue Management System",
+
   description:
-    "A centralized digital governance platform for structured planning, monitoring, and reporting across all administrative levels of Adama City.",
+    "An integrated digital platform for Adama City Administration to manage municipal revenue, taxpayer registration, tax assessment, tariffs, billing, collections, payments, cash reconciliation, and financial reporting.",
+
   keywords: [
     "Adama City",
-    "Governance",
-    "Smart Planning",
-    "Reporting System",
-    "Digital Administration",
-    "CSPR",
+    "Adama Municipality",
+    "Municipal Revenue Management",
+    "Revenue Administration",
+    "Taxpayer Management",
+    "Tax Assessment",
+    "Tariff Management",
+    "Revenue Collection",
+    "Payment Management",
+    "Cash Reconciliation",
+    "Financial Reporting",
+    "Municipal Tax",
+    "Digital Government",
+    "Ethiopia",
   ],
-  authors: [{ name: "Adama City Administration" }],
+
+  authors: [
+    {
+      name: "Adama City Administration",
+    },
+  ],
+
+  creator: "Adama City Administration",
+  publisher: "Adama City Administration",
+
+
+  category: "Government",
+
   icons: {
     icon: "/favicon.ico",
+    shortcut: "/favicon.ico",
+  },
+
+  robots: {
+    index: false,
+    follow: false,
+    nocache: true,
+  },
+
+  openGraph: {
+    type: "website",
+    locale: "en_ET",
+    siteName: "Adama Municipal Revenue Management System",
+    title: "Adama Municipal Revenue Management System",
+    description:
+      "Integrated municipal revenue administration for taxpayer services, assessments, billing, collections, payments, and financial management.",
   },
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  themeColor: "#0f172a",
 };
 
 type Props = {
@@ -54,7 +99,10 @@ type Props = {
 
 const locales = ["en", "am", "or"] as const;
 
-export default async function RootLayout({ children, params }: Props) {
+export default async function RootLayout({
+  children,
+  params,
+}: Props) {
   const { locale } = await params;
 
   if (!locales.includes(locale as (typeof locales)[number])) {
@@ -70,7 +118,6 @@ export default async function RootLayout({ children, params }: Props) {
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body suppressHydrationWarning className="min-h-full flex flex-col">
-        {/* ✅ ThemeProvider here — Server Component context, script injection is safe */}
         <ThemeProvider>
           <NextIntlClientProvider locale={locale} messages={messages}>
             <AppProvider>{children}</AppProvider>

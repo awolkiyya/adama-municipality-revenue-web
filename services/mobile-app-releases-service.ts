@@ -771,19 +771,62 @@ export const mobileAppReleasesService = {
     return response.data;
   },
 
-  /**
-   * Download a published APK.
-   */
-  async download(id: string): Promise<Blob> {
-    const response = await api.get(
-      `${BASE_URL}/${encodeURIComponent(id)}/download`,
-      {
-        responseType: "blob",
+ 
+/**
+ * Download a published APK.
+ *
+ * Uses the authenticated Axios instance and validates
+ * the response before returning the downloaded file.
+ */
+async download(id: string): Promise<Blob> {
+  const response = await api.get(
+    `${BASE_URL}/${encodeURIComponent(id)}/download`,
+    {
+      responseType: "blob",
+      headers: {
+        Accept: "application/vnd.android.package-archive",
       },
-    );
+      timeout: 120000,
+    },
+  );
 
-    return response.data;
-  },
+  const blob = response.data as Blob;
+
+  if (!(blob instanceof Blob) || blob.size === 0) {
+    throw new Error("The downloaded APK is empty or invalid.");
+  }
+
+  // Normalize the Axios response header.
+  const contentType = String(
+    response.headers["content-type"] ?? blob.type ?? "",
+  ).toLowerCase();
+
+  // Detect API errors returned as JSON or HTML.
+  if (
+    contentType.includes("application/json") ||
+    contentType.includes("text/html")
+  ) {
+    const errorText = await blob.text();
+
+    throw new Error(
+      errorText || "The server returned an error instead of an APK.",
+    );
+  }
+
+  // APK files are ZIP archives and start with PK.
+  const signature = new Uint8Array(
+    await blob.slice(0, 4).arrayBuffer(),
+  );
+
+  if (signature[0] !== 0x50 || signature[1] !== 0x4b) {
+    throw new Error("The downloaded file is not a valid APK archive.");
+  }
+
+  return new Blob([blob], {
+    type: "application/vnd.android.package-archive",
+  });
+},
+
 };
 
 /**

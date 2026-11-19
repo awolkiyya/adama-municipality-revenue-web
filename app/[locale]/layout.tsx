@@ -23,7 +23,8 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   metadataBase: new URL(
-    process.env.NEXT_PUBLIC_APP_URL || "https://revenue.adamacity.gov.et"
+    process.env.NEXT_PUBLIC_APP_URL ||
+      "https://revenue.adamacity.gov.et"
   ),
 
   title: {
@@ -34,34 +35,45 @@ export const metadata: Metadata = {
   applicationName: "Adama Municipal Revenue Management System",
 
   description:
-    "An integrated digital platform for Adama City Administration to manage municipal revenue, taxpayer registration, tax assessment, tariffs, billing, collections, payments, cash reconciliation, and financial reporting.",
+    "The Adama Municipal Revenue Management System is an integrated digital platform developed by Software Engineer Awol Abdulbaasit for Adama City Administration. It supports taxpayer registration, tax assessment, tariff management, billing, revenue collection, payments, cash reconciliation, and financial reporting.",
 
   keywords: [
     "Adama City",
+    "Adama City Administration",
     "Adama Municipality",
+    "Adama Municipal Revenue Management System",
     "Municipal Revenue Management",
     "Revenue Administration",
     "Taxpayer Management",
+    "Taxpayer Registration",
     "Tax Assessment",
     "Tariff Management",
+    "Revenue Billing",
     "Revenue Collection",
     "Payment Management",
     "Cash Reconciliation",
     "Financial Reporting",
     "Municipal Tax",
     "Digital Government",
+    "Government Digital Transformation",
     "Ethiopia",
+    "Awol Abdulbaasit",
+    "Software Engineer",
   ],
 
   authors: [
+    {
+      name: "Awol Abdulbaasit",
+      url: "https://github.com/awolkiyya",
+    },
     {
       name: "Adama City Administration",
     },
   ],
 
-  creator: "Adama City Administration",
-  publisher: "Adama City Administration",
+  creator: "Awol Abdulbaasit - Software Engineer",
 
+  publisher: "Adama City Administration",
 
   category: "Government",
 
@@ -82,7 +94,7 @@ export const metadata: Metadata = {
     siteName: "Adama Municipal Revenue Management System",
     title: "Adama Municipal Revenue Management System",
     description:
-      "Integrated municipal revenue administration for taxpayer services, assessments, billing, collections, payments, and financial management.",
+      "Developed by Software Engineer Awol Abdulbaasit for Adama City Administration. An integrated digital platform for taxpayer services, tax assessment, tariff management, billing, revenue collection, payments, cash reconciliation, and financial management.",
   },
 };
 

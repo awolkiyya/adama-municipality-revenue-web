@@ -1,4 +1,3 @@
-// hooks/use-mobile-app-releases.ts
 
 "use client";
 
@@ -14,17 +13,17 @@ import {
 
 import type {
   CreateMobileAppReleasePayload,
+  MobileAppType,
   MobileAppReleaseFilters,
   PublishMobileAppReleasePayload,
   UpdateMobileAppReleasePayload,
+  UploadProgressCallback,
   WithdrawMobileAppReleasePayload,
+  MobileAppReleaseUpload,
 } from "@/types/mobile-app-release";
 
 /**
  * Query keys for the mobile app releases module.
- *
- * Centralized keys simplify cache management after creating,
- * updating, publishing, or withdrawing releases.
  */
 export const mobileAppReleaseKeys = {
   all: ["mobile-app-releases"] as const,
@@ -54,9 +53,12 @@ function isValidReleaseId(id: string): boolean {
   );
 }
 
+/* -------------------------------------------------------------------------- */
+/* Queries                                                                    */
+/* -------------------------------------------------------------------------- */
+
 /**
- * Fetch mobile app releases with search, status filtering,
- * pagination, sorting, and other supported filters.
+ * Fetch mobile app releases.
  */
 export function useMobileAppReleases(
   filters: MobileAppReleaseFilters = {},
@@ -108,8 +110,52 @@ export function useLatestMobileAppRelease(
   });
 }
 
+/* -------------------------------------------------------------------------- */
+/* APK upload                                                                 */
+/* -------------------------------------------------------------------------- */
+
+export interface UploadMobileAppApkVariables {
+  appType: MobileAppType;
+  file: File;
+  onProgress?: UploadProgressCallback;
+}
+
 /**
- * Create a mobile app release and upload its APK.
+ * Upload and verify an APK using resumable chunked uploads.
+ *
+ * This mutation:
+ * 1. Creates or resumes an upload session.
+ * 2. Uploads missing chunks.
+ * 3. Verifies and assembles the APK on the server.
+ * 4. Returns the completed upload session.
+ *
+ * It does NOT create a mobile app release.
+ */
+export function useUploadMobileAppApk() {
+  return useMutation<
+    MobileAppReleaseUpload,
+    Error,
+    UploadMobileAppApkVariables
+  >({
+    mutationFn: ({
+      appType,
+      file,
+      onProgress,
+    }) =>
+      mobileAppReleasesService.uploadApk(
+        appType,
+        file,
+        onProgress,
+      ),
+  });
+}
+
+/* -------------------------------------------------------------------------- */
+/* Create                                                                     */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Create a mobile app release from a completed upload session.
  */
 export function useCreateMobileAppRelease() {
   const queryClient = useQueryClient();
@@ -117,7 +163,8 @@ export function useCreateMobileAppRelease() {
   return useMutation({
     mutationFn: (
       payload: CreateMobileAppReleasePayload,
-    ) => mobileAppReleasesService.create(payload),
+    ) =>
+      mobileAppReleasesService.create(payload),
 
     onSuccess: async (release) => {
       if (release.id) {
@@ -140,6 +187,10 @@ export function useCreateMobileAppRelease() {
   });
 }
 
+/* -------------------------------------------------------------------------- */
+/* Update                                                                     */
+/* -------------------------------------------------------------------------- */
+
 /**
  * Update release metadata or replace its APK.
  */
@@ -153,7 +204,8 @@ export function useUpdateMobileAppRelease() {
     }: {
       id: string;
       payload: UpdateMobileAppReleasePayload;
-    }) => mobileAppReleasesService.update(id, payload),
+    }) =>
+      mobileAppReleasesService.update(id, payload),
 
     onSuccess: async (release, variables) => {
       queryClient.setQueryData(
@@ -178,6 +230,10 @@ export function useUpdateMobileAppRelease() {
   });
 }
 
+/* -------------------------------------------------------------------------- */
+/* Publish                                                                    */
+/* -------------------------------------------------------------------------- */
+
 /**
  * Publish a draft release.
  */
@@ -191,7 +247,8 @@ export function usePublishMobileAppRelease() {
     }: {
       id: string;
       payload?: PublishMobileAppReleasePayload;
-    }) => mobileAppReleasesService.publish(id, payload),
+    }) =>
+      mobileAppReleasesService.publish(id, payload),
 
     onSuccess: async (_response, variables) => {
       await Promise.all([
@@ -210,6 +267,10 @@ export function usePublishMobileAppRelease() {
     },
   });
 }
+
+/* -------------------------------------------------------------------------- */
+/* Withdraw                                                                   */
+/* -------------------------------------------------------------------------- */
 
 /**
  * Withdraw a published release.
@@ -224,7 +285,8 @@ export function useWithdrawMobileAppRelease() {
     }: {
       id: string;
       payload?: WithdrawMobileAppReleasePayload;
-    }) => mobileAppReleasesService.withdraw(id, payload),
+    }) =>
+      mobileAppReleasesService.withdraw(id, payload),
 
     onSuccess: async (_response, variables) => {
       await Promise.all([
@@ -244,9 +306,11 @@ export function useWithdrawMobileAppRelease() {
   });
 }
 
+/* -------------------------------------------------------------------------- */
+/* Delete                                                                     */
+/* -------------------------------------------------------------------------- */
+
 /**
- * Delete a mobile app release.
- *
  * Enable this only after implementing and authorizing the
  * corresponding DELETE endpoint in Laravel.
  */
@@ -275,4 +339,3 @@ export function useWithdrawMobileAppRelease() {
 //     },
 //   });
 // }
-

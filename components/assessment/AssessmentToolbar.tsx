@@ -5,7 +5,7 @@
 // ASSESSMENT TOOLBAR
 // =====================================================
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import {
   CalendarDays,
@@ -122,26 +122,36 @@ function getDefaultFilters(): AssessmentFilters {
 }
 
 // =====================================================
-// FILTER COMPARISON
+// COMPONENT
 // =====================================================
 
-function hasSameFilters(
-  first: AssessmentFilters,
-  second: AssessmentFilters,
-): boolean {
+export function AssessmentToolbar(
+  props: AssessmentToolbarProps,
+) {
+  /*
+   * Remount the internal component whenever the externally
+   * applied filters change.
+   *
+   * This resets draft filters without requiring useEffect.
+   * JSON serialization also prevents unnecessary remounts
+   * when the parent creates a new filters object with the
+   * same values.
+   */
+  const filterKey = JSON.stringify(props.filters);
+
   return (
-    first.status === second.status &&
-    first.source_type === second.source_type &&
-    JSON.stringify(first.date) ===
-      JSON.stringify(second.date)
+    <AssessmentToolbarContent
+      key={filterKey}
+      {...props}
+    />
   );
 }
 
 // =====================================================
-// COMPONENT
+// INTERNAL COMPONENT
 // =====================================================
 
-export function AssessmentToolbar({
+function AssessmentToolbarContent({
   config,
   search,
   setSearch,
@@ -158,36 +168,12 @@ export function AssessmentToolbar({
     useState<AssessmentFilters>(filters);
 
   // ===================================================
-  // SYNCHRONIZE DRAFT FILTERS
-  // ===================================================
-
-  useEffect(() => {
-    setDraftFilters(filters);
-  }, [filters]);
-
-  // ===================================================
   // FILTER SCHEMA
   // ===================================================
 
   const dateFilterSchema: FilterField[] = [
     buildDateFilter(),
   ];
-
-  // ===================================================
-  // FILTER STATE
-  // ===================================================
-
-  const hasPendingChanges =
-    !hasSameFilters(draftFilters, filters);
-
-  // ===================================================
-  // APPLIED FILTERS
-  // ===================================================
-
-  const hasAppliedFilters =
-    filters.status !== "ALL" ||
-    filters.source_type !== "ALL" ||
-    filters.date !== null;
 
   // ===================================================
   // ACTIVE FILTER COUNT

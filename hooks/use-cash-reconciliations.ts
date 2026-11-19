@@ -1,3 +1,4 @@
+
 "use client";
 
 import {
@@ -14,7 +15,37 @@ import type {
   UpdateCashReconciliationPayload,
   SubmitCashReconciliationPayload,
   ReviewCashReconciliationPayload,
+  ExpectedByCollectorFilters,
 } from "@/types/cash-reconciliation";
+
+// ============================================================
+// MUTATION INPUT TYPES
+// ============================================================
+
+export interface CreateCashReconciliationInput {
+  payload: CreateCashReconciliationPayload;
+  files: File[];
+}
+
+export interface UpdateCashReconciliationInput {
+  id: string;
+  payload: UpdateCashReconciliationPayload;
+  files: File[];
+  removeEvidenceIds: string[];
+}
+
+// ============================================================
+// UUID VALIDATION
+// ============================================================
+
+function isValidUuid(id: unknown): id is string {
+  return (
+    typeof id === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      id,
+    )
+  );
+}
 
 // ============================================================
 // QUERY KEYS
@@ -30,9 +61,18 @@ export const cashReconciliationQueryKeys = {
   list: (filters: CashReconciliationFilters = {}) =>
     [...QUERY_KEY, "list", filters] as const,
 
+  // Expected cash by collector
+  expectedByCollectors: () =>
+    [...QUERY_KEY, "expected-by-collector"] as const,
+
+  expectedByCollector: (
+    filters: ExpectedByCollectorFilters = {},
+  ) =>
+    [...QUERY_KEY, "expected-by-collector", filters] as const,
+
   details: () => [...QUERY_KEY, "detail"] as const,
 
-  detail: (id: number) =>
+  detail: (id: string) =>
     [...QUERY_KEY, "detail", id] as const,
 };
 
@@ -42,7 +82,7 @@ export const cashReconciliationQueryKeys = {
 
 async function invalidateCashReconciliations(
   queryClient: ReturnType<typeof useQueryClient>,
-  id?: number,
+  id?: string,
 ): Promise<void> {
   const invalidations = [
     queryClient.invalidateQueries({
@@ -85,19 +125,47 @@ export function useCashReconciliations(
 }
 
 // ============================================================
+// EXPECTED CASH BY COLLECTOR
+// ============================================================
+
+/**
+ * Fetch expected, reconciled, and outstanding cash grouped
+ * by revenue collector.
+ *
+ * Supports:
+ * - Date range filtering
+ * - Collector name/email search
+ * - Expected, reconciled, and outstanding sorting
+ * - Pagination
+ *
+ * The response includes pagination metadata and aggregate
+ * totals for the currently filtered collector dataset.
+ */
+export function useExpectedCashByCollector(
+  filters: ExpectedByCollectorFilters = {},
+) {
+  return useQuery({
+    queryKey:
+      cashReconciliationQueryKeys.expectedByCollector(filters),
+
+    queryFn: () =>
+      cashReconciliationService.expectedByCollector(filters),
+
+    staleTime: 30_000,
+  });
+}
+
+// ============================================================
 // DETAIL
 // ============================================================
 
 /**
- * Fetch one reconciliation by its numeric database ID.
+ * Fetch one reconciliation by its UUID.
  */
 export function useCashReconciliation(
-  id: number | null | undefined,
+  id: string | null | undefined,
 ) {
-  const validId =
-    typeof id === "number" &&
-    Number.isSafeInteger(id) &&
-    id > 0;
+  const validId = isValidUuid(id);
 
   return useQuery({
     queryKey: validId
@@ -105,7 +173,7 @@ export function useCashReconciliation(
       : [...cashReconciliationQueryKeys.details(), "disabled"],
 
     queryFn: () =>
-      cashReconciliationService.getById(id as number),
+      cashReconciliationService.getById(id as string),
 
     enabled: validId,
 
@@ -118,15 +186,18 @@ export function useCashReconciliation(
 // ============================================================
 
 /**
- * Create a draft cash reconciliation.
+ * Create a draft cash reconciliation together with
+ * its evidence files in one multipart request.
  */
 export function useCreateCashReconciliation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (
-      payload: CreateCashReconciliationPayload,
-    ) => cashReconciliationService.create(payload),
+    mutationFn: ({
+      payload,
+      files,
+    }: CreateCashReconciliationInput) =>
+      cashReconciliationService.create(payload, files),
 
     onSuccess: async (created) => {
       await invalidateCashReconciliations(
@@ -142,7 +213,9 @@ export function useCreateCashReconciliation() {
 // ============================================================
 
 /**
- * Update an editable draft or returned reconciliation.
+ * Update an editable draft or returned reconciliation
+ * together with newly selected evidence files and requested
+ * removals of existing evidence.
  */
 export function useUpdateCashReconciliation() {
   const queryClient = useQueryClient();
@@ -151,16 +224,61 @@ export function useUpdateCashReconciliation() {
     mutationFn: ({
       id,
       payload,
-    }: {
-      id: number;
-      payload: UpdateCashReconciliationPayload;
-    }) => cashReconciliationService.update(id, payload),
+      files,
+      removeEvidenceIds,
+    }: UpdateCashReconciliationInput) =>
+      cashReconciliationService.update(
+        id,
+        payload,
+        files,
+        removeEvidenceIds,
+      ),
 
     onSuccess: async (updated) => {
       await invalidateCashReconciliations(
         queryClient,
         updated.id,
       );
+    },
+  });
+}
+
+// ============================================================
+// DELETE DRAFT
+// ============================================================
+
+/**
+ * Permanently delete an unsubmitted DRAFT reconciliation.
+ *
+ * The backend must enforce:
+ * - The authenticated collector owns the reconciliation.
+ * - The reconciliation status is exactly DRAFT.
+ * - Submitted and reviewed records cannot be deleted.
+ *
+ * After deletion, refresh reconciliation lists and remove
+ * the deleted reconciliation from the detail cache.
+ */
+export function useDeleteCashReconciliationDraft() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => {
+      if (!isValidUuid(id)) {
+        throw new Error(
+          "Invalid cash reconciliation ID.",
+        );
+      }
+
+      return cashReconciliationService.deleteDraft(id);
+    },
+
+    onSuccess: async (_result, id) => {
+      queryClient.removeQueries({
+        queryKey: cashReconciliationQueryKeys.detail(id),
+        exact: true,
+      });
+
+      await invalidateCashReconciliations(queryClient);
     },
   });
 }
@@ -182,9 +300,10 @@ export function useSubmitCashReconciliation() {
       id,
       payload,
     }: {
-      id: number;
+      id: string;
       payload: SubmitCashReconciliationPayload;
-    }) => cashReconciliationService.submit(id, payload),
+    }) =>
+      cashReconciliationService.submit(id, payload),
 
     onSuccess: async (updated) => {
       await invalidateCashReconciliations(
@@ -215,9 +334,10 @@ export function useReviewCashReconciliation() {
       id,
       payload,
     }: {
-      id: number;
+      id: string;
       payload: ReviewCashReconciliationPayload;
-    }) => cashReconciliationService.review(id, payload),
+    }) =>
+      cashReconciliationService.review(id, payload),
 
     onSuccess: async (updated) => {
       await invalidateCashReconciliations(
@@ -239,7 +359,7 @@ export function useCancelCashReconciliation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: number) =>
+    mutationFn: (id: string) =>
       cashReconciliationService.cancel(id),
 
     onSuccess: async (updated) => {

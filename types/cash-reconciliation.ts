@@ -1,3 +1,4 @@
+
 // src/types/cash-reconciliation.types.ts
 
 /**
@@ -55,11 +56,37 @@ export interface CashReconciliationUser {
 }
 
 // ============================================================
+// EVIDENCE FILE
+// ============================================================
+
+/**
+ * Evidence file attached to a cash reconciliation.
+ *
+ * These fields match the Laravel CashReconciliationResource.
+ */
+export interface CashReconciliationEvidence {
+  /**
+   * File database ID (UUID).
+   */
+  id: string;
+
+  /**
+   * File UUID used by the shared file-management system.
+   */
+  uuid: string;
+
+  original_name: string;
+  mime_type: string;
+  size: number | null;
+  created_at: string | null;
+}
+
+// ============================================================
 // CASH RECONCILIATION RESOURCE
 // ============================================================
 
 export interface CashReconciliation {
-  id: number;
+  id: string;
 
   collector_id: string;
   collector?: CashReconciliationUser | null;
@@ -68,7 +95,7 @@ export interface CashReconciliation {
   period_end: string;
 
   /**
-   * Monetary values are serialized by the Laravel resource
+   * Monetary values are serialized by Laravel
    * as decimal strings with two decimal places.
    *
    * Example: "12500.00"
@@ -79,13 +106,20 @@ export interface CashReconciliation {
 
   difference_type: CashReconciliationDifferenceType;
 
-  has_actual_amount: boolean;
+  has_actual_amount?: boolean;
   has_discrepancy: boolean;
   is_balanced: boolean;
   has_shortage: boolean;
   has_overage: boolean;
 
   collector_notes: string | null;
+
+  /**
+   * Evidence files attached to this reconciliation.
+   *
+   * The API returns an empty array when no evidence exists.
+   */
+  evidence: CashReconciliationEvidence[];
 
   submitted_at: string | null;
 
@@ -188,6 +222,21 @@ export interface UpdateCashReconciliationPayload {
   actual_amount?: string | number | null;
 
   collector_notes?: string | null;
+
+  /**
+   * New evidence files to upload.
+   *
+   * These are UploadedFile objects in the browser.
+   * The API receives them as multipart/form-data.
+   */
+  evidence?: File[];
+
+  /**
+   * IDs of existing evidence files to detach.
+   *
+   * These are File database IDs, not the separate uuid field.
+   */
+  remove_evidence_ids?: string[];
 }
 
 // ============================================================
@@ -234,3 +283,78 @@ export interface CashReconciliationListResponse {
 export type CashReconciliationSingleResponse = {
   data: CashReconciliation;
 };
+
+
+
+export type ExpectedCashSortBy =
+  | "expected"
+  | "reconciled"
+  | "outstanding";
+
+export type ExpectedCashSortDirection =
+  | "asc"
+  | "desc";
+
+export interface ExpectedByCollectorFilters {
+  date_from?: string;
+  date_to?: string;
+  search?: string;
+  sort_by?: ExpectedCashSortBy;
+  sort_dir?: ExpectedCashSortDirection;
+  page?: number;
+  per_page?: number;
+}
+
+export interface ExpectedCashCollector {
+  collector_id: string;
+
+  collector: {
+    id: string;
+    name: string;
+    email: string | null;
+  };
+
+  payments_count: number;
+  expected_total: string;
+
+  reconciliations_count: number;
+  reconciled_total: string;
+
+  outstanding_total: string;
+}
+
+export interface ExpectedCashTotals {
+  collectors: number;
+  payments_count: number;
+  expected_total: string;
+  reconciliations_count: number;
+  reconciled_total: string;
+  outstanding_total: string;
+}
+
+export interface ExpectedCashPagination {
+  current_page: number;
+  last_page: number;
+  per_page: number;
+  total: number;
+}
+
+// export interface ExpectedByCollectorResponse {
+//   success: boolean;
+//   message: string;
+//   data: ExpectedCashCollector[];
+//   errors: unknown | null;
+
+//   meta: {
+//     timestamp: string;
+//     request_id: string;
+//     version: string;
+
+//     current_page: number;
+//     last_page: number;
+//     per_page: number;
+//     total: number;
+
+//     summary: ExpectedCashTotals;
+//   };
+// }

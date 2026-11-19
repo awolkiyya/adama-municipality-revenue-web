@@ -22,6 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Progress } from "@/components/ui/progress";
 
 import {
   MOBILE_APP_TYPES,
@@ -43,7 +44,13 @@ export type ReleaseFormValues = {
 };
 
 export type ReleaseFormSubmit = ReleaseFormValues & {
-  /** New APK selected by the user. Null means keep the current APK in edit mode. */
+  /**
+   * Newly selected APK.
+   *
+   * Null means:
+   * - Keep the current APK in edit mode.
+   * - No APK has been selected yet in create mode.
+   */
   apkFile: File | null;
 };
 
@@ -57,6 +64,7 @@ type ReleaseFormProps = {
   initialValues?: Partial<ReleaseFormValues>;
   existingApk?: ExistingApk;
   isSubmitting?: boolean;
+  uploadProgress?: number | null;
   cancelHref: string;
   onSubmit: (values: ReleaseFormSubmit) => void | Promise<void>;
 };
@@ -106,46 +114,52 @@ function validateApk(file: File): string {
 }
 
 /**
- * Payload for the update mutation.
+ * Convert form values into the Laravel create payload.
  *
- * app_type is intentionally excluded because the backend
- * does not allow changing the application type after creation.
- */
-export function toUpdatePayload(
-  values: ReleaseFormSubmit,
-): UpdateMobileAppReleasePayload {
-  return {
-    version_name: values.versionName.trim(),
-    version_code: Number(values.versionCode),
-    release_notes: values.releaseNotes.trim() || null,
-    is_mandatory: values.isMandatory,
-    ...(values.apkFile ? { apk: values.apkFile } : {}),
-  };
-}
-
-/**
- * Payload for the create mutation.
- *
- * Application type and APK are required.
+ * APK binary data is uploaded separately through the chunked
+ * upload API. Only its completed upload UUID is sent here.
  */
 export function toCreatePayload(
   values: ReleaseFormSubmit,
+  uploadUuid: string,
 ): CreateMobileAppReleasePayload {
   if (!values.appType) {
     throw new Error("Select a mobile application.");
   }
 
-  if (!values.apkFile) {
-    throw new Error("Upload an APK file.");
+  if (!uploadUuid) {
+    throw new Error("A completed APK upload is required.");
   }
 
   return {
     app_type: values.appType,
     version_name: values.versionName.trim(),
     version_code: Number(values.versionCode),
+    upload_uuid: uploadUuid,
     release_notes: values.releaseNotes.trim() || null,
     is_mandatory: values.isMandatory,
-    apk: values.apkFile,
+  };
+}
+
+/**
+ * Convert form values into the Laravel update payload.
+ *
+ * If uploadUuid is supplied, the backend replaces the APK.
+ * Otherwise, the existing APK is retained.
+ *
+ * app_type is intentionally excluded because the backend
+ * does not allow changing the application type after creation.
+ */
+export function toUpdatePayload(
+  values: ReleaseFormSubmit,
+  uploadUuid?: string,
+): UpdateMobileAppReleasePayload {
+  return {
+    version_name: values.versionName.trim(),
+    version_code: Number(values.versionCode),
+    release_notes: values.releaseNotes.trim() || null,
+    is_mandatory: values.isMandatory,
+    ...(uploadUuid ? { upload_uuid: uploadUuid } : {}),
   };
 }
 
@@ -158,10 +172,12 @@ export function ReleaseForm({
   initialValues,
   existingApk,
   isSubmitting = false,
+  uploadProgress = null,
   cancelHref,
   onSubmit,
 }: ReleaseFormProps) {
   const isEdit = mode === "edit";
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [initial] = useState<ReleaseFormValues>({
@@ -221,7 +237,7 @@ export function ReleaseForm({
     setApkError(error);
     setApkFile(error ? null : file);
 
-    if (error && fileInputRef.current) {
+    if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
   }
@@ -238,6 +254,8 @@ export function ReleaseForm({
   function handleDrop(event: DragEvent<HTMLLabelElement>) {
     event.preventDefault();
     setIsDragging(false);
+
+    if (isSubmitting) return;
 
     selectApk(event.dataTransfer.files?.[0] ?? null);
   }
@@ -269,6 +287,10 @@ export function ReleaseForm({
     : isEdit && existingApk
       ? existingApk
       : null;
+
+  const isUploading =
+    uploadProgress !== null &&
+    uploadProgress !== undefined;
 
   return (
     <form
@@ -444,7 +466,10 @@ export function ReleaseForm({
             htmlFor="apkFile"
             onDragOver={(e) => {
               e.preventDefault();
-              setIsDragging(true);
+
+              if (!isSubmitting) {
+                setIsDragging(true);
+              }
             }}
             onDragLeave={() => setIsDragging(false)}
             onDrop={handleDrop}
@@ -488,6 +513,40 @@ export function ReleaseForm({
             <AlertCircle className="h-4 w-4 shrink-0" />
             {apkError}
           </p>
+        )}
+
+        {/* Upload progress */}
+
+        {isUploading && (
+          <div
+            className="space-y-2 rounded-lg border bg-muted/20 p-3"
+            role="status"
+            aria-live="polite"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                {uploadProgress === 100
+                  ? "Verifying APK..."
+                  : "Uploading APK..."}
+              </div>
+
+              <span className="text-sm font-semibold tabular-nums">
+                {uploadProgress}%
+              </span>
+            </div>
+
+            <Progress
+              value={uploadProgress}
+              className="h-2"
+            />
+
+            <p className="text-xs text-muted-foreground">
+              {uploadProgress === 100
+                ? "All chunks uploaded. The server is assembling and verifying your APK."
+                : "Keep this page open while your APK is being uploaded."}
+            </p>
+          </div>
         )}
       </div>
 

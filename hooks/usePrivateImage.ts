@@ -1,56 +1,83 @@
 
-import { fetchPrivateImage } from "@/services/user.service";
 import { useEffect, useState } from "react";
+
+import { fetchPrivateImage } from "@/services/user.service";
 
 type PrivateImageState = {
   path: string | null;
   url: string | undefined;
   loading: boolean;
+  error: boolean;
+};
+
+const INITIAL_STATE: PrivateImageState = {
+  path: null,
+  url: undefined,
+  loading: false,
+  error: false,
 };
 
 export function usePrivateImage(path?: string | null) {
-  const [state, setState] = useState<PrivateImageState>({
-    path: null,
-    url: undefined,
-    loading: false,
-  });
+  const [state, setState] = useState<PrivateImageState>(INITIAL_STATE);
 
   useEffect(() => {
     if (!path) {
       return;
     }
 
-    let alive = true;
+    let active = true;
+    let objectUrl: string | undefined;
 
     fetchPrivateImage(path)
-      .then((res) => {
-        if (alive) {
-          setState({
-            path,
-            url: res,
-            loading: false,
-          });
+      .then((url) => {
+        objectUrl = url;
+
+        if (!active) {
+          URL.revokeObjectURL(url);
+          return;
         }
+
+        setState({
+          path,
+          url,
+          loading: false,
+          error: false,
+        });
       })
       .catch(() => {
-        if (alive) {
-          setState({
-            path,
-            url: undefined,
-            loading: false,
-          });
+        if (!active) {
+          return;
         }
+
+        setState({
+          path,
+          url: undefined,
+          loading: false,
+          error: true,
+        });
       });
 
     return () => {
-      alive = false;
+      active = false;
+
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+        objectUrl = undefined;
+      }
     };
   }, [path]);
 
-  const isCurrentPath = state.path === (path ?? null);
+  const normalizedPath = path ?? null;
+  const isCurrentPath = state.path === normalizedPath;
+
+  // Derive the loading state instead of resetting state inside an effect.
+  const loading =
+    Boolean(normalizedPath) &&
+    (!isCurrentPath || state.loading);
 
   return {
-    url: isCurrentPath ? state.url : undefined,
-    loading: Boolean(path) && (!isCurrentPath || state.loading),
+    url: normalizedPath && isCurrentPath ? state.url : undefined,
+    loading,
+    error: Boolean(normalizedPath && isCurrentPath && state.error),
   };
 }

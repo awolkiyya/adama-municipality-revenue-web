@@ -1,11 +1,11 @@
+
 "use client";
 
-import { LeaseAmendmentForm } from "@/components/forms/lease-amendment-form";
-import {
-  useParams,
-  useRouter,
-} from "next/navigation";
+import type React from "react";
 
+import { useParams, useRouter } from "next/navigation";
+
+import { LeaseAmendmentForm } from "@/components/forms/lease-amendment-form";
 
 export default function EditLeaseAmendmentPage() {
   const router = useRouter();
@@ -28,15 +28,12 @@ export default function EditLeaseAmendmentPage() {
           typeof LeaseAmendmentForm
         >["onSubmit"]
       >
-    >[0],
+    >[0]
   ) => {
-    console.log(
-      "UPDATE LEASE AMENDMENT:",
-      {
-        amendmentId,
-        values,
-      },
-    );
+    console.log("UPDATE LEASE AMENDMENT:", {
+      amendmentId,
+      values,
+    });
 
     /*
      * Later:
@@ -48,7 +45,7 @@ export default function EditLeaseAmendmentPage() {
      */
 
     router.push(
-      `/${locale}/office/dashboard/lease-amendments`,
+      `/${locale}/office/dashboard/lease-amendments`
     );
   };
 
@@ -75,12 +72,14 @@ export default function EditLeaseAmendmentPage() {
         rejectedAt: null,
         decisionMetadata: null,
         administrativeUnitId: null,
+        administrativeUnit: null,
         taxpayer: null,
         services: [],
         createdBy: null,
         updatedBy: null,
         createdAt: "",
-        updatedAt: ""
-      }}    />
+        updatedAt: "",
+      }}
+    />
   );
 }

@@ -2,8 +2,8 @@
 /**
  * Mobile App Release Types
  *
- * These types represent the mobile app release API contracts
- * returned by Laravel's MobileAppReleaseResource.
+ * Types representing Laravel mobile app release and
+ * resumable APK upload API contracts.
  */
 
 /* -------------------------------------------------------------------------- */
@@ -17,37 +17,42 @@ export type MobileAppType =
   | "administrator"
   | "supervisor";
 
-  export const MOBILE_APP_TYPES: {
-    value: MobileAppType;
-    label: string;
-    description: string;
-  }[] = [
-    {
-      value: "field_collector",
-      label: "Field Collector",
-      description: "For municipal revenue collectors to register taxpayers, manage assessments, and collect payments in the field.",
-    },
-    {
-      value: "taxpayer",
-      label: "Taxpayer",
-      description: "For taxpayers to access municipal services, manage their tax information, and make payments.",
-    },
-    {
-      value: "inspector",
-      label: "Inspector",
-      description: "For municipal inspectors to conduct inspections, verify compliance, and submit inspection reports.",
-    },
-    {
-      value: "administrator",
-      label: "Administrator",
-      description: "For system administrators to manage users, permissions, configurations, and system operations.",
-    },
-    {
-      value: "supervisor",
-      label: "Supervisor",
-      description: "For supervisors to monitor field operations, review activities, and oversee revenue collection performance.",
-    },
-  ];
+export const MOBILE_APP_TYPES: {
+  value: MobileAppType;
+  label: string;
+  description: string;
+}[] = [
+  {
+    value: "field_collector",
+    label: "Field Collector",
+    description:
+      "For municipal revenue collectors to register taxpayers, manage assessments, and collect payments in the field.",
+  },
+  {
+    value: "taxpayer",
+    label: "Taxpayer",
+    description:
+      "For taxpayers to access municipal services, manage their tax information, and make payments.",
+  },
+  {
+    value: "inspector",
+    label: "Inspector",
+    description:
+      "For municipal inspectors to conduct inspections, verify compliance, and submit inspection reports.",
+  },
+  {
+    value: "administrator",
+    label: "Administrator",
+    description:
+      "For system administrators to manage users, permissions, configurations, and system operations.",
+  },
+  {
+    value: "supervisor",
+    label: "Supervisor",
+    description:
+      "For supervisors to monitor field operations, review activities, and oversee revenue collection performance.",
+  },
+];
 
 /* -------------------------------------------------------------------------- */
 /* Release Status                                                             */
@@ -86,14 +91,6 @@ export interface MobileAppReleaseCreator {
 /* Release Record                                                             */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Release record returned by MobileAppReleaseResource.
- *
- * IMPORTANT:
- * - id is a UUID string, not a number.
- * - app_type identifies the target mobile application.
- * - APK information is nested under the apk property.
- */
 export interface MobileAppRelease {
   id: string;
 
@@ -110,26 +107,12 @@ export interface MobileAppRelease {
   status: MobileAppReleaseStatus;
   published_at: string | null;
 
-  /**
-   * True when the release has a published, downloadable APK.
-   */
   is_downloadable: boolean;
 
-  /**
-   * Associated APK metadata.
-   * Null when no APK file is associated with the release.
-   */
   apk: MobileAppReleaseApk | null;
 
-  /**
-   * API-generated download URL.
-   * Null when the release is not downloadable.
-   */
   download_url: string | null;
 
-  /**
-   * Available when Laravel eager-loads the creator relationship.
-   */
   creator?: MobileAppReleaseCreator | null;
 
   created_at: string;
@@ -137,15 +120,9 @@ export interface MobileAppRelease {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Summary Statistics                                                        */
+/* Summary Statistics                                                         */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Summary statistics returned in the pagination metadata.
- *
- * Statistics should be scoped to the selected application type
- * when the backend receives an app_type filter.
- */
 export interface MobileAppReleaseSummary {
   total: number;
   drafts: number;
@@ -160,9 +137,6 @@ export interface MobileAppReleaseSummary {
 /* API Responses                                                              */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Response for release operations such as publish and withdraw.
- */
 export interface MobileAppReleaseActionResponse {
   success?: boolean;
   message: string;
@@ -176,10 +150,10 @@ export interface MobileAppReleaseActionResponse {
 /* -------------------------------------------------------------------------- */
 
 /**
- * Payload for creating a release.
+ * Create a release using an already completed APK upload.
  *
- * Send multipart/form-data when uploading the APK.
- * Application type is required.
+ * The APK itself is uploaded separately through the resumable
+ * upload endpoints. This endpoint receives only upload_uuid.
  */
 export interface CreateMobileAppReleasePayload {
   app_type: MobileAppType;
@@ -187,7 +161,7 @@ export interface CreateMobileAppReleasePayload {
   version_name: string;
   version_code: number;
 
-  apk: File;
+  upload_uuid: string;
 
   release_notes?: string | null;
   is_mandatory?: boolean;
@@ -198,28 +172,101 @@ export interface CreateMobileAppReleasePayload {
 /* -------------------------------------------------------------------------- */
 
 /**
- * Payload for updating a draft release.
+ * Update a draft release.
  *
- * Application type cannot be changed after creation.
- * APK replacement is optional.
+ * upload_uuid is optional:
+ * - Provided: replace the existing APK.
+ * - Omitted: retain the existing APK.
+ *
+ * Application type cannot be changed.
  */
 export interface UpdateMobileAppReleasePayload {
   version_name?: string;
   version_code?: number;
 
-  apk?: File | null;
+  upload_uuid?: string;
 
   release_notes?: string | null;
   is_mandatory?: boolean;
 }
 
 /* -------------------------------------------------------------------------- */
+/* Resumable APK Upload                                                       */
+/* -------------------------------------------------------------------------- */
+
+export type MobileAppReleaseUploadStatus =
+  | "UPLOADING"
+  | "ASSEMBLING"
+  | "COMPLETED"
+  | "FAILED"
+  | "EXPIRED"
+  | "CONSUMED";
+
+/**
+ * Upload session returned by Laravel.
+ *
+ * uploaded_chunks contains zero-based chunk indexes
+ * successfully received by the server.
+ */
+export interface MobileAppReleaseUpload {
+  uuid: string;
+
+  app_type: MobileAppType;
+
+  original_name: string;
+
+  total_size: number;
+
+  chunk_size: number;
+
+  total_chunks: number;
+
+  uploaded_chunks: number[];
+
+  status: MobileAppReleaseUploadStatus;
+
+  checksum: string | null;
+
+  expires_at: string | null;
+
+  completed_at: string | null;
+}
+
+/**
+ * Request to create a new resumable upload session.
+ *
+ * The backend determines chunk_size and total_chunks.
+ */
+export interface CreateMobileAppReleaseUploadPayload {
+  app_type: MobileAppType;
+
+  original_name: string;
+
+  total_size: number;
+}
+
+/**
+ * Optional expected SHA-256 checksum.
+ *
+ * Include this only if your Laravel upload-session endpoint
+ * accepts and validates expected_checksum.
+ */
+export interface CreateMobileAppReleaseUploadWithChecksumPayload
+  extends CreateMobileAppReleaseUploadPayload {
+  expected_checksum?: string;
+}
+
+/**
+ * Progress callback used by the upload service.
+ */
+export type UploadProgressCallback = (
+  percentage: number,
+) => void;
+
+/* -------------------------------------------------------------------------- */
 /* Release Filters                                                            */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Filters for listing mobile app releases.
- */
 export interface MobileAppReleaseFilters {
   app_type?: MobileAppType;
 
@@ -236,9 +283,10 @@ export interface MobileAppReleaseFilters {
   sort_direction?: "asc" | "desc";
 }
 
-/**
- * Filters used by the frontend list page.
- */
+/* -------------------------------------------------------------------------- */
+/* List Parameters                                                            */
+/* -------------------------------------------------------------------------- */
+
 export interface MobileAppReleaseListParams {
   app_type?: MobileAppType;
 
@@ -253,44 +301,21 @@ export interface MobileAppReleaseListParams {
 /* Publish Payload                                                            */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Publishing is controlled by the backend.
- *
- * The backend automatically sets is_latest for the selected app_type.
- */
 export type PublishMobileAppReleasePayload = Record<string, never>;
 
 /* -------------------------------------------------------------------------- */
 /* Withdraw Payload                                                           */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Payload for withdrawing a release.
- */
 export interface WithdrawMobileAppReleasePayload {
   reason?: string;
 }
 
+/* -------------------------------------------------------------------------- */
+/* Latest Release                                                             */
+/* -------------------------------------------------------------------------- */
 
 export interface LatestReleaseResult {
   release: MobileAppRelease | null;
   notFound: boolean;
 }
-
-// export interface MobileAppRelease {
-//     id: string;
-//     app_type: MobileAppType;
-//     version_name: string;
-//     version_code: number;
-//     status?: string;
-//     is_downloadable: boolean;
-//     download_url?: string | null;
-//     apk_download_url?: string | null;
-//     is_mandatory:boolean;
-//     apk?: {
-//       uuid?: string;
-//       original_name?: string | null;
-//       extension?: string | null;
-//       size_bytes?: number | null;
-//     } | null;
-//   };

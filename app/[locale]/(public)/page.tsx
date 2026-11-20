@@ -414,22 +414,21 @@ const focusRing =
 // 44px+ tap target, full width on mobile, natural width on larger screens
 const secondaryButton = `inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border bg-background px-4 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-muted active:bg-muted/80 sm:w-auto ${focusRing}`;
 
+
 /* -------------------------------------------------------------------------- */
 /* Small building blocks                                                      */
 /* -------------------------------------------------------------------------- */
 
 function AppIcon({ src, alt }: { src?: string; alt: string }) {
-  const [failed, setFailed] = useState(false);
-
-  // Reset if the src changes
-  useEffect(() => {
-    setFailed(false);
-  }, [src]);
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
 
   const box =
     "flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl sm:size-16";
 
-  if (!src || failed) {
+  // Show fallback when the source is missing or the current image failed.
+  const hasFailed = !src || failedSrc === src;
+
+  if (hasFailed) {
     return (
       <span
         aria-hidden="true"
@@ -450,12 +449,13 @@ function AppIcon({ src, alt }: { src?: string; alt: string }) {
         height={64}
         loading="lazy"
         decoding="async"
-        onError={() => setFailed(true)}
+        onError={() => setFailedSrc(src)}
         className="size-full object-contain p-1.5"
       />
     </span>
   );
 }
+
 
 function Stat({ label, value }: { label: string; value?: ReactNode }) {
   const title = typeof value === "string" ? value : undefined;

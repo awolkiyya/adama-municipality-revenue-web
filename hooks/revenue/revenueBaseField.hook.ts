@@ -1,404 +1,180 @@
+
 import {
-    useMutation,
-    useQuery,
-    useQueryClient,
-  } from "@tanstack/react-query";
-  
-  
-  import {
-    ListResponse,
-  } from "@/types/api";
-  
-  import { toast } from "sonner";
-import { BaseField, BaseFieldFilters } from "@/types/revenue/revenue-baseField";
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+
+import type { ListResponse } from "@/types/api";
+import type {
+  BaseField,
+  BaseFieldFilters,
+} from "@/types/revenue/revenue-baseField";
+
+import { toast } from "sonner";
 import { baseFieldService } from "@/services/revenue/revenueBaseField.service";
-  
-  
-  
-  
-  
+
 /* --------------------------------------
-   Base Fields
+ Base Fields
 -------------------------------------- */
 
 export const useBaseFields = (
   params?: BaseFieldFilters
 ) => {
   const normalizedParams: BaseFieldFilters = {
-    page: params?.page ?? 1,
-    per_page: params?.per_page ?? 8,
-    search: params?.search?.trim() || undefined,
-    dataType: params?.dataType,
-    isActive: params?.isActive,
+      page: params?.page ?? 1,
+
+      // Previously defaulted to 8, causing the mismatch.
+      per_page: params?.per_page ?? 100,
+
+      search: params?.search?.trim() || undefined,
+      dataType: params?.dataType,
+      isActive: params?.isActive,
   };
 
   return useQuery<ListResponse<BaseField>>({
-    queryKey: ["base-fields", normalizedParams],
+      queryKey: ["base-fields", normalizedParams],
 
-    queryFn: () =>
-      baseFieldService.getBaseFields(normalizedParams),
+      queryFn: () =>
+          baseFieldService.getBaseFields(normalizedParams),
 
-    staleTime: 1000 * 60 * 5,
+      staleTime: 1000 * 60 * 5,
 
-    placeholderData: (previousData) => previousData,
+      placeholderData: (previousData) => previousData,
   });
 };
-  
-  
-  
-  
-  
-  
-  
-  
-  /* --------------------------------------
-     Base Field Detail
-  -------------------------------------- */
-  
-  export const useBaseField = (
-    id:string,
-    enabled=true
-  )=>{
-  
-  
-    return useQuery({
-  
-      queryKey:[
-        "base-field",
-        id,
-      ],
-  
-  
-      queryFn:()=>
-        baseFieldService.getBaseFieldById(
-          id
-        ),
-  
-  
-      enabled:
-        enabled && !!id,
-  
-  
-      staleTime:
-        1000 * 60 * 5,
-  
-    });
-  
-  
-  };
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  /* --------------------------------------
-     Create Base Field
-  -------------------------------------- */
-  
-  export const useCreateBaseField = ()=>{
-  
-  
-  
-    const queryClient =
-      useQueryClient();
-  
-  
-  
-    return useMutation({
-  
-  
-      mutationFn:(
-        data:Partial<BaseField>
-      ) =>
-        baseFieldService.createBaseField(
-          data
-        ),
-  
-  
-  
-      onSuccess:()=>{
-  
-  
-        queryClient.invalidateQueries({
-  
-          queryKey:[
-            "base-fields",
-          ],
-  
-        });
-  
-  
-  
-        toast.success(
-          "Base field created successfully"
-        );
-  
-  
-  
+
+/* --------------------------------------
+ Base Field Detail
+-------------------------------------- */
+
+export const useBaseField = (
+  id: string,
+  enabled = true
+) => {
+  return useQuery({
+      queryKey: ["base-field", id],
+
+      queryFn: () =>
+          baseFieldService.getBaseFieldById(id),
+
+      enabled: enabled && !!id,
+
+      staleTime: 1000 * 60 * 5,
+  });
+};
+
+/* --------------------------------------
+ Create Base Field
+-------------------------------------- */
+
+export const useCreateBaseField = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+      mutationFn: (data: Partial<BaseField>) =>
+          baseFieldService.createBaseField(data),
+
+      onSuccess: () => {
+          queryClient.invalidateQueries({
+              queryKey: ["base-fields"],
+          });
+
+          toast.success("Base field created successfully");
       },
-  
-  
-    });
-  
-  
-  };
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  /* --------------------------------------
-     Update Base Field
-  -------------------------------------- */
-  
-  export const useUpdateBaseField = ()=>{
-  
-  
-    const queryClient =
-      useQueryClient();
-  
-  
-  
-    return useMutation({
-  
-  
-      mutationFn:({
-  
-        id,
-  
-        data,
-  
-      }:{
-  
-        id:string;
-  
-        data:Partial<BaseField>;
-  
-      })=>
-  
-        baseFieldService.updateBaseField(
+  });
+};
+
+/* --------------------------------------
+ Update Base Field
+-------------------------------------- */
+
+export const useUpdateBaseField = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+      mutationFn: ({
           id,
-          data
-        ),
-  
-  
-  
-      onSuccess:(_,variables)=>{
-  
-  
-        queryClient.invalidateQueries({
-  
-          queryKey:[
-            "base-fields",
-          ],
-  
-        });
-  
-  
-  
-        queryClient.invalidateQueries({
-  
-          queryKey:[
-            "base-field",
-            variables.id,
-          ],
-  
-        });
-  
-  
+          data,
+      }: {
+          id: string;
+          data: Partial<BaseField>;
+      }) =>
+          baseFieldService.updateBaseField(id, data),
+
+      onSuccess: (_, variables) => {
+          queryClient.invalidateQueries({
+              queryKey: ["base-fields"],
+          });
+
+          queryClient.invalidateQueries({
+              queryKey: ["base-field", variables.id],
+          });
       },
-  
-  
-    });
-  
-  
-  };
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  /* --------------------------------------
-     Activate Base Field
-  -------------------------------------- */
-  
-  export const useActivateBaseField = ()=>{
-  
-  
-    const queryClient =
-      useQueryClient();
-  
-  
-  
-    return useMutation({
-  
-  
-      mutationFn:(
-        id:string
-      )=>
-  
-        baseFieldService.activateBaseField(
-          id
-        ),
-  
-  
-  
-      onSuccess:(_,id)=>{
-  
-  
-        queryClient.invalidateQueries({
-  
-          queryKey:[
-            "base-fields",
-          ],
-  
-        });
-  
-  
-  
-        queryClient.invalidateQueries({
-  
-          queryKey:[
-            "base-field",
-            id,
-          ],
-  
-        });
-  
-  
+  });
+};
+
+/* --------------------------------------
+ Activate Base Field
+-------------------------------------- */
+
+export const useActivateBaseField = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+      mutationFn: (id: string) =>
+          baseFieldService.activateBaseField(id),
+
+      onSuccess: (_, id) => {
+          queryClient.invalidateQueries({
+              queryKey: ["base-fields"],
+          });
+
+          queryClient.invalidateQueries({
+              queryKey: ["base-field", id],
+          });
       },
-  
-  
-    });
-  
-  
-  };
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  /* --------------------------------------
-     Deactivate Base Field
-  -------------------------------------- */
-  
-  export const useDeactivateBaseField = ()=>{
-  
-  
-    const queryClient =
-      useQueryClient();
-  
-  
-  
-    return useMutation({
-  
-  
-      mutationFn:(
-        id:string
-      )=>
-  
-        baseFieldService.deactivateBaseField(
-          id
-        ),
-  
-  
-  
-      onSuccess:(_,id)=>{
-  
-  
-        queryClient.invalidateQueries({
-  
-          queryKey:[
-            "base-fields",
-          ],
-  
-        });
-  
-  
-  
-        queryClient.invalidateQueries({
-  
-          queryKey:[
-            "base-field",
-            id,
-          ],
-  
-        });
-  
-  
+  });
+};
+
+/* --------------------------------------
+ Deactivate Base Field
+-------------------------------------- */
+
+export const useDeactivateBaseField = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+      mutationFn: (id: string) =>
+          baseFieldService.deactivateBaseField(id),
+
+      onSuccess: (_, id) => {
+          queryClient.invalidateQueries({
+              queryKey: ["base-fields"],
+          });
+
+          queryClient.invalidateQueries({
+              queryKey: ["base-field", id],
+          });
       },
-  
-  
-    });
-  
-  
-  };
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  /* --------------------------------------
-     Delete Base Field
-  -------------------------------------- */
-  
-  export const useDeleteBaseField = ()=>{
-  
-  
-    const queryClient =
-      useQueryClient();
-  
-  
-  
-    return useMutation({
-  
-  
-      mutationFn:(
-        id:string
-      )=>
-  
-        baseFieldService.deleteBaseField(
-          id
-        ),
-  
-  
-  
-      onSuccess:()=>{
-  
-  
-        queryClient.invalidateQueries({
-  
-          queryKey:[
-            "base-fields",
-          ],
-  
-        });
-  
-  
+  });
+};
+
+/* --------------------------------------
+ Delete Base Field
+-------------------------------------- */
+
+export const useDeleteBaseField = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+      mutationFn: (id: string) =>
+          baseFieldService.deleteBaseField(id),
+
+      onSuccess: () => {
+          queryClient.invalidateQueries({
+              queryKey: ["base-fields"],
+          });
       },
-  
-  
-    });
-  
-  
-  };
+  });
+};

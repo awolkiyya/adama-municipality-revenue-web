@@ -427,64 +427,133 @@ export function RevenueServiceForm({
     const handleBaseFieldChange = (
         index: number,
         selectedValue: string,
-        selectedItem: BaseField
+        selectedItem?: BaseField
     ) => {
-        const selectedField =
-            selectedItem ??
-            baseFields.find(
-                (field) =>
-                    field.id === selectedValue ||
-                    field.code === selectedValue
+        /*
+        |--------------------------------------------------------------------------
+        | Resolve Against Canonical Base Fields
+        |--------------------------------------------------------------------------
+        |
+        | Never blindly trust selectedItem.id.
+        | The canonical ID must come from the baseFields prop.
+        |
+        */
+    
+        const normalizedValue = String(selectedValue ?? "").trim();
+    
+        const selectedCode = selectedItem?.code
+            ? String(selectedItem.code).trim()
+            : "";
+    
+        const selectedName = selectedItem?.name
+            ? String(selectedItem.name).trim()
+            : "";
+    
+        const canonicalBaseField = baseFields.find((field) => {
+            const id = String(field.id);
+            const code = String(field.code ?? "").trim();
+    
+            return (
+                id === normalizedValue ||
+                code === normalizedValue ||
+                (!!selectedItem?.id &&
+                    id === String(selectedItem.id)) ||
+                (!!selectedCode && code === selectedCode)
             );
-
-        if (!selectedField?.id) {
-            console.error("Unable to resolve selected base field", {
-                selectedValue,
-                selectedItem,
-            });
-
+        });
+    
+        if (!canonicalBaseField) {
+            console.error(
+                "Selected base field could not be resolved against canonical base fields.",
+                {
+                    selectedValue: normalizedValue,
+                    selectedItem,
+                    selectedCode,
+                    selectedName,
+                    availableBaseFields: baseFields.map((field) => ({
+                        id: field.id,
+                        code: field.code,
+                        name: field.name,
+                    })),
+                }
+            );
+    
             setErrors((previous) => ({
                 ...previous,
                 [`fields.${index}.baseFieldId`]:
-                    "Could not resolve this base field. Please select it again.",
+                    "This field is not available in the canonical base-field list. Refresh the fields and try again.",
             }));
-
+    
             return;
         }
-
+    
+        /*
+        |--------------------------------------------------------------------------
+        | Prevent Duplicate Base Field Selection
+        |--------------------------------------------------------------------------
+        */
+    
+        const alreadySelected = values.fields.some(
+            (field, currentIndex) =>
+                currentIndex !== index &&
+                field.baseFieldId === canonicalBaseField.id
+        );
+    
+        if (alreadySelected) {
+            setErrors((previous) => ({
+                ...previous,
+                [`fields.${index}.baseFieldId`]:
+                    "This base field has already been selected.",
+            }));
+    
+            return;
+        }
+    
+        /*
+        |--------------------------------------------------------------------------
+        | Store Canonical Base Field ID
+        |--------------------------------------------------------------------------
+        */
+    
         setValues((previous) => {
             const fields = [...previous.fields];
             const existing = fields[index];
-
+    
             if (!existing) {
                 return previous;
             }
-
+    
             fields[index] = {
                 ...existing,
-                baseFieldId: selectedField.id,
+                baseFieldId: canonicalBaseField.id,
                 label:
                     existing.label.trim() === ""
-                        ? selectedField.name
+                        ? canonicalBaseField.name
                         : existing.label,
                 sortOrder: index,
             };
-
+    
             return {
                 ...previous,
                 fields,
             };
         });
-
+    
         setSelectedBaseFields((previous) => ({
             ...previous,
-            [String(index)]: selectedField,
+            [String(index)]: canonicalBaseField,
         }));
-
+    
         setErrors((previous) => ({
             ...previous,
             [`fields.${index}.baseFieldId`]: "",
         }));
+    
+        console.log("Canonical base field selected:", {
+            id: canonicalBaseField.id,
+            code: canonicalBaseField.code,
+            name: canonicalBaseField.name,
+        });
     };
 
     /*
@@ -497,15 +566,27 @@ export function RevenueServiceForm({
         index: number,
         baseFieldId: string
     ): BaseField | undefined => {
+        if (!baseFieldId) {
+            return undefined;
+        }
+    
+        // Always prefer the canonical baseFields collection.
+        const canonicalField = baseFields.find(
+            (field) => field.id === baseFieldId
+        );
+    
+        if (canonicalField) {
+            return canonicalField;
+        }
+    
+        // Cached fields are only a fallback for display.
         const cached = selectedBaseFields[String(index)];
-
-        if (cached && cached.id === baseFieldId) {
+    
+        if (cached?.id === baseFieldId) {
             return cached;
         }
-
-        return baseFields.find(
-            (baseField) => baseField.id === baseFieldId
-        );
+    
+        return undefined;
     };
 
     /*
@@ -1040,36 +1121,14 @@ export function RevenueServiceForm({
                                                             </Label>
 
                                                             <BaseFieldDropdown
-                                                                value={
-                                                                    field.baseFieldId ||
-                                                                    null
-                                                                }
+                                                                value={field.baseFieldId || null}
                                                                 excludeIds={values.fields
-                                                                    .filter(
-                                                                        (
-                                                                            _,
-                                                                            existingIndex
-                                                                        ) =>
-                                                                            existingIndex !==
-                                                                            index
-                                                                    )
-                                                                    .map(
-                                                                        (existing) =>
-                                                                            existing.baseFieldId
-                                                                    )
-                                                                    .filter(
-                                                                        Boolean
-                                                                    )}
-                                                                onChange={(
-                                                                    value,
-                                                                    item
-                                                                ) =>
-                                                                    handleBaseFieldChange(
-                                                                        index,
-                                                                        value,
-                                                                        item
-                                                                    )
-                                                                }
+                                                                    .filter((_, existingIndex) => existingIndex !== index)
+                                                                    .map((existing) => existing.baseFieldId)
+                                                                    .filter(Boolean)}
+                                                                onChange={(value, item) => {
+                                                                    handleBaseFieldChange(index, value, item);
+                                                                }}
                                                             />
 
                                                             {fieldError && (

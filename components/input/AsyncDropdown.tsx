@@ -1,33 +1,34 @@
+
 "use client";
 
 import React, {
-  useState,
-  useEffect,
-  useRef,
-  useCallback,
-  useMemo,
+    useState,
+    useEffect,
+    useRef,
+    useCallback,
+    useMemo,
 } from "react";
 
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
 } from "@/components/ui/popover";
 
 import {
-  Command,
-  CommandInput,
-  CommandList,
-  CommandGroup,
-  CommandItem,
+    Command,
+    CommandInput,
+    CommandList,
+    CommandGroup,
+    CommandItem,
 } from "@/components/ui/command";
 
 import {
-  Check,
-  ChevronsUpDown,
-  AlertCircle,
-  Info,
-  Loader2,
+    Check,
+    ChevronsUpDown,
+    AlertCircle,
+    Info,
+    Loader2,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -38,36 +39,36 @@ import { Button } from "@/components/ui/button";
 ========================================================= */
 
 interface AsyncDropdownProps<T extends object, V extends string | number> {
-  value: V | null;
+    value: V | null;
 
-  onChange: (value: V, item: T) => void;
+    onChange: (value: V, item: T) => void;
 
-  fetchData: (params: {
-    search: string;
-    page: number;
-    pageSize: number;
-  }) => Promise<{
-    data: T[];
-    total?: number;
-  }>;
+    fetchData: (params: {
+        search: string;
+        page: number;
+        pageSize: number;
+    }) => Promise<{
+        data: T[];
+        total?: number;
+    }>;
 
-  fetchItemById?: (id: V) => Promise<T | null>;
+    fetchItemById?: (id: V) => Promise<T | null>;
 
-  displayField?: keyof T;
+    displayField?: keyof T;
 
-  renderLabel?: (item: T) => string;
+    renderLabel?: (item: T) => string;
 
-  renderOption?: (item: T) => React.ReactNode;
+    renderOption?: (item: T) => React.ReactNode;
 
-  valueField: keyof T;
+    valueField: keyof T;
 
-  placeholder?: string;
+    placeholder?: string;
 
-  pageSize?: number;
+    pageSize?: number;
 
-  debounceTime?: number;
+    debounceTime?: number;
 
-  disabled?: boolean;
+    disabled?: boolean;
 }
 
 /* =========================================================
@@ -75,11 +76,11 @@ interface AsyncDropdownProps<T extends object, V extends string | number> {
 ========================================================= */
 
 const truncateText = (text: string, max = 60): string => {
-  if (!text) return "";
+    if (!text) return "";
 
-  return text.length > max
-    ? `${text.slice(0, max)}...`
-    : text;
+    return text.length > max
+        ? `${text.slice(0, max)}...`
+        : text;
 };
 
 /**
@@ -87,11 +88,39 @@ const truncateText = (text: string, max = 60): string => {
  * Supports API IDs returned as either 4 or "4".
  */
 const sameId = (first: unknown, second: unknown): boolean => {
-  if (first == null || second == null) {
-    return first == null && second == null;
-  }
+    if (first == null || second == null) {
+        return first == null && second == null;
+    }
 
-  return String(first) === String(second);
+    return String(first) === String(second);
+};
+
+/**
+ * Remove duplicate records using the configured value field.
+ */
+const uniqueByValue = <T extends object>(
+    items: T[],
+    valueField: keyof T,
+): T[] => {
+    const seen = new Set<string>();
+
+    return items.filter((item) => {
+        const id = item[valueField];
+
+        if (id == null) {
+            return false;
+        }
+
+        const normalizedId = String(id);
+
+        if (seen.has(normalizedId)) {
+            return false;
+        }
+
+        seen.add(normalizedId);
+
+        return true;
+    });
 };
 
 /* =========================================================
@@ -99,539 +128,627 @@ const sameId = (first: unknown, second: unknown): boolean => {
 ========================================================= */
 
 export const AsyncDropdown = <
-  T extends object,
-  V extends string | number,
+    T extends object,
+    V extends string | number,
 >({
-  value,
-  onChange,
-  fetchData,
-  fetchItemById,
-  displayField,
-  renderLabel,
-  renderOption,
-  valueField,
-  placeholder = "Select...",
-  pageSize = 20,
-  debounceTime = 300,
-  disabled = false,
+    value,
+    onChange,
+    fetchData,
+    fetchItemById,
+    displayField,
+    renderLabel,
+    renderOption,
+    valueField,
+    placeholder = "Select...",
+    pageSize = 20,
+    debounceTime = 300,
+    disabled = false,
 }: AsyncDropdownProps<T, V>) => {
-  /* =====================================================
-     STATE
-  ===================================================== */
+    /* =====================================================
+       STATE
+    ===================================================== */
 
-  const [open, setOpen] = useState(false);
-  const [options, setOptions] = useState<T[]>([]);
-  const [search, setSearch] = useState("");
-  const [page, setPage] = useState(1);
-  const [total, setTotal] = useState<number | null>(null);
-  const [loadedCount, setLoadedCount] = useState(0);
+    const [open, setOpen] = useState(false);
 
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+    const [options, setOptions] = useState<T[]>([]);
 
-  /**
-   * Keeps the selected object available when it is not
-   * included in the current server response.
-   */
-  const [selectedItem, setSelectedItem] = useState<T | null>(null);
+    const [search, setSearch] = useState("");
 
-  /* =====================================================
-     REFS
-  ===================================================== */
+    const [page, setPage] = useState(1);
 
-  const mountedRef = useRef(false);
-  const requestIdRef = useRef(0);
-  const loadingMoreRef = useRef(false);
+    const [total, setTotal] = useState<number | null>(null);
 
-  const valueRef = useRef<V | null>(value);
-  const selectedItemRef = useRef<T | null>(selectedItem);
+    const [loadedCount, setLoadedCount] = useState(0);
 
-  /* =====================================================
-     MOUNT TRACKING
-  ===================================================== */
+    const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    mountedRef.current = true;
+    const [error, setError] = useState<string | null>(null);
 
-    return () => {
-      mountedRef.current = false;
-      requestIdRef.current += 1;
-    };
-  }, []);
+    /**
+     * Keeps the selected object available when it is not
+     * included in the current server response.
+     */
+    const [selectedItem, setSelectedItem] = useState<T | null>(null);
 
-  /* =====================================================
-     SYNCHRONIZE LATEST VALUES
-  ===================================================== */
+    /* =====================================================
+       REFS
+    ===================================================== */
 
-  useEffect(() => {
-    valueRef.current = value;
-    selectedItemRef.current = selectedItem;
-  }, [value, selectedItem]);
+    const mountedRef = useRef(false);
 
-  /* =====================================================
-     LABEL HELPERS
-  ===================================================== */
+    const requestIdRef = useRef(0);
 
-  const getLabelText = useCallback(
-    (item: T): string => {
-      if (renderLabel) {
-        return renderLabel(item);
-      }
+    const loadingMoreRef = useRef(false);
 
-      if (displayField) {
-        const raw: unknown = item[displayField];
+    const valueRef = useRef<V | null>(value);
+
+    const selectedItemRef = useRef<T | null>(null);
+
+    /* =====================================================
+       MOUNT TRACKING
+    ===================================================== */
+
+    useEffect(() => {
+        mountedRef.current = true;
+
+        return () => {
+            mountedRef.current = false;
+
+            requestIdRef.current += 1;
+
+            loadingMoreRef.current = false;
+        };
+    }, []);
+
+    /* =====================================================
+       SYNCHRONIZE SELECTED VALUE
+    ===================================================== */
+
+    useEffect(() => {
+        valueRef.current = value;
+
+        if (value == null) {
+            selectedItemRef.current = null;
+
+            setSelectedItem(null);
+
+            return;
+        }
+
+        const matchingOption = options.find((item) =>
+            sameId(item[valueField], value),
+        );
+
+        if (matchingOption) {
+            selectedItemRef.current = matchingOption;
+
+            setSelectedItem(matchingOption);
+
+            return;
+        }
+
+        const currentSelected = selectedItemRef.current;
 
         if (
-          typeof raw === "string" ||
-          typeof raw === "number"
+            currentSelected &&
+            !sameId(currentSelected[valueField], value)
         ) {
-          return String(raw);
+            selectedItemRef.current = null;
+
+            setSelectedItem(null);
         }
-      }
+    }, [value, options, valueField]);
 
-      return "";
-    },
-    [renderLabel, displayField],
-  );
+    /* =====================================================
+       LABEL HELPERS
+    ===================================================== */
 
-  const getOptionNode = useCallback(
-    (item: T): React.ReactNode => {
-      if (renderOption) {
-        return renderOption(item);
-      }
+    const getLabelText = useCallback(
+        (item: T): string => {
+            if (renderLabel) {
+                return renderLabel(item);
+            }
 
-      return getLabelText(item);
-    },
-    [renderOption, getLabelText],
-  );
+            if (displayField) {
+                const raw: unknown = item[displayField];
 
-  /* =====================================================
-     RESOLVE CURRENT SELECTION
-  ===================================================== */
+                if (
+                    typeof raw === "string" ||
+                    typeof raw === "number"
+                ) {
+                    return String(raw);
+                }
+            }
 
-  const resolvedSelected = useMemo(() => {
-    if (value == null) {
-      return null;
-    }
-
-    const matchingOption = options.find((item) =>
-      sameId(item[valueField], value),
+            return "";
+        },
+        [renderLabel, displayField],
     );
 
-    if (matchingOption) {
-      return matchingOption;
-    }
+    const getOptionNode = useCallback(
+        (item: T): React.ReactNode => {
+            if (renderOption) {
+                return renderOption(item);
+            }
 
-    if (
-      selectedItem &&
-      sameId(selectedItem[valueField], value)
-    ) {
-      return selectedItem;
-    }
+            return getLabelText(item);
+        },
+        [renderOption, getLabelText],
+    );
 
-    return null;
-  }, [value, options, selectedItem, valueField]);
+    /* =====================================================
+       RESOLVE CURRENT SELECTION
+    ===================================================== */
 
-  /* =====================================================
-     LOAD DATA
-  ===================================================== */
-
-  const loadOptions = useCallback(
-    async (
-      pageNum: number,
-      searchText: string,
-      reset = false,
-    ) => {
-      if (!mountedRef.current) {
-        return;
-      }
-
-      if (!reset && loadingMoreRef.current) {
-        return;
-      }
-
-      if (reset) {
-        loadingMoreRef.current = false;
-      } else {
-        loadingMoreRef.current = true;
-      }
-
-      const requestId = ++requestIdRef.current;
-
-      setLoading(true);
-      setError(null);
-
-      try {
-        const result = await fetchData({
-          search: searchText,
-          page: pageNum,
-          pageSize,
-        });
-
-        if (
-          !mountedRef.current ||
-          requestId !== requestIdRef.current
-        ) {
-          return;
+    const resolvedSelected = useMemo(() => {
+        if (value == null) {
+            return null;
         }
 
-        const incomingOptions = Array.isArray(result?.data)
-          ? result.data
-          : [];
+        const matchingOption = options.find((item) =>
+            sameId(item[valueField], value),
+        );
 
-        if (reset) {
-          const currentValue = valueRef.current;
-          const currentSelectedItem = selectedItemRef.current;
+        if (matchingOption) {
+            return matchingOption;
+        }
 
-          setOptions((previous) => {
-            /**
-             * Preserve the selected item if it is missing
-             * from the current search/page response.
-             */
-            const currentSelected =
-              previous.find((item) =>
-                sameId(item[valueField], currentValue),
-              ) ??
-              (currentSelectedItem &&
-              sameId(
-                currentSelectedItem[valueField],
-                currentValue,
-              )
-                ? currentSelectedItem
-                : null);
+        if (
+            selectedItem &&
+            sameId(selectedItem[valueField], value)
+        ) {
+            return selectedItem;
+        }
+
+        return null;
+    }, [value, options, selectedItem, valueField]);
+
+    /* =====================================================
+       LOAD DATA
+    ===================================================== */
+
+    const loadOptions = useCallback(
+        async (
+            pageNum: number,
+            searchText: string,
+            reset = false,
+        ) => {
+            if (!mountedRef.current) {
+                return;
+            }
+
+            if (!reset && loadingMoreRef.current) {
+                return;
+            }
+
+            if (reset) {
+                loadingMoreRef.current = false;
+            } else {
+                loadingMoreRef.current = true;
+            }
+
+            const requestId = ++requestIdRef.current;
+
+            setLoading(true);
+
+            setError(null);
+
+            try {
+                const result = await fetchData({
+                    search: searchText,
+                    page: pageNum,
+                    pageSize,
+                });
+
+                if (
+                    !mountedRef.current ||
+                    requestId !== requestIdRef.current
+                ) {
+                    return;
+                }
+
+                const incomingOptions = uniqueByValue(
+                    Array.isArray(result?.data)
+                        ? result.data
+                        : [],
+                    valueField,
+                );
+
+                if (reset) {
+                    const currentValue = valueRef.current;
+
+                    const currentSelectedItem =
+                        selectedItemRef.current;
+
+                    const previousSelected =
+                        options.find((item) =>
+                            sameId(
+                                item[valueField],
+                                currentValue,
+                            ),
+                        ) ??
+                        (
+                            currentSelectedItem &&
+                            sameId(
+                                currentSelectedItem[valueField],
+                                currentValue,
+                            )
+                                ? currentSelectedItem
+                                : null
+                        );
+
+                    const mergedOptions = [...incomingOptions];
+
+                    if (
+                        previousSelected &&
+                        !mergedOptions.some((item) =>
+                            sameId(
+                                item[valueField],
+                                previousSelected[valueField],
+                            ),
+                        )
+                    ) {
+                        mergedOptions.unshift(previousSelected);
+                    }
+
+                    setOptions(mergedOptions);
+
+                    // Count only actual API results, not preserved selections.
+                    setLoadedCount(incomingOptions.length);
+
+                } else {
+                    setOptions((previous) => {
+                        const merged = uniqueByValue(
+                            [...previous, ...incomingOptions],
+                            valueField,
+                        );
+
+                        return merged;
+                    });
+
+                    setLoadedCount((previous) => {
+                        const previousIds = new Set(
+                            options.map((item) =>
+                                String(item[valueField]),
+                            ),
+                        );
+
+                        const newUniqueCount = incomingOptions.filter(
+                            (item) =>
+                                !previousIds.has(
+                                    String(item[valueField]),
+                                ),
+                        ).length;
+
+                        return previous + newUniqueCount;
+                    });
+                }
+
+                setPage(pageNum);
+
+                setTotal(
+                    typeof result?.total === "number"
+                        ? result.total
+                        : null,
+                );
+
+            } catch (err) {
+                if (
+                    !mountedRef.current ||
+                    requestId !== requestIdRef.current
+                ) {
+                    return;
+                }
+
+                console.error(
+                    "AsyncDropdown: failed to load options",
+                    err,
+                );
+
+                setError("Failed to load data");
+
+            } finally {
+                if (
+                    mountedRef.current &&
+                    requestId === requestIdRef.current
+                ) {
+                    setLoading(false);
+
+                    loadingMoreRef.current = false;
+                }
+            }
+        },
+        [fetchData, pageSize, valueField, options],
+    );
+
+    /* =====================================================
+       INITIAL LOAD + SEARCH
+    ===================================================== */
+
+    useEffect(() => {
+        const timer = window.setTimeout(() => {
+            void loadOptions(1, search, true);
+        }, debounceTime);
+
+        return () => {
+            window.clearTimeout(timer);
+
+            // Invalidate requests belonging to the previous search.
+            requestIdRef.current += 1;
+
+            loadingMoreRef.current = false;
+        };
+    }, [search, loadOptions, debounceTime]);
+
+    /* =====================================================
+       LOAD SELECTED ITEM BY ID
+    ===================================================== */
+
+    useEffect(() => {
+        if (value == null || !fetchItemById) {
+            return;
+        }
+
+        let active = true;
+
+        const loadSelectedItem = async () => {
+            try {
+                const item = await fetchItemById(value);
+
+                if (
+                    !active ||
+                    !mountedRef.current ||
+                    !item ||
+                    !sameId(item[valueField], value)
+                ) {
+                    return;
+                }
+
+                selectedItemRef.current = item;
+
+                setSelectedItem(item);
+
+                setOptions((previous) => {
+                    const exists = previous.some((option) =>
+                        sameId(
+                            option[valueField],
+                            item[valueField],
+                        ),
+                    );
+
+                    if (exists) {
+                        return previous;
+                    }
+
+                    return [item, ...previous];
+                });
+
+            } catch (err) {
+                if (active) {
+                    console.error(
+                        "AsyncDropdown: failed to load selected item",
+                        err,
+                    );
+                }
+            }
+        };
+
+        void loadSelectedItem();
+
+        return () => {
+            active = false;
+        };
+    }, [value, fetchItemById, valueField]);
+
+    /* =====================================================
+       INFINITE SCROLL
+    ===================================================== */
+
+    const hasMore =
+        total !== null
+            ? loadedCount < total
+            : loadedCount > 0 &&
+              loadedCount % pageSize === 0;
+
+    const handleScroll = useCallback(
+        (event: React.UIEvent<HTMLDivElement>) => {
+            const element = event.currentTarget;
+
+            const reachedBottom =
+                element.scrollTop + element.clientHeight >=
+                element.scrollHeight - 20;
 
             if (
-              currentSelected &&
-              !incomingOptions.some((item) =>
-                sameId(
-                  item[valueField],
-                  currentSelected[valueField],
-                ),
-              )
+                !reachedBottom ||
+                loading ||
+                loadingMoreRef.current ||
+                !hasMore
             ) {
-              return [currentSelected, ...incomingOptions];
+                return;
             }
 
-            return incomingOptions;
-          });
+            void loadOptions(page + 1, search);
+        },
+        [loading, hasMore, loadOptions, page, search],
+    );
 
-          setLoadedCount(incomingOptions.length);
-        } else {
-          setOptions((previous) => {
-            const merged = [...previous];
+    /* =====================================================
+       OPEN / CLOSE
+    ===================================================== */
 
-            for (const item of incomingOptions) {
-              const exists = merged.some((existing) =>
-                sameId(
-                  existing[valueField],
-                  item[valueField],
-                ),
-              );
+    const handleOpenChange = useCallback(
+        (nextOpen: boolean) => {
+            setOpen(nextOpen);
 
-              if (!exists) {
-                merged.push(item);
-              }
+            // Reset search when closing.
+            if (!nextOpen && search) {
+                setSearch("");
+            }
+        },
+        [search],
+    );
+
+    /* =====================================================
+       SELECT
+    ===================================================== */
+
+    const handleSelect = useCallback(
+        (item: T) => {
+            const rawValue = item[valueField];
+
+            if (
+                rawValue == null ||
+                (typeof rawValue !== "string" &&
+                    typeof rawValue !== "number")
+            ) {
+                console.error(
+                    "AsyncDropdown: selected item has an invalid value",
+                    {
+                        item,
+                        valueField,
+                    },
+                );
+
+                return;
             }
 
-            return merged;
-          });
+            const selectedValue = rawValue as V;
 
-          setLoadedCount(
-            (previous) => previous + incomingOptions.length,
-          );
-        }
+            selectedItemRef.current = item;
 
-        setPage(pageNum);
-        setTotal(
-          typeof result?.total === "number"
-            ? result.total
-            : null,
-        );
-      } catch (err) {
-        if (
-          !mountedRef.current ||
-          requestId !== requestIdRef.current
-        ) {
-          return;
-        }
+            setSelectedItem(item);
 
-        console.error(
-          "AsyncDropdown: failed to load options",
-          err,
-        );
+            onChange(selectedValue, item);
 
-        setError("Failed to load data");
-      } finally {
-        if (
-          mountedRef.current &&
-          requestId === requestIdRef.current
-        ) {
-          setLoading(false);
-          loadingMoreRef.current = false;
-        }
-      }
-    },
-    [fetchData, pageSize, valueField],
-  );
+            handleOpenChange(false);
+        },
+        [valueField, onChange, handleOpenChange],
+    );
 
-  /* =====================================================
-     INITIAL LOAD + SEARCH
-  ===================================================== */
+    /* =====================================================
+       UI
+    ===================================================== */
 
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      void loadOptions(1, search, true);
-    }, debounceTime);
-
-    return () => {
-      window.clearTimeout(timer);
-
-      // Invalidate requests belonging to the previous search.
-      requestIdRef.current += 1;
-      loadingMoreRef.current = false;
-    };
-  }, [search, loadOptions, debounceTime]);
-
-  /* =====================================================
-     LOAD SELECTED ITEM BY ID
-  ===================================================== */
-
-  useEffect(() => {
-    if (value == null || !fetchItemById) {
-      return;
-    }
-
-    let active = true;
-
-    const loadSelectedItem = async () => {
-      try {
-        const item = await fetchItemById(value);
-
-        if (
-          !active ||
-          !mountedRef.current ||
-          !item
-        ) {
-          return;
-        }
-
-        setSelectedItem(item);
-
-        setOptions((previous) => {
-          const exists = previous.some((option) =>
-            sameId(
-              option[valueField],
-              item[valueField],
-            ),
-          );
-
-          if (exists) {
-            return previous;
-          }
-
-          return [item, ...previous];
-        });
-      } catch (err) {
-        if (active) {
-          console.error(
-            "AsyncDropdown: failed to load selected item",
-            err,
-          );
-        }
-      }
-    };
-
-    void loadSelectedItem();
-
-    return () => {
-      active = false;
-    };
-  }, [value, fetchItemById, valueField]);
-
-  /* =====================================================
-     INFINITE SCROLL
-  ===================================================== */
-
-  const hasMore =
-    total !== null
-      ? loadedCount < total
-      : loadedCount > 0 &&
-        loadedCount % pageSize === 0;
-
-  const handleScroll = useCallback(
-    (event: React.UIEvent<HTMLDivElement>) => {
-      const element = event.currentTarget;
-
-      const reachedBottom =
-        element.scrollTop + element.clientHeight >=
-        element.scrollHeight - 20;
-
-      if (
-        !reachedBottom ||
-        loading ||
-        loadingMoreRef.current ||
-        !hasMore
-      ) {
-        return;
-      }
-
-      void loadOptions(page + 1, search);
-    },
-    [loading, hasMore, loadOptions, page, search],
-  );
-
-  /* =====================================================
-     OPEN / CLOSE
-  ===================================================== */
-
-  const handleOpenChange = useCallback(
-    (nextOpen: boolean) => {
-      setOpen(nextOpen);
-
-      // Reset search when closing.
-      if (!nextOpen && search) {
-        setSearch("");
-      }
-    },
-    [search],
-  );
-
-  /* =====================================================
-     SELECT
-  ===================================================== */
-
-  const handleSelect = useCallback(
-    (item: T) => {
-      const selectedValue = item[valueField] as V;
-
-      setSelectedItem(item);
-      onChange(selectedValue, item);
-
-      handleOpenChange(false);
-    },
-    [valueField, onChange, handleOpenChange],
-  );
-
-  /* =====================================================
-     UI
-  ===================================================== */
-
-  return (
-    <Popover
-      open={open}
-      onOpenChange={handleOpenChange}
-      modal
-    >
-      <PopoverTrigger asChild>
-        <Button
-          type="button"
-          variant="outline"
-          role="combobox"
-          aria-expanded={open}
-          disabled={disabled}
-          className="h-11 w-full justify-between gap-2 rounded-sm px-3 text-left"
+    return (
+        <Popover
+            open={open}
+            onOpenChange={handleOpenChange}
+            modal
         >
-          <span className="truncate text-sm font-medium">
-            {resolvedSelected
-              ? truncateText(
-                  getLabelText(resolvedSelected),
-                  60,
-                )
-              : placeholder}
-          </span>
+            <PopoverTrigger asChild>
+                <Button
+                    type="button"
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={open}
+                    disabled={disabled}
+                    className="h-11 w-full justify-between gap-2 rounded-sm px-3 text-left"
+                >
+                    <span className="truncate text-sm font-medium">
+                        {resolvedSelected
+                            ? truncateText(
+                                getLabelText(resolvedSelected),
+                                60,
+                            )
+                            : placeholder}
+                    </span>
 
-          <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
-        </Button>
-      </PopoverTrigger>
+                    <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+            </PopoverTrigger>
 
-      <PopoverContent
-        align="start"
-        sideOffset={6}
-        className="w-[var(--radix-popover-trigger-width)] min-w-[280px] p-0"
-        onWheel={(event) => event.stopPropagation()}
-        onTouchMove={(event) => event.stopPropagation()}
-      >
-        <Command shouldFilter={false}>
-          <CommandInput
-            placeholder="Search..."
-            value={search}
-            onValueChange={setSearch}
-          />
-
-          <CommandList
-            className="max-h-72 overflow-y-auto overscroll-contain"
-            onScroll={handleScroll}
-          >
-            {loading && options.length === 0 && (
-              <div className="flex items-center justify-center gap-2 p-4 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Loading...
-              </div>
-            )}
-
-            {error && (
-              <div className="flex items-center gap-2 p-4 text-sm text-red-500">
-                <AlertCircle className="h-4 w-4" />
-                {error}
-              </div>
-            )}
-
-            {!loading &&
-              options.length === 0 &&
-              !error && (
-                <div className="flex items-center gap-2 p-4 text-sm text-muted-foreground">
-                  <Info className="h-4 w-4" />
-                  No results found
-                </div>
-              )}
-
-            <CommandGroup>
-              {options.map((item) => {
-                const itemId = item[valueField];
-                const isSelected = sameId(itemId, value);
-
-                return (
-                  <CommandItem
-                    key={String(itemId)}
-                    value={`${getLabelText(item)} ${String(itemId)}`}
-                    onSelect={() => handleSelect(item)}
-                    className="flex items-start gap-3 py-3 text-sm"
-                  >
-                    <Check
-                      className={cn(
-                        "mt-0.5 h-4 w-4 shrink-0",
-                        isSelected
-                          ? "opacity-100"
-                          : "opacity-0",
-                      )}
+            <PopoverContent
+                align="start"
+                sideOffset={6}
+                className="w-[var(--radix-popover-trigger-width)] min-w-[280px] p-0"
+                onWheel={(event) => event.stopPropagation()}
+                onTouchMove={(event) => event.stopPropagation()}
+            >
+                <Command shouldFilter={false}>
+                    <CommandInput
+                        placeholder="Search..."
+                        value={search}
+                        onValueChange={setSearch}
                     />
 
-                    <span className="line-clamp-2 break-words">
-                      {getOptionNode(item)}
-                    </span>
-                  </CommandItem>
-                );
-              })}
-            </CommandGroup>
+                    <CommandList
+                        className="max-h-72 overflow-y-auto overscroll-contain"
+                        onScroll={handleScroll}
+                    >
+                        {loading && options.length === 0 && (
+                            <div className="flex items-center justify-center gap-2 p-4 text-sm text-muted-foreground">
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                Loading...
+                            </div>
+                        )}
 
-            {loading && options.length > 0 && (
-              <div className="flex items-center justify-center gap-2 p-3 text-xs text-muted-foreground">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                Loading more...
-              </div>
-            )}
+                        {error && (
+                            <div className="flex items-center gap-2 p-4 text-sm text-red-500">
+                                <AlertCircle className="h-4 w-4" />
+                                {error}
+                            </div>
+                        )}
 
-            {!loading &&
-              !error &&
-              options.length > 0 &&
-              !hasMore && (
-                <div className="py-2 text-center text-xs text-muted-foreground">
-                  No more results
-                </div>
-              )}
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
-  );
+                        {!loading &&
+                            options.length === 0 &&
+                            !error && (
+                                <div className="flex items-center gap-2 p-4 text-sm text-muted-foreground">
+                                    <Info className="h-4 w-4" />
+                                    No results found
+                                </div>
+                            )}
+
+                        <CommandGroup>
+                            {options.map((item) => {
+                                const itemId = item[valueField];
+
+                                const isSelected = sameId(
+                                    itemId,
+                                    value,
+                                );
+
+                                return (
+                                    <CommandItem
+                                        key={String(itemId)}
+                                        value={`${getLabelText(item)} ${String(itemId)}`}
+                                        onSelect={() => handleSelect(item)}
+                                        className="flex items-start gap-3 py-3 text-sm"
+                                    >
+                                        <Check
+                                            className={cn(
+                                                "mt-0.5 h-4 w-4 shrink-0",
+                                                isSelected
+                                                    ? "opacity-100"
+                                                    : "opacity-0",
+                                            )}
+                                        />
+
+                                        <span className="line-clamp-2 break-words">
+                                            {getOptionNode(item)}
+                                        </span>
+                                    </CommandItem>
+                                );
+                            })}
+                        </CommandGroup>
+
+                        {loading && options.length > 0 && (
+                            <div className="flex items-center justify-center gap-2 p-3 text-xs text-muted-foreground">
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                Loading more...
+                            </div>
+                        )}
+
+                        {!loading &&
+                            !error &&
+                            options.length > 0 &&
+                            !hasMore && (
+                                <div className="py-2 text-center text-xs text-muted-foreground">
+                                    No more results
+                                </div>
+                            )}
+                    </CommandList>
+                </Command>
+            </PopoverContent>
+        </Popover>
+    );
 };

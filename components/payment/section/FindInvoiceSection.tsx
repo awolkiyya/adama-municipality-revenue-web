@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useState } from "react";
@@ -33,6 +32,9 @@ import type {
 
 const DEFAULT_PER_PAGE = 10;
 const SEARCH_DEBOUNCE_MS = 350;
+
+/* Invoices are fetched only after this many characters */
+const MIN_SEARCH_CHARS = 3;
 
 const PAD = "p-4 sm:p-6";
 const PAD_X = "px-4 sm:px-6";
@@ -124,23 +126,52 @@ export function FindInvoiceSection({
   }, [search]);
 
   /* =======================================================
-     INVOICE QUERY
+     SEARCH STATE (derived)
+     ======================================================= */
+
+  const trimmedSearch = search.trim();
+
+  /* Agent typed enough, but the debounce has not fired yet */
+  const isDebouncing =
+    trimmedSearch.length >= MIN_SEARCH_CHARS &&
+    trimmedSearch !== debouncedSearch;
+
+  /* The query only runs once the debounced text is long enough */
+  const searchEnabled =
+    debouncedSearch.length >= MIN_SEARCH_CHARS;
+
+  const remainingChars =
+    MIN_SEARCH_CHARS - trimmedSearch.length;
+
+  /* =======================================================
+     INVOICE QUERY (only runs when the agent searches)
      ======================================================= */
 
   const {
     data: response,
-    isLoading,
+    isLoading: isQueryLoading,
     isFetching,
-    isError,
+    isError: isQueryError,
     refetch,
-  } = useAgentPendingInvoices({
-    search: debouncedSearch || undefined,
-    page,
-    per_page: perPage,
-  });
+  } = useAgentPendingInvoices(
+    {
+      search: debouncedSearch,
+      page,
+      per_page: perPage,
+    },
+    { enabled: searchEnabled },
+  );
 
-  const invoices = response?.data ?? [];
-  const pagination = response?.meta;
+  /*
+   * Guard every value with searchEnabled so stale data or a
+   * disabled query never leaks into the UI.
+   * (In React Query v4, a disabled query reports isLoading = true.)
+   */
+  const invoices = searchEnabled ? (response?.data ?? []) : [];
+  const pagination = searchEnabled ? response?.meta : undefined;
+
+  const isLoading = searchEnabled && isQueryLoading;
+  const isError = searchEnabled && isQueryError;
 
   /* =======================================================
      PAGINATION VALUES
@@ -149,6 +180,7 @@ export function FindInvoiceSection({
   const currentPage = pagination?.current_page ?? page;
   const pageSize = pagination?.per_page ?? perPage;
   const total = pagination?.total ?? 0;
+  const lastPage = pagination?.last_page ?? 1;
 
   /* =======================================================
      ACTIONS
@@ -174,14 +206,7 @@ export function FindInvoiceSection({
   }
 
   function handlePageChange(nextPage: number) {
-    if (nextPage < 1) {
-      return;
-    }
-
-    if (
-      pagination?.last_page !== undefined &&
-      nextPage > pagination.last_page
-    ) {
+    if (nextPage < 1 || nextPage > lastPage) {
       return;
     }
 
@@ -239,6 +264,8 @@ export function FindInvoiceSection({
           />
 
           <Input
+            autoFocus
+            autoComplete="off"
             value={search}
             onChange={(event) =>
               handleSearchChange(event.target.value)
@@ -264,28 +291,47 @@ export function FindInvoiceSection({
         </div>
 
         {/* =================================================
-            SEARCH HINT
+            IDLE: nothing typed yet (no invoices shown)
             ================================================= */}
 
-        {!debouncedSearch && !isLoading && !isError && (
-          <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
-            <Search
-              aria-hidden="true"
-              className="h-3.5 w-3.5 shrink-0"
-            />
+        {trimmedSearch.length === 0 && (
+          <div className="mt-4 rounded-lg border border-dashed px-6 py-9 text-center">
+            <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-muted">
+              <FileText
+                aria-hidden="true"
+                className="h-4 w-4 text-muted-foreground"
+              />
+            </div>
 
-            <span>
-              Search by invoice number, taxpayer name,
-              taxpayer number, or phone.
-            </span>
+            <p className="mt-3 text-sm font-medium">
+              Search to find an invoice
+            </p>
+
+            <p className="mx-auto mt-1 max-w-md text-xs leading-5 text-muted-foreground">
+              Type an invoice number, taxpayer name, taxpayer
+              number, or phone. Matching invoices appear here as
+              you type.
+            </p>
           </div>
         )}
 
         {/* =================================================
-            INITIAL LOADING
+            TOO SHORT
             ================================================= */}
 
-        {isLoading && (
+        {trimmedSearch.length > 0 && remainingChars > 0 && (
+          <p className="mt-3 text-xs text-muted-foreground">
+            Type {remainingChars} more{" "}
+            {remainingChars === 1 ? "character" : "characters"} to
+            search...
+          </p>
+        )}
+
+        {/* =================================================
+            SEARCHING (debounce wait or first fetch)
+            ================================================= */}
+
+        {(isDebouncing || isLoading) && (
           <div
             role="status"
             className="mt-4 rounded-lg border bg-muted/20 px-4 py-6"
@@ -296,20 +342,17 @@ export function FindInvoiceSection({
                 className="h-4 w-4 animate-spin"
               />
 
-              <span>
-                {debouncedSearch
-                  ? "Searching invoices..."
-                  : "Loading pending invoices..."}
-              </span>
+              <span>Searching invoices...</span>
             </div>
           </div>
         )}
 
         {/* =================================================
-            BACKGROUND FETCHING
+            BACKGROUND FETCHING (page change, refetch)
             ================================================= */}
 
-        {!isLoading &&
+        {!isDebouncing &&
+          !isLoading &&
           isFetching &&
           invoices.length > 0 && (
             <div
@@ -329,7 +372,7 @@ export function FindInvoiceSection({
             ERROR
             ================================================= */}
 
-        {isError && !isLoading && (
+        {isError && !isLoading && !isDebouncing && (
           <div
             role="alert"
             className="mt-4 rounded-lg border border-destructive/30 bg-destructive/5 p-4"
@@ -341,7 +384,7 @@ export function FindInvoiceSection({
                 </p>
 
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Something went wrong while retrieving pending
+                  Something went wrong while searching pending
                   invoices.
                 </p>
               </div>
@@ -362,7 +405,9 @@ export function FindInvoiceSection({
             RESULTS
             ================================================= */}
 
-        {!isLoading &&
+        {searchEnabled &&
+          !isDebouncing &&
+          !isLoading &&
           !isError &&
           invoices.length > 0 && (
             <div className="mt-4 overflow-hidden rounded-lg border">
@@ -370,12 +415,14 @@ export function FindInvoiceSection({
 
               <div className="flex items-center justify-between gap-3 border-b bg-muted/30 px-4 py-2.5">
                 <p className="text-xs font-medium text-muted-foreground">
-                  Pending invoices
+                  Results for &ldquo;{debouncedSearch}&rdquo;
                 </p>
 
-                <p className="text-xs text-muted-foreground">
-                  {total}{" "}
-                  {total === 1 ? "invoice" : "invoices"}
+                <p
+                  aria-live="polite"
+                  className="text-xs text-muted-foreground"
+                >
+                  {total} {total === 1 ? "invoice" : "invoices"}
                 </p>
               </div>
 
@@ -464,26 +511,13 @@ export function FindInvoiceSection({
           )}
 
         {/* =================================================
-            EMPTY INITIAL STATE
+            NO MATCH
             ================================================= */}
 
-        {!isLoading &&
+        {searchEnabled &&
+          !isDebouncing &&
+          !isLoading &&
           !isError &&
-          !debouncedSearch &&
-          invoices.length === 0 && (
-            <EmptyState
-              title="No pending invoices"
-              description="There are currently no invoices available for agent-assisted payment."
-            />
-          )}
-
-        {/* =================================================
-            EMPTY SEARCH STATE
-            ================================================= */}
-
-        {!isLoading &&
-          !isError &&
-          debouncedSearch &&
           invoices.length === 0 && (
             <EmptyState
               title="No matching invoice"
@@ -495,11 +529,12 @@ export function FindInvoiceSection({
             PAGINATION
             ================================================= */}
 
-        {!isLoading &&
+        {searchEnabled &&
+          !isDebouncing &&
+          !isLoading &&
           !isError &&
           invoices.length > 0 &&
-          pagination &&
-          pagination!.last_page! > 1 && (
+          lastPage > 1 && (
             <div className="mt-4">
               <DataTablePagination
                 page={currentPage}

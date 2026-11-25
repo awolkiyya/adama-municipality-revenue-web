@@ -21,6 +21,8 @@ export const agentInvoiceKeys = {
 
 export function useAgentPendingInvoices(
   filters: AgentPendingInvoiceFilters = {},
+  options?: { enabled?: boolean },
+
 ) {
   return useQuery({
     queryKey:
@@ -28,6 +30,8 @@ export function useAgentPendingInvoices(
 
     queryFn: () =>
       agentInvoiceService.getPending(filters),
+    enabled: options?.enabled ?? true, // existing callers keep working
+
 
     placeholderData: (previousData) =>
       previousData,

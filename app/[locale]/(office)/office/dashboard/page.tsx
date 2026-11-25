@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useMemo, useState, type ReactNode } from "react";
@@ -76,6 +77,20 @@ const SYSTEM_STATS = [
   { label: "Assessments", key: "totalAssessments" },
   { label: "Assessment invoices", key: "totalAssessmentInvoices" },
   { label: "Direct invoices", key: "totalDirectCollectionInvoices" },
+
+  // Revenue configuration statistics
+  {
+    label: "Active revenue categories",
+    key: "totalActiveRevenueCategories",
+  },
+  {
+    label: "Revenue codes",
+    key: "totalRevenueCodes",
+  },
+  {
+    label: "Active revenue services",
+    key: "totalActiveRevenueServices",
+  },
 ] as const;
 
 const ACTIVITY_STATUS: Record<
@@ -236,8 +251,6 @@ function DashboardSkeleton() {
     </div>
   );
 }
-
-
 
 /* -------------------------------------------------------------------------- */
 /* Analytics dashboard                                                        */
@@ -450,7 +463,7 @@ function AnalyticsDashboard() {
         </Card>
       </section>
 
-      {/* 4. All-time system statistics */}
+      {/* 3. All-time system statistics */}
       <section aria-label="System records">
         <Card>
           <CardHeading
@@ -459,7 +472,7 @@ function AnalyticsDashboard() {
           />
 
           <CardContent>
-            <dl className="grid grid-cols-2 gap-6 sm:grid-cols-3 lg:grid-cols-6">
+            <dl className="grid grid-cols-2 gap-6 sm:grid-cols-3 lg:grid-cols-3">
               {SYSTEM_STATS.map((stat) => (
                 <div key={stat.key}>
                   <dt className="text-sm text-muted-foreground">
@@ -478,7 +491,6 @@ function AnalyticsDashboard() {
     </div>
   );
 }
-
 
 /* -------------------------------------------------------------------------- */
 /* Dashboard page                                                             */
@@ -526,8 +538,6 @@ function DashboardContent() {
     </div>
   );
 }
-
-
 
 export default function RevenueDashboardPage() {
   return (

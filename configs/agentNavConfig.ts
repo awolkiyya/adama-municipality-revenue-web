@@ -11,13 +11,13 @@ export const AGENT_NAV_ITEMS: NavItem[] = [
     title: "dashboard",
     url: "/agent/dashboard",
     icon: PieChart,
-    permission: APP_PERMISSIONS.AGENT_DASHBOARD_VIEW,
+    permission: APP_PERMISSIONS.DASHBOARD_VIEW,
   },
 
   {
     title: "payments",
     url: "/agent/dashboard/payments",
     icon: CreditCard,
-    permission: APP_PERMISSIONS.AGENT_PAYMENTS_VIEW,
+    permission: APP_PERMISSIONS.PAYMENTS_VIEW,
   },
 ];

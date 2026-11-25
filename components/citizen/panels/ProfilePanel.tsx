@@ -290,37 +290,6 @@ function IdentityCard({
 
         </div>
 
-        {/* Identifiers and verification */}
-
-        <div className="flex flex-wrap items-center gap-3 sm:justify-end">
-
-          {accountType === "citizen" && citizenId && (
-            <Identifier
-              label="Citizen ID"
-              value={citizenId}
-            />
-          )}
-
-          {accountType === "employee" && user.role && (
-            <div className="rounded-lg border bg-muted/30 px-3 py-2">
-              <p className="text-xs text-muted-foreground">
-                Account role
-              </p>
-
-              <p className="mt-1 text-sm font-medium">
-                {user.role.label || titleCase(user.role.name)}
-              </p>
-            </div>
-          )}
-
-          {accountType === "citizen" && nationalId && (
-            <NationalIdStatus
-              citizen={citizen}
-              status={nationalIdVerified}
-            />
-          )}
-
-        </div>
 
       </CardContent>
     </Card>

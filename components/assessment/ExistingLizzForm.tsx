@@ -338,71 +338,50 @@ export default function ExistingLizzForm({
   );
 
   // ==========================================================
-  // REVENUE SERVICES
-  // ==========================================================
+// REVENUE SERVICES — LIZZ (REVENUE CODE: 1731)
+// ==========================================================
 
-  const {
-    data: revenueServicesData,
-    isLoading: revenueServicesLoading,
-    isError: revenueServicesError,
-  } = useRevenueServices({
-    is_active: true,
-    per_page: 100,
-    page: 1,
+const {
+  data: revenueServicesData,
+  isLoading: revenueServicesLoading,
+  isError: revenueServicesError,
+} = useRevenueServices({
+  search: "1731",
+  is_active: true,
+  per_page: 100,
+  page: 1,
+});
+
+devLog("LIZZ revenue service data state", {
+  loading: revenueServicesLoading,
+  error: revenueServicesError,
+  total: revenueServicesData?.data?.length ?? 0,
+});
+
+// ==========================================================
+// LIZZ REVENUE SERVICES
+// ==========================================================
+
+const revenueServices = useMemo<RevenueService[]>(() => {
+  const services = revenueServicesData?.data ?? [];
+
+  const mappedServices = services
+      .filter(
+          (service) =>
+              service.revenueCode?.code === "1731",
+      )
+      .map(mapRevenueService);
+
+  devLog("LIZZ revenue services mapped", {
+      total: services.length,
+      lizzServicesCount: mappedServices.length,
+      lizzServiceIds: mappedServices.map(
+          (service) => service.id,
+      ),
   });
 
-  devLog(
-    "revenue service data state",
-    {
-      loading: revenueServicesLoading,
-      error: revenueServicesError,
-      total:
-        revenueServicesData?.data?.length ?? 0,
-    },
-  );
-
-  // ==========================================================
-  // LIZZ REVENUE SERVICES
-  // ==========================================================
-
-  const revenueServices =
-    useMemo<RevenueService[]>(
-      () => {
-        const allServices =
-          revenueServicesData?.data ?? [];
-
-        const lizzServices =
-          allServices
-            .filter(
-              (service) =>
-                service.revenueCode?.code ===
-                "1731",
-            )
-            .map(
-              mapRevenueService,
-            );
-
-        devLog(
-          "LIZZ revenue services mapped",
-          {
-            allServicesCount:
-              allServices.length,
-
-            lizzServicesCount:
-              lizzServices.length,
-
-            lizzServiceIds:
-              lizzServices.map(
-                (service) =>
-                  service.id,
-              ),
-          },
-        );
-
-        return lizzServices;
-      },
-      [revenueServicesData],
-    );
+  return mappedServices;
+}, [revenueServicesData]);
 
   // ==========================================================
   // FORM WORKFLOW

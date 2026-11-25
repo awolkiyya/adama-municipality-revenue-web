@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, {
@@ -76,19 +75,13 @@ interface AsyncDropdownProps<T extends object, V extends string | number> {
 ========================================================= */
 
 const truncateText = (text: string, max = 60): string => {
-    if (!text) {
-        return "";
-    }
+    if (!text) return "";
 
     return text.length > max
         ? `${text.slice(0, max)}...`
         : text;
 };
 
-/**
- * Normalize IDs for comparisons.
- * Supports API IDs returned as either 4 or "4".
- */
 const sameId = (
     first: unknown,
     second: unknown,
@@ -100,9 +93,6 @@ const sameId = (
     return String(first) === String(second);
 };
 
-/**
- * Remove duplicate records using the configured value field.
- */
 const uniqueByValue = <T extends object>(
     items: T[],
     valueField: keyof T,
@@ -112,15 +102,11 @@ const uniqueByValue = <T extends object>(
     return items.filter((item) => {
         const id = item[valueField];
 
-        if (id == null) {
-            return false;
-        }
+        if (id == null) return false;
 
         const normalizedId = String(id);
 
-        if (seen.has(normalizedId)) {
-            return false;
-        }
+        if (seen.has(normalizedId)) return false;
 
         seen.add(normalizedId);
 
@@ -169,11 +155,14 @@ export const AsyncDropdown = <
 
     const [error, setError] = useState<string | null>(null);
 
-    /**
-     * Retains the selected object when it is not included
-     * in the current server response.
-     */
-    const [selectedItem, setSelectedItem] = useState<T | null>(null);
+    const [hasMore, setHasMore] = useState(true);
+
+    const [hasLoadedFirstPage, setHasLoadedFirstPage] =
+        useState(false);
+
+    const [selectedItem, setSelectedItem] = useState<T | null>(
+        null,
+    );
 
     /* =====================================================
        REFS
@@ -189,11 +178,35 @@ export const AsyncDropdown = <
 
     const selectedItemRef = useRef<T | null>(null);
 
-    /**
-     * Tracks IDs already counted from API responses.
-     * Preserved selected items are not included in pagination.
-     */
+    const optionsRef = useRef<T[]>([]);
+
     const loadedIdsRef = useRef<Set<string>>(new Set());
+
+    const loadedCountRef = useRef(0);
+
+    const listRef = useRef<HTMLDivElement>(null);
+
+    const fetchDataRef = useRef(fetchData);
+
+    const fetchItemByIdRef = useRef(fetchItemById);
+
+    const onChangeRef = useRef(onChange);
+
+    /* =====================================================
+       KEEP LATEST CALLBACKS
+    ===================================================== */
+
+    useEffect(() => {
+        fetchDataRef.current = fetchData;
+    }, [fetchData]);
+
+    useEffect(() => {
+        fetchItemByIdRef.current = fetchItemById;
+    }, [fetchItemById]);
+
+    useEffect(() => {
+        onChangeRef.current = onChange;
+    }, [onChange]);
 
     /* =====================================================
        MOUNT TRACKING
@@ -218,6 +231,26 @@ export const AsyncDropdown = <
     useEffect(() => {
         valueRef.current = value;
     }, [value]);
+
+    /* =====================================================
+       SAFE OPTIONS UPDATER
+    ===================================================== */
+
+    const updateOptions = useCallback(
+        (
+            updater: T[] | ((previous: T[]) => T[]),
+        ) => {
+            const nextOptions =
+                typeof updater === "function"
+                    ? updater(optionsRef.current)
+                    : updater;
+
+            optionsRef.current = nextOptions;
+
+            setOptions(nextOptions);
+        },
+        [],
+    );
 
     /* =====================================================
        LABEL HELPERS
@@ -261,9 +294,7 @@ export const AsyncDropdown = <
     ===================================================== */
 
     const resolvedSelected = useMemo(() => {
-        if (value == null) {
-            return null;
-        }
+        if (value == null) return null;
 
         const matchingOption = options.find((item) =>
             sameId(item[valueField], value),
@@ -284,7 +315,7 @@ export const AsyncDropdown = <
     }, [value, options, selectedItem, valueField]);
 
     /* =====================================================
-       LOAD DATA
+       LOAD OPTIONS
     ===================================================== */
 
     const loadOptions = useCallback(
@@ -293,9 +324,7 @@ export const AsyncDropdown = <
             searchText: string,
             reset = false,
         ) => {
-            if (!mountedRef.current) {
-                return;
-            }
+            if (!mountedRef.current) return;
 
             if (!reset && loadingMoreRef.current) {
                 return;
@@ -310,11 +339,10 @@ export const AsyncDropdown = <
             const requestId = ++requestIdRef.current;
 
             setLoading(true);
-
             setError(null);
 
             try {
-                const result = await fetchData({
+                const result = await fetchDataRef.current({
                     search: searchText,
                     page: pageNum,
                     pageSize,
@@ -334,6 +362,11 @@ export const AsyncDropdown = <
                     valueField,
                 );
 
+                const responseTotal =
+                    typeof result?.total === "number"
+                        ? result.total
+                        : null;
+
                 if (reset) {
                     const currentValue = valueRef.current;
 
@@ -341,7 +374,7 @@ export const AsyncDropdown = <
                         selectedItemRef.current;
 
                     const previousSelected =
-                        options.find((item) =>
+                        optionsRef.current.find((item) =>
                             sameId(
                                 item[valueField],
                                 currentValue,
@@ -371,17 +404,26 @@ export const AsyncDropdown = <
                         mergedOptions.unshift(previousSelected);
                     }
 
-                    setOptions(mergedOptions);
+                    updateOptions(mergedOptions);
 
-                    // Only count actual API records.
                     loadedIdsRef.current = new Set(
                         incomingOptions.map((item) =>
                             String(item[valueField]),
                         ),
                     );
 
+                    loadedCountRef.current =
+                        incomingOptions.length;
+
                     setLoadedCount(incomingOptions.length);
 
+                    setHasLoadedFirstPage(true);
+
+                    setHasMore(
+                        responseTotal !== null
+                            ? incomingOptions.length < responseTotal
+                            : incomingOptions.length >= pageSize,
+                    );
                 } else {
                     const previousIds = loadedIdsRef.current;
 
@@ -398,26 +440,30 @@ export const AsyncDropdown = <
                         );
                     }
 
-                    setOptions((previous) =>
+                    updateOptions((previous) =>
                         uniqueByValue(
                             [...previous, ...incomingOptions],
                             valueField,
                         ),
                     );
 
-                    setLoadedCount((previous) =>
-                        previous + newUniqueOptions.length,
+                    const nextLoadedCount =
+                        loadedCountRef.current +
+                        newUniqueOptions.length;
+
+                    loadedCountRef.current = nextLoadedCount;
+
+                    setLoadedCount(nextLoadedCount);
+
+                    setHasMore(
+                        responseTotal !== null
+                            ? nextLoadedCount < responseTotal
+                            : incomingOptions.length >= pageSize,
                     );
                 }
 
                 setPage(pageNum);
-
-                setTotal(
-                    typeof result?.total === "number"
-                        ? result.total
-                        : null,
-                );
-
+                setTotal(responseTotal);
             } catch (err) {
                 if (
                     !mountedRef.current ||
@@ -431,24 +477,82 @@ export const AsyncDropdown = <
                     err,
                 );
 
-                setError("Failed to load data");
-
+                setError(
+                    "Failed to load data. Please try again.",
+                );
             } finally {
                 if (
                     mountedRef.current &&
                     requestId === requestIdRef.current
                 ) {
                     setLoading(false);
-
                     loadingMoreRef.current = false;
                 }
             }
         },
-        [fetchData, pageSize, valueField, options],
+        [pageSize, valueField, updateOptions],
+    );
+
+    /* =====================================================
+       SEARCH HANDLER
+
+       State resets happen in the input event handler,
+       not synchronously inside the search effect.
+    ===================================================== */
+
+    const handleSearchChange = useCallback(
+        (nextSearch: string) => {
+            setSearch(nextSearch);
+
+            // Preserve the currently selected item before
+            // clearing the previous search results.
+            const currentValue = valueRef.current;
+
+            const matchingSelected =
+                optionsRef.current.find((item) =>
+                    sameId(item[valueField], currentValue),
+                ) ??
+                (
+                    selectedItemRef.current &&
+                    sameId(
+                        selectedItemRef.current[valueField],
+                        currentValue,
+                    )
+                        ? selectedItemRef.current
+                        : null
+                );
+
+            if (matchingSelected) {
+                selectedItemRef.current = matchingSelected;
+                setSelectedItem(matchingSelected);
+            }
+
+            // Invalidate any request from the previous search.
+            requestIdRef.current += 1;
+            loadingMoreRef.current = false;
+
+            // Reset pagination for the new search.
+            loadedIdsRef.current = new Set();
+            loadedCountRef.current = 0;
+
+            updateOptions([]);
+
+            setPage(1);
+            setTotal(null);
+            setLoadedCount(0);
+            setHasMore(true);
+            setHasLoadedFirstPage(false);
+            setError(null);
+            setLoading(false);
+        },
+        [updateOptions, valueField],
     );
 
     /* =====================================================
        INITIAL LOAD + SEARCH
+
+       No synchronous state updates are performed directly
+       inside this effect.
     ===================================================== */
 
     useEffect(() => {
@@ -459,7 +563,6 @@ export const AsyncDropdown = <
         return () => {
             window.clearTimeout(timer);
 
-            // Invalidate requests belonging to the previous search.
             requestIdRef.current += 1;
 
             loadingMoreRef.current = false;
@@ -473,7 +576,7 @@ export const AsyncDropdown = <
     useEffect(() => {
         if (
             value == null ||
-            !fetchItemById ||
+            !fetchItemByIdRef.current ||
             resolvedSelected
         ) {
             return;
@@ -483,7 +586,8 @@ export const AsyncDropdown = <
 
         const loadSelectedItem = async () => {
             try {
-                const item = await fetchItemById(value);
+                const item =
+                    await fetchItemByIdRef.current?.(value);
 
                 if (
                     !active ||
@@ -498,7 +602,7 @@ export const AsyncDropdown = <
 
                 setSelectedItem(item);
 
-                setOptions((previous) => {
+                updateOptions((previous) => {
                     const exists = previous.some((option) =>
                         sameId(
                             option[valueField],
@@ -506,13 +610,10 @@ export const AsyncDropdown = <
                         ),
                     );
 
-                    if (exists) {
-                        return previous;
-                    }
+                    if (exists) return previous;
 
                     return [item, ...previous];
                 });
-
             } catch (err) {
                 if (active) {
                     console.error(
@@ -530,20 +631,14 @@ export const AsyncDropdown = <
         };
     }, [
         value,
-        fetchItemById,
         valueField,
         resolvedSelected,
+        updateOptions,
     ]);
 
     /* =====================================================
        INFINITE SCROLL
     ===================================================== */
-
-    const hasMore =
-        total !== null
-            ? loadedCount < total
-            : loadedCount > 0 &&
-              loadedCount % pageSize === 0;
 
     const handleScroll = useCallback(
         (event: React.UIEvent<HTMLDivElement>) => {
@@ -551,21 +646,69 @@ export const AsyncDropdown = <
 
             const reachedBottom =
                 element.scrollTop + element.clientHeight >=
-                element.scrollHeight - 20;
+                element.scrollHeight - 24;
 
             if (
                 !reachedBottom ||
                 loading ||
                 loadingMoreRef.current ||
-                !hasMore
+                !hasMore ||
+                !hasLoadedFirstPage
             ) {
                 return;
             }
 
             void loadOptions(page + 1, search);
         },
-        [loading, hasMore, loadOptions, page, search],
+        [
+            loading,
+            hasMore,
+            hasLoadedFirstPage,
+            loadOptions,
+            page,
+            search,
+        ],
     );
+
+    /* =====================================================
+       AUTO-FILL WHEN LIST DOES NOT OVERFLOW
+    ===================================================== */
+
+    useEffect(() => {
+        if (
+            !open ||
+            loading ||
+            !hasMore ||
+            !hasLoadedFirstPage ||
+            loadingMoreRef.current
+        ) {
+            return;
+        }
+
+        const element = listRef.current;
+
+        if (!element) return;
+
+        /*
+         * If the loaded options do not fill the available
+         * dropdown height, fetch another page automatically.
+         */
+        const hasScrollableContent =
+            element.scrollHeight > element.clientHeight + 4;
+
+        if (!hasScrollableContent) {
+            void loadOptions(page + 1, search);
+        }
+    }, [
+        open,
+        options,
+        loading,
+        hasMore,
+        hasLoadedFirstPage,
+        page,
+        search,
+        loadOptions,
+    ]);
 
     /* =====================================================
        OPEN / CLOSE
@@ -575,12 +718,11 @@ export const AsyncDropdown = <
         (nextOpen: boolean) => {
             setOpen(nextOpen);
 
-            // Reset search when closing.
             if (!nextOpen && search) {
-                setSearch("");
+                handleSearchChange("");
             }
         },
-        [search],
+        [search, handleSearchChange],
     );
 
     /* =====================================================
@@ -593,8 +735,10 @@ export const AsyncDropdown = <
 
             if (
                 rawValue == null ||
-                (typeof rawValue !== "string" &&
-                    typeof rawValue !== "number")
+                (
+                    typeof rawValue !== "string" &&
+                    typeof rawValue !== "number"
+                )
             ) {
                 console.error(
                     "AsyncDropdown: selected item has an invalid value",
@@ -609,16 +753,43 @@ export const AsyncDropdown = <
 
             const selectedValue = rawValue as V;
 
+            valueRef.current = selectedValue;
+
             selectedItemRef.current = item;
 
             setSelectedItem(item);
 
-            onChange(selectedValue, item);
+            onChangeRef.current(selectedValue, item);
 
             handleOpenChange(false);
         },
-        [valueField, onChange, handleOpenChange],
+        [valueField, handleOpenChange],
     );
+
+    /* =====================================================
+       RETRY
+    ===================================================== */
+
+    const handleRetry = useCallback(() => {
+        // Reload from page one to ensure the current search
+        // and pagination state are consistent after an error.
+        requestIdRef.current += 1;
+        loadingMoreRef.current = false;
+
+        loadedIdsRef.current = new Set();
+        loadedCountRef.current = 0;
+
+        updateOptions([]);
+
+        setPage(1);
+        setTotal(null);
+        setLoadedCount(0);
+        setHasMore(true);
+        setHasLoadedFirstPage(false);
+        setError(null);
+
+        void loadOptions(1, search, true);
+    }, [loadOptions, search, updateOptions]);
 
     /* =====================================================
        UI
@@ -648,99 +819,138 @@ export const AsyncDropdown = <
                             : placeholder}
                     </span>
 
-                    <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
+                    <ChevronsUpDown className="size-4 shrink-0 opacity-50" />
                 </Button>
             </PopoverTrigger>
 
             <PopoverContent
                 align="start"
                 sideOffset={6}
-                className="w-[var(--radix-popover-trigger-width)] min-w-[280px] p-0"
-                onWheel={(event) => event.stopPropagation()}
-                onTouchMove={(event) => event.stopPropagation()}
+                className="w-[var(--radix-popover-trigger-width)] min-w-[280px] overflow-hidden p-0"
             >
                 <Command shouldFilter={false}>
+                    {/* Search */}
+
                     <CommandInput
                         placeholder="Search..."
                         value={search}
-                        onValueChange={setSearch}
+                        onValueChange={handleSearchChange}
                     />
 
+                    {/* Scrollable Options */}
+
                     <CommandList
-                        className="max-h-72 overflow-y-auto overscroll-contain"
+                        ref={listRef}
                         onScroll={handleScroll}
+                        className={cn(
+                            "max-h-72 overflow-x-hidden overflow-y-auto overscroll-contain",
+                            "[&_[cmdk-list-sizer]]:min-h-0",
+                        )}
                     >
+                        {/* Initial Loading */}
+
                         {loading && options.length === 0 && (
-                            <div className="flex items-center justify-center gap-2 p-4 text-sm text-muted-foreground">
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                                Loading...
+                            <div className="flex min-h-28 flex-col items-center justify-center gap-2 p-4 text-sm text-muted-foreground">
+                                <Loader2 className="size-5 animate-spin text-primary" />
+
+                                <span>Loading options...</span>
                             </div>
                         )}
+
+                        {/* Error */}
 
                         {error && (
-                            <div className="flex items-center gap-2 p-4 text-sm text-red-500">
-                                <AlertCircle className="h-4 w-4" />
-                                {error}
+                            <div className="flex flex-col items-center gap-2 p-4 text-center">
+                                <div className="flex size-9 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+                                    <AlertCircle className="size-4" />
+                                </div>
+
+                                <p className="text-sm text-destructive">
+                                    {error}
+                                </p>
+
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={handleRetry}
+                                >
+                                    Try again
+                                </Button>
                             </div>
                         )}
 
+                        {/* Empty State */}
+
                         {!loading &&
-                            options.length === 0 &&
-                            !error && (
-                                <div className="flex items-center gap-2 p-4 text-sm text-muted-foreground">
-                                    <Info className="h-4 w-4" />
-                                    No results found
+                            !error &&
+                            options.length === 0 && (
+                                <div className="flex min-h-28 flex-col items-center justify-center gap-2 p-4 text-sm text-muted-foreground">
+                                    <Info className="size-5" />
+
+                                    <span>No results found</span>
                                 </div>
                             )}
 
-                        <CommandGroup>
-                            {options.map((item) => {
-                                const itemId = item[valueField];
+                        {/* Options */}
 
-                                const isSelected = sameId(
-                                    itemId,
-                                    value,
-                                );
+                        {options.length > 0 && (
+                            <CommandGroup>
+                                {options.map((item) => {
+                                    const itemId = item[valueField];
 
-                                return (
-                                    <CommandItem
-                                        key={String(itemId)}
-                                        value={`${getLabelText(item)} ${String(itemId)}`}
-                                        onSelect={() =>
-                                            handleSelect(item)
-                                        }
-                                        className="flex items-start gap-3 py-3 text-sm"
-                                    >
-                                        <Check
-                                            className={cn(
-                                                "mt-0.5 h-4 w-4 shrink-0",
-                                                isSelected
-                                                    ? "opacity-100"
-                                                    : "opacity-0",
-                                            )}
-                                        />
+                                    const isSelected = sameId(
+                                        itemId,
+                                        value,
+                                    );
 
-                                        <span className="line-clamp-2 break-words">
-                                            {getOptionNode(item)}
-                                        </span>
-                                    </CommandItem>
-                                );
-                            })}
-                        </CommandGroup>
+                                    return (
+                                        <CommandItem
+                                            key={String(itemId)}
+                                            value={`${getLabelText(item)} ${String(itemId)}`}
+                                            onSelect={() =>
+                                                handleSelect(item)
+                                            }
+                                            className="flex items-start gap-3 py-3 text-sm"
+                                        >
+                                            <Check
+                                                className={cn(
+                                                    "mt-0.5 size-4 shrink-0",
+                                                    isSelected
+                                                        ? "opacity-100"
+                                                        : "opacity-0",
+                                                )}
+                                            />
+
+                                            <span className="min-w-0 flex-1 break-words">
+                                                {getOptionNode(item)}
+                                            </span>
+                                        </CommandItem>
+                                    );
+                                })}
+                            </CommandGroup>
+                        )}
+
+                        {/* Loading More - Sticky Footer */}
 
                         {loading && options.length > 0 && (
-                            <div className="flex items-center justify-center gap-2 p-3 text-xs text-muted-foreground">
-                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                Loading more...
+                            <div className="sticky bottom-0 z-10 flex items-center justify-center gap-2 border-t bg-popover/95 px-3 py-3 text-xs text-muted-foreground backdrop-blur">
+                                <Loader2 className="size-4 animate-spin text-primary" />
+
+                                <span>Loading more options...</span>
                             </div>
                         )}
+
+                        {/* End of Results */}
 
                         {!loading &&
                             !error &&
                             options.length > 0 &&
                             !hasMore && (
-                                <div className="py-2 text-center text-xs text-muted-foreground">
-                                    No more results
+                                <div className="border-t py-3 text-center text-xs text-muted-foreground">
+                                    {total !== null
+                                        ? `${loadedCount} of ${total} results`
+                                        : "No more results"}
                                 </div>
                             )}
                     </CommandList>

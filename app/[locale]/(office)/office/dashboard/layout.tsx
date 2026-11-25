@@ -165,7 +165,7 @@ function OfficeLoader({
     >
       <style>{LOADER_CSS}</style>
 
-      <div className="rounded-2xl border bg-card p-6 shadow-sm">
+      <div className="rounded-2xl  p-6">
         <ChartGraphic />
       </div>
 

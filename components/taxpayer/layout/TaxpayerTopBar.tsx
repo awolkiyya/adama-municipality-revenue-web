@@ -1,8 +1,9 @@
 
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
-import { Bell, Menu } from "lucide-react";
+import { Bell } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
@@ -27,9 +28,6 @@ interface TaxpayerTopBarProps {
   /** Unpaid invoices (summary.outstanding_invoices). */
   outstandingInvoices?: number;
 
-  /** Opens the mobile navigation drawer. */
-  onMenuClick?: () => void;
-
   /**
    * Optional page title override for pages outside
    * the taxpayer navigation configuration.
@@ -45,7 +43,6 @@ export function TaxpayerTopBar({
   taxpayerName = "Taxpayer",
   unreadNotifications = 0,
   outstandingInvoices = 0,
-  onMenuClick,
   title,
 }: TaxpayerTopBarProps) {
   const t = useTranslations();
@@ -53,12 +50,11 @@ export function TaxpayerTopBar({
   const { active } = useActiveNavItem(TAXPAYER_NAV_ITEMS);
 
   /* ------------------------------------------------------------------------ */
-  /* Page information                                                         */
+  /* Page Information                                                         */
   /* ------------------------------------------------------------------------ */
 
   const portalName = t("navigation.taxpayerPortal");
 
-  // Do not assume the dashboard when the current page has no navigation match.
   const pageTitle =
     title ?? (active ? t(active.labelKey) : portalName);
 
@@ -96,30 +92,38 @@ export function TaxpayerTopBar({
       "
     >
       {/* ------------------------------------------------------------------ */}
-      {/* Mobile Navigation                                                  */}
+      {/* Municipal Logo                                                     */}
       {/* ------------------------------------------------------------------ */}
 
-      <div className="flex shrink-0 items-center md:hidden">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          onClick={onMenuClick}
-          disabled={!onMenuClick}
-          aria-label="Open navigation menu"
-          className="size-9 rounded-xl"
-        >
-          <Menu
-            className="size-5"
-            aria-hidden="true"
-          />
-        </Button>
-
-        <Separator
-          orientation="vertical"
-          className="mx-2 h-6 sm:mx-3"
+      <Link
+        href="/citizen/dashboard"
+        aria-label="Municipal Portal Dashboard"
+        className="
+          flex shrink-0 items-center justify-center
+          rounded-lg
+          outline-none
+          transition-opacity
+          hover:opacity-80
+          focus-visible:ring-2
+          focus-visible:ring-ring
+          focus-visible:ring-offset-2
+        "
+      >
+        <Image
+          src="/images/logo.png"
+          alt="Adama Municipality"
+          width={120}
+          height={48}
+          priority
+          className="h-9 w-auto max-w-[100px] object-contain md:h-11 md:max-w-[120px]"
         />
-      </div>
+      </Link>
+
+      {/* Separator */}
+      <Separator
+        orientation="vertical"
+        className="mx-3 h-7 sm:mx-4"
+      />
 
       {/* ------------------------------------------------------------------ */}
       {/* Page Information                                                   */}

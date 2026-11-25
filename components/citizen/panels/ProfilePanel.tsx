@@ -18,6 +18,7 @@ import {
   Sun,
   UserRound,
 } from "lucide-react";
+
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useLocale } from "next-intl";
@@ -34,13 +35,17 @@ import {
   AvatarFallback,
   AvatarImage,
 } from "@/components/ui/avatar";
+
 import { Button } from "@/components/ui/button";
+
 import {
   Card,
   CardContent,
 } from "@/components/ui/card";
+
 import { useLogout } from "@/hooks/auth/useLogout";
 import type { RootState } from "@/lib/store/store";
+import type { AuthUser, CitizenProfile } from "@/types/user";
 import { cn } from "@/lib/utils";
 
 /* -------------------------------------------------------------------------- */
@@ -51,7 +56,9 @@ const PORTAL_ROUTES = {
   citizen: {
     notifications: "/citizen/dashboard/notifications",
     verifyPhone: "/citizen/dashboard/profile/verify-phone",
+    verifyNationalId: "/citizen/dashboard/profile/verify-national-id",
   },
+
   employee: {
     notifications: "/office/dashboard/notifications",
     verifyPhone: "/office/dashboard/profile/verify-phone",
@@ -72,47 +79,10 @@ type AccountType = "citizen" | "employee";
 
 type ProfileRecord = Record<string, unknown>;
 
-type AdministrativeUnit = {
-  id?: string | null;
-  name?: string | null;
-  code?: string | null;
-  level?: string | null;
-  context?: {
-    city?: { name?: string | null } | null;
-    subcity?: { name?: string | null } | null;
-    wereda?: { name?: string | null } | null;
-  } | null;
-};
+type ProfileCitizen = CitizenProfile & ProfileRecord;
 
-type ProfileUser = {
-  id?: string | number;
-  name?: string | null;
-  label?: string | null;
-  user_type?: string | null;
-
-  email?: string | null;
-  phone?: string | null;
-  avatar?: string | null;
-
-  is_active?: boolean | null;
-  is_phone_verified?: boolean | null;
-
-  created_at?: string | null;
-  createdAt?: string | null;
-
-  last_login_at?: string | null;
-  lastLoginAt?: string | null;
-
-  administrative_unit?: AdministrativeUnit | null;
-
-  role?: {
-    id?: number | string;
-    name?: string | null;
-    label?: string | null;
-  } | null;
-
-  citizen?: ProfileRecord | null;
-  employee?: ProfileRecord | null;
+type ProfileUser = AuthUser & {
+  citizen?: ProfileCitizen | null;
 };
 
 /* -------------------------------------------------------------------------- */
@@ -130,7 +100,8 @@ export function ProfilePanel() {
     return <ProfileSkeleton />;
   }
 
-  const user = reduxUser as unknown as ProfileUser;
+  const user = reduxUser as ProfileUser;
+
   const accountType = getAccountType(user.user_type);
 
   if (!accountType) {
@@ -141,85 +112,95 @@ export function ProfilePanel() {
     );
   }
 
-  const profile =
+  const citizen =
     accountType === "citizen"
       ? user.citizen
-      : user.employee;
+      : null;
 
-  /*
-   * Prefer an actual profile name when available.
-   * For employees without an employee profile, use the API label.
-   * The API's label is the role/designation label, not necessarily
-   * the employee's personal name.
-   */
   const fullName =
-    getString(profile, "full_name") ||
-    getString(profile, "name") ||
-    user.label ||
-    user.name ||
-    (accountType === "citizen" ? "Citizen" : "Employee");
+    accountType === "citizen"
+      ? citizen?.full_name || user.label || user.name || "Citizen"
+      : user.label || user.name || "Employee";
 
-  const registered = user.createdAt ?? user.created_at;
+  const registered = user.created_at;
+
   const routes = PORTAL_ROUTES[accountType];
 
   const handleLogout = () => {
     if (logout.isPending) return;
+
     logout.mutate();
   };
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6">
-      {/* Identity */}
+
+      {/* IDENTITY */}
+
       <IdentityCard
         user={user}
-        profile={profile}
+        citizen={citizen}
         accountType={accountType}
         fullName={fullName}
       />
 
-      {/* Profile-specific information */}
+      {/* PROFILE INFORMATION */}
+
       {accountType === "citizen" ? (
         <CitizenInformation
-          citizen={profile}
+          citizen={citizen}
           fullName={fullName}
         />
       ) : (
-        <EmployeeInformation
-          user={user}
-          employee={profile}
-          fullName={fullName}
-        />
+        <EmployeeInformation user={user} />
       )}
 
-      {/* Phone verification */}
+      {/* PHONE VERIFICATION */}
+
       {user.phone && !user.is_phone_verified && (
         <PhoneVerificationNotice href={routes.verifyPhone} />
       )}
 
-      {/* Shared contact information */}
+      {/* CONTACT INFORMATION */}
+
       <ContactInformation user={user} />
 
-      {/* Account information */}
+      {/* ACCOUNT INFORMATION */}
+
       <AccountInformation
         user={user}
         registered={registered}
       />
 
-      {/* Preferences */}
-      <Section title="Preferences" icon={<Monitor className="size-4" />}>
+      {/* PREFERENCES */}
+
+      <Section
+        title="Preferences"
+        icon={<Monitor className="size-4" />}
+      >
         <Row label="Theme" value={<ThemeToggle />} />
         <Row label="Language" value={<LanguageToggle />} />
       </Section>
 
-      {/* Account actions */}
+      {/* ACCOUNT ACTIONS */}
+
       <Card>
         <CardContent className="divide-y p-0">
+
           <Link
             href={routes.notifications}
-            className="flex items-center gap-3 px-5 py-4 text-sm font-medium transition-colors hover:bg-muted/40"
+            className={cn(
+              "flex items-center gap-3 px-5 py-4",
+              "text-sm font-medium transition-colors",
+              "hover:bg-muted/40"
+            )}
           >
             <Bell className="size-4 text-muted-foreground" />
-            <span className="flex-1">Notification preferences</span>
+
+            <span className="flex-1">
+              Notification preferences
+            </span>
+
             <ChevronRight className="size-4 text-muted-foreground" />
           </Link>
 
@@ -234,10 +215,13 @@ export function ProfilePanel() {
             )}
           >
             <LogOut className="size-4" />
+
             {logout.isPending ? "Signing out…" : "Sign out"}
           </button>
+
         </CardContent>
       </Card>
+
     </div>
   );
 }
@@ -248,41 +232,35 @@ export function ProfilePanel() {
 
 function IdentityCard({
   user,
-  profile,
+  citizen,
   accountType,
   fullName,
 }: {
   user: ProfileUser;
-  profile: ProfileRecord | null | undefined;
+  citizen: ProfileCitizen | null | undefined;
   accountType: AccountType;
   fullName: string;
 }) {
-  const identifier =
-    accountType === "citizen"
-      ? getString(profile, "citizen_uid")
-      : getFirstString(profile, [
-          "employee_uid",
-          "employee_id",
-          "staff_id",
-          "employee_code",
-        ]);
+  const citizenId = citizen?.citizen_uid;
+  const nationalId = citizen?.national_id;
 
-  const identifierLabel =
-    accountType === "citizen" ? "Citizen ID" : "Employee ID";
-
-  const nationalId = getString(profile, "national_id");
-
-  // Replace this field with your actual API verification property.
-  const isNationalIdVerified =
-    profile?.is_national_id_verified === true;
+  const nationalIdVerified =
+    getNationalIdVerificationStatus(citizen);
 
   return (
     <Card className="overflow-hidden">
       <CardContent className="flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+
+        {/* Identity */}
+
         <div className="flex min-w-0 items-center gap-4">
+
           <Avatar className="size-16 shrink-0">
             {user.avatar && (
-              <AvatarImage src={user.avatar} alt={fullName} />
+              <AvatarImage
+                src={user.avatar}
+                alt={fullName}
+              />
             )}
 
             <AvatarFallback className="bg-primary/10 text-lg font-semibold text-primary">
@@ -291,65 +269,192 @@ function IdentityCard({
           </Avatar>
 
           <div className="min-w-0">
+
             <h2 className="truncate text-lg font-semibold tracking-tight">
               {fullName}
             </h2>
 
             <div className="mt-1 flex flex-wrap items-center gap-2">
+
               <span className="text-sm text-muted-foreground">
                 {accountType === "citizen"
                   ? "Registered citizen"
                   : user.role?.label || "Registered employee"}
               </span>
 
-              <StatusPill active={Boolean(user.is_active)} />
+              <StatusPill active={user.is_active} />
+
             </div>
+
           </div>
+
         </div>
 
+        {/* Identifiers and verification */}
+
         <div className="flex flex-wrap items-center gap-3 sm:justify-end">
-          {identifier && (
-            <div className="min-w-0 sm:text-right">
+
+          {accountType === "citizen" && citizenId && (
+            <Identifier
+              label="Citizen ID"
+              value={citizenId}
+            />
+          )}
+
+          {accountType === "employee" && user.role && (
+            <div className="rounded-lg border bg-muted/30 px-3 py-2">
               <p className="text-xs text-muted-foreground">
-                {identifierLabel}
+                Account role
               </p>
 
-              <div className="mt-1 flex items-center gap-1.5">
-                <span className="truncate font-mono text-sm font-medium">
-                  {identifier}
-                </span>
-
-                <CopyButton
-                  value={identifier}
-                  label={identifierLabel.toLowerCase()}
-                />
-              </div>
+              <p className="mt-1 text-sm font-medium">
+                {user.role.label || titleCase(user.role.name)}
+              </p>
             </div>
           )}
 
           {accountType === "citizen" && nationalId && (
-            isNationalIdVerified ? (
-              <div className="inline-flex items-center gap-1.5 rounded-md border border-emerald-500/30 bg-emerald-500/5 px-3 py-2 text-xs font-medium text-emerald-700 dark:text-emerald-400">
-                <ShieldCheck className="size-4" />
-                National ID verified
-              </div>
-            ) : (
-              <Button
-                asChild
-                size="sm"
-                variant="outline"
-                className="gap-2 border-primary/30 text-primary hover:bg-primary/5"
-              >
-                <Link href="/citizen/dashboard/profile/verify-national-id">
-                  <ShieldCheck className="size-4" />
-                  Verify National ID
-                </Link>
-              </Button>
-            )
+            <NationalIdStatus
+              citizen={citizen}
+              status={nationalIdVerified}
+            />
           )}
+
         </div>
+
       </CardContent>
     </Card>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* IDENTIFIER                                                                 */
+/* -------------------------------------------------------------------------- */
+
+function Identifier({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="min-w-0 sm:text-right">
+
+      <p className="text-xs text-muted-foreground">
+        {label}
+      </p>
+
+      <div className="mt-1 flex items-center gap-1.5">
+
+        <span className="truncate font-mono text-sm font-medium">
+          {value}
+        </span>
+
+        <CopyButton
+          value={value}
+          label={label.toLowerCase()}
+        />
+
+      </div>
+
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* NATIONAL ID VERIFICATION STATUS                                            */
+/* -------------------------------------------------------------------------- */
+
+type NationalIdStatusType =
+  | "VERIFIED"
+  | "PENDING"
+  | "UNVERIFIED"
+  | "UNKNOWN";
+
+function getNationalIdVerificationStatus(
+  citizen: ProfileCitizen | null | undefined
+): NationalIdStatusType {
+  if (!citizen) return "UNKNOWN";
+
+  const record = citizen as ProfileRecord;
+
+  const verified = record.is_national_id_verified;
+
+  const status = String(
+    record.national_id_verification_status ?? ""
+  ).toUpperCase();
+
+  if (verified === true) return "VERIFIED";
+
+  if (verified === false) {
+    return status === "PENDING" ? "PENDING" : "UNVERIFIED";
+  }
+
+  if (status === "VERIFIED") return "VERIFIED";
+
+  if (status === "PENDING") return "PENDING";
+
+  if (
+    status === "UNVERIFIED" ||
+    status === "REJECTED"
+  ) {
+    return "UNVERIFIED";
+  }
+
+  return "UNKNOWN";
+}
+
+function NationalIdStatus({
+  citizen,
+  status,
+}: {
+  citizen: ProfileCitizen | null | undefined;
+  status: NationalIdStatusType;
+}) {
+  const hasNationalId = Boolean(citizen?.national_id);
+
+  if (!hasNationalId) return null;
+
+  if (status === "VERIFIED") {
+    return (
+      <div className="inline-flex items-center gap-1.5 rounded-md border border-emerald-500/30 bg-emerald-500/5 px-3 py-2 text-xs font-medium text-emerald-700 dark:text-emerald-400">
+        <ShieldCheck className="size-4" />
+        National ID verified
+      </div>
+    );
+  }
+
+  if (status === "PENDING") {
+    return (
+      <div className="inline-flex items-center gap-1.5 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs font-medium text-amber-700 dark:text-amber-400">
+        <AlertCircle className="size-4" />
+        Verification pending
+      </div>
+    );
+  }
+
+  if (status === "UNKNOWN") {
+    return (
+      <div className="inline-flex items-center gap-1.5 rounded-md border bg-muted/50 px-3 py-2 text-xs font-medium text-muted-foreground">
+        <ShieldCheck className="size-4" />
+        Verification status unavailable
+      </div>
+    );
+  }
+
+  return (
+    <Button
+      asChild
+      size="sm"
+      variant="outline"
+      className="gap-2 border-primary/30 text-primary hover:bg-primary/5"
+    >
+      <Link href={PORTAL_ROUTES.citizen.verifyNationalId}>
+        <ShieldCheck className="size-4" />
+        Verify National ID
+      </Link>
+    </Button>
   );
 }
 
@@ -361,7 +466,7 @@ function CitizenInformation({
   citizen,
   fullName,
 }: {
-  citizen: ProfileRecord | null | undefined;
+  citizen: ProfileCitizen | null | undefined;
   fullName: string;
 }) {
   if (!citizen) {
@@ -372,35 +477,50 @@ function CitizenInformation({
     );
   }
 
-  const nationalId = getString(citizen, "national_id");
-  const gender = getString(citizen, "gender");
-  const dateOfBirth = getString(citizen, "date_of_birth");
-  const address = getString(citizen, "address");
-
   return (
     <Section
       title="Personal information"
       icon={<UserRound className="size-4" />}
     >
+
       <Row label="Full name" value={fullName} />
+
+      <Row
+        label="Citizen number"
+        value={citizen.citizen_uid}
+      />
 
       <Row
         label="National ID"
         value={
-          nationalId ? (
-            <SensitiveValue value={nationalId} label="national ID" />
+          citizen.national_id ? (
+            <SensitiveValue
+              value={citizen.national_id}
+              label="national ID"
+            />
           ) : null
         }
       />
 
-      <Row label="Gender" value={titleCase(gender)} />
+      <Row
+        label="Gender"
+        value={titleCase(citizen.gender)}
+      />
 
       <Row
         label="Date of birth"
-        value={dateOfBirth ? formatDate(dateOfBirth) : null}
+        value={
+          citizen.date_of_birth
+            ? formatDate(citizen.date_of_birth)
+            : null
+        }
       />
 
-      <Row label="Address" value={address} />
+      <Row
+        label="Address"
+        value={citizen.address}
+      />
+
     </Section>
   );
 }
@@ -411,108 +531,89 @@ function CitizenInformation({
 
 function EmployeeInformation({
   user,
-  employee,
-  fullName,
 }: {
   user: ProfileUser;
-  employee: ProfileRecord | null | undefined;
-  fullName: string;
 }) {
-  /*
-   * The current employee API response does not include an employee object.
-   * Therefore, use the fields actually available from the user response:
-   * role, label, username and administrative unit.
-   *
-   * If the backend later returns an employee object, the optional fields
-   * below will automatically be displayed.
-   */
-
-  const employeeId = getFirstString(employee, [
-    "employee_uid",
-    "employee_id",
-    "staff_id",
-    "employee_code",
-  ]);
-
-  const jobTitle =
-    getFirstString(employee, [
-      "job_title",
-      "position",
-      "designation",
-      "title",
-    ]) ||
-    user.role?.label ||
-    user.label;
-
-  const department = getFirstString(employee, [
-    "department_name",
-    "department",
-  ]);
-
-  const employmentType = getFirstString(employee, [
-    "employment_type",
-    "employee_type",
-  ]);
-
-  const hireDate = getFirstString(employee, [
-    "hire_date",
-    "employment_date",
-    "date_joined",
-  ]);
-
-  const gender = getString(employee, "gender");
-  const dateOfBirth = getString(employee, "date_of_birth");
-  const address = getString(employee, "address");
-
   return (
     <>
+      {/* Employment information */}
+
       <Section
         title="Employment information"
         icon={<BriefcaseBusiness className="size-4" />}
       >
-        <Row label="Display name" value={fullName} />
-
-        <Row label="Username" value={user.name} />
-
-        <Row label="Employee ID" value={employeeId} />
-
-        <Row label="Role" value={user.role?.label || user.role?.name} />
-
-        <Row label="Job title" value={jobTitle} />
-
-        <Row label="Department" value={department} />
 
         <Row
-          label="Employment type"
-          value={titleCase(employmentType)}
+          label="Display name"
+          value={user.label}
         />
 
         <Row
-          label="Hire date"
-          value={hireDate ? formatDate(hireDate) : null}
+          label="Username"
+          value={user.name}
         />
+
+        <Row
+          label="Role"
+          value={
+            user.role?.label ||
+            titleCase(user.role?.name)
+          }
+        />
+
+        <Row
+          label="Role code"
+          value={user.role?.name}
+        />
+
       </Section>
+
+      {/* Sector assignment */}
+
+      <SectorInformation sector={user.sector} />
+
+      {/* Administrative assignment */}
 
       <AdministrativeUnitInformation
         unit={user.administrative_unit}
       />
-
-      {(gender || dateOfBirth || address) && (
-        <Section
-          title="Personal information"
-          icon={<UserRound className="size-4" />}
-        >
-          <Row label="Gender" value={titleCase(gender)} />
-
-          <Row
-            label="Date of birth"
-            value={dateOfBirth ? formatDate(dateOfBirth) : null}
-          />
-
-          <Row label="Address" value={address} />
-        </Section>
-      )}
     </>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* SECTOR INFORMATION                                                         */
+/* -------------------------------------------------------------------------- */
+
+function SectorInformation({
+  sector,
+}: {
+  sector: AuthUser["sector"] | null | undefined;
+}) {
+  if (!sector) return null;
+
+  return (
+    <Section
+      title="Sector assignment"
+      icon={<BriefcaseBusiness className="size-4" />}
+    >
+
+      <Row
+        label="Sector name"
+        value={sector.name}
+      />
+
+      <Row
+        label="Sector code"
+        value={sector.code}
+      />
+
+      <Row
+        label="Sector ID"
+        value={sector.id}
+      />
+
+    </Section>
   );
 }
 
@@ -523,7 +624,7 @@ function EmployeeInformation({
 function AdministrativeUnitInformation({
   unit,
 }: {
-  unit?: AdministrativeUnit | null;
+  unit: AuthUser["administrative_unit"] | null | undefined;
 }) {
   if (!unit) return null;
 
@@ -540,14 +641,36 @@ function AdministrativeUnitInformation({
       title="Administrative assignment"
       icon={<MapPin className="size-4" />}
     >
-      <Row label="Administrative unit" value={unit.name} />
-      <Row label="Unit code" value={unit.code} />
-      <Row label="Administrative level" value={titleCase(unit.level)} />
+
+      <Row
+        label="Administrative unit"
+        value={unit.name}
+      />
+
+      <Row
+        label="Unit code"
+        value={unit.code}
+      />
+
+      <Row
+        label="Administrative level"
+        value={titleCase(unit.level)}
+      />
 
       <Row
         label="Location"
-        value={locationParts.length ? locationParts.join(" / ") : null}
+        value={
+          locationParts.length
+            ? locationParts.join(" / ")
+            : null
+        }
       />
+
+      <Row
+        label="Administrative unit ID"
+        value={unit.id}
+      />
+
     </Section>
   );
 }
@@ -556,7 +679,11 @@ function AdministrativeUnitInformation({
 /* PHONE VERIFICATION                                                         */
 /* -------------------------------------------------------------------------- */
 
-function PhoneVerificationNotice({ href }: { href: string }) {
+function PhoneVerificationNotice({
+  href,
+}: {
+  href: string;
+}) {
   return (
     <div
       role="alert"
@@ -565,23 +692,31 @@ function PhoneVerificationNotice({ href }: { href: string }) {
         "bg-amber-500/5 p-4 sm:flex-row sm:items-center sm:justify-between"
       )}
     >
+
       <div className="flex items-start gap-3">
+
         <AlertCircle className="mt-0.5 size-5 shrink-0 text-amber-600" />
 
         <div>
+
           <p className="text-sm font-medium">
             Verify your phone number
           </p>
 
-          <p className="text-sm text-muted-foreground">
+          <p className="mt-1 text-sm text-muted-foreground">
             Verify your phone number to receive important account notifications.
           </p>
+
         </div>
+
       </div>
 
       <Button asChild size="sm" className="shrink-0">
-        <Link href={href}>Verify phone</Link>
+        <Link href={href}>
+          Verify phone
+        </Link>
       </Button>
+
     </div>
   );
 }
@@ -590,34 +725,52 @@ function PhoneVerificationNotice({ href }: { href: string }) {
 /* CONTACT INFORMATION                                                        */
 /* -------------------------------------------------------------------------- */
 
-function ContactInformation({ user }: { user: ProfileUser }) {
+function ContactInformation({
+  user,
+}: {
+  user: ProfileUser;
+}) {
   return (
-    <Section title="Contact" icon={<Bell className="size-4" />}>
+    <Section
+      title="Contact information"
+      icon={<Bell className="size-4" />}
+    >
+
       <Row
-        label="Phone"
+        label="Phone number"
         value={
           user.phone ? (
             <span className="flex flex-wrap items-center gap-2">
-              <span className="tabular-nums">{user.phone}</span>
+              <span className="tabular-nums">
+                {user.phone}
+              </span>
+
               <PhoneVerificationStatus
-                verified={Boolean(user.is_phone_verified)}
+                verified={user.is_phone_verified}
               />
             </span>
           ) : null
         }
       />
 
-      <Row label="Email" value={user.email} />
-
       <Row
-        label="Administrative unit"
-        value={user.administrative_unit?.name}
+        label="Email address"
+        value={user.email}
       />
+
     </Section>
   );
 }
 
-function PhoneVerificationStatus({ verified }: { verified: boolean }) {
+/* -------------------------------------------------------------------------- */
+/* PHONE VERIFICATION STATUS                                                  */
+/* -------------------------------------------------------------------------- */
+
+function PhoneVerificationStatus({
+  verified,
+}: {
+  verified: boolean;
+}) {
   return (
     <span
       className={cn(
@@ -643,18 +796,20 @@ function AccountInformation({
   user: ProfileUser;
   registered?: string | null;
 }) {
-  const lastLogin = user.lastLoginAt ?? user.last_login_at;
-
   return (
-    <Section title="Account" icon={<UserRound className="size-4" />}>
+    <Section
+      title="Account information"
+      icon={<UserRound className="size-4" />}
+    >
+
       <Row
         label="Account type"
         value={titleCase(user.user_type)}
       />
 
       <Row
-        label="Status"
-        value={<StatusPill active={Boolean(user.is_active)} />}
+        label="Account status"
+        value={<StatusPill active={user.is_active} />}
       />
 
       <Row
@@ -664,8 +819,22 @@ function AccountInformation({
 
       <Row
         label="Last sign-in"
-        value={lastLogin ? formatDate(lastLogin) : null}
+        value={
+          user.lastLoginAt
+            ? formatDate(user.lastLoginAt)
+            : null
+        }
       />
+
+      <Row
+        label="Email verification"
+        value={
+          user.email_verified_at
+            ? "Verified"
+            : "Not verified"
+        }
+      />
+
     </Section>
   );
 }
@@ -685,24 +854,36 @@ function Section({
 }) {
   return (
     <section>
+
       <div className="mb-2 flex items-center gap-2 px-1">
+
         {icon && (
-          <span className="text-muted-foreground">{icon}</span>
+          <span className="text-muted-foreground">
+            {icon}
+          </span>
         )}
 
         <h3 className="text-sm font-medium text-muted-foreground">
           {title}
         </h3>
+
       </div>
 
       <Card>
         <CardContent className="p-0">
-          <dl className="divide-y px-5">{children}</dl>
+          <dl className="divide-y px-5">
+            {children}
+          </dl>
         </CardContent>
       </Card>
+
     </section>
   );
 }
+
+/* -------------------------------------------------------------------------- */
+/* ROW                                                                        */
+/* -------------------------------------------------------------------------- */
 
 function Row({
   label,
@@ -718,16 +899,22 @@ function Row({
 
   return (
     <div className="grid gap-1 py-3.5 sm:grid-cols-3 sm:gap-4">
-      <dt className="text-sm text-muted-foreground">{label}</dt>
+
+      <dt className="text-sm text-muted-foreground">
+        {label}
+      </dt>
 
       <dd
         className={cn(
           "min-w-0 break-words text-sm sm:col-span-2",
-          empty ? "text-muted-foreground" : "font-medium"
+          empty
+            ? "text-muted-foreground"
+            : "font-medium"
         )}
       >
         {empty ? "Not provided" : value}
       </dd>
+
     </div>
   );
 }
@@ -736,7 +923,11 @@ function Row({
 /* STATUS                                                                     */
 /* -------------------------------------------------------------------------- */
 
-function StatusPill({ active }: { active: boolean }) {
+function StatusPill({
+  active,
+}: {
+  active: boolean;
+}) {
   return (
     <span
       className={cn(
@@ -765,10 +956,12 @@ function SensitiveValue({
   const [visible, setVisible] = useState(false);
 
   const masked =
-    "•".repeat(Math.max(0, value.length - 4)) + value.slice(-4);
+    "•".repeat(Math.max(0, value.length - 4)) +
+    value.slice(-4);
 
   return (
     <span className="flex items-center gap-1.5">
+
       <span className="font-mono tabular-nums">
         {visible ? value : masked}
       </span>
@@ -777,7 +970,7 @@ function SensitiveValue({
         type="button"
         onClick={() => setVisible((current) => !current)}
         aria-label={`${visible ? "Hide" : "Show"} ${label}`}
-        className="rounded p-1 text-muted-foreground hover:bg-muted"
+        className="rounded p-1 text-muted-foreground transition-colors hover:bg-muted"
       >
         {visible ? (
           <EyeOff className="size-4" />
@@ -786,7 +979,11 @@ function SensitiveValue({
         )}
       </button>
 
-      <CopyButton value={value} label={label} />
+      <CopyButton
+        value={value}
+        label={label}
+      />
+
     </span>
   );
 }
@@ -807,9 +1004,13 @@ function CopyButton({
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(value);
+
       setCopied(true);
 
-      window.setTimeout(() => setCopied(false), 1500);
+      window.setTimeout(
+        () => setCopied(false),
+        1500
+      );
     } catch {
       // Clipboard access may be unavailable.
     }
@@ -820,7 +1021,7 @@ function CopyButton({
       type="button"
       onClick={copy}
       aria-label={`Copy ${label}`}
-      className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted"
+      className="shrink-0 rounded p-1 text-muted-foreground transition-colors hover:bg-muted"
     >
       {copied ? (
         <Check className="size-4 text-emerald-600" />
@@ -858,6 +1059,7 @@ function Segmented({
       aria-label={label}
       className="inline-flex flex-wrap gap-1 rounded-lg border bg-muted/40 p-1"
     >
+
       {options.map((option) => {
         const selected = option.value === value;
 
@@ -882,6 +1084,7 @@ function Segmented({
           </button>
         );
       })}
+
     </div>
   );
 }
@@ -942,13 +1145,19 @@ function LanguageToggle() {
     }
 
     const query =
-      typeof window !== "undefined" ? window.location.search : "";
+      typeof window !== "undefined"
+        ? window.location.search
+        : "";
 
     const hash =
-      typeof window !== "undefined" ? window.location.hash : "";
+      typeof window !== "undefined"
+        ? window.location.hash
+        : "";
 
     startTransition(() => {
-      router.replace(`${segments.join("/")}${query}${hash}`);
+      router.replace(
+        `${segments.join("/")}${query}${hash}`
+      );
     });
   };
 
@@ -967,16 +1176,29 @@ function LanguageToggle() {
 /* PROFILE UNAVAILABLE                                                        */
 /* -------------------------------------------------------------------------- */
 
-function ProfileUnavailable({ message }: { message: string }) {
+function ProfileUnavailable({
+  message,
+}: {
+  message: string;
+}) {
   return (
     <Card>
       <CardContent className="flex items-start gap-3 p-6">
+
         <AlertCircle className="mt-0.5 size-5 shrink-0 text-destructive" />
 
         <div>
-          <p className="text-sm font-medium">Profile unavailable</p>
-          <p className="mt-1 text-sm text-muted-foreground">{message}</p>
+
+          <p className="text-sm font-medium">
+            Profile unavailable
+          </p>
+
+          <p className="mt-1 text-sm text-muted-foreground">
+            {message}
+          </p>
+
         </div>
+
       </CardContent>
     </Card>
   );
@@ -995,14 +1217,17 @@ function ProfileSkeleton() {
       aria-busy="true"
       aria-label="Loading profile"
     >
+
       <Card>
         <CardContent className="flex items-center gap-4 p-6">
+
           <div className="size-16 animate-pulse rounded-full bg-muted" />
 
           <div className="space-y-2">
             <div className={cn(bar, "h-5 w-40")} />
             <div className={cn(bar, "h-4 w-28")} />
           </div>
+
         </CardContent>
       </Card>
 
@@ -1015,6 +1240,7 @@ function ProfileSkeleton() {
           </CardContent>
         </Card>
       ))}
+
     </div>
   );
 }
@@ -1028,7 +1254,9 @@ function getAccountType(
 ): AccountType | null {
   const normalized = value?.toLowerCase().trim();
 
-  if (normalized === "citizen") return "citizen";
+  if (normalized === "citizen") {
+    return "citizen";
+  }
 
   if (
     normalized === "employee" ||
@@ -1040,39 +1268,11 @@ function getAccountType(
   return null;
 }
 
-function getString(
-  record: ProfileRecord | null | undefined,
-  key: string
-): string | null {
-  if (!record) return null;
-
-  const value = record[key];
-
-  if (typeof value === "string" && value.trim() !== "") {
-    return value.trim();
-  }
-
-  if (typeof value === "number") {
-    return String(value);
-  }
-
-  return null;
-}
-
-function getFirstString(
-  record: ProfileRecord | null | undefined,
-  keys: string[]
-): string | null {
-  for (const key of keys) {
-    const value = getString(record, key);
-    if (value) return value;
-  }
-
-  return null;
-}
-
 function getInitials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
+  const parts = name
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
 
   if (parts.length === 0) return "?";
 
@@ -1082,13 +1282,17 @@ function getInitials(name: string): string {
   ).toUpperCase();
 }
 
-function titleCase(value?: string | null): string | null {
+function titleCase(
+  value?: string | null
+): string | null {
   if (!value) return null;
 
   return value
     .toLowerCase()
     .replace(/_/g, " ")
-    .replace(/\b\w/g, (character) => character.toUpperCase());
+    .replace(/\b\w/g, (character) =>
+      character.toUpperCase()
+    );
 }
 
 function formatDate(value: string): string {

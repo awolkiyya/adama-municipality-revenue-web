@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useMemo, useState } from "react";
@@ -38,8 +39,6 @@ import {
 import { DuplicateTariffVersionDialog } from "@/components/revenue/tariff-versions/DuplicateTariffVersionDialog";
 import DeleteModal from "@/components/dialogs/deleteModal";
 
-
-
 import {
   useActivateTariffVersion,
   useCurrentActiveTariff,
@@ -58,22 +57,121 @@ import Can from "@/components/access/Can";
 // Types
 // ---------------------------------------------------------------------------
 
-type VersionStatus = "active" | "scheduled" | "archived";
+type VersionStatus =
+  | "active"
+  | "scheduled"
+  | "expired"
+  | "inactive";
 
 // ---------------------------------------------------------------------------
-// Helpers
+// Date helpers
 // ---------------------------------------------------------------------------
 
-function getVersionStatus(version: TariffVersion): VersionStatus {
+/**
+ * Returns today's date in the municipal business timezone.
+ *
+ * Using Africa/Addis_Ababa ensures that tariff status is calculated
+ * consistently even when the user's browser uses another timezone.
+ *
+ * Result format: YYYY-MM-DD
+ */
+function getTodayInAddisAbaba(): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Africa/Addis_Ababa",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  const day = parts.find((part) => part.type === "day")?.value;
+
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Normalizes an API date to YYYY-MM-DD.
+ *
+ * This avoids UTC conversion issues when API fields contain
+ * date-only values such as 2026-11-25.
+ *
+ * Invalid dates return null.
+ */
+function normalizeApiDate(
+  date?: string | null,
+): string | null {
+  if (!date) {
+    return null;
+  }
+
+  const datePart = date.slice(0, 10);
+
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(datePart);
+
+  if (!match) {
+    return null;
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+
+  // Reject invalid calendar dates.
+  if (
+    parsed.getUTCFullYear() !== year ||
+    parsed.getUTCMonth() !== month - 1 ||
+    parsed.getUTCDate() !== day
+  ) {
+    return null;
+  }
+
+  return datePart;
+}
+
+// ---------------------------------------------------------------------------
+// Status helper
+// ---------------------------------------------------------------------------
+
+/**
+ * Determines the display status of a tariff version.
+ *
+ * Priority:
+ * 1. Expired: effectiveTo is before today.
+ * 2. Scheduled: effectiveFrom is after today.
+ * 3. Active: isActive is true.
+ * 4. Inactive: otherwise.
+ *
+ * The effectiveTo date is inclusive.
+ */
+function getVersionStatus(
+  version: TariffVersion,
+): VersionStatus {
+  const today = getTodayInAddisAbaba();
+
+  const startDate = normalizeApiDate(version.effectiveFrom);
+  const endDate = normalizeApiDate(version.effectiveTo);
+
+  // The effective period has ended.
+  // The end date itself remains valid.
+  if (endDate && endDate < today) {
+    return "expired";
+  }
+
+  // The effective period has not started.
+  if (startDate && startDate > today) {
+    return "scheduled";
+  }
+
+  // The version is the selected active tariff.
   if (version.isActive) {
     return "active";
   }
 
-  if (version.effectiveTo) {
-    return "archived";
-  }
-
-  return "scheduled";
+  // The version is not selected as the active tariff.
+  return "inactive";
 }
 
 // ---------------------------------------------------------------------------
@@ -102,9 +200,17 @@ const STATUS_META: Record<
     Icon: Clock3,
   },
 
-  archived: {
-    label: "Archived",
-    badgeClass: "gap-1 bg-muted text-muted-foreground hover:bg-muted",
+  expired: {
+    label: "Expired",
+    badgeClass:
+      "gap-1 bg-muted text-muted-foreground hover:bg-muted",
+    Icon: Archive,
+  },
+
+  inactive: {
+    label: "Inactive",
+    badgeClass:
+      "gap-1 bg-red-500/10 text-red-600 hover:bg-red-500/10",
     Icon: Archive,
   },
 };
@@ -150,6 +256,7 @@ function TariffVersionsPageContent() {
   // -------------------------------------------------------------------------
 
   const [duplicateOpen, setDuplicateOpen] = useState(false);
+
   const [sourceVersion, setSourceVersion] =
     useState<TariffVersion | null>(null);
 
@@ -158,6 +265,7 @@ function TariffVersionsPageContent() {
   // -------------------------------------------------------------------------
 
   const [deleteOpen, setDeleteOpen] = useState(false);
+
   const [selectedVersion, setSelectedVersion] =
     useState<TariffVersion | null>(null);
 
@@ -206,7 +314,16 @@ function TariffVersionsPageContent() {
   // -------------------------------------------------------------------------
 
   const sortedVersions = useMemo(
-    () => [...versions].sort((a, b) => Number(b.year) - Number(a.year)),
+    () =>
+      [...versions].sort((a, b) => {
+        const yearDifference = Number(b.year) - Number(a.year);
+
+        if (yearDifference !== 0) {
+          return yearDifference;
+        }
+
+        return Number(b.version ?? 1) - Number(a.version ?? 1);
+      }),
     [versions],
   );
 
@@ -334,7 +451,9 @@ function TariffVersionsPageContent() {
       {/* Active tariff status */}
 
       {activeTariffResponse?.data?.message && (
-        <ActiveTariffStatus message={activeTariffResponse.data.message} />
+        <ActiveTariffStatus
+          message={activeTariffResponse.data.message}
+        />
       )}
 
       {/* Error, loading, empty state, or table */}
@@ -370,7 +489,9 @@ function TariffVersionsPageContent() {
             <Inbox className="h-5 w-5 text-muted-foreground" />
           </div>
 
-          <p className="text-sm font-semibold">No tariff versions yet</p>
+          <p className="text-sm font-semibold">
+            No tariff versions yet
+          </p>
 
           <p className="max-w-sm text-xs text-muted-foreground">
             Create your first tariff version. Once you have configured its
@@ -419,18 +540,23 @@ function TariffVersionsPageContent() {
                       <th className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground">
                         Year
                       </th>
+
                       <th className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground">
                         Version
                       </th>
+
                       <th className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground">
                         Effective Period
                       </th>
+
                       <th className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground">
                         Status
                       </th>
+
                       <th className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground">
                         Price Rules
                       </th>
+
                       <th className="px-5 py-3 text-right text-xs font-semibold text-muted-foreground">
                         Actions
                       </th>
@@ -448,11 +574,13 @@ function TariffVersionsPageContent() {
                           key={version.id}
                           className="border-b transition last:border-none hover:bg-muted/40"
                         >
+                          {/* Year */}
+
                           <td className="px-5 py-4">
                             <div className="flex items-center gap-2">
                               <div
                                 className={`flex h-9 min-w-14 items-center justify-center rounded-lg px-2 text-sm font-bold ${
-                                  version.isActive
+                                  status === "active"
                                     ? "bg-primary text-primary-foreground"
                                     : "bg-muted"
                                 }`}
@@ -460,15 +588,19 @@ function TariffVersionsPageContent() {
                                 {version.year}
                               </div>
 
-                              {version.isActive && (
+                              {status === "active" && (
                                 <CheckCircle2 className="h-4 w-4 text-emerald-500" />
                               )}
                             </div>
                           </td>
 
+                          {/* Version */}
+
                           <td className="px-5 py-4">
                             v{version.version ?? 1}
                           </td>
+
+                          {/* Effective period */}
 
                           <td className="px-5 py-4 text-muted-foreground">
                             <div>
@@ -485,6 +617,8 @@ function TariffVersionsPageContent() {
                             </div>
                           </td>
 
+                          {/* Status */}
+
                           <td className="px-5 py-4">
                             <Badge className={statusMeta.badgeClass}>
                               <StatusIcon className="h-3 w-3" />
@@ -492,9 +626,13 @@ function TariffVersionsPageContent() {
                             </Badge>
                           </td>
 
+                          {/* Price rules */}
+
                           <td className="px-5 py-4">
                             {version.tariffRulesCount ?? 0}
                           </td>
+
+                          {/* Actions */}
 
                           <td className="px-5 py-4 text-right">
                             <DropdownMenu>
@@ -513,6 +651,8 @@ function TariffVersionsPageContent() {
                                 align="end"
                                 className="w-52"
                               >
+                                {/* View details */}
+
                                 <Can
                                   resource="tariff_version"
                                   action="view"
@@ -527,6 +667,8 @@ function TariffVersionsPageContent() {
                                   </DropdownMenuItem>
                                 </Can>
 
+                                {/* Edit */}
+
                                 <Can
                                   resource="tariff_version"
                                   action="update"
@@ -538,6 +680,8 @@ function TariffVersionsPageContent() {
                                     Edit Version
                                   </DropdownMenuItem>
                                 </Can>
+
+                                {/* Duplicate */}
 
                                 <Can
                                   resource="tariff_version"
@@ -554,12 +698,11 @@ function TariffVersionsPageContent() {
                                   </DropdownMenuItem>
                                 </Can>
 
-                                {!version.isActive && (
+                                {/* Activate and delete */}
+
+                                {status !== "active" && (
                                   <>
                                     <DropdownMenuSeparator />
-
-                                    {/* Use approve only if activation is part
-                                        of your approval workflow. */}
 
                                     <Can
                                       resource="tariff_version"
@@ -570,9 +713,13 @@ function TariffVersionsPageContent() {
                                         onClick={() =>
                                           void handleActivate(version.id)
                                         }
-                                        disabled={activateMutation.isPending}
+                                        disabled={
+                                          activateMutation.isPending ||
+                                          status === "expired"
+                                        }
                                       >
                                         <CheckCircle2 className="mr-2 h-4 w-4" />
+
                                         {activateMutation.isPending
                                           ? "Activating..."
                                           : "Activate"}
@@ -606,6 +753,8 @@ function TariffVersionsPageContent() {
                   </tbody>
                 </table>
               </div>
+
+              {/* Pagination */}
 
               <DataTablePagination
                 page={page}

@@ -66,6 +66,7 @@ export type PermissionAction =
   | "portal_access"
   |"duplicate"
   | "publish"
+  |"view_all_expected_cash"
   |"reconcile"
   ;
 

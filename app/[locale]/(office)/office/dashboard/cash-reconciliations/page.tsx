@@ -755,6 +755,7 @@ export default function CashReconciliationsPage() {
   const canReview = can(CASH_RECONCILIATION_RESOURCE, "review");
   const canCancel = can(CASH_RECONCILIATION_RESOURCE, "cancel");
   const canDelete = can(CASH_RECONCILIATION_RESOURCE, "delete");
+  const canViewallexpectedcash = can(CASH_RECONCILIATION_RESOURCE,"view_all_expected_cash");
 
   // ==========================================================
   // LIST FILTERS
@@ -1466,14 +1467,19 @@ export default function CashReconciliationsPage() {
                   Reports and tools
                 </DropdownMenuLabel>
 
-                <DropdownMenuItem
-                  onSelect={openCollectorBreakdown}
-                  disabled={isLoading}
-                >
-                  <Users className="mr-2 size-4" />
-                  Expected Cash by Collector
-                </DropdownMenuItem>
+                {canViewallexpectedcash &&(
+                  <DropdownMenuItem
+                    onSelect={openCollectorBreakdown}
+                    disabled={isLoading}
+                  >
+                    <Users className="mr-2 size-4" />
+                    Expected Cash by Collector
+                  </DropdownMenuItem>
 
+
+                )}
+
+                
                 <DropdownMenuItem
                   onSelect={handleExport}
                   disabled={filteredRecords.length === 0}

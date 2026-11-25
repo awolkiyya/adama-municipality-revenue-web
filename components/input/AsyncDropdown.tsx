@@ -76,7 +76,9 @@ interface AsyncDropdownProps<T extends object, V extends string | number> {
 ========================================================= */
 
 const truncateText = (text: string, max = 60): string => {
-    if (!text) return "";
+    if (!text) {
+        return "";
+    }
 
     return text.length > max
         ? `${text.slice(0, max)}...`
@@ -87,7 +89,10 @@ const truncateText = (text: string, max = 60): string => {
  * Normalize IDs for comparisons.
  * Supports API IDs returned as either 4 or "4".
  */
-const sameId = (first: unknown, second: unknown): boolean => {
+const sameId = (
+    first: unknown,
+    second: unknown,
+): boolean => {
     if (first == null || second == null) {
         return first == null && second == null;
     }
@@ -165,8 +170,8 @@ export const AsyncDropdown = <
     const [error, setError] = useState<string | null>(null);
 
     /**
-     * Keeps the selected object available when it is not
-     * included in the current server response.
+     * Retains the selected object when it is not included
+     * in the current server response.
      */
     const [selectedItem, setSelectedItem] = useState<T | null>(null);
 
@@ -183,6 +188,12 @@ export const AsyncDropdown = <
     const valueRef = useRef<V | null>(value);
 
     const selectedItemRef = useRef<T | null>(null);
+
+    /**
+     * Tracks IDs already counted from API responses.
+     * Preserved selected items are not included in pagination.
+     */
+    const loadedIdsRef = useRef<Set<string>>(new Set());
 
     /* =====================================================
        MOUNT TRACKING
@@ -201,43 +212,12 @@ export const AsyncDropdown = <
     }, []);
 
     /* =====================================================
-       SYNCHRONIZE SELECTED VALUE
+       SYNCHRONIZE VALUE REF
     ===================================================== */
 
     useEffect(() => {
         valueRef.current = value;
-
-        if (value == null) {
-            selectedItemRef.current = null;
-
-            setSelectedItem(null);
-
-            return;
-        }
-
-        const matchingOption = options.find((item) =>
-            sameId(item[valueField], value),
-        );
-
-        if (matchingOption) {
-            selectedItemRef.current = matchingOption;
-
-            setSelectedItem(matchingOption);
-
-            return;
-        }
-
-        const currentSelected = selectedItemRef.current;
-
-        if (
-            currentSelected &&
-            !sameId(currentSelected[valueField], value)
-        ) {
-            selectedItemRef.current = null;
-
-            setSelectedItem(null);
-        }
-    }, [value, options, valueField]);
+    }, [value]);
 
     /* =====================================================
        LABEL HELPERS
@@ -393,35 +373,41 @@ export const AsyncDropdown = <
 
                     setOptions(mergedOptions);
 
-                    // Count only actual API results, not preserved selections.
+                    // Only count actual API records.
+                    loadedIdsRef.current = new Set(
+                        incomingOptions.map((item) =>
+                            String(item[valueField]),
+                        ),
+                    );
+
                     setLoadedCount(incomingOptions.length);
 
                 } else {
-                    setOptions((previous) => {
-                        const merged = uniqueByValue(
-                            [...previous, ...incomingOptions],
-                            valueField,
-                        );
+                    const previousIds = loadedIdsRef.current;
 
-                        return merged;
-                    });
-
-                    setLoadedCount((previous) => {
-                        const previousIds = new Set(
-                            options.map((item) =>
+                    const newUniqueOptions = incomingOptions.filter(
+                        (item) =>
+                            !previousIds.has(
                                 String(item[valueField]),
                             ),
+                    );
+
+                    for (const item of incomingOptions) {
+                        previousIds.add(
+                            String(item[valueField]),
                         );
+                    }
 
-                        const newUniqueCount = incomingOptions.filter(
-                            (item) =>
-                                !previousIds.has(
-                                    String(item[valueField]),
-                                ),
-                        ).length;
+                    setOptions((previous) =>
+                        uniqueByValue(
+                            [...previous, ...incomingOptions],
+                            valueField,
+                        ),
+                    );
 
-                        return previous + newUniqueCount;
-                    });
+                    setLoadedCount((previous) =>
+                        previous + newUniqueOptions.length,
+                    );
                 }
 
                 setPage(pageNum);
@@ -468,7 +454,7 @@ export const AsyncDropdown = <
     useEffect(() => {
         const timer = window.setTimeout(() => {
             void loadOptions(1, search, true);
-        }, debounceTime);
+        }, Math.max(0, debounceTime));
 
         return () => {
             window.clearTimeout(timer);
@@ -485,7 +471,11 @@ export const AsyncDropdown = <
     ===================================================== */
 
     useEffect(() => {
-        if (value == null || !fetchItemById) {
+        if (
+            value == null ||
+            !fetchItemById ||
+            resolvedSelected
+        ) {
             return;
         }
 
@@ -538,7 +528,12 @@ export const AsyncDropdown = <
         return () => {
             active = false;
         };
-    }, [value, fetchItemById, valueField]);
+    }, [
+        value,
+        fetchItemById,
+        valueField,
+        resolvedSelected,
+    ]);
 
     /* =====================================================
        INFINITE SCROLL
@@ -711,7 +706,9 @@ export const AsyncDropdown = <
                                     <CommandItem
                                         key={String(itemId)}
                                         value={`${getLabelText(item)} ${String(itemId)}`}
-                                        onSelect={() => handleSelect(item)}
+                                        onSelect={() =>
+                                            handleSelect(item)
+                                        }
                                         className="flex items-start gap-3 py-3 text-sm"
                                     >
                                         <Check

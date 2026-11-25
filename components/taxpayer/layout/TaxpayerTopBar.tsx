@@ -92,7 +92,7 @@ export function TaxpayerTopBar({
       "
     >
       {/* ------------------------------------------------------------------ */}
-      {/* Municipal Logo                                                     */}
+      {/* Municipal Logo - Small Mobile Only                                 */}
       {/* ------------------------------------------------------------------ */}
 
       <Link
@@ -107,6 +107,7 @@ export function TaxpayerTopBar({
           focus-visible:ring-2
           focus-visible:ring-ring
           focus-visible:ring-offset-2
+          sm:hidden
         "
       >
         <Image
@@ -115,14 +116,14 @@ export function TaxpayerTopBar({
           width={120}
           height={48}
           priority
-          className="h-9 w-auto max-w-[100px] object-contain md:h-11 md:max-w-[120px]"
+          className="h-9 w-auto max-w-[100px] object-contain"
         />
       </Link>
 
-      {/* Separator */}
+      {/* Mobile Logo Separator */}
       <Separator
         orientation="vertical"
-        className="mx-3 h-7 sm:mx-4"
+        className="mx-3 h-7 sm:hidden"
       />
 
       {/* ------------------------------------------------------------------ */}

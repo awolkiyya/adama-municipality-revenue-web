@@ -1458,12 +1458,11 @@ function AssessmentFormContent({
   // ===================================================
 
   return (
-    <div className="mx-auto w-full max-w-7xl p-5">
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[280px_1fr]">
         {/* SIDEBAR */}
 
         <aside className="lg:sticky lg:top-5 lg:h-fit">
-          <div className="space-y-6 rounded-xl border bg-card p-5">
+          <div className="space-y-6 rounded-sm border bg-card p-5">
             {/* STEPPER */}
 
             <ol className="space-y-1">
@@ -1608,7 +1607,7 @@ function AssessmentFormContent({
 
         {/* MAIN CONTENT */}
 
-        <div className="rounded-xl border bg-card shadow-none">
+        <div className="rounded-sm border bg-card shadow-none">
           <div className="flex items-center justify-between border-b px-5 py-4 sm:px-6">
             <div>
               <p className="text-sm font-semibold">
@@ -1642,7 +1641,6 @@ function AssessmentFormContent({
                   <TaxpayerSelector
                     value={taxpayerId}
                     onChange={handleTaxpayerChange}
-                    // taxpayers={taxpayers}
                   />
 
                   {taxpayerLoading && (
@@ -2112,6 +2110,5 @@ function AssessmentFormContent({
           </div>
         </div>
       </div>
-    </div>
   );
 }

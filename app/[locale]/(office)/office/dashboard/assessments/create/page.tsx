@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 
 import {
   ArrowLeft,
@@ -488,52 +488,97 @@ export default function CreateAssessmentPage() {
       [citizensData],
     );
 
-  /*
-   * --------------------------------------------------------------------------
-   * Revenue services
-   * --------------------------------------------------------------------------
-   */
+/*
+ * --------------------------------------------------------------------------
+ * Assessment-based revenue services
+ * --------------------------------------------------------------------------
+ */
 
-  const {
-    data: revenueServicesData,
+const {
+  data: assessmentOnlyData,
+  isLoading: assessmentOnlyLoading,
+  isError: assessmentOnlyError,
+  refetch: refetchAssessmentOnly,
+} = useRevenueServices({
+  is_active: true,
+  collection_mode: "ASSESSMENT_ONLY",
+  per_page: 100,
+  page: 1,
+});
 
-    isLoading:
-      revenueServicesLoading,
+const {
+  data: bothCollectionModesData,
+  isLoading: bothCollectionModesLoading,
+  isError: bothCollectionModesError,
+  refetch: refetchBothCollectionModes,
+} = useRevenueServices({
+  is_active: true,
+  collection_mode: "BOTH",
+  per_page: 100,
+  page: 1,
+});
 
-    isError:
-      revenueServicesError,
+/*
+* --------------------------------------------------------------------------
+* Combined loading and error states
+* --------------------------------------------------------------------------
+*/
 
-    refetch:
-      refetchRevenueServices,
-  } = useRevenueServices({
-    is_active: true,
-    per_page: 100,
-    page: 1,
-  });
+const revenueServicesLoading =
+  assessmentOnlyLoading || bothCollectionModesLoading;
 
-  /*
-   * --------------------------------------------------------------------------
-   * Adapt API services to form services
-   * --------------------------------------------------------------------------
-   */
+const revenueServicesError =
+  assessmentOnlyError || bothCollectionModesError;
 
-  const revenueServices =
-    useMemo<RevenueService[]>(
-      () => {
-        const apiServices =
-          revenueServicesData?.data ??
-          [];
+/*
+* --------------------------------------------------------------------------
+* Refetch both queries
+* --------------------------------------------------------------------------
+*/
 
-        return apiServices.map(
-          (service) =>
-            mapRevenueService(
+const refetchRevenueServices = useCallback(async () => {
+  await Promise.all([
+      refetchAssessmentOnly(),
+      refetchBothCollectionModes(),
+  ]);
+}, [
+  refetchAssessmentOnly,
+  refetchBothCollectionModes,
+]);
+
+/*
+* --------------------------------------------------------------------------
+* Adapt and combine API services
+* --------------------------------------------------------------------------
+*/
+
+const revenueServices = useMemo<RevenueService[]>(() => {
+  const assessmentOnlyServices =
+      assessmentOnlyData?.data ?? [];
+
+  const bothCollectionServices =
+      bothCollectionModesData?.data ?? [];
+
+  const combinedServices = [
+      ...assessmentOnlyServices,
+      ...bothCollectionServices,
+  ];
+
+  // Prevent duplicate services.
+  const uniqueServices = Array.from(
+      new Map(
+          combinedServices.map((service) => [
+              service.id,
               service,
-            ),
-        );
-      },
-      [revenueServicesData],
-    );
+          ]),
+      ).values(),
+  );
 
+  return uniqueServices.map(mapRevenueService);
+}, [
+  assessmentOnlyData,
+  bothCollectionModesData,
+]);
   /*
    * --------------------------------------------------------------------------
    * Mutations
@@ -635,9 +680,7 @@ export default function CreateAssessmentPage() {
 
         actions={
           <Button
-            type="button"
-            variant="outline"
-            className="border-white/30 bg-white/10 text-white backdrop-blur-sm hover:bg-white hover:text-primary"
+            variant='secondary'
             onClick={handleBack}
           >
             <ArrowLeft className="mr-2 h-4 w-4" />

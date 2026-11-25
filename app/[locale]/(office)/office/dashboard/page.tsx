@@ -3,37 +3,51 @@
 
 import { useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
+
 import {
   AlertCircle,
   ArrowRight,
-  Ban,
   Banknote,
   BarChart3,
-  CheckCircle2,
-  CircleDollarSign,
+  Building2,
   ClipboardList,
   Clock3,
-  CreditCard,
+  CircleDollarSign,
   FileCheck2,
+  FileText,
   Landmark,
+  Layers3,
   LineChart as LineChartIcon,
-  RotateCcw,
-  XCircle,
+  Receipt,
+  Settings2,
+  Users,
+  UserCheck,
+  Code2,
+  type LucideIcon,
 } from "lucide-react";
 
 import Can from "@/components/access/Can";
 import ProtectedRoute from "@/components/access/ProtectedRoute";
+
 import MetricCard from "@/components/dashboard/MetricCard";
+
 import {
   PeriodSwitch,
   type PeriodSelection,
 } from "@/components/dashboard/PeriodSwitch";
+
 import RevenueChart from "@/components/dashboard/RevenueChart";
 import SourceMix from "@/components/dashboard/SourceMix";
 import QuickAccess from "@/components/dashboard/QuickAccess";
 
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+} from "@/components/ui/alert";
+
 import { Button } from "@/components/ui/button";
+
 import {
   Card,
   CardContent,
@@ -42,7 +56,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+
 import { Skeleton } from "@/components/ui/skeleton";
+
 import {
   ToggleGroup,
   ToggleGroupItem,
@@ -60,72 +76,120 @@ import {
 
 import {
   type ChartType,
-  type DashboardActivityStatus,
   type DashboardWorkQueueItem,
-  type IconType,
 } from "@/types/dashboard";
+
 import UnpaidInvoicesDialog from "@/components/dialogs/UnpaidInvoicesDialog";
 
 /* -------------------------------------------------------------------------- */
 /* Configuration                                                              */
 /* -------------------------------------------------------------------------- */
 
-const SYSTEM_STATS = [
-  { label: "Users", key: "totalUsers" },
-  { label: "Taxpayers", key: "totalTaxpayers" },
-  { label: "Agents", key: "totalAgents" },
-  { label: "Assessments", key: "totalAssessments" },
-  { label: "Assessment invoices", key: "totalAssessmentInvoices" },
-  { label: "Direct invoices", key: "totalDirectCollectionInvoices" },
+type SystemStatGroup =
+  | "people"
+  | "operations"
+  | "configuration";
 
-  // Revenue configuration statistics
+interface SystemStat {
+  label: string;
+  key:
+    | "totalUsers"
+    | "totalTaxpayers"
+    | "totalAgents"
+    | "totalAssessments"
+    | "totalAssessmentInvoices"
+    | "totalDirectCollectionInvoices"
+    | "totalActiveRevenueCategories"
+    | "totalRevenueCodes"
+    | "totalActiveRevenueServices";
+  group: SystemStatGroup;
+  icon: LucideIcon;
+}
+
+interface SystemStatGroupConfig {
+  key: SystemStatGroup;
+  title: string;
+  description: string;
+  icon: LucideIcon;
+}
+
+const SYSTEM_STAT_GROUPS: SystemStatGroupConfig[] = [
   {
-    label: "Active revenue categories",
+    key: "people",
+    title: "People and accounts",
+    description: "Registered users and taxpayer accounts.",
+    icon: Users,
+  },
+  {
+    key: "operations",
+    title: "Revenue operations",
+    description: "Assessment and invoice records.",
+    icon: ClipboardList,
+  },
+  {
+    key: "configuration",
+    title: "Revenue configuration",
+    description: "Configured revenue categories, codes and services.",
+    icon: Settings2,
+  },
+];
+
+const SYSTEM_STATS: SystemStat[] = [
+  {
+    label: "Users",
+    key: "totalUsers",
+    group: "people",
+    icon: Users,
+  },
+  {
+    label: "Taxpayers",
+    key: "totalTaxpayers",
+    group: "people",
+    icon: Building2,
+  },
+  {
+    label: "Agents",
+    key: "totalAgents",
+    group: "people",
+    icon: UserCheck,
+  },
+  {
+    label: "Assessments",
+    key: "totalAssessments",
+    group: "operations",
+    icon: ClipboardList,
+  },
+  {
+    label: "Assessment invoices",
+    key: "totalAssessmentInvoices",
+    group: "operations",
+    icon: FileCheck2,
+  },
+  {
+    label: "Direct invoices",
+    key: "totalDirectCollectionInvoices",
+    group: "operations",
+    icon: Receipt,
+  },
+  {
+    label: "Active categories",
     key: "totalActiveRevenueCategories",
+    group: "configuration",
+    icon: Layers3,
   },
   {
     label: "Revenue codes",
     key: "totalRevenueCodes",
+    group: "configuration",
+    icon: Code2,
   },
   {
-    label: "Active revenue services",
+    label: "Active services",
     key: "totalActiveRevenueServices",
+    group: "configuration",
+    icon: Settings2,
   },
-] as const;
-
-const ACTIVITY_STATUS: Record<
-  DashboardActivityStatus,
-  { icon: IconType; className: string }
-> = {
-  INITIATED: {
-    icon: Clock3,
-    className: "bg-muted text-muted-foreground",
-  },
-  PENDING: {
-    icon: Clock3,
-    className: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
-  },
-  PROCESSING: {
-    icon: CreditCard,
-    className: "bg-blue-500/10 text-blue-700 dark:text-blue-400",
-  },
-  COMPLETED: {
-    icon: CheckCircle2,
-    className: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
-  },
-  FAILED: {
-    icon: XCircle,
-    className: "bg-red-500/10 text-red-700 dark:text-red-400",
-  },
-  REVERSED: {
-    icon: RotateCcw,
-    className: "bg-orange-500/10 text-orange-700 dark:text-orange-400",
-  },
-  CANCELLED: {
-    icon: Ban,
-    className: "bg-muted text-muted-foreground",
-  },
-};
+];
 
 const KPI_ICON = "bg-muted text-muted-foreground";
 
@@ -152,10 +216,14 @@ function CardHeading({
     <CardHeader>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 space-y-1">
-          <CardTitle className="text-base">{title}</CardTitle>
+          <CardTitle className="text-base">
+            {title}
+          </CardTitle>
 
           {description ? (
-            <CardDescription>{description}</CardDescription>
+            <CardDescription>
+              {description}
+            </CardDescription>
           ) : null}
         </div>
 
@@ -174,27 +242,205 @@ function EmptyMessage({
 }) {
   return (
     <div className="rounded-lg border border-dashed px-4 py-8 text-center">
-      <p className="text-sm font-medium">{title}</p>
-      <p className="mt-1 text-sm text-muted-foreground">{text}</p>
+      <p className="text-sm font-medium">
+        {title}
+      </p>
+
+      <p className="mt-1 text-sm text-muted-foreground">
+        {text}
+      </p>
     </div>
   );
 }
 
-const rowLink =
-  "group -mx-2 flex items-center gap-3 rounded-lg px-2 py-2.5 transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+/* -------------------------------------------------------------------------- */
+/* System statistics components                                               */
+/* -------------------------------------------------------------------------- */
 
-function WorkQueueRow({ item }: { item: DashboardWorkQueueItem }) {
-  const Icon =
-    item.key === "pending_bank_transfers" ? Landmark : ClipboardList;
+function SystemStatCard({
+  stat,
+  value,
+}: {
+  stat: SystemStat;
+  value: number;
+}) {
+  const Icon = stat.icon;
 
   return (
-    <Link href={"/office/dashboard/payments"} className={rowLink}>
-      <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
-        <Icon className="size-4" aria-hidden="true" />
+    <div
+      className={cn(
+        "group flex min-w-0 items-center gap-3 rounded-lg border bg-card p-4",
+        "transition-colors duration-200 hover:bg-muted/40",
+      )}
+    >
+      <div
+        className={cn(
+          "flex size-10 shrink-0 items-center justify-center rounded-lg",
+          "bg-muted text-muted-foreground",
+          "transition-colors duration-200 group-hover:bg-background",
+        )}
+      >
+        <Icon
+          className="size-5"
+          aria-hidden="true"
+        />
       </div>
 
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium">{item.title}</p>
+        <dt className="truncate text-sm font-medium text-muted-foreground">
+          {stat.label}
+        </dt>
+
+        <dd className="mt-1 text-2xl font-semibold leading-none tracking-tight tabular-nums">
+          {value.toLocaleString()}
+        </dd>
+      </div>
+    </div>
+  );
+}
+
+function SystemStatGroupSection({
+  group,
+  statistics,
+}: {
+  group: SystemStatGroupConfig;
+  statistics: Record<SystemStat["key"], number>;
+}) {
+  const Icon = group.icon;
+
+  const stats = SYSTEM_STATS.filter(
+    (stat) => stat.group === group.key,
+  );
+
+  return (
+    <section
+      aria-labelledby={`system-stat-${group.key}`}
+      className="space-y-3"
+    >
+      <div className="flex items-start gap-3">
+        <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+          <Icon
+            className="size-4"
+            aria-hidden="true"
+          />
+        </div>
+
+        <div className="min-w-0">
+          <h3
+            id={`system-stat-${group.key}`}
+            className="text-sm font-semibold"
+          >
+            {group.title}
+          </h3>
+
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {group.description}
+          </p>
+        </div>
+      </div>
+
+      <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {stats.map((stat) => (
+          <SystemStatCard
+            key={stat.key}
+            stat={stat}
+            value={statistics[stat.key]}
+          />
+        ))}
+      </dl>
+    </section>
+  );
+}
+
+function SystemRecords({
+  statistics,
+}: {
+  statistics: Record<SystemStat["key"], number>;
+}) {
+  return (
+    <section aria-labelledby="system-records-heading">
+      <Card>
+        <CardHeader>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="space-y-1">
+              <CardTitle
+                id="system-records-heading"
+                className="text-base"
+              >
+                System records
+              </CardTitle>
+
+              <CardDescription>
+                All-time system totals, independent of the selected reporting period.
+              </CardDescription>
+            </div>
+
+            <div className="flex w-fit items-center gap-2 rounded-md border bg-muted/30 px-3 py-1.5">
+              <Clock3
+                className="size-3.5 text-muted-foreground"
+                aria-hidden="true"
+              />
+
+              <span className="text-xs font-medium text-muted-foreground">
+                All time
+              </span>
+            </div>
+          </div>
+        </CardHeader>
+
+        <CardContent className="space-y-7">
+          {SYSTEM_STAT_GROUPS.map((group, index) => (
+            <div key={group.key}>
+              {index > 0 && (
+                <div className="mb-6 border-t" />
+              )}
+
+              <SystemStatGroupSection
+                group={group}
+                statistics={statistics}
+              />
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+    </section>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Work queue                                                                 */
+/* -------------------------------------------------------------------------- */
+
+const rowLink =
+  "group -mx-2 flex items-center gap-3 rounded-lg px-2 py-2.5 transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+
+function WorkQueueRow({
+  item,
+}: {
+  item: DashboardWorkQueueItem;
+}) {
+  const Icon =
+    item.key === "pending_bank_transfers"
+      ? Landmark
+      : ClipboardList;
+
+  return (
+    <Link
+      href="/office/dashboard/payments"
+      className={rowLink}
+    >
+      <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+        <Icon
+          className="size-4"
+          aria-hidden="true"
+        />
+      </div>
+
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium">
+          {item.title}
+        </p>
+
         <p className="truncate text-xs text-muted-foreground">
           {item.description}
         </p>
@@ -209,7 +455,7 @@ function WorkQueueRow({ item }: { item: DashboardWorkQueueItem }) {
         )}
         aria-label={`${item.count} items`}
       >
-        {item.count}
+        {item.count.toLocaleString()}
       </span>
 
       <ArrowRight
@@ -219,6 +465,10 @@ function WorkQueueRow({ item }: { item: DashboardWorkQueueItem }) {
     </Link>
   );
 }
+
+/* -------------------------------------------------------------------------- */
+/* Loading state                                                              */
+/* -------------------------------------------------------------------------- */
 
 function DashboardSkeleton() {
   return (
@@ -238,7 +488,10 @@ function DashboardSkeleton() {
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {Array.from({ length: 4 }, (_, index) => (
-          <Skeleton key={index} className="h-28" />
+          <Skeleton
+            key={index}
+            className="h-28"
+          />
         ))}
       </div>
 
@@ -247,7 +500,7 @@ function DashboardSkeleton() {
         <Skeleton className="h-96" />
       </div>
 
-      <Skeleton className="h-72" />
+      <Skeleton className="h-[34rem]" />
     </div>
   );
 }
@@ -257,12 +510,14 @@ function DashboardSkeleton() {
 /* -------------------------------------------------------------------------- */
 
 function AnalyticsDashboard() {
-  const [chartType, setChartType] = useState<ChartType>("bar");
+  const [chartType, setChartType] =
+    useState<ChartType>("bar");
 
-  const [period, setPeriod] = useState<PeriodSelection>({
-    type: "preset",
-    period: "7d",
-  });
+  const [period, setPeriod] =
+    useState<PeriodSelection>({
+      type: "preset",
+      period: "7d",
+    });
 
   const { dateRange, periodLabel } = useMemo(() => {
     if (period.type === "custom") {
@@ -276,7 +531,9 @@ function AnalyticsDashboard() {
     }
 
     const days = DAYS_BY_PERIOD[period.period];
+
     const to = new Date();
+
     const from = new Date(to);
 
     from.setDate(from.getDate() - days + 1);
@@ -307,9 +564,14 @@ function AnalyticsDashboard() {
   if (isError || !data?.success) {
     return (
       <Alert variant="destructive">
-        <AlertCircle className="size-4" aria-hidden="true" />
+        <AlertCircle
+          className="size-4"
+          aria-hidden="true"
+        />
 
-        <AlertTitle>Unable to load analytics</AlertTitle>
+        <AlertTitle>
+          Unable to load analytics
+        </AlertTitle>
 
         <AlertDescription className="mt-2 flex flex-col items-start gap-3">
           The dashboard analytics could not be loaded. Please try again.
@@ -326,25 +588,42 @@ function AnalyticsDashboard() {
     );
   }
 
-  const { revenue, workQueue, recentActivity, systemStatistics } =
-    data.data;
+  const {
+    revenue,
+    workQueue,
+    systemStatistics,
+  } = data.data;
 
   const { totals } = revenue;
 
   return (
     <div className="space-y-8">
-      {/* 1. Overview KPIs */}
-      <section aria-labelledby="overview-heading" className="space-y-4">
+      {/* =====================================================
+          1. OVERVIEW KPIs
+      ===================================================== */}
+
+      <section
+        aria-labelledby="overview-heading"
+        className="space-y-4"
+      >
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 id="overview-heading" className="text-lg font-semibold">
+            <h2
+              id="overview-heading"
+              className="text-lg font-semibold tracking-tight"
+            >
               Overview
             </h2>
 
-            <p className="text-sm text-muted-foreground">{periodLabel}</p>
+            <p className="text-sm text-muted-foreground">
+              {periodLabel}
+            </p>
           </div>
 
-          <PeriodSwitch value={period} onChange={setPeriod} />
+          <PeriodSwitch
+            value={period}
+            onChange={setPeriod}
+          />
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -385,11 +664,15 @@ function AnalyticsDashboard() {
         </div>
       </section>
 
-      {/* 2. Collections chart and work queue */}
+      {/* =====================================================
+          2. COLLECTIONS CHART + WORK QUEUE
+      ===================================================== */}
+
       <section
         aria-label="Collections and work queue"
         className="grid min-w-0 gap-6 xl:grid-cols-3"
       >
+        {/* Collections chart */}
         <Card className="min-w-0 xl:col-span-2">
           <CardHeading
             title="Collections over time"
@@ -401,18 +684,33 @@ function AnalyticsDashboard() {
                 size="sm"
                 value={chartType}
                 onValueChange={(value) => {
-                  if (value === "bar" || value === "line") {
+                  if (
+                    value === "bar" ||
+                    value === "line"
+                  ) {
                     setChartType(value);
                   }
                 }}
                 aria-label="Chart type"
               >
-                <ToggleGroupItem value="bar" aria-label="Bar chart">
-                  <BarChart3 className="size-4" aria-hidden="true" />
+                <ToggleGroupItem
+                  value="bar"
+                  aria-label="Bar chart"
+                >
+                  <BarChart3
+                    className="size-4"
+                    aria-hidden="true"
+                  />
                 </ToggleGroupItem>
 
-                <ToggleGroupItem value="line" aria-label="Line chart">
-                  <LineChartIcon className="size-4" aria-hidden="true" />
+                <ToggleGroupItem
+                  value="line"
+                  aria-label="Line chart"
+                >
+                  <LineChartIcon
+                    className="size-4"
+                    aria-hidden="true"
+                  />
                 </ToggleGroupItem>
               </ToggleGroup>
             }
@@ -433,6 +731,7 @@ function AnalyticsDashboard() {
           </CardFooter>
         </Card>
 
+        {/* Work queue */}
         <Card className="min-w-0">
           <CardHeading
             title="Needs attention"
@@ -440,7 +739,7 @@ function AnalyticsDashboard() {
             action={
               workQueue.total > 0 ? (
                 <span className="rounded-md bg-destructive/10 px-2 py-1 text-xs font-semibold text-destructive">
-                  {workQueue.total}
+                  {workQueue.total.toLocaleString()}
                 </span>
               ) : undefined
             }
@@ -450,7 +749,10 @@ function AnalyticsDashboard() {
             {workQueue.items.length > 0 ? (
               <div className="space-y-0.5">
                 {workQueue.items.map((item) => (
-                  <WorkQueueRow key={item.key} item={item} />
+                  <WorkQueueRow
+                    key={item.key}
+                    item={item}
+                  />
                 ))}
               </div>
             ) : (
@@ -463,31 +765,13 @@ function AnalyticsDashboard() {
         </Card>
       </section>
 
-      {/* 3. All-time system statistics */}
-      <section aria-label="System records">
-        <Card>
-          <CardHeading
-            title="System records"
-            description="All-time totals, not affected by the period filter."
-          />
+      {/* =====================================================
+          3. ALL-TIME SYSTEM RECORDS
+      ===================================================== */}
 
-          <CardContent>
-            <dl className="grid grid-cols-2 gap-6 sm:grid-cols-3 lg:grid-cols-3">
-              {SYSTEM_STATS.map((stat) => (
-                <div key={stat.key}>
-                  <dt className="text-sm text-muted-foreground">
-                    {stat.label}
-                  </dt>
-
-                  <dd className="mt-1 text-2xl font-semibold tabular-nums">
-                    {systemStatistics[stat.key].toLocaleString()}
-                  </dd>
-                </div>
-              ))}
-            </dl>
-          </CardContent>
-        </Card>
-      </section>
+      <SystemRecords
+        statistics={systemStatistics}
+      />
     </div>
   );
 }
@@ -499,6 +783,7 @@ function AnalyticsDashboard() {
 function DashboardContent() {
   return (
     <div className="mx-auto w-full max-w-7xl space-y-8 p-4 sm:p-6 lg:p-8">
+      {/* Page header */}
       <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">
@@ -512,15 +797,28 @@ function DashboardContent() {
 
         <div className="flex flex-wrap items-center gap-2">
           {/* Unpaid invoices permission */}
-          <Can resource="invoices" action="read">
+          <Can
+            resource="invoices"
+            action="read"
+          >
             <UnpaidInvoicesDialog />
           </Can>
 
           {/* Reports permission */}
-          <Can resource="reports" action="view">
-            <Button variant="outline" asChild>
+          <Can
+            resource="reports"
+            action="view"
+          >
+            <Button
+              variant="outline"
+              asChild
+            >
               <Link href="/office/dashboard/reports">
-                <BarChart3 className="size-4" aria-hidden="true" />
+                <BarChart3
+                  className="size-4"
+                  aria-hidden="true"
+                />
+
                 Reports
               </Link>
             </Button>
@@ -528,20 +826,30 @@ function DashboardContent() {
         </div>
       </header>
 
-      {/* Only authorized users mount the analytics query and UI. */}
-      <Can resource="analytics" action="view">
+      {/* Analytics permission */}
+      <Can
+        resource="analytics"
+        action="view"
+      >
         <AnalyticsDashboard />
       </Can>
 
-      {/* Quick access is independent of analytics.view. */}
+      {/* Quick access is independent of analytics permission */}
       <QuickAccess />
     </div>
   );
 }
 
+/* -------------------------------------------------------------------------- */
+/* Page export                                                                */
+/* -------------------------------------------------------------------------- */
+
 export default function RevenueDashboardPage() {
   return (
-    <ProtectedRoute resource="dashboard" action="view">
+    <ProtectedRoute
+      resource="dashboard"
+      action="view"
+    >
       <DashboardContent />
     </ProtectedRoute>
   );

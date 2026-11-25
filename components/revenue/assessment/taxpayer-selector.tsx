@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from "next/link";
@@ -63,15 +64,20 @@ const SKELETON_ROWS = 5;
 
 function getInitials(name?: string | null) {
   if (!name) return "?";
+
   const parts = name.trim().split(/\s+/).filter(Boolean);
+
   if (parts.length === 0) return "?";
+
   const first = parts[0][0] ?? "";
   const last = parts.length > 1 ? parts[parts.length - 1][0] : "";
+
   return (first + last).toUpperCase();
 }
 
 function formatGender(gender?: string | null) {
   if (!gender) return null;
+
   return gender.charAt(0).toUpperCase() + gender.slice(1).toLowerCase();
 }
 
@@ -101,6 +107,7 @@ function ResultSkeleton() {
       {Array.from({ length: SKELETON_ROWS }).map((_, index) => (
         <div key={index} className="flex items-center gap-3 px-2 py-2.5">
           <div className="h-9 w-9 shrink-0 animate-pulse rounded-full bg-muted" />
+
           <div className="flex-1 space-y-2">
             <div className="h-3 w-2/5 animate-pulse rounded bg-muted" />
             <div className="h-3 w-3/5 animate-pulse rounded bg-muted/70" />
@@ -111,12 +118,20 @@ function ResultSkeleton() {
   );
 }
 
-function CopyButton({ text, label }: { text: string; label: string }) {
+function CopyButton({
+  text,
+  label,
+}: {
+  text: string;
+  label: string;
+}) {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (!copied) return;
+
     const id = setTimeout(() => setCopied(false), 1500);
+
     return () => clearTimeout(id);
   }, [copied]);
 
@@ -125,7 +140,7 @@ function CopyButton({ text, label }: { text: string; label: string }) {
       await navigator.clipboard.writeText(text);
       setCopied(true);
     } catch {
-      /* Clipboard may be unavailable (insecure context) – fail silently. */
+      // Clipboard may be unavailable.
     }
   };
 
@@ -165,13 +180,21 @@ export function TaxpayerSelector({
   const [page, setPage] = useState(1);
 
   /*
-   * Keep the chosen record in state. Search results change as the user types
-   * or paginates, so deriving the selection from the current page would make
-   * the details disappear right after picking someone.
+   * Cache the selected citizen independently of the current search results.
+   *
+   * This ensures the selected taxpayer remains visible when:
+   * - The user searches for another citizen.
+   * - The user changes pagination.
+   * - The selected citizen disappears from the current API response.
    */
-  const [selectedCitizen, setSelectedCitizen] = useState<Citizen | null>(null);
+  const [selectedCitizen, setSelectedCitizen] = useState<Citizen | null>(
+    null,
+  );
 
-  /* Debounce the search so we don't hit the API on every keystroke. */
+  /* ------------------------------------------------------------------------ */
+  /* Debounced search                                                         */
+  /* ------------------------------------------------------------------------ */
+
   useEffect(() => {
     const timeoutId = setTimeout(() => {
       setSearch(searchInput.trim());
@@ -181,7 +204,10 @@ export function TaxpayerSelector({
     return () => clearTimeout(timeoutId);
   }, [searchInput]);
 
-  /* Server-side search + pagination. */
+  /* ------------------------------------------------------------------------ */
+  /* Server-side search and pagination                                       */
+  /* ------------------------------------------------------------------------ */
+
   const citizensQuery = useCitizens({
     search: search || undefined,
     page,
@@ -192,12 +218,15 @@ export function TaxpayerSelector({
 
   const taxpayers = useMemo<Citizen[]>(() => {
     const response = citizensQuery.data;
+
     if (!response || response.success !== true) return [];
+
     return Array.isArray(response.data) ? response.data : [];
   }, [citizensQuery.data]);
 
   const pagination = useMemo(() => {
     const meta = citizensQuery.data?.meta;
+
     return {
       currentPage: meta?.current_page ?? page,
       lastPage: meta?.last_page ?? 1,
@@ -208,26 +237,33 @@ export function TaxpayerSelector({
     };
   }, [citizensQuery.data, page, taxpayers.length]);
 
+  /* ------------------------------------------------------------------------ */
+  /* Selected taxpayer                                                       */
+  /* ------------------------------------------------------------------------ */
+
   /*
-   * If the parent sets `value` (e.g. edit mode) and the record is in the
-   * loaded results, hydrate the details. A cached selection is never
-   * overwritten by a different ID, and is dropped if the value is cleared.
+   * Derive the selected taxpayer instead of synchronizing it through an
+   * effect. This avoids react-hooks/set-state-in-effect.
+   *
+   * The cached record is used when the selected citizen is not present
+   * in the current search results.
    */
-  useEffect(() => {
-    if (!value) {
-      setSelectedCitizen(null);
-      return;
-    }
-    if (selectedCitizen && String(selectedCitizen.id) === String(value)) return;
+  const selected = useMemo(() => {
+    if (!value) return null;
 
-    const match = taxpayers.find((c) => String(c.id) === String(value));
-    if (match) setSelectedCitizen(match);
-  }, [value, taxpayers, selectedCitizen]);
+    const cachedMatch =
+      selectedCitizen &&
+      String(selectedCitizen.id) === String(value)
+        ? selectedCitizen
+        : null;
 
-  const selected =
-    selectedCitizen && String(selectedCitizen.id) === String(value)
-      ? selectedCitizen
-      : null;
+    if (cachedMatch) return cachedMatch;
+
+    return (
+      taxpayers.find((citizen) => String(citizen.id) === String(value)) ??
+      null
+    );
+  }, [value, selectedCitizen, taxpayers]);
 
   const isInitialLoading = citizensQuery.isLoading;
   const isRefreshing = citizensQuery.isFetching && !citizensQuery.isLoading;
@@ -237,28 +273,55 @@ export function TaxpayerSelector({
   const canGoNext = pagination.hasMore || page < pagination.lastPage;
   const canGoPrevious = page > 1;
 
+  /* ------------------------------------------------------------------------ */
+  /* Actions                                                                  */
+  /* ------------------------------------------------------------------------ */
+
   const resetSearch = useCallback(() => {
     setSearchInput("");
     setSearch("");
     setPage(1);
   }, []);
 
-  const handleSelect = (citizen: Citizen) => {
-    setSelectedCitizen(citizen);
-    onChange(String(citizen.id));
-    onSelectCitizen?.(citizen);
-    setOpen(false);
-    resetSearch();
-  };
+  const handleSelect = useCallback(
+    (citizen: Citizen) => {
+      setSelectedCitizen(citizen);
 
-  const handleClear = () => {
+      onChange(String(citizen.id));
+      onSelectCitizen?.(citizen);
+
+      setOpen(false);
+      resetSearch();
+    },
+    [onChange, onSelectCitizen, resetSearch],
+  );
+
+  const handleClear = useCallback(() => {
     setSelectedCitizen(null);
+
     onChange("");
     onSelectCitizen?.(null);
-  };
+  }, [onChange, onSelectCitizen]);
+
+  const handleOpenChange = useCallback(
+    (nextOpen: boolean) => {
+      setOpen(nextOpen);
+
+      if (!nextOpen) {
+        resetSearch();
+      }
+    },
+    [resetSearch],
+  );
+
+  /* ------------------------------------------------------------------------ */
+  /* Selected taxpayer information                                            */
+  /* ------------------------------------------------------------------------ */
 
   const address =
-    selected?.administrative_unit?.full_address || selected?.address || "";
+    selected?.administrative_unit?.full_address ||
+    selected?.address ||
+    "";
 
   const details = selected
     ? [
@@ -272,21 +335,34 @@ export function TaxpayerSelector({
           value: selected.citizen_uid,
           copyable: true,
         },
-        { label: "Phone", value: selected.phone },
-        { label: "Gender", value: formatGender(selected.gender) },
+        {
+          label: "Phone",
+          value: selected.phone,
+          copyable: false,
+        },
+        {
+          label: "Gender",
+          value: formatGender(selected.gender),
+          copyable: false,
+        },
       ]
     : [];
+
+  /* ------------------------------------------------------------------------ */
+  /* Render                                                                   */
+  /* ------------------------------------------------------------------------ */
 
   return (
     <section
       aria-labelledby={`${fieldId}-title`}
-      className="space-y-5  p-5 sm:p-6"
+      className="space-y-5 p-5 sm:p-6"
     >
       {/* Header */}
       <header className="flex items-start gap-3">
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
           <Users className="h-4 w-4" />
         </span>
+
         <div className="min-w-0">
           <h2
             id={`${fieldId}-title`}
@@ -294,25 +370,20 @@ export function TaxpayerSelector({
           >
             Taxpayer
           </h2>
+
           <p className="mt-1 text-sm text-muted-foreground">
             Choose the citizen this assessment applies to.
           </p>
         </div>
       </header>
 
-      {/* Selector */}
+      {/* Taxpayer selector */}
       <div className="space-y-2">
         <Label htmlFor={fieldId}>
           Taxpayer <span className="text-destructive">*</span>
         </Label>
 
-        <Popover
-          open={open}
-          onOpenChange={(nextOpen) => {
-            setOpen(nextOpen);
-            if (!nextOpen) resetSearch();
-          }}
-        >
+        <Popover open={open} onOpenChange={handleOpenChange}>
           <PopoverTrigger asChild>
             <Button
               id={fieldId}
@@ -326,16 +397,19 @@ export function TaxpayerSelector({
               disabled={disabled}
               className={cn(
                 "h-auto min-h-12 w-full justify-between gap-3 px-3 py-2 font-normal",
-                error && "border-destructive focus-visible:ring-destructive",
+                error &&
+                  "border-destructive focus-visible:ring-destructive",
               )}
             >
               {selected ? (
                 <span className="flex min-w-0 items-center gap-3 text-left">
                   <Avatar name={selected.full_name} />
+
                   <span className="min-w-0">
                     <span className="block truncate text-sm font-medium">
                       {selected.full_name}
                     </span>
+
                     <span className="block truncate text-xs text-muted-foreground">
                       National ID {selected.national_id || "—"}
                     </span>
@@ -387,14 +461,17 @@ export function TaxpayerSelector({
                     <span className="flex h-10 w-10 items-center justify-center rounded-full bg-destructive/10">
                       <AlertCircle className="h-5 w-5 text-destructive" />
                     </span>
+
                     <div className="space-y-1">
                       <p className="text-sm font-medium">
                         Couldn’t load taxpayers
                       </p>
+
                       <p className="text-xs text-muted-foreground">
                         Check your connection and try again.
                       </p>
                     </div>
+
                     <Button
                       type="button"
                       size="sm"
@@ -407,83 +484,99 @@ export function TaxpayerSelector({
                   </div>
                 )}
 
-                {/* Empty */}
-                {!isInitialLoading && !isError && taxpayers.length === 0 && (
-                  <div className="flex flex-col items-center gap-3 px-4 py-8 text-center">
-                    <span className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
-                      <Search className="h-5 w-5 text-muted-foreground" />
-                    </span>
-                    <div className="space-y-1">
-                      <p className="text-sm font-medium">
-                        {search ? "No matching taxpayers" : "No taxpayers yet"}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {search
-                          ? `Nothing found for “${search}”. Try a different name, ID or phone number.`
-                          : "Register the first taxpayer to continue."}
-                      </p>
+                {/* Empty results */}
+                {!isInitialLoading &&
+                  !isError &&
+                  taxpayers.length === 0 && (
+                    <div className="flex flex-col items-center gap-3 px-4 py-8 text-center">
+                      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
+                        <Search className="h-5 w-5 text-muted-foreground" />
+                      </span>
+
+                      <div className="space-y-1">
+                        <p className="text-sm font-medium">
+                          {search
+                            ? "No matching taxpayers"
+                            : "No taxpayers yet"}
+                        </p>
+
+                        <p className="text-xs text-muted-foreground">
+                          {search
+                            ? `Nothing found for “${search}”. Try a different name, ID or phone number.`
+                            : "Register the first taxpayer to continue."}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
-                {/* Results */}
-                {!isInitialLoading && !isError && taxpayers.length > 0 && (
-                  <CommandGroup className="p-1">
-                    {taxpayers.map((citizen) => {
-                      const isSelected = String(citizen.id) === String(value);
-                      const gender = formatGender(citizen.gender);
-                      const unit = citizen.administrative_unit?.name;
+                {/* Taxpayer results */}
+                {!isInitialLoading &&
+                  !isError &&
+                  taxpayers.length > 0 && (
+                    <CommandGroup className="p-1">
+                      {taxpayers.map((citizen) => {
+                        const isSelected =
+                          String(citizen.id) === String(value);
 
-                      return (
-                        <CommandItem
-                          key={citizen.id}
-                          value={String(citizen.id)}
-                          onSelect={() => handleSelect(citizen)}
-                          className="items-start gap-3 rounded-md px-2 py-2.5"
-                        >
-                          <Avatar name={citizen.full_name} />
+                        const gender = formatGender(citizen.gender);
+                        const unit = citizen.administrative_unit?.name;
 
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2">
-                              <p className="truncate text-sm font-medium">
-                                {citizen.full_name}
+                        return (
+                          <CommandItem
+                            key={citizen.id}
+                            value={String(citizen.id)}
+                            onSelect={() => handleSelect(citizen)}
+                            className="items-start gap-3 rounded-md px-2 py-2.5"
+                          >
+                            <Avatar name={citizen.full_name} />
+
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2">
+                                <p className="truncate text-sm font-medium">
+                                  {citizen.full_name}
+                                </p>
+
+                                {gender && (
+                                  <span className="shrink-0 text-xs text-muted-foreground">
+                                    {gender}
+                                  </span>
+                                )}
+                              </div>
+
+                              <p className="truncate text-xs text-muted-foreground">
+                                ID {citizen.national_id || "not recorded"}
                               </p>
-                              {gender && (
-                                <span className="shrink-0 text-xs text-muted-foreground">
-                                  {gender}
+
+                              <p className="mt-0.5 flex items-center gap-3 truncate text-xs text-muted-foreground">
+                                <span className="inline-flex items-center gap-1">
+                                  <Phone className="h-3 w-3" />
+                                  {citizen.phone || "No phone"}
                                 </span>
-                              )}
+
+                                {unit && (
+                                  <span className="inline-flex min-w-0 items-center gap-1">
+                                    <MapPin className="h-3 w-3 shrink-0" />
+                                    <span className="truncate">
+                                      {unit}
+                                    </span>
+                                  </span>
+                                )}
+                              </p>
                             </div>
 
-                            <p className="truncate text-xs text-muted-foreground">
-                              ID {citizen.national_id || "not recorded"}
-                            </p>
-
-                            <p className="mt-0.5 flex items-center gap-3 truncate text-xs text-muted-foreground">
-                              <span className="inline-flex items-center gap-1">
-                                <Phone className="h-3 w-3" />
-                                {citizen.phone || "No phone"}
-                              </span>
-                              {unit && (
-                                <span className="inline-flex min-w-0 items-center gap-1">
-                                  <MapPin className="h-3 w-3 shrink-0" />
-                                  <span className="truncate">{unit}</span>
-                                </span>
+                            <Check
+                              className={cn(
+                                "mt-1 h-4 w-4 shrink-0 text-primary",
+                                isSelected
+                                  ? "opacity-100"
+                                  : "opacity-0",
                               )}
-                            </p>
-                          </div>
-
-                          <Check
-                            className={cn(
-                              "mt-1 h-4 w-4 shrink-0 text-primary",
-                              isSelected ? "opacity-100" : "opacity-0",
-                            )}
-                          />
-                        </CommandItem>
-                      );
-                    })}
-                  </CommandGroup>
-                )}
+                            />
+                          </CommandItem>
+                        );
+                      })}
+                    </CommandGroup>
+                  )}
               </CommandList>
 
               {/* Pagination */}
@@ -506,7 +599,9 @@ export function TaxpayerSelector({
                       className="h-7 w-7"
                       aria-label="Previous page"
                       disabled={!canGoPrevious || isBusy}
-                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      onClick={() =>
+                        setPage((current) => Math.max(1, current - 1))
+                      }
                     >
                       <ChevronLeft className="h-4 w-4" />
                     </Button>
@@ -522,7 +617,9 @@ export function TaxpayerSelector({
                       className="h-7 w-7"
                       aria-label="Next page"
                       disabled={!canGoNext || isBusy}
-                      onClick={() => setPage((p) => p + 1)}
+                      onClick={() =>
+                        setPage((current) => current + 1)
+                      }
                     >
                       <ChevronRight className="h-4 w-4" />
                     </Button>
@@ -552,6 +649,7 @@ export function TaxpayerSelector({
           </PopoverContent>
         </Popover>
 
+        {/* Validation */}
         {error && (
           <p
             id={errorId}
@@ -567,6 +665,7 @@ export function TaxpayerSelector({
       {/* Selected taxpayer details */}
       {selected && (
         <div className="overflow-hidden rounded-lg border bg-muted/20">
+          {/* Selection header */}
           <div className="flex items-center justify-between gap-2 border-b bg-muted/40 px-4 py-2.5">
             <Badge variant="secondary" className="gap-1.5">
               <Check className="h-3 w-3 text-emerald-600" />
@@ -586,16 +685,23 @@ export function TaxpayerSelector({
             </Button>
           </div>
 
+          {/* Taxpayer information */}
           <div className="space-y-4 p-4">
             <div className="flex items-center gap-3">
-              <Avatar name={selected.full_name} className="h-11 w-11 text-sm" />
+              <Avatar
+                name={selected.full_name}
+                className="h-11 w-11 text-sm"
+              />
+
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold">
                   {selected.full_name}
                 </p>
+
                 {selected.administrative_unit?.name && (
                   <p className="flex items-center gap-1 text-xs text-muted-foreground">
                     <MapPin className="h-3 w-3 shrink-0" />
+
                     <span className="truncate">
                       {selected.administrative_unit.name}
                     </span>
@@ -610,15 +716,18 @@ export function TaxpayerSelector({
                   <dt className="text-xs text-muted-foreground">
                     {detail.label}
                   </dt>
+
                   <dd className="flex items-center gap-1">
                     <span
                       className={cn(
                         "truncate font-medium",
-                        !detail.value && "font-normal text-muted-foreground",
+                        !detail.value &&
+                          "font-normal text-muted-foreground",
                       )}
                     >
                       {detail.value || "Not recorded"}
                     </span>
+
                     {detail.copyable && detail.value && (
                       <CopyButton
                         text={String(detail.value)}
@@ -630,7 +739,10 @@ export function TaxpayerSelector({
               ))}
 
               <div className="min-w-0 sm:col-span-2">
-                <dt className="text-xs text-muted-foreground">Address</dt>
+                <dt className="text-xs text-muted-foreground">
+                  Address
+                </dt>
+
                 <dd
                   className={cn(
                     "font-medium",

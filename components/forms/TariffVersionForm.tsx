@@ -772,7 +772,7 @@ export function TariffVersionForm({
                                 </Label>
 
                                 <p className="text-xs leading-5 text-muted-foreground">
-                                    New assessments may use this version's pricing once the
+                                    New assessments may use this versions pricing once the
                                     server accepts the activation.
                                 </p>
                             </div>

@@ -120,7 +120,7 @@ function TaxPayerDetailPage() {
             </h2>
 
             <p className="text-sm text-muted-foreground">
-              We could not retrieve this citizen's information.
+              We could not retrieve this citizens information.
               The record may have been removed or you may not have permission to view it.
             </p>
 

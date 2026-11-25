@@ -11,6 +11,13 @@ import { IconBadge } from "@/components/commen/icon-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 import {
   Plus,
@@ -84,6 +91,12 @@ type UserTableRow = Omit<AuthUser, "role"> & {
       : undefined
     : undefined;
 };
+
+/* =====================================================
+   PER PAGE OPTIONS
+===================================================== */
+
+const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 
 /* =====================================================
    FILTERS
@@ -325,6 +338,15 @@ function UsersPageContent() {
   };
 
   /* ===================================================
+     PER PAGE CHANGE
+  =================================================== */
+
+  const handlePageSizeChange = (size: number) => {
+    setPageSize(size);
+    setPage(1);
+  };
+
+  /* ===================================================
      OPEN FILTER SHEET
   =================================================== */
 
@@ -491,6 +513,39 @@ function UsersPageContent() {
         }
         right={
           <div className="flex w-full flex-wrap items-center justify-end gap-2">
+
+            {/* PER PAGE */}
+
+            <div className="flex items-center gap-2">
+              <span className="hidden text-sm text-muted-foreground sm:inline">
+                Per page
+              </span>
+
+              <Select
+                value={String(pageSize)}
+                onValueChange={(value) =>
+                  handlePageSizeChange(Number(value))
+                }
+              >
+                <SelectTrigger className="w-[80px]">
+                  <SelectValue />
+                </SelectTrigger>
+
+                <SelectContent>
+                  {PAGE_SIZE_OPTIONS.map((size) => (
+                    <SelectItem
+                      key={size}
+                      value={String(size)}
+                    >
+                      {size}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* FILTERS */}
+
             <Button
               variant="outline"
               onClick={() => {
@@ -650,13 +705,10 @@ function UsersPageContent() {
 
       <DataTablePagination
         page={meta?.current_page ?? page}
-        pageSize={meta?.per_page ?? pageSize}
+        pageSize={pageSize}
         total={meta?.total ?? 0}
         onPageChange={setPage}
-        onPageSizeChange={(size) => {
-          setPageSize(size);
-          setPage(1);
-        }}
+        onPageSizeChange={handlePageSizeChange}
       />
 
       {/* RESET PASSWORD */}

@@ -458,9 +458,11 @@ function NationalIdStatus({
   );
 }
 
+
 /* -------------------------------------------------------------------------- */
 /* CITIZEN INFORMATION                                                        */
 /* -------------------------------------------------------------------------- */
+
 
 function CitizenInformation({
   citizen,
@@ -482,7 +484,6 @@ function CitizenInformation({
       title="Personal information"
       icon={<UserRound className="size-4" />}
     >
-
       <Row label="Full name" value={fullName} />
 
       <Row
@@ -493,12 +494,34 @@ function CitizenInformation({
       <Row
         label="National ID"
         value={
-          citizen.national_id ? (
-            <SensitiveValue
-              value={citizen.national_id}
-              label="national ID"
-            />
-          ) : null
+          <div className="flex flex-wrap items-center gap-2">
+            {citizen.national_id ? (
+              <SensitiveValue
+                value={citizen.national_id}
+                label="national ID"
+              />
+            ) : (
+              <span className="text-sm text-muted-foreground">
+                Not provided
+              </span>
+            )}
+
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1.5 rounded-lg text-xs font-medium"
+              onClick={() => {
+                // Connect your National ID verification action here.
+              }}
+            >
+              <ShieldCheck
+                className="size-3.5"
+                aria-hidden="true"
+              />
+              Verify National ID
+            </Button>
+          </div>
         }
       />
 
@@ -520,10 +543,10 @@ function CitizenInformation({
         label="Address"
         value={citizen.address}
       />
-
     </Section>
   );
 }
+
 
 /* -------------------------------------------------------------------------- */
 /* EMPLOYEE INFORMATION                                                       */

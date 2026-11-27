@@ -12,7 +12,6 @@
     - docker
     - directories
     - monitoring
-
     - role: ssl
       tags:
         - ssl

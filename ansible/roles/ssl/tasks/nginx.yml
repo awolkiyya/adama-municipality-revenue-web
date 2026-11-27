@@ -1,41 +1,28 @@
 
----
 # ============================================================
 # ADAMA MUNICIPAL REVENUE
-# NGINX GATEWAY AND PRODUCTION CERTIFICATE VALIDATION
+# NGINX GATEWAY AND DOMAIN CERTIFICATE VALIDATION
 # ============================================================
 
-# 1. Ensure production certificate environment.
-
-- name: Ensure production certificate is selected
+- name: Ensure production certificate environment
   ansible.builtin.assert:
     that:
       - not (ssl_certbot_staging | bool)
-    fail_msg: >-
-      Nginx production validation requires a production certificate.
+    fail_msg: Nginx production validation requires a production certificate.
 
-
-# 2. Check production certificate fullchain.
-
-- name: Check production certificate fullchain
+- name: Check certificate fullchain
   ansible.builtin.stat:
     path: "{{ ssl_certificate_fullchain }}"
     follow: true
   register: ssl_nginx_fullchain
 
-
-# 3. Check production certificate private key.
-
-- name: Check production certificate private key
+- name: Check certificate private key
   ansible.builtin.stat:
     path: "{{ ssl_certificate_private_key }}"
     follow: true
   register: ssl_nginx_private_key
 
-
-# 4. Verify certificate files.
-
-- name: Verify production certificate files exist
+- name: Verify certificate files exist
   ansible.builtin.assert:
     that:
       - ssl_nginx_fullchain.stat.exists
@@ -43,14 +30,9 @@
       - ssl_nginx_private_key.stat.exists
       - ssl_nginx_private_key.stat.isreg
     fail_msg: >-
-      Production certificate files are missing or invalid.
-      Expected fullchain: {{ ssl_certificate_fullchain }}
-      Expected private key: {{ ssl_certificate_private_key }}
+      Certificate files are missing or invalid.
 
-
-# 5. Verify certificate expiration.
-
-- name: Validate production certificate expiration
+- name: Validate certificate expiration
   ansible.builtin.command:
     argv:
       - openssl
@@ -62,41 +44,43 @@
       - -noout
   changed_when: false
 
-
-# 6. Verify certificate IP address.
-
-- name: Validate production certificate IP address
+- name: Validate certificate domains
   ansible.builtin.command:
     argv:
       - openssl
       - x509
       - -in
       - "{{ ssl_certificate_fullchain }}"
-      - -checkip
-      - "{{ ssl_certificate_ip }}"
+      - -checkhost
+      - "{{ item }}"
       - -noout
+  loop: "{{ ssl_certificate_domains }}"
+  register: ssl_nginx_domain_checks
   changed_when: false
 
-
-# 7. Check gateway Compose file.
+- name: Verify all certificate domains
+  ansible.builtin.assert:
+    that:
+      - ssl_nginx_domain_checks.results | length == ssl_certificate_domains | length
+      - >-
+        ssl_nginx_domain_checks.results
+        | map(attribute='rc')
+        | select('equalto', 0)
+        | list
+        | length == ssl_certificate_domains | length
+    fail_msg: Certificate does not cover every configured domain.
 
 - name: Check gateway Compose file
   ansible.builtin.stat:
     path: "{{ ssl_gateway_compose_file }}"
   register: ssl_gateway_compose_stat
 
-
 - name: Verify gateway Compose file exists
   ansible.builtin.assert:
     that:
       - ssl_gateway_compose_stat.stat.exists
       - ssl_gateway_compose_stat.stat.isreg
-    fail_msg: >-
-      Gateway Compose file was not found:
-      {{ ssl_gateway_compose_file }}
-
-
-# 8. Validate gateway Compose configuration.
+    fail_msg: Gateway Compose file was not found.
 
 - name: Validate gateway Compose configuration
   ansible.builtin.command:
@@ -110,9 +94,6 @@
       - config
       - --quiet
   changed_when: false
-
-
-# 9. Discover Nginx gateway container.
 
 - name: Discover Nginx gateway container
   ansible.builtin.command:
@@ -129,19 +110,11 @@
   register: ssl_gateway_container_id
   changed_when: false
 
-
-# 10. Ensure Nginx container exists.
-
 - name: Verify Nginx gateway container exists
   ansible.builtin.assert:
     that:
       - ssl_gateway_container_id.stdout | trim | length > 0
-    fail_msg: >-
-      Nginx gateway container was not found or is not running.
-      Compose service: {{ ssl_gateway_service }}
-
-
-# 11. Inspect Nginx container.
+    fail_msg: Nginx gateway container was not found.
 
 - name: Inspect Nginx gateway container
   ansible.builtin.command:
@@ -152,9 +125,6 @@
   register: ssl_gateway_container_inspect
   changed_when: false
 
-
-# 12. Verify container is running.
-
 - name: Verify Nginx gateway container state
   ansible.builtin.assert:
     that:
@@ -163,10 +133,7 @@
         ['State']['Running']
     fail_msg: Nginx gateway container is not running.
 
-
-# 13. Validate actual Nginx configuration.
-
-- name: Test Nginx configuration inside gateway container
+- name: Test Nginx configuration
   ansible.builtin.command:
     argv:
       - docker
@@ -177,20 +144,14 @@
   register: ssl_nginx_config_test
   changed_when: false
 
-
-# 14. Display validation summary.
-
 - name: Display Nginx gateway validation summary
   ansible.builtin.debug:
     msg:
-      - "Production certificate: verified"
-      - "Certificate IP: {{ ssl_certificate_ip }}"
+      - "Certificate: {{ ssl_certificate_name }}"
+      - "Domains: {{ ssl_certificate_domains | join(', ') }}"
       - "Certificate expiration: valid"
-      - "Gateway Compose file: {{ ssl_gateway_compose_file }}"
-      - "Gateway service: {{ ssl_gateway_service }}"
-      - "Gateway container ID: {{ ssl_gateway_container_id.stdout | trim }}"
-      - "Gateway container state: running"
-      - "Compose configuration: valid"
+      - "Domain verification: passed"
+      - "Gateway Compose configuration: valid"
+      - "Gateway container: running"
       - "Nginx configuration test: passed"
-      - "Nginx configuration deployment: not performed"
       - "Nginx reload: not performed"

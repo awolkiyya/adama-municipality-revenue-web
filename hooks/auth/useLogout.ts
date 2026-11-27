@@ -14,29 +14,25 @@ export const useLogout = () => {
   const router = useRouter();
   const locale = useLocale();
 
+  const handleLogout = () => {
+    dispatch(logout());
+    queryClient.clear();
+
+    // Redirect to the localized citizen login page.
+    router.replace(`/${locale}/citizen/auth/login`);
+  };
+
   return useMutation({
     mutationFn: authService.logout,
 
     onSuccess: () => {
-      // Laravel successfully invalidated the session.
-      dispatch(logout());
-
-      // Remove all authenticated/user-specific cached data.
-      queryClient.clear();
-
-      // Preserve the current language.
-      router.replace(`/${locale}`);
+      handleLogout();
     },
 
     onError: () => {
-      // Even if the Laravel session is already expired,
-      // the frontend must immediately consider the user logged out.
-      dispatch(logout());
-
-      queryClient.clear();
-
-      // Preserve the current language.
-      router.replace(`/${locale}`);
+      // Clear local authentication even if the
+      // Laravel session has already expired.
+      handleLogout();
     },
   });
 };

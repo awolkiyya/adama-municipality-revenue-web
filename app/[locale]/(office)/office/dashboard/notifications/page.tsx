@@ -526,8 +526,8 @@ export function TaxpayerNotifications() {
   const total = notificationsResponse?.meta?.total;
 
   return (
-    <div className="min-w-0 overflow-x-clip">
-      <div className="mx-auto w-full min-w-0 max-w-3xl space-y-4 px-4 py-5 sm:space-y-6 sm:p-6 lg:p-8">
+    <div className="w-full min-w-0 max-w-full overflow-x-clip">
+      <div className="mx-auto w-full min-w-0 max-w-3xl space-y-4 px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-5 sm:space-y-6 sm:p-6 lg:p-8">
         {/* Header */}
         <header className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div className="min-w-0 space-y-1">
@@ -596,7 +596,7 @@ export function TaxpayerNotifications() {
           container, never the page), wrapping on larger screens.
         */}
         <div
-          className="-mx-4 flex snap-x snap-mandatory gap-2 overflow-x-auto px-4 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0 [&::-webkit-scrollbar]:hidden"
+          className="flex w-full min-w-0 max-w-full gap-2 overflow-x-auto overscroll-x-contain [-ms-overflow-style:none] [scrollbar-width:none] sm:flex-wrap sm:overflow-visible [&::-webkit-scrollbar]:hidden"
           role="group"
           aria-label="Filter notifications"
         >
@@ -607,7 +607,7 @@ export function TaxpayerNotifications() {
               aria-pressed={filter === item.key}
               onClick={() => setFilter(item.key)}
               className={cn(
-                "inline-flex h-9 shrink-0 snap-start items-center whitespace-nowrap rounded-full border px-3.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                "inline-flex h-9 shrink-0 items-center whitespace-nowrap rounded-full border px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:px-3.5",
                 filter === item.key
                   ? "border-primary bg-primary text-primary-foreground"
                   : "text-muted-foreground hover:bg-muted"

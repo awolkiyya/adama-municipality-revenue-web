@@ -1,4 +1,3 @@
-
 "use client";
 
 import {
@@ -44,19 +43,9 @@ type Category =
   | "leases"
   | "system";
 
-type FilterKey =
-  | "all"
-  | "unread"
-  | "invoices"
-  | "payments"
-  | "other";
+type FilterKey = "all" | "unread" | "invoices" | "payments" | "other";
 
-type GroupKey =
-  | "attention"
-  | "today"
-  | "yesterday"
-  | "week"
-  | "earlier";
+type GroupKey = "attention" | "today" | "yesterday" | "week" | "earlier";
 
 interface NotificationMeta {
   icon: LucideIcon;
@@ -165,10 +154,7 @@ const DEFAULT_META: NotificationMeta = {
   urgent: false,
 };
 
-const FILTERS: {
-  key: FilterKey;
-  label: string;
-}[] = [
+const FILTERS: { key: FilterKey; label: string }[] = [
   { key: "all", label: "All" },
   { key: "unread", label: "Unread" },
   { key: "invoices", label: "Invoices" },
@@ -188,9 +174,7 @@ const GROUP_LABEL: Record<GroupKey, string> = {
 /* Notification Metadata                                                      */
 /* -------------------------------------------------------------------------- */
 
-function getNotificationMeta(
-  notification: AppNotification
-): NotificationMeta {
+function getNotificationMeta(notification: AppNotification): NotificationMeta {
   const knownMeta = NOTIFICATION_META[notification.type];
 
   if (knownMeta) {
@@ -248,10 +232,7 @@ function isUnread(notification: AppNotification): boolean {
 }
 
 function isUrgent(notification: AppNotification): boolean {
-  return (
-    notification.priority === "high" ||
-    notification.priority === "urgent"
-  );
+  return notification.priority === "high" || notification.priority === "urgent";
 }
 
 function matchesFilter(
@@ -301,10 +282,7 @@ function startOfToday(): Date {
   return date;
 }
 
-function getBucket(
-  value: string | null,
-  today: Date
-): GroupKey {
+function getBucket(value: string | null, today: Date): GroupKey {
   if (!value) return "earlier";
 
   const date = new Date(value);
@@ -315,9 +293,7 @@ function getBucket(
 
   date.setHours(0, 0, 0, 0);
 
-  const days = Math.floor(
-    (today.getTime() - date.getTime()) / DAY_MS
-  );
+  const days = Math.floor((today.getTime() - date.getTime()) / DAY_MS);
 
   if (days <= 0) return "today";
   if (days === 1) return "yesterday";
@@ -365,9 +341,7 @@ function timeAgo(value: string | null): string {
 /**
  * Notification action URLs must be internal application paths.
  */
-function getSafeActionUrl(
-  actionUrl: string | null
-): string | null {
+function getSafeActionUrl(actionUrl: string | null): string | null {
   if (!actionUrl) return null;
 
   if (
@@ -406,10 +380,8 @@ export function TaxpayerNotifications() {
     page: 1,
   });
 
-  const {
-    data: unreadCount = 0,
-    isLoading: isUnreadCountLoading,
-  } = useUnreadNotificationCount();
+  const { data: unreadCount = 0, isLoading: isUnreadCountLoading } =
+    useUnreadNotificationCount();
 
   /* ---------------------------------------------------------------------- */
   /* API Mutations                                                          */
@@ -463,31 +435,16 @@ export function TaxpayerNotifications() {
   /* ---------------------------------------------------------------------- */
 
   const counts = useMemo(() => {
+    const countBy = (key: FilterKey) =>
+      notifications.filter((n) => matchesFilter(n, key)).length;
+
     return {
       all: notifications.length,
-
-      unread: notifications.filter(isUnread).length,
-
-      invoices: notifications.filter(
-        (notification) =>
-          getNotificationMeta(notification).category === "invoices"
-      ).length,
-
-      payments: notifications.filter(
-        (notification) =>
-          getNotificationMeta(notification).category === "payments"
-      ).length,
-
-      other: notifications.filter((notification) => {
-        const category = getNotificationMeta(notification).category;
-
-        return (
-          category === "assessments" ||
-          category === "leases" ||
-          category === "system"
-        );
-      }).length,
-    };
+      unread: countBy("unread"),
+      invoices: countBy("invoices"),
+      payments: countBy("payments"),
+      other: countBy("other"),
+    } satisfies Record<FilterKey, number>;
   }, [notifications]);
 
   /* ---------------------------------------------------------------------- */
@@ -496,14 +453,8 @@ export function TaxpayerNotifications() {
 
   const filteredNotifications = useMemo(() => {
     return notifications
-      .filter((notification) =>
-        matchesFilter(notification, filter)
-      )
-      .sort(
-        (a, b) =>
-          getTimestamp(b.created_at) -
-          getTimestamp(a.created_at)
-      );
+      .filter((notification) => matchesFilter(notification, filter))
+      .sort((a, b) => getTimestamp(b.created_at) - getTimestamp(a.created_at));
   }, [notifications, filter]);
 
   /* ---------------------------------------------------------------------- */
@@ -511,40 +462,28 @@ export function TaxpayerNotifications() {
   /* ---------------------------------------------------------------------- */
 
   const groups = useMemo(() => {
-    const sorted = [...filteredNotifications];
-
     const isPriority = (notification: AppNotification) =>
       isUnread(notification) && isUrgent(notification);
 
-    const output: {
-      key: GroupKey;
-      items: AppNotification[];
-    }[] = [];
+    const output: { key: GroupKey; items: AppNotification[] }[] = [];
 
-    const attention = sorted.filter(isPriority);
+    const attention = filteredNotifications.filter(isPriority);
 
     if (attention.length > 0) {
-      output.push({
-        key: "attention",
-        items: attention,
-      });
+      output.push({ key: "attention", items: attention });
     }
 
     const today = startOfToday();
 
-    for (const notification of sorted.filter(
-      (item) => !isPriority(item)
-    )) {
+    for (const notification of filteredNotifications) {
+      if (isPriority(notification)) continue;
+
       const key = getBucket(notification.created_at, today);
 
       let group = output.find((item) => item.key === key);
 
       if (!group) {
-        group = {
-          key,
-          items: [],
-        };
-
+        group = { key, items: [] };
         output.push(group);
       }
 
@@ -560,14 +499,39 @@ export function TaxpayerNotifications() {
 
   if (isLoading) {
     return (
-      <div className="mx-auto flex min-h-[400px] w-full max-w-3xl items-center justify-center p-6">
-        <div className="flex flex-col items-center gap-3 text-center">
-          <Loader2 className="size-7 animate-spin text-muted-foreground" />
+      <div
+        className="mx-auto w-full min-w-0 max-w-3xl space-y-5 px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-5 sm:p-6 lg:p-8"
+        role="status"
+        aria-live="polite"
+      >
+        <span className="sr-only">Loading notifications...</span>
 
-          <p className="text-sm text-muted-foreground">
-            Loading notifications...
-          </p>
+        <div className="space-y-2">
+          <div className="h-7 w-40 animate-pulse rounded-md bg-muted" />
+          <div className="h-4 w-56 max-w-full animate-pulse rounded-md bg-muted" />
         </div>
+
+        <div className="flex gap-2 overflow-hidden">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div
+              key={i}
+              className="h-9 w-20 shrink-0 animate-pulse rounded-full bg-muted"
+            />
+          ))}
+        </div>
+
+        <Card className="divide-y overflow-hidden">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="flex gap-3 p-4">
+              <div className="size-10 shrink-0 animate-pulse rounded-lg bg-muted" />
+              <div className="min-w-0 flex-1 space-y-2">
+                <div className="h-4 w-3/4 animate-pulse rounded bg-muted" />
+                <div className="h-3 w-full animate-pulse rounded bg-muted" />
+                <div className="h-3 w-2/3 animate-pulse rounded bg-muted" />
+              </div>
+            </div>
+          ))}
+        </Card>
       </div>
     );
   }
@@ -578,8 +542,8 @@ export function TaxpayerNotifications() {
 
   if (isError) {
     return (
-      <div className="mx-auto w-full max-w-3xl p-4 sm:p-6 lg:p-8">
-        <Card className="flex flex-col items-center px-6 py-12 text-center">
+      <div className="mx-auto w-full min-w-0 max-w-3xl px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-5 sm:p-6 lg:p-8">
+        <Card className="flex flex-col items-center px-5 py-10 text-center sm:px-6 sm:py-12">
           <div className="flex size-11 items-center justify-center rounded-lg bg-destructive/10">
             <AlertCircle className="size-5 text-destructive" />
           </div>
@@ -588,7 +552,7 @@ export function TaxpayerNotifications() {
             Unable to load notifications
           </h2>
 
-          <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+          <p className="mt-1 max-w-sm break-words text-sm text-muted-foreground">
             {error instanceof Error
               ? error.message
               : "Something went wrong while retrieving your notifications."}
@@ -597,8 +561,7 @@ export function TaxpayerNotifications() {
           <Button
             type="button"
             variant="outline"
-            size="sm"
-            className="mt-5"
+            className="mt-5 h-10 w-full sm:w-auto"
             onClick={() => refetch()}
             disabled={isRefetching}
           >
@@ -619,65 +582,61 @@ export function TaxpayerNotifications() {
   /* Render                                                                 */
   /* ---------------------------------------------------------------------- */
 
-  return (
-    <div className="min-w-0">
-      <div className="mx-auto w-full max-w-3xl space-y-6 p-4 sm:p-6 lg:p-8">
+  const total = notificationsResponse?.meta?.total;
 
+  return (
+    <div className="w-full min-w-0 max-w-full overflow-x-clip">
+      {/*
+        Bottom padding keeps the last item clear of the mobile bottom nav
+        (6rem + device safe area). Remove if your layout already adds it.
+      */}
+      <div className="mx-auto w-full min-w-0 max-w-3xl space-y-4 px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-5 sm:space-y-6 sm:p-6 lg:p-8">
         {/* Header */}
-        <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <div className="space-y-1">
-            <h1 className="text-2xl font-semibold tracking-tight">
+        <header className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div className="min-w-0 space-y-1">
+            <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
               Notifications
             </h1>
 
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-muted-foreground" aria-live="polite">
               {isUnreadCountLoading
                 ? "Checking unread notifications..."
                 : unreadCount > 0
                   ? `You have ${unreadCount} unread ${
-                      unreadCount === 1
-                        ? "notification"
-                        : "notifications"
+                      unreadCount === 1 ? "notification" : "notifications"
                     }.`
                   : "You're all caught up."}
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex w-full items-center gap-2 sm:w-auto">
             <Button
               type="button"
               variant="outline"
-              size="sm"
               onClick={() => refetch()}
               disabled={isRefetching}
               aria-label="Refresh notifications"
+              className="size-10 shrink-0 p-0 sm:size-9"
             >
               <RefreshCw
-                className={cn(
-                  "size-4",
-                  isRefetching && "animate-spin"
-                )}
+                className={cn("size-4", isRefetching && "animate-spin")}
               />
             </Button>
 
             <Button
               type="button"
               variant="outline"
-              size="sm"
-              disabled={
-                unreadCount === 0 ||
-                markAllReadMutation.isPending
-              }
+              disabled={unreadCount === 0 || markAllReadMutation.isPending}
               onClick={markAllRead}
-              className="w-full shrink-0 sm:w-auto"
+              className="h-10 min-w-0 flex-1 sm:h-9 sm:flex-none"
             >
               {markAllReadMutation.isPending ? (
-                <Loader2 className="mr-2 size-4 animate-spin" />
+                <Loader2 className="mr-2 size-4 shrink-0 animate-spin" />
               ) : (
-                <CheckCheck className="mr-2 size-4" />
+                <CheckCheck className="mr-2 size-4 shrink-0" />
               )}
 
-              Mark all as read
+              <span className="truncate">Mark all as read</span>
             </Button>
           </div>
         </header>
@@ -686,16 +645,19 @@ export function TaxpayerNotifications() {
         {actionError && (
           <div
             role="alert"
-            className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive"
+            className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-3 text-sm text-destructive sm:px-4"
           >
-            <AlertCircle className="size-4 shrink-0" />
-            {actionError}
+            <AlertCircle className="mt-0.5 size-4 shrink-0" />
+            <span className="min-w-0 break-words">{actionError}</span>
           </div>
         )}
 
-        {/* Filters */}
+        {/*
+          Filters: one swipeable row on mobile (only this row scrolls, never
+          the page), wrapping on larger screens.
+        */}
         <div
-          className="flex flex-wrap gap-1.5"
+          className="flex w-full min-w-0 max-w-full gap-2 overflow-x-auto overscroll-x-contain [-ms-overflow-style:none] [scrollbar-width:none] sm:flex-wrap sm:overflow-visible [&::-webkit-scrollbar]:hidden"
           role="group"
           aria-label="Filter notifications"
         >
@@ -706,7 +668,7 @@ export function TaxpayerNotifications() {
               aria-pressed={filter === item.key}
               onClick={() => setFilter(item.key)}
               className={cn(
-                "rounded-full border px-3 py-1.5 text-sm transition-colors",
+                "inline-flex h-9 shrink-0 items-center whitespace-nowrap rounded-full border px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:px-3.5",
                 filter === item.key
                   ? "border-primary bg-primary text-primary-foreground"
                   : "text-muted-foreground hover:bg-muted"
@@ -722,9 +684,9 @@ export function TaxpayerNotifications() {
         </div>
 
         {/* Notification List */}
-        <Card className="overflow-hidden">
+        <Card className="min-w-0 overflow-hidden">
           {groups.length === 0 ? (
-            <div className="flex flex-col items-center px-6 py-14 text-center">
+            <div className="flex flex-col items-center px-5 py-12 text-center sm:px-6 sm:py-14">
               <div className="flex size-10 items-center justify-center rounded-lg bg-muted">
                 <Bell className="size-5 text-muted-foreground" />
               </div>
@@ -747,8 +709,7 @@ export function TaxpayerNotifications() {
                 <Button
                   type="button"
                   variant="outline"
-                  size="sm"
-                  className="mt-4"
+                  className="mt-4 h-10 w-full max-w-xs sm:w-auto"
                   onClick={() => setFilter("all")}
                 >
                   Show all
@@ -757,16 +718,20 @@ export function TaxpayerNotifications() {
             </div>
           ) : (
             groups.map((group) => (
-              <section key={group.key}>
+              <section key={group.key} aria-label={GROUP_LABEL[group.key]}>
                 <h2
                   className={cn(
-                    "border-b bg-muted/30 px-4 py-2 text-xs font-medium",
+                    "flex items-center justify-between gap-2 border-b bg-muted/30 px-4 py-2 text-xs font-medium",
                     group.key === "attention"
                       ? "text-destructive"
                       : "text-muted-foreground"
                   )}
                 >
-                  {GROUP_LABEL[group.key]}
+                  <span className="truncate">{GROUP_LABEL[group.key]}</span>
+
+                  <span className="shrink-0 tabular-nums opacity-70">
+                    {group.items.length}
+                  </span>
                 </h2>
 
                 <ul className="divide-y border-b last:border-b-0">
@@ -788,10 +753,9 @@ export function TaxpayerNotifications() {
         </Card>
 
         {/* Pagination Information */}
-        {notificationsResponse?.meta && (
+        {typeof total === "number" && (
           <p className="text-center text-xs text-muted-foreground">
-            Showing {notifications.length} of{" "}
-            {notificationsResponse.meta.total} notifications
+            Showing {notifications.length} of {total} notifications
           </p>
         )}
       </div>
@@ -825,64 +789,72 @@ function NotificationRow({
   return (
     <li
       className={cn(
-        "flex gap-3 p-4 transition-colors",
+        "flex min-w-0 gap-3 p-4 transition-colors",
         unread && "bg-primary/[0.03]"
       )}
     >
-      {/* Icon */}
-      <div
-        className={cn(
-          "flex size-9 shrink-0 items-center justify-center rounded-lg",
-          TONE_CLASS[meta.tone]
+      {/* Icon (unread dot sits on the icon so it never takes row width) */}
+      <div className="relative shrink-0">
+        <div
+          className={cn(
+            "flex size-10 items-center justify-center rounded-lg sm:size-9",
+            TONE_CLASS[meta.tone]
+          )}
+        >
+          <Icon className="size-4" aria-hidden="true" />
+        </div>
+
+        {unread && (
+          <span
+            aria-hidden="true"
+            className="absolute -right-1 -top-1 size-2.5 rounded-full border-2 border-background bg-primary"
+          />
         )}
-      >
-        <Icon className="size-4" aria-hidden="true" />
       </div>
 
       {/* Content */}
       <div className="min-w-0 flex-1">
-        <div className="flex items-start justify-between gap-3">
+        {/* Title + time: stacked on mobile, side by side from sm up */}
+        <div className="flex min-w-0 flex-col gap-0.5 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
           <p
             className={cn(
-              "text-sm",
+              "min-w-0 break-words text-sm",
               unread ? "font-semibold" : "font-medium"
             )}
           >
-            {unread && (
-              <span className="sr-only">Unread: </span>
-            )}
+            {unread && <span className="sr-only">Unread: </span>}
 
             {notification.title}
           </p>
 
           <time
             dateTime={notification.created_at ?? undefined}
-            className="shrink-0 text-xs text-muted-foreground"
+            className="shrink-0 text-xs text-muted-foreground sm:pt-0.5"
           >
             {timeAgo(notification.created_at)}
           </time>
         </div>
 
-        <p className="mt-0.5 whitespace-pre-line text-sm text-muted-foreground">
+        <p className="mt-1 whitespace-pre-line break-words text-sm text-muted-foreground [overflow-wrap:anywhere]">
           {notification.message}
         </p>
 
-        {/* Actions */}
+        {/* Actions: full-width tap targets on mobile, inline on larger screens */}
         {(actionUrl || unread) && (
-          <div className="mt-2.5 flex flex-wrap items-center gap-3">
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
             {actionUrl && (
               <Button
                 asChild
-                type="button"
                 size="sm"
                 variant={priority ? "default" : "outline"}
-                onClick={() => {
-                  if (unread) {
-                    void onRead(notification.id);
-                  }
-                }}
+                className="h-10 w-full sm:h-8 sm:w-auto"
               >
-                <Link href={actionUrl}>
+                <Link
+                  href={actionUrl}
+                  onClick={() => {
+                    if (unread) void onRead(notification.id);
+                  }}
+                >
                   {meta.action}
                 </Link>
               </Button>
@@ -893,11 +865,9 @@ function NotificationRow({
                 type="button"
                 disabled={isMarkingRead}
                 onClick={() => void onRead(notification.id)}
-                className="inline-flex items-center gap-1 text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-md text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 sm:h-auto sm:w-auto sm:justify-start"
               >
-                {isMarkingRead && (
-                  <Loader2 className="size-3 animate-spin" />
-                )}
+                {isMarkingRead && <Loader2 className="size-3 animate-spin" />}
 
                 Mark as read
               </button>
@@ -905,14 +875,6 @@ function NotificationRow({
           </div>
         )}
       </div>
-
-      {/* Unread Indicator */}
-      {unread && (
-        <span
-          aria-label="Unread"
-          className="mt-2 size-2 shrink-0 rounded-full bg-primary"
-        />
-      )}
     </li>
   );
 }
